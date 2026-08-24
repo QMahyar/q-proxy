@@ -39,7 +39,7 @@ main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
 .grid2{display:grid;gap:16px}
 @media(min-width:768px){.grid2{grid-template-columns:1fr 1fr}}
 .home-grid{display:grid;gap:16px;min-width:0}
-.home-grid > *{min-width:0}
+.home-grid > *{min-width:0;contain:layout paint}
 @media(min-width:1024px){.home-grid{grid-template-columns:3fr 2fr;align-items:start}}
 .field{margin-block-end:16px}
 .field:last-child{margin-block-end:0}
