@@ -1,6 +1,6 @@
 {
   "name": "q-proxy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "test": "vitest run",
     "build": "node scripts/build-single-file.mjs",
     "dev": "wrangler dev",
-    "deploy": "node scripts/build-single-file.mjs && wrangler deploy",
+    "deploy": "node scripts/deploy.mjs",
     "version": "node scripts/version.mjs",
     "release": "node scripts/release.mjs"
   },

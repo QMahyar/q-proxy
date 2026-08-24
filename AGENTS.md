@@ -29,7 +29,7 @@ node scripts/version.mjs        # print version (from git tag)
 node scripts/release.mjs <version> [--dry]  # tag + changelog check + build
 ```
 
-Deploy credentials: Global API Key pattern from `E:\vault\Platforms\cloudflare\platform.md` — `$env:CLOUDFLARE_API_KEY` (cfk_ prefix) + `$env:CLOUDFLARE_EMAIL` + `$env:CLOUDFLARE_ACCOUNT_ID`. Using `CLOUDFLARE_API_TOKEN` with a cfk_ key fails `[code: 9109]`.
+Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY` (Global Key, cfk_-style) + `$env:CLOUDFLARE_EMAIL` + `$env:CLOUDFLARE_ACCOUNT_ID`. Using `CLOUDFLARE_API_TOKEN` with a Global Key fails `[code: 9109]`. Private deploy targets live in `wrangler.local.toml` (gitignored, same shape as `wrangler.toml`) — `npm run deploy` picks it up when present via `scripts/deploy.mjs`.
 
 ## Code Conventions
 
@@ -104,7 +104,3 @@ Protocol changes: validate against Xray-core fixtures first (`docs/research/04-p
 - Early-data oversize drops silently instead of closing 1009
 - Login throttle is per-isolate memory (best-effort)
 - Counters are estimates (`download = requestsTotal × 1 MiB`)
-
-## Live Deployment
-
-Worker `q-proxy` on Horror account `ff2508cf6f5086d052488a181a1d6a45`, URL `https://q-proxy.qhorror13194.workers.dev`, securePath `11cb1a51aa9ce39cf25a77c4`, KV `a8183f8f7f734e51b2fd7cc80634d14f`. Vault record: `E:\vault\Platforms\cloudflare\qproxy.md`.

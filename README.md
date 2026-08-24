@@ -10,8 +10,6 @@ Single-user Cloudflare Worker that terminates VLESS, VMess, Trojan and Shadowsoc
 [![bundle](https://img.shields.io/badge/bundle-esbuild%20single--file-black)](./scripts/build-single-file.mjs)
 [![deps](https://img.shields.io/badge/runtime_deps-zero-lightgrey)](./package.json)
 
-> **Live (QHolo / Horror):** `https://q-proxy.qhorror13194.workers.dev` → `https://q-proxy.qhorror13194.workers.dev/11cb1a51aa9ce39cf25a77c4/login`
-
 ## Quick Links
 
 | Track | Document | Audience |
@@ -74,15 +72,15 @@ main = "dist/q-proxy.js"
 compatibility_date = "2026-08-01"
 [[kv_namespaces]]
 binding = "QPROXY_KV"
-id = "a8183f8f7f734e51b2fd7cc80634d14f"  # from kv create
+id = "REPLACE_WITH_YOUR_KV_ID"  # from kv create
 ```
 
-Global API Key (not Bearer token) — values in `E:\vault\Platforms\cloudflare\platform.md:31`:
+Create a **Global API Key** at dash.cloudflare.com → My Profile → API Tokens → Global API Key (not a Bearer token):
 ```powershell
-Set-Location -LiteralPath "E:\Code\Q Proxy"
-$env:CLOUDFLARE_API_KEY="cfk_..."     # Global API Key — cfk_ prefix
-$env:CLOUDFLARE_EMAIL="qhorror1@gmail.com"
-$env:CLOUDFLARE_ACCOUNT_ID="ff2508cf6f5086d052488a181a1d6a45"
+Set-Location -LiteralPath "<repo>"
+$env:CLOUDFLARE_API_KEY="<your-global-api-key>"
+$env:CLOUDFLARE_EMAIL="<your-account-email>"
+$env:CLOUDFLARE_ACCOUNT_ID="<your-account-id>"
 npx wrangler whoami          # must show the account
 npx wrangler kv namespace create QPROXY_KV  # copy id → wrangler.toml
 npm run deploy               # = build + deploy (package.json:11)

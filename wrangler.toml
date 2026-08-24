@@ -4,4 +4,4 @@ compatibility_date = "2026-08-01"
 
 [[kv_namespaces]]
 binding = "QPROXY_KV"
-id = "a8183f8f7f734e51b2fd7cc80634d14f"
+id = "REPLACE_WITH_YOUR_KV_ID"

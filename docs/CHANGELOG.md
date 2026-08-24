@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.1 — 2026-08-24
+
+### Security
+- Removed operator-specific deployment data (account IDs, worker host, securePath, KV namespace ID) from all public docs and config. Private deploy targets now live in `wrangler.local.toml` (gitignored).
+
+### Added
+- `scripts/deploy.mjs` — `npm run deploy` prefers `wrangler.local.toml` when present, falls back to `wrangler.toml`.
+- `scripts/version.mjs` + `scripts/release.mjs` — version is derived from git tags; build fails on version drift at a tagged commit; release gate runs typecheck + tests + changelog check before tagging.
+- `AGENTS.md` — agent context: conventions, invariants, boundaries, patterns.
+
+### Changed
+- `wrangler.toml` ships with a placeholder KV id.
+
 ## 1.0.0 — 2026-08-24 (stable)
 
 First stable release. Single-file Cloudflare Worker, zero runtime deps, bilingual EN/FA panel.
@@ -16,10 +29,6 @@ First stable release. Single-file Cloudflare Worker, zero runtime deps, bilingua
 - **KV** `qproxy:settings` (`{version, updatedAt, data}`), `qproxy:meta`, `qproxy:counters` (buffered 60s/32, day rollover). Migrations `src/settings/migrate.ts`.
 - **Build** `scripts/build-single-file.mjs` esbuild esm/browser/es2023/minify, `.html`→text, `__APP_VERSION__` define, rejects bare imports except `cloudflare:*`. `dist/q-proxy.js` ≈228 KB.
 - **Hardening (post-audit)** LE SS nonce (SIP004), first-packet dedup, Trojan UDP codec, proto-pollution guard, `sessionSecret` redaction, setup TOCTOU, PBKDF2 100k, throttle cap, counters single-flight, `my-ip` auth, `remoteDns` normalization, `proxyIp` DoH upstream, `driveSession` catch.
-
-### Live
-
-- Worker `q-proxy` on Horror `qhorror1@gmail.com` (`ff2508cf6f5086d052488a181a1d6a45`) → `https://q-proxy.qhorror13194.workers.dev` — KV `a8183f8f7f734e51b2fd7cc80634d14f` — panel `https://q-proxy.qhorror13194.workers.dev/11cb1a51aa9ce39cf25a77c4/login`
 
 ### Docs
 

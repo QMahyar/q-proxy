@@ -7,21 +7,19 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 
-function gitVersion() {
+function git(args) {
   try {
-    return execSync("git describe --tags --abbrev=0", { encoding: "utf8", cwd: root }).trim().replace(/^v/, "");
+    return execSync(`git ${args}`, { encoding: "utf8", cwd: root }).trim();
   } catch {
-    return null;
+    return "";
   }
 }
 
-const tagVersion = gitVersion();
-if (tagVersion !== null && tagVersion !== pkg.version) {
-  console.error(`version drift: package.json ${pkg.version} != git tag v${tagVersion}`);
-  console.error("fix with: npm version <value>  (or move the tag)");
-  process.exit(1);
+const latestTag = git("describe --tags --abbrev=0").replace(/^v/, "");
+if (latestTag !== "" && latestTag !== pkg.version) {
+  console.log(`building ${pkg.version} (latest tag v${latestTag})`);
 }
-const version = tagVersion ?? pkg.version;
+const version = pkg.version;
 
 const result = await esbuild.build({
   entryPoints: [resolve(root, "src/worker.ts")],

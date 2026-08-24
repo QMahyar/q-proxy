@@ -41,10 +41,9 @@ binding = "QPROXY_KV"
 id = "REPLACE_WITH_YOUR_KV_ID"
 ```
 
-Credentials use **Global API Key** (from `E:\vault\Platforms\cloudflare\platform.md:31`):
+Credentials use a **Global API Key** (dash.cloudflare.com → My Profile → API Tokens → Global API Key):
 
 ```powershell
-# Pick one identity from the vault table
 $env:CLOUDFLARE_API_KEY   = "cfk_<your-global-api-key>"
 $env:CLOUDFLARE_EMAIL     = "you@example.com"
 $env:CLOUDFLARE_ACCOUNT_ID = "<your-account-id>"
@@ -55,7 +54,7 @@ npm run deploy               # = build + wrangler deploy (package.json:11)
 # or: npm run dev            # local miniflare at http://127.0.0.1:8787
 ```
 
-> `CLOUDFLARE_API_TOKEN` with a `cfk_` value fails `[code: 9109] Invalid access token` — use `CLOUDFLARE_API_KEY` (`platform.md:34`).
+> `CLOUDFLARE_API_TOKEN` with a `cfk_` value fails `[code: 9109] Invalid access token` — use `CLOUDFLARE_API_KEY`.
 
 Screenshot: *Terminal `wrangler whoami` + `deploy` success + assigned `*.workers.dev` URL*
 

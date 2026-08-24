@@ -206,7 +206,7 @@ Keep the emitter pure — no KV, no `fetch`, no `cloudflare:*` imports (so it st
 - Spec: `docs/SPEC.md` — 44 shipped features, NFRs, threat model
 - Architecture: `docs/ARCHITECTURE.md` — frozen types (§2.2 `Settings`/`Fingerprint`/`FragmentSettings`), route table (§3), data flows (§4), KV (§5), build (§8)
 - Research: `docs/research/01-bpb-panel.md` / `02-edgetunnel.md` / `03-nahan.md` / `04-protocol-formats.md`
-- Platform creds: `E:\vault\Platforms\cloudflare\platform.md` — Global API Key wiring
+- Deploy auth: Cloudflare Global API Key env vars (see `../README.md` Deploy B)
 
 Next: read [../RATIONALE.md](../RATIONALE.md) for why these choices were made.
 
@@ -319,9 +319,9 @@ expect(res.status).toBe(200);
 ## 17. Verifying No Off-Target Writes
 
 ```bash
-test ! -f "E:/Code/Q Proxy/README.md"  # must be false — docs only under arena temp
-ls C:/Users/qmahyar/AppData/Local/Temp/arena-qproxy-docs/candidate-2
+test ! -f "./README.md"  # sanity — docs live in the repo, not temp dirs
 ```
+
 
 All output constrained to candidate-2 per task; no writes to E:\Code\Q Proxy.
 
@@ -334,7 +334,6 @@ package.json:2 version -> __APP_VERSION__ (scripts/build-single-file.mjs:18 defi
 - docs/SPEC.md §4.4 securePath semantics + §4.5 KV-window throttle + §4.6 storage split
 - docs/ARCHITECTURE.md §4.1 WS end-to-end diagram (source for mermaid §4.1)
 - docs/research/04-protocol-formats.md §1 URI grammars + §2 clashes
-- E:\vault\Platforms\cloudflare\platform.md multi-account Global API Key table
 
 ## 20. Checklist Before PR
 
