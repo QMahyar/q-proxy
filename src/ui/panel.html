@@ -595,7 +595,14 @@ const p=document.createElement('div');
 p.id='sp-'+s.key;p.role='tabpanel';p.setAttribute('aria-labelledby','st-'+s.key);
 p.hidden=true;
 let h='';
+if(s.key==='protocols'){
+const protoCards=s.cards.slice(0,4);
+const commonCards=s.cards.slice(4);
+h+='<div class="grid2">';protoCards.forEach(c=>{h+=cardHtml(c)});h+='</div>';
+commonCards.forEach(c=>{h+=cardHtml(c)});
+} else {
 s.cards.forEach(c=>{h+=cardHtml(c)});
+}
 p.innerHTML=h;
 wrap.appendChild(p)});
 SECTIONS.forEach(s=>{S.snap[s.key]=JSON.stringify(collectSection(s.key))});
@@ -943,7 +950,19 @@ const mode=e.target.closest('[data-mode]');
 if(mode){
 S.subMode=mode.dataset.mode;
 mode.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===mode)));
-renderHome()}}
+const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
+document.querySelectorAll('#home-body [id^="sub-u"] code').forEach((code,i)=>{
+const entry=urls[i];
+if(!entry) return;
+const newUrl=subUrlWithMode(entry.url);
+code.textContent=newUrl;
+const wrapper=code.closest('.copy-field');
+if(wrapper){
+const qrBtn=wrapper.querySelector('[data-qr]');
+if(qrBtn) qrBtn.setAttribute('data-qr',newUrl);
+}
+});
+return}}
 function handleChip(chip){
 const group=chip.closest('[data-type="chips"]');
 if(!group)return;
