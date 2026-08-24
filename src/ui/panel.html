@@ -30,7 +30,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-si
 main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
 @media(min-width:1024px){main{padding-inline:32px}}
 .view-title{font-size:var(--fs-xl);font-weight:700;margin-block:16px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;min-width:0;overflow:hidden}
 @media(min-width:768px){.card{padding:24px}}
 .card+.card,.home-grid .card+.card{margin-block-start:16px}
 .card__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-block-end:12px}
@@ -38,7 +38,8 @@ main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
 .card--dim{opacity:.55}
 .grid2{display:grid;gap:16px}
 @media(min-width:768px){.grid2{grid-template-columns:1fr 1fr}}
-.home-grid{display:grid;gap:16px}
+.home-grid{display:grid;gap:16px;min-width:0}
+.home-grid > *{min-width:0}
 @media(min-width:1024px){.home-grid{grid-template-columns:3fr 2fr;align-items:start}}
 .field{margin-block-end:16px}
 .field:last-child{margin-block-end:0}
