@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4 — 2026-08-24
+
+### Fixed
+- Settings validation now rejects an empty `tlsPorts` list with "select at least one TLS port" — previously a panel save with all TLS ports unchecked produced zero subscription configs silently (the failure mode reported from live testing).
+
 ## 1.0.3 — 2026-08-24
 
 ### Fixed

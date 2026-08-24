@@ -183,3 +183,18 @@ describe("validateSettings", () => {
     }
   });
 });
+
+describe("empty tlsPorts guard", () => {
+  it("rejects an empty tlsPorts list with a clear message", () => {
+    const result = validateSettings({ tlsPorts: [] });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fields.tlsPorts).toContain("at least one TLS port");
+    }
+  });
+
+  it("allows empty plainPorts (never policy)", () => {
+    const result = validateSettings({ plainPorts: [] });
+    expect(result.ok).toBe(true);
+  });
+});

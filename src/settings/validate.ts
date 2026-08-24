@@ -329,6 +329,9 @@ export function validateSettings(input: unknown): ValidationResult {
     fail(fields, "tlsPorts", `ports overlap plainPorts: ${overlap.join(", ")}`);
     fail(fields, "plainPorts", `ports overlap tlsPorts: ${overlap.join(", ")}`);
   }
+  if (out.tlsPorts.length === 0) {
+    fail(fields, "tlsPorts", "select at least one TLS port — otherwise no configurations can be generated");
+  }
   const plainPortPolicy = enumField(patch, "plainPortPolicy", fields, PLAIN_PORT_POLICIES);
   if (plainPortPolicy !== undefined) out.plainPortPolicy = plainPortPolicy;
   const fingerprint = enumField(patch, "fingerprint", fields, FINGERPRINTS);
