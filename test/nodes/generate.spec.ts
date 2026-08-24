@@ -198,6 +198,30 @@ describe("generateNodes fragment variants", () => {
   });
 });
 
+describe("generateNodes address composition guarantee", () => {
+  it("emits only the worker hostname when all user lists are empty", () => {
+    const s = settings();
+    s.customDomains = [];
+    s.cleanIps = [];
+    s.cdn = { enabled: false, addresses: [], host: "", sni: "" };
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.length).toBeGreaterThan(0);
+    expect(new Set(nodes.map((n) => n.address))).toEqual(new Set([HOST]));
+  });
+
+  it("never introduces addresses beyond hostname + user lists", () => {
+    const s = settings();
+    s.customDomains = ["my.domain.net"];
+    s.cleanIps = ["1.2.3.4:2053", "5.6.7.8"];
+    const allowed = new Set([HOST, "my.domain.net", "1.2.3.4", "5.6.7.8"]);
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.length).toBeGreaterThan(0);
+    for (const n of nodes) {
+      expect(allowed.has(n.address), `unexpected address ${n.address}`).toBe(true);
+    }
+  });
+});
+
 describe("generateNodes caps and toggles", () => {
   it("caps output at maxNodesPerFormat", () => {
     const s = settings();

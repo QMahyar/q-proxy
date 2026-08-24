@@ -74,6 +74,7 @@ src/ui/assets.ts         panel.html, login.html, camo.html as strings
 7. `mergeInto` skips `__proto__`/`constructor`/`prototype` keys and uses `Object.hasOwn`
 8. Setup endpoint re-reads KV via `loadSettingsFresh` before write (TOCTOU)
 9. Emitters are pure functions `(nodes, opts) => string` — no fetch, no KV, no `cloudflare:*`
+10. Subscription addresses come ONLY from the worker hostname + user-owned lists (`customDomains`, `cleanIps`, `cdn.*`). No IP or domain may ever be hard-coded into generation; enforced by the address-composition tests in `test/nodes/generate.spec.ts`.
 
 ## Boundaries
 

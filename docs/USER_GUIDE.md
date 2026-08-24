@@ -161,7 +161,9 @@ Still stuck? Enable `debugLogging: true` (`src/types/settings.ts:48` → `src/co
 |-------|---------|--------|
 | hostnameOverride | proxy.example.com | Overrides worker hostname for all emitted nodes |
 | customDomains[] | cdn.example.com | Extra SNI/host entries; plain-port nodes hidden unless plainPortPolicy=always |
-| cleanIps[] | 104.21.12.34, [2606:4700::1] | Direct IPs in address pool; mixed into urltest groups |
+| cleanIps[] | 104.21.12.34, [2606:4700::1]:8443, ip:port | Direct addresses in the pool. An entry with `:port` emits only that port (TLS family decides security); bare entries follow the TLS/plain port selection below. Invalid lines are dropped on save. |
+
+Address composition guarantee: subscriptions contain **only** your worker hostname plus entries from these user-owned lists — no built-in or hard-coded IPs/domains are ever added.
 
 Set in Panel -> Settings -> Routing. DNS for custom domains must be proxied (orange cloud) in CF dashboard — no auto DNS changes (docs/SPEC.md F-16).
 
