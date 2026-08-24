@@ -248,7 +248,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
     if (!headerSent) {
       headerSent = true;
       const header = opts.responseHeader;
-      if (header !== undefined && header !== null && header.length > 0) await sendDown(header);
+      if (header !== undefined && header !== null && header.length > 0) sink.send(header);
     }
     let current: Slot = slot;
     while (!finished) {

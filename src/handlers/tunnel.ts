@@ -118,7 +118,7 @@ async function driveSession(
     if (codec !== null) {
       const encoder = codec.beginDownlink();
       downlinkEncoder = encoder;
-      headerBytes = encoder.header();
+      headerBytes = inbound.responseHeader() ?? encoder.header();
       uplinkDecode = (chunk: Uint8Array) => codec.decodeUp(chunk);
       log.debug("tunnel", "body codec active", { kind });
     } else {

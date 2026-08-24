@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.3 — 2026-08-24
+
+### Fixed
+- **Shadowsocks downlink was broken for real clients**: the session salt was routed through the AEAD framer, double-wrapping it. Clients could complete the handshake but never decrypt the response. Salt is now sent raw, followed by counter-framed AEAD chunks per SIP004. Proven end-to-end with an independent Node client (full HTTP fetch through the tunnel).
+- **VMess responses were missing the encrypted response header** when the body codec was active: the protocol's cached AEAD response header is now sent raw before the first body frame, as Xray clients require.
+- Tunnel smoke tests now pin exact statuses instead of accepting any non-5xx.
+
+### Added
+- `test/manual/vless-probe.mjs` and `test/manual/ss-probe.mjs` — real-client end-to-end probes that speak VLESS and Shadowsocks against a running `wrangler dev`, verifying handshakes, framing, and actual proxied HTTP.
+
+### Notes
+- Found while debugging with real clients: unit tests exercised the encoder in isolation, so the salt-wrapping seam bug at the relay boundary was invisible until a wire-level client was used.
+
 ## 1.0.2 — 2026-08-24
 
 ### Fixed
