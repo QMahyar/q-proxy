@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex,nofollow">
+<title>Q Proxy</title>
+<style>
+:root{--bg:#0a0e14;--surface:#101720;--surface-2:#16202b;--surface-3:#1d2937;--border:#24303f;--border-strong:#33465c;--text:#e7eef5;--text-dim:#96a7b8;--text-faint:#61758a;--accent:#22d3ee;--accent-hover:#5ce1f5;--accent-down:#0ea5c9;--accent-ink:#052430;--accent-bg:rgba(34,211,238,.10);--success:#43d17c;--warning:#f5b83d;--danger:#f4718a;--danger-bg:rgba(244,113,138,.12);--ring:#7fe3f7;--font-sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Vazirmatn","Vazir","IRANSansX","Noto Sans Arabic","Noto Sans",Tahoma,sans-serif;--fs-sm:12px;--fs-md:13px;--fs-lg:15px;--fs-xl:18px;--fs-2xl:24px;--r-md:10px;--r-lg:14px;--r-sm:6px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:var(--fs-md);line-height:1.5}
+.stage{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:20px}
+.mark{font-size:var(--fs-2xl);font-weight:700;text-align:center;letter-spacing:.02em}
+.tagline{color:var(--text-dim);text-align:center;margin-top:4px;font-size:var(--fs-md)}
+.card{width:360px;max-width:92vw;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--s-5)}
+.field{margin-bottom:var(--s-4)}
+.field__label{display:block;font-size:var(--fs-sm);color:var(--text-dim);margin-bottom:6px}
+.control{position:relative;display:flex;gap:8px}
+.input{width:100%;height:38px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text);padding-inline:12px;padding-inline-end:40px;font-family:inherit;font-size:var(--fs-md)}
+.input:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-color:var(--accent)}
+.input[aria-invalid=true]{border-color:var(--danger)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding-inline:14px;border-radius:var(--r-sm);border:1px solid transparent;font-family:inherit;font-size:var(--fs-md);font-weight:600;color:var(--text);background:transparent;cursor:pointer;transition:background .12s ease-out,border-color .12s ease-out,color .12s ease-out}
+.btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.btn--primary{background:var(--accent);color:var(--accent-ink)}
+.btn--primary:hover{background:var(--accent-hover)}
+.btn--primary:active{background:var(--accent-down)}
+.btn--primary:disabled,.btn--ghost:disabled{opacity:.45;pointer-events:none}
+.btn--block{width:100%}
+.icon-btn{position:absolute;inset-inline-end:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r-sm);border:0;background:transparent;color:var(--text-dim);cursor:pointer}
+.icon-btn:hover{color:var(--text);background:var(--surface-3)}
+.icon-btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.icon-btn svg{width:18px;height:18px}
+.err{display:none;color:var(--danger);font-size:var(--fs-sm);margin-top:6px}
+.err.show{display:block}
+.hint-line{display:none;justify-content:space-between;font-size:var(--fs-sm);color:var(--text-faint);margin-top:6px}
+.hint-line.show{display:flex}
+.meter{flex:1;height:3px;background:var(--surface-3);border-radius:999px;overflow:hidden;align-self:center}
+.meter>i{display:block;height:100%;width:0;background:var(--danger);transition:width .16s ease-out}
+.lang-seg{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:2px}
+.seg-btn{height:30px;padding-inline:14px;border:0;background:transparent;color:var(--text-dim);font-family:inherit;font-size:var(--fs-sm);font-weight:600;border-radius:999px;cursor:pointer}
+.seg-btn[aria-pressed=true]{background:var(--accent-bg);color:var(--accent)}
+.seg-btn:focus-visible{outline:2px solid var(--ring);outline-offset:1px}
+.spin{width:14px;height:14px;border:2px solid currentColor;border-block-start-color:transparent;border-inline-end-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.shake{animation:shk .24s ease-out}
+@keyframes shk{25%{translate:-6px 0}50%{translate:6px 0}75%{translate:-3px 0}}
+.toasts{position:fixed;inset-inline:0;bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:8px;z-index:50;pointer-events:none}
+.toast{pointer-events:auto;background:var(--surface);border:1px solid var(--border);border-inline-start:3px solid var(--accent);border-radius:var(--r-md);padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.45);max-width:min(420px,92vw);font-size:var(--fs-md);animation:tin .16s ease-out}
+.toast--err{border-inline-start-color:var(--danger)}
+.toast--ok{border-inline-start-color:var(--success)}
+@keyframes tin{from{opacity:0;translate:0 8px}}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media(pointer:coarse){.btn{height:44px}.icon-btn{width:44px;height:44px}.seg-btn{height:38px}}
+</style>
+</head>
+<body>
+<svg hidden xmlns="http://www.w3.org/2000/svg"><symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol><symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12A3 3 0 1 1 9.88 9.88"/><line x1="1" y1="1" x2="23" y2="23"/></symbol></svg>
+<main class="stage">
+<h1 class="mark">&#9670; Q Proxy</h1>
+<p class="tagline" id="tagline"></p>
+<section class="card" id="card" aria-live="polite"></section>
+<nav aria-label="Language"><div class="lang-seg" role="group" id="langseg"></div></nav>
+</main>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<script>
+(()=>{'use strict';
+const DICT={
+en:{'app.name':'Q Proxy','app.tagline':'Cloudflare proxy panel','lang.en':'English','lang.fa':'فارسی','login.title':'Sign in to Q Proxy','login.password':'Passphrase','login.submit':'Sign in','login.submitting':'Signing in…','login.redirecting':'Redirecting…','login.error.wrong':'Wrong passphrase','login.error.locked':'Too many attempts. Try again in {seconds}s.','setup.title':'Create passphrase','setup.hint':'Choose a strong passphrase to protect this panel.','setup.new':'New passphrase','setup.confirm':'Confirm passphrase','setup.strength.weak':'Weak','setup.strength.ok':'OK','setup.strength.strong':'Strong','setup.rule':'At least 8 characters, one uppercase letter and one digit.','setup.error.mismatch':'Passphrases do not match','setup.submit':'Save and continue','common.reveal':'Reveal','common.hide':'Hide','toast.networkError':'Network error — check your connection.'},
+fa:{'app.name':'Q Proxy','app.tagline':'پنل پراکسی کلادفلر','lang.en':'English','lang.fa':'فارسی','login.title':'ورود به Q Proxy','login.password':'گذرواژه','login.submit':'ورود','login.submitting':'در حال ورود…','login.redirecting':'در حال انتقال…','login.error.wrong':'گذرواژه نادرست است','login.error.locked':'تلاش بیش از حد. بعد از {seconds} ثانیه دوباره امتحان کنید.','setup.title':'ساخت گذرواژه','setup.hint':'برای محافظت از این پنل یک گذرواژهٔ قوی انتخاب کنید.','setup.new':'گذرواژهٔ جدید','setup.confirm':'تکرار گذرواژه','setup.strength.weak':'ضعیف','setup.strength.ok':'قابل قبول','setup.strength.strong':'قوی','setup.rule':'حداقل ۸ نویسه شامل یک حرف بزرگ و یک رقم.','setup.error.mismatch':'دو گذرواژه یکسان نیستند','setup.submit':'ذخیره و ادامه','common.reveal':'نمایش','common.hide':'پنهان','toast.networkError':'خطای شبکه — اتصال خود را بررسی کنید.'}};
+const BASE=location.pathname.replace(/\/[^/]*\/?$/,'/');
+const getLang=()=>{const m=document.cookie.match(/(?:^|;\s*)qp_lang=(en|fa)/);return m&&m[1]||'fa'};
+let LANG=getLang();
+const t=(k,p)=>{let s=(DICT[LANG]&&DICT[LANG][k])||DICT.en[k]||k;if(p)for(const n in p)s=s.split('{'+n+'}').join(p[n]);return s};
+const $=id=>document.getElementById(id);
+function setLang(l){document.cookie='qp_lang='+l+'; Path=/; Max-Age=31536000; SameSite=Lax';location.reload()}
+function renderLangSeg(){const seg=$('langseg');seg.innerHTML='';[['en','lang.en'],['fa','lang.fa']].forEach(([code,key])=>{const b=document.createElement('button');b.type='button';b.className='seg-btn';b.textContent=t(key);b.setAttribute('aria-pressed',String(LANG===code));b.addEventListener('click',()=>{if(code!==LANG)setLang(code)});seg.appendChild(b)})}
+function applyLang(){document.documentElement.lang=LANG;document.documentElement.dir=LANG==='fa'?'rtl':'ltr';$('tagline').textContent=t('app.tagline');document.title='Q Proxy'}
+function toast(msg,kind){const box=$('toasts');const el=document.createElement('div');el.className='toast'+(kind==='err'?' toast--err':kind==='ok'?' toast--ok':'');el.textContent=msg;box.appendChild(el);while(box.children.length>3)box.firstChild.remove();setTimeout(()=>el.remove(),kind==='err'?6000:3500)}
+async function post(path,body){let r;try{r=await fetch(BASE+'api/'+path,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Q-Panel':'1'},body:JSON.stringify(body)})}catch(e){throw{status:0,code:'',message:'network'}}
+let d=null;try{d=await r.json()}catch(e){}
+if(!r.ok||!d||d.ok!==true)throw{status:r.status,code:d&&d.error?d.error.code:'',message:d&&d.error?d.error.message:'',retryAfter:Number(r.headers.get('Retry-After'))||0};
+return d.data}
+function eyeBtn(targetId){return '<button type="button" class="icon-btn" data-reveal="'+targetId+'" aria-label="'+t('common.reveal')+'" aria-pressed="false"><svg aria-hidden="true"><use href="#i-eye"/></svg></button>'}
+function wireReveals(root){root.querySelectorAll('[data-reveal]').forEach(b=>{b.addEventListener('click',()=>{const inp=$(b.getAttribute('data-reveal'));const show=inp.type==='password';inp.type=show?'text':'password';b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',t(show?'common.hide':'common.reveal'));b.querySelector('use').setAttribute('href',show?'#i-eye-off':'#i-eye')})})}
+let busy=false,countdownTimer=null;
+function setBusy(btn,labelKey){busy=true;btn.disabled=true;btn.innerHTML='<span class="spin" aria-hidden="true"></span>'+t(labelKey)}
+function setIdle(btn,labelKey){busy=false;btn.disabled=false;btn.textContent=t(labelKey)}
+function showError(id,msg){const el=$(id);el.textContent=msg;el.classList.add('show')}
+function clearErrors(){document.querySelectorAll('.err').forEach(e=>e.classList.remove('show'))}
+function goPanel(){$('card').innerHTML='<p style="text-align:center;color:var(--text-dim)">'+t('login.redirecting')+'</p>';location.replace(BASE+'panel')}
+function renderLogin(){clearErrors();const c=$('card');c.innerHTML='<h2 style="font-size:var(--fs-xl);font-weight:600;text-align:center">'+t('login.title')+'</h2><form id="f" novalidate style="margin-top:var(--s-4)"><div class="field"><label class="field__label" for="pw">'+t('login.password')+'</label><div class="control"><input class="input" type="password" id="pw" autocomplete="current-password" spellcheck="false">'+eyeBtn('pw')+'</div><p class="err" id="e-pw" role="alert"></p></div><button class="btn btn--primary btn--block" id="go" type="submit">'+t('login.submit')+'</button></form>';wireReveals(c);const f=$('f'),pw=$('pw'),go=$('go');f.addEventListener('submit',ev=>{ev.preventDefault();if(busy)return;if(!pw.value)return pw.focus();setBusy(go,'login.submitting');post('auth/login',{password:pw.value}).then(()=>goPanel()).catch(err=>{setIdle(go,'login.submit');if(err.status===429){startCountdown(Number(err.retryAfter)||60,go);showError('e-pw',t('login.error.locked',{seconds:String(countdown)}));return}c.classList.remove('shake');void c.offsetWidth;c.classList.add('shake');showError('e-pw',err.code==='SETUP_REQUIRED'?'':t('login.error.wrong'));pw.focus();pw.select();if(err.code==='SETUP_REQUIRED'){renderSetup();return}if(err.status===0)toast(t('toast.networkError'),'err')})});pw.focus()}
+let countdown=0;
+function startCountdown(sec,btn){countdown=sec;clearInterval(countdownTimer);btn.disabled=true;btn.textContent=t('login.error.locked',{seconds:String(countdown)});countdownTimer=setInterval(()=>{countdown--;if(countdown<=0){clearInterval(countdownTimer);btn.disabled=false;btn.textContent=t('login.submit')}else btn.textContent=t('login.error.locked',{seconds:String(countdown)})},1000)}
+function strength(pw){let sc=0;if(pw.length>=8)sc++;if(/[A-Z]/.test(pw))sc++;if(/\d/.test(pw))sc++;if(sc<2||pw.length<8)return{k:'setup.strength.weak',v:.33,c:'var(--danger)'};if(sc===2)return{k:'setup.strength.ok',v:.66,c:'var(--warning)'};return{k:'setup.strength.strong',v:1,c:'var(--success)'}}
+function renderSetup(){clearErrors();const c=$('card');c.innerHTML='<h2 style="font-size:var(--fs-xl);font-weight:600;text-align:center">'+t('setup.title')+'</h2><p style="text-align:center;color:var(--text-dim);font-size:var(--fs-sm);margin-top:6px">'+t('setup.hint')+'</p><form id="f" novalidate style="margin-top:var(--s-4)"><div class="field"><label class="field__label" for="np">'+t('setup.new')+'</label><div class="control"><input class="input" type="password" id="np" autocomplete="new-password" spellcheck="false">'+eyeBtn('np')+'</div><div class="hint-line" id="meter-row"><span class="meter"><i id="meter-i"></i></span><span id="meter-l"></span></div><p class="hint-line show" id="rule-row"><span>'+t('setup.rule')+'</span></p><p class="err" id="e-np" role="alert"></p></div><div class="field"><label class="field__label" for="cp">'+t('setup.confirm')+'</label><div class="control"><input class="input" type="password" id="cp" autocomplete="new-password" spellcheck="false">'+eyeBtn('cp')+'</div><p class="err" id="e-cp" role="alert"></p></div><button class="btn btn--primary btn--block" id="go" type="submit">'+t('setup.submit')+'</button></form>';wireReveals(c);const f=$('f'),np=$('np'),cp=$('cp'),go=$('go'),row=$('meter-row'),bar=$('meter-i'),lab=$('meter-l');np.addEventListener('input',()=>{row.classList.add('show');const s=strength(np.value);bar.style.width=Math.round(s.v*100)+'%';bar.style.background=s.c;lab.textContent=t(s.k);lab.style.color=s.c});f.addEventListener('submit',ev=>{ev.preventDefault();if(busy)return;clearErrors();if(np.value.length<8){showError('e-np',t('setup.rule'));np.focus();return}if(!(/[A-Z]/.test(np.value)&&/\d/.test(np.value))){showError('e-np',t('setup.rule'));np.focus();return}if(np.value!==cp.value){showError('e-cp',t('setup.error.mismatch'));cp.focus();return}setBusy(go,'login.submitting');post('auth/setup',{newPassword:np.value}).then(()=>{toast(t('setup.title')+' ✓','ok');goPanel()}).catch(async err=>{if(err.code!=='ALREADY_SET'&&err.status!==409&&err.status!==0){try{await post('auth/login',{password:np.value});return goPanel()}catch(e2){}}setIdle(go,'setup.submit');if(err.status===409||err.code==='ALREADY_SET'){renderLogin();return}showError('e-np',err.status===0?t('toast.networkError'):t('setup.rule'));np.focus()})});np.focus()}
+applyLang();renderLangSeg();
+(async()=>{try{const d=await fetch(BASE+'api/settings',{credentials:'same-origin'});let j=null;try{j=await d.json()}catch(e){}
+if(d.ok&&j&&j.ok&&j.data){if(j.data.hasPassword===false){renderSetup()}else{goPanel()}return}
+if(j&&!j.ok&&(j.data&&j.data.hasPassword===false)){renderSetup();return}}catch(e){}
+renderLogin()})();
+})();
+</script>
+</body>
+</html>

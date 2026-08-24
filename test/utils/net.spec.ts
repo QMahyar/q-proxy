@@ -1,0 +1,113 @@
+import { describe, expect, it } from "vitest";
+import {
+  bracketIpv6,
+  cidrContains,
+  isCloudflareIp,
+  isIPv4,
+  isIPv6,
+  isLocalOrPrivateTarget,
+  parseHostPort,
+} from "../../src/utils/net";
+
+describe("isIPv4", () => {
+  it("accepts valid", () => {
+    expect(isIPv4("0.0.0.0")).toBe(true);
+    expect(isIPv4("192.168.1.1")).toBe(true);
+    expect(isIPv4("255.255.255.255")).toBe(true);
+  });
+  it("rejects invalid", () => {
+    expect(isIPv4("256.1.1.1")).toBe(false);
+    expect(isIPv4("1.2.3")).toBe(false);
+    expect(isIPv4("a.b.c.d")).toBe(false);
+    expect(isIPv4("")).toBe(false);
+  });
+});
+
+describe("isIPv6", () => {
+  it("accepts valid forms", () => {
+    for (const s of [
+      "::",
+      "::1",
+      "2001:db8::1",
+      "2001:db8:0:0:0:0:0:1",
+      "fe80::1%eth0",
+      "::ffff:192.168.1.1",
+      "2a02:898:146:64::",
+      "2602:fc59:b0:64::",
+    ]) {
+      expect(isIPv6(s), s).toBe(true);
+    }
+  });
+  it("rejects invalid forms", () => {
+    for (const s of [":::", "2001:db8:::1", "12345::", "1.2.3.4", ":", "2001:db8:0:0:0:0:0:1:2"]) {
+      expect(isIPv6(s), s).toBe(false);
+    }
+  });
+});
+
+describe("parseHostPort", () => {
+  it("parses ipv4 host:port", () => {
+    expect(parseHostPort("1.2.3.4:8080")).toEqual({ host: "1.2.3.4", port: 8080 });
+  });
+  it("parses domain with default port", () => {
+    expect(parseHostPort("example.com", 443)).toEqual({ host: "example.com", port: 443 });
+  });
+  it("parses bracketed ipv6", () => {
+    expect(parseHostPort("[2001:db8::1]:443")).toEqual({ host: "2001:db8::1", port: 443 });
+    expect(parseHostPort("[::1]")).toEqual({ host: "::1", port: 80 });
+  });
+  it("treats bare ipv6 without brackets as host", () => {
+    expect(parseHostPort("2001:db8::1")).toEqual({ host: "2001:db8::1", port: 80 });
+  });
+  it("returns null on garbage", () => {
+    expect(parseHostPort("host:99999")).toBeNull();
+    expect(parseHostPort("host:-1")).toBeNull();
+    expect(parseHostPort(":80")).toBeNull();
+    expect(parseHostPort("[bad]:80")).toBeNull();
+  });
+});
+
+describe("bracketIpv6", () => {
+  it("brackets only ipv6", () => {
+    expect(bracketIpv6("2001:db8::1")).toBe("[2001:db8::1]");
+    expect(bracketIpv6("example.com")).toBe("example.com");
+    expect(bracketIpv6("1.2.3.4")).toBe("1.2.3.4");
+  });
+});
+
+describe("cidrContains", () => {
+  it("v4 containment", () => {
+    expect(cidrContains("104.16.0.1", "104.16.0.0/13")).toBe(true);
+    expect(cidrContains("104.24.0.1", "104.16.0.0/13")).toBe(false);
+    expect(cidrContains("10.0.0.5", "10.0.0.0/8")).toBe(true);
+  });
+  it("v6 containment", () => {
+    expect(cidrContains("2400:cb00::1", "2400:cb00::/32")).toBe(true);
+    expect(cidrContains("2606:4700::1", "2400:cb00::/32")).toBe(false);
+  });
+  it("refuses family mismatch", () => {
+    expect(cidrContains("1.2.3.4", "::/0")).toBe(false);
+  });
+});
+
+describe("isCloudflareIp", () => {
+  it("detects cf ranges", () => {
+    expect(isCloudflareIp("104.16.132.229")).toBe(true);
+    expect(isCloudflareIp("172.64.0.1")).toBe(true);
+    expect(isCloudflareIp("2606:4700:4700::1111")).toBe(true);
+    expect(isCloudflareIp("8.8.8.8")).toBe(false);
+  });
+});
+
+describe("isLocalOrPrivateTarget", () => {
+  it("flags localhost and private ranges", () => {
+    for (const h of ["localhost", "127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.0.5", "::1", "fc00::1", "fe80::1", "[::1]", "foo.local"]) {
+      expect(isLocalOrPrivateTarget(h), h).toBe(true);
+    }
+  });
+  it("allows public targets", () => {
+    for (const h of ["example.com", "8.8.8.8", "104.16.0.1", "2606:4700::1111"]) {
+      expect(isLocalOrPrivateTarget(h), h).toBe(false);
+    }
+  });
+});

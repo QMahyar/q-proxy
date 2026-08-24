@@ -1,0 +1,77 @@
+import type { ProxyNode } from "../../types/node";
+import type { EmitOptions } from "./registry";
+
+const TEST_URL = "https://www.gstatic.com/generate_204";
+
+type LoonNode = Extract<ProxyNode, { kind: "vmess" | "trojan" | "vless" }>;
+
+function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): LoonNode[] {
+  return nodes.filter(
+    (n): n is LoonNode =>
+      (isFragment || n.variant !== "fragment") &&
+      (n.kind === "vmess" ||
+        (n.kind === "vless" && n.security === "tls") ||
+        (n.kind === "trojan" && n.security === "tls")),
+  );
+}
+
+function vmessLine(node: Extract<ProxyNode, { kind: "vmess" }>): string {
+  const parts = [
+    `${node.name} = vmess`,
+    node.address,
+    String(node.port),
+    `username=${node.uuid}`,
+    "cipher=auto",
+    `alterId=${node.alterId}`,
+    "udp=true",
+    node.security === "tls" ? "tls=true" : "tls=false",
+  ];
+  if (node.security === "tls" && node.sni !== null) parts.push(`sni=${node.sni}`);
+  parts.push("transporter=ws", `path=${node.path}`, `host=${node.host}`);
+  return parts.join(", ");
+}
+
+function trojanLine(node: Extract<ProxyNode, { kind: "trojan" }>): string {
+  const parts = [
+    `${node.name} = trojan`,
+    node.address,
+    String(node.port),
+    `password=${node.password}`,
+    "udp=true",
+  ];
+  if (node.sni !== null) parts.push(`sni=${node.sni}`);
+  parts.push("transporter=ws", `path=${node.path}`, `host=${node.host}`);
+  return parts.join(", ");
+}
+
+function vlessLine(node: Extract<ProxyNode, { kind: "vless" }>): string {
+  const parts = [
+    `${node.name} = vless`,
+    node.address,
+    String(node.port),
+    `username=${node.uuid}`,
+    node.security === "tls" ? "over-tls=true" : "over-tls=false",
+  ];
+  if (node.security === "tls" && node.sni !== null) parts.push(`sni=${node.sni}`);
+  parts.push("transporter=ws", `path=${node.path}`, `host=${node.host}`);
+  return parts.join(", ");
+}
+
+export function emitLoonConf(nodes: readonly ProxyNode[], opts: EmitOptions): string {
+  const visible = visibleNodes(nodes, opts.isFragment);
+  const lines = visible.map((n) => (n.kind === "vmess" ? vmessLine(n) : n.kind === "vless" ? vlessLine(n) : trojanLine(n)));
+  const names = lines.map((l) => l.slice(0, l.indexOf(" =")));
+  const group =
+    names.length > 1
+      ? `PROXY = url-test, ${names.join(", ")}, url=${TEST_URL}, interval=${opts.urlTestIntervalSec}, tolerance=50, timeout=5`
+      : names.length === 1
+        ? `PROXY = select, ${names[0]}`
+        : "PROXY = select, DIRECT";
+  const sections = [
+    "[General]\nloglevel = notify",
+    `[Proxy]\n${lines.join("\n")}`.trimEnd(),
+    `[Proxy Group]\n${group}`,
+    "[Rule]\nFINAL,PROXY",
+  ];
+  return `${sections.join("\n\n")}\n`;
+}

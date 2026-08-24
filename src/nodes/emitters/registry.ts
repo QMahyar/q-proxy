@@ -1,0 +1,23 @@
+import type { SubFormat } from "../../core/ua";
+import type { ProxyNode } from "../../types/node";
+import { emitBase64List } from "./base64-list";
+import { emitClashYaml } from "./clash-yaml";
+import { emitLoonConf } from "./loon-conf";
+import { emitSingBoxJson } from "./singbox-json";
+import { emitSurgeConf } from "./surge-conf";
+
+export interface EmitOptions {
+  remoteDns: string;
+  urlTestIntervalSec: number;
+  isFragment: boolean;
+}
+
+export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;
+
+export const EMITTERS: Record<SubFormat, NodeEmitter> = {
+  base64: emitBase64List,
+  clash: emitClashYaml,
+  singbox: emitSingBoxJson,
+  surge: emitSurgeConf,
+  loon: emitLoonConf,
+};

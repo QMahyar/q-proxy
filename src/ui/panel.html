@@ -1,0 +1,1043 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex,nofollow">
+<title>Q Proxy</title>
+<script>
+(()=>{const m=document.cookie.match(/(?:^|;\s*)qp_lang=(en|fa)/);const l=m&&m[1]||'fa';document.documentElement.lang=l;document.documentElement.dir=l==='fa'?'rtl':'ltr'})();
+</script>
+<style>
+:root{--bg:#0a0e14;--surface:#101720;--surface-2:#16202b;--surface-3:#1d2937;--border:#24303f;--border-strong:#33465c;--text:#e7eef5;--text-dim:#96a7b8;--text-faint:#61758a;--accent:#22d3ee;--accent-hover:#5ce1f5;--accent-down:#0ea5c9;--accent-ink:#052430;--accent-bg:rgba(34,211,238,.10);--success:#43d17c;--success-bg:rgba(67,209,124,.12);--warning:#f5b83d;--warning-bg:rgba(245,184,61,.12);--danger:#f4718a;--danger-bg:rgba(244,113,138,.12);--ring:#7fe3f7;--overlay:rgba(4,7,10,.72);--font-sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Vazirmatn","Vazir","IRANSansX","Noto Sans Arabic","Noto Sans",Tahoma,sans-serif;--font-mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,Menlo,"Courier New",monospace;--fs-xs:11px;--fs-sm:12px;--fs-md:13px;--fs-lg:15px;--fs-xl:18px;--r-sm:6px;--r-md:10px;--r-lg:14px;--r-full:999px;--shadow-pop:0 8px 24px rgba(0,0,0,.45);--shadow-modal:0 24px 64px rgba(0,0,0,.55)}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:var(--fs-md);line-height:1.5;min-height:100vh}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-radius:inherit}
+[hidden]{display:none!important}
+.visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.mono{font-family:var(--font-mono)}
+.topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:var(--s-4,16px);background:var(--surface);border-block-end:1px solid var(--border);padding-inline:16px;min-height:52px}
+.brand{font-weight:700;font-size:var(--fs-lg);white-space:nowrap;display:flex;align-items:center;gap:8px}
+.brand .gem{color:var(--accent)}
+.tabs{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:inline-flex;align-items:center;height:44px;padding-inline:12px;color:var(--text-dim);text-decoration:none;font-weight:600;border-block-end:2px solid transparent;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab[aria-selected=true]{color:var(--accent);border-block-end-color:var(--accent)}
+.topbar__end{display:flex;align-items:center;gap:8px;margin-inline-start:auto}
+main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
+@media(min-width:1024px){main{padding-inline:32px}}
+.view-title{font-size:var(--fs-xl);font-weight:700;margin-block:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:16px}
+@media(min-width:768px){.card{padding:24px}}
+.card+.card,.home-grid .card+.card{margin-block-start:16px}
+.card__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-block-end:12px}
+.card__title{font-size:var(--fs-lg);font-weight:600}
+.card--dim{opacity:.55}
+.grid2{display:grid;gap:16px}
+@media(min-width:768px){.grid2{grid-template-columns:1fr 1fr}}
+.home-grid{display:grid;gap:16px}
+@media(min-width:1024px){.home-grid{grid-template-columns:3fr 2fr;align-items:start}}
+.field{margin-block-end:16px}
+.field:last-child{margin-block-end:0}
+.field__label{display:block;font-size:var(--fs-sm);color:var(--text-dim);font-weight:600;margin-block-end:6px}
+.field__hint{font-size:var(--fs-sm);color:var(--text-faint);margin-block-start:6px}
+.field__error{display:none;font-size:var(--fs-sm);color:var(--danger);margin-block-start:6px}
+.field--error .field__error{display:block}
+.field--error .field__hint{display:none}
+.input,.select,.textarea{width:100%;height:38px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text);padding-inline:12px;font-family:inherit;font-size:var(--fs-md)}
+.textarea{height:auto;min-height:88px;padding-block:8px;resize:vertical;line-height:1.6}
+.input--mono,.textarea--mono{font-family:var(--font-mono);word-break:break-all}
+.input:focus-visible,.textarea:focus-visible,.select:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-color:var(--accent)}
+.input[aria-invalid=true],.textarea[aria-invalid=true]{border-color:var(--danger)}
+.select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2396a7b8' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-inline-end:32px}
+[dir=rtl] .select{background-position:left 10px center;padding-inline:32px 12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding-inline:14px;border-radius:var(--r-sm);border:1px solid transparent;font-family:inherit;font-size:var(--fs-md);font-weight:600;color:var(--text);background:transparent;cursor:pointer;text-decoration:none;transition:background .12s ease-out,border-color .12s ease-out,color .12s ease-out}
+.btn svg{width:16px;height:16px;flex:none}
+.btn--primary{background:var(--accent);color:var(--accent-ink)}
+.btn--primary:hover{background:var(--accent-hover)}
+.btn--primary:active{background:var(--accent-down)}
+.btn--ghost{border-color:var(--border-strong)}
+.btn--ghost:hover{background:var(--surface-3)}
+.btn--ghost-danger{border-color:var(--danger);color:var(--danger)}
+.btn--ghost-danger:hover{background:var(--danger-bg)}
+.btn--icon{width:36px;height:36px;padding:0;border-radius:var(--r-sm)}
+.btn--sm{height:28px;padding-inline:10px;font-size:var(--fs-sm)}
+.btn:disabled{opacity:.45;pointer-events:none}
+.spin{width:14px;height:14px;border:2px solid currentColor;border-block-start-color:transparent;border-inline-end-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.secret-field,.copy-field{display:flex;gap:8px;align-items:center}
+.copy-field{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:4px 4px 4px 12px;min-height:38px}
+.copy-field code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-sm);direction:ltr;text-align:start;color:var(--accent);unicode-bidi:isolate}
+.copy-field .btn{flex:none}
+.switch{display:inline-flex;align-items:center;gap:12px;cursor:pointer;min-height:38px}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch__track{width:40px;height:22px;border-radius:var(--r-full);background:var(--surface-3);border:1px solid var(--border-strong);position:relative;transition:background .12s ease-out;flex:none}
+.switch__thumb{position:absolute;top:2px;inset-inline-start:2px;width:16px;height:16px;border-radius:50%;background:var(--text-dim);transition:translate .16s ease-out,background .12s ease-out}
+.switch input:checked~.switch__track{background:var(--accent);border-color:var(--accent)}
+[dir=rtl] .switch input:checked~.switch__track .switch__thumb{translate:-18px 0}
+[dir=ltr] .switch input:checked~.switch__track .switch__thumb{translate:18px 0}
+.switch input:focus-visible~.switch__track{outline:2px solid var(--ring);outline-offset:2px}
+.switch.pending{opacity:.6;pointer-events:none}
+.switch__label{font-weight:600}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:8px}
+.row+.row,.rows>.row+div{border-block-start:1px solid var(--border)}
+.chip-row{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;height:34px;padding-inline:14px;border-radius:var(--r-full);border:1px solid var(--border-strong);background:transparent;color:var(--text-dim);font-family:inherit;font-size:var(--fs-md);font-weight:600;cursor:pointer}
+.chip:hover{background:var(--surface-3)}
+.chip[aria-checked=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-full);padding:2px}
+.seg button{height:30px;padding-inline:14px;border:0;background:transparent;color:var(--text-dim);font-family:inherit;font-size:var(--fs-sm);font-weight:600;border-radius:var(--r-full);cursor:pointer}
+.seg button[aria-checked=true]{background:var(--accent-bg);color:var(--accent)}
+.port-matrix{border:1px solid var(--border);border-radius:var(--r-md);padding:12px}
+.port-matrix legend{font-size:var(--fs-sm);color:var(--text-dim);font-weight:600;padding-inline:6px;display:flex;align-items:center;gap:8px}
+.port-cells{display:flex;flex-wrap:wrap;gap:8px}
+.port-cell input{position:absolute;opacity:0;width:1px;height:1px}
+.port-cell span{display:inline-flex;align-items:center;justify-content:center;min-width:52px;height:38px;padding-inline:8px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-dim);font-family:var(--font-mono);cursor:pointer}
+.port-cell input:checked+span{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.port-cell input:focus-visible+span{outline:2px solid var(--ring);outline-offset:2px}
+.line-editor .meta{display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-xs);margin-block-start:4px}
+.line-editor .cnt{color:var(--text-faint)}
+.line-editor .bad{color:var(--danger);text-align:end;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%}
+.subtabs{display:flex;gap:8px;overflow-x:auto;padding-block:8px 12px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 92%,transparent);mask-image:linear-gradient(90deg,#000 92%,transparent)}
+.subtabs::-webkit-scrollbar{display:none}
+.subtab{flex:none;display:inline-flex;align-items:center;height:34px;padding-inline:16px;border-radius:var(--r-full);border:1px solid var(--border);background:var(--surface);color:var(--text-dim);text-decoration:none;font-size:var(--fs-md);font-weight:600;cursor:pointer}
+.subtab[aria-selected=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
+.tbl th{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);text-align:start;font-weight:600;padding:6px 8px;border-block-end:1px solid var(--border)}
+.tbl td{padding:8px;border-block-end:1px solid var(--border);vertical-align:middle}
+.tbl tr:last-child td{border-block-end:0}
+.glyph-ok{color:var(--success)}.glyph-warn{color:var(--warning)}.glyph-bad{color:var(--danger)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+.dot--ok{background:var(--success)}.dot--warn{background:var(--warning)}.dot--bad{background:var(--danger)}
+.chip-status{display:inline-flex;align-items:center;gap:6px;height:22px;padding-inline:10px;border-radius:var(--r-full);font-size:var(--fs-xs);font-weight:700;letter-spacing:.03em}
+.chip-status.ok{background:var(--success-bg);color:var(--success)}
+.chip-status.bad{background:var(--danger-bg);color:var(--danger)}
+.progress{height:6px;background:var(--surface-3);border-radius:var(--r-full);overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .16s ease-out}
+.applybar{position:fixed;inset-inline:0;bottom:calc(16px + env(safe-area-inset-bottom));z-index:45;display:flex;justify-content:center;pointer-events:none}
+.applybar__inner{pointer-events:auto;display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-md);box-shadow:var(--shadow-pop);padding:10px 14px;max-width:min(560px,94vw)}
+.applybar__label{color:var(--warning);font-weight:600;display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)}
+.modal{position:fixed;inset:0;background:var(--overlay);display:grid;place-items:center;z-index:100;padding:16px}
+.modal__panel{background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-lg);max-width:min(380px,94vw);width:100%;box-shadow:var(--shadow-modal);padding:24px;animation:mIn .16s ease-out}
+@keyframes mIn{from{opacity:0;translate:0 8px}}
+.modal__title{font-size:var(--fs-lg);font-weight:700;margin-block-end:12px}
+.modal__body{color:var(--text-dim);margin-block-end:16px}
+.modal__actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.qr-wrap{display:grid;place-items:center;background:#fff;border-radius:var(--r-md);padding:10px;margin-block-end:12px}
+.toasts{position:fixed;inset-inline:0;bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:8px;z-index:120;pointer-events:none}
+.toast{pointer-events:auto;background:var(--surface);border:1px solid var(--border);border-inline-start:3px solid var(--accent);border-radius:var(--r-md);padding:10px 14px;box-shadow:var(--shadow-pop);max-width:min(420px,92vw);animation:tIn .16s ease-out}
+.toast--err{border-inline-start-color:var(--danger)}
+.toast--ok{border-inline-start-color:var(--success)}
+@keyframes tIn{from{opacity:0;translate:0 8px}}
+.stat-grid{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 12px;align-items:center}
+.stat-grid .lbl{color:var(--text-faint);font-size:var(--fs-sm)}
+.hint-danger{color:var(--danger)}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media(pointer:coarse),(max-width:767px){.btn{height:44px}.btn--icon{width:44px;height:44px}.chip{height:44px}.seg button{height:38px}.port-cell span{height:44px}}
+@media(max-width:767px){.topbar{flex-wrap:wrap;padding-block:4px 0}.tabs{order:3;width:100%}.stat-grid{grid-template-columns:auto 1fr}.stat-grid .h-cell{display:none}.tbl thead{display:none}.tbl td{display:block;border-block-end:0;padding:3px 8px}.tbl tr{display:block;border-block-end:1px solid var(--border);padding-block:6px}.tbl td::before{content:attr(data-l) ": ";color:var(--text-faint);font-size:var(--fs-xs)}}
+</style>
+
+</head>
+<body>
+<svg hidden xmlns="http://www.w3.org/2000/svg">
+<symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12A3 3 0 1 1 9.88 9.88"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-dice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.2" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.2" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.2" fill="currentColor"/></symbol>
+<symbol id="i-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14h1v1h-1zM14 20h1v1h-1zM18 18h3v3h-3z"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 4 14 8-14 8V4z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+</svg>
+<header class="topbar">
+<div class="brand"><span class="gem">&#9670;</span> Q Proxy</div>
+<nav class="tabs" role="tablist" aria-label="Views" id="nav">
+<a class="tab" role="tab" id="tab-home" href="#/home" data-view="home"></a>
+<a class="tab" role="tab" id="tab-settings" href="#/settings/general" data-view="settings"></a>
+<a class="tab" role="tab" id="tab-checker" href="#/checker" data-view="checker"></a>
+</nav>
+<div class="topbar__end">
+<div class="seg" role="group" aria-label="Language" id="langseg"></div>
+<button type="button" class="btn btn--icon btn--ghost-danger" id="logout-btn" data-action="logout"><svg aria-hidden="true"><use href="#i-power"/></svg></button>
+</div>
+</header>
+<main id="main">
+<section id="view-home" hidden>
+<h1 class="view-title" id="home-h1"></h1>
+<div class="home-grid" id="home-body"></div>
+</section>
+<section id="view-settings" hidden>
+<h1 class="view-title" id="settings-h1"></h1>
+<div class="subtabs" role="tablist" aria-label="Settings sections" id="subtabs"></div>
+<div id="settings-panels"></div>
+</section>
+<section id="view-checker" hidden>
+<h1 class="view-title" id="checker-h1"></h1>
+<div id="checker-body"></div>
+<span class="visually-hidden" id="ck-live" aria-live="polite"></span>
+</section>
+</main>
+<div class="applybar" id="applybar" hidden><div class="applybar__inner"><span class="applybar__label"><span class="dot dot--warn"></span><span id="dirty-label"></span></span><button type="button" class="btn btn--ghost btn--sm" id="discard-btn" data-action="discard"></button><button type="button" class="btn btn--primary btn--sm" id="apply-btn" data-action="apply"></button></div></div>
+<div class="modal" id="m-qr" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="qr-title"><div class="modal__title" id="qr-title"></div><div class="qr-wrap"><canvas id="qr-canvas" width="560" height="560" style="width:280px;height:280px;display:block;max-width:64vw;max-height:64vw"></canvas></div><p class="field__hint" id="qr-hint" style="margin-block-end:12px"></p><div id="qr-caption"></div><div class="modal__actions" style="margin-block-start:16px"><button type="button" class="btn btn--ghost" id="qr-close" data-action="close-modal"></button></div></div></div>
+<div class="modal" id="m-confirm" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="cf-title"><div class="modal__title" id="cf-title"></div><div class="modal__body" id="cf-body"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="cf-cancel"></button><button type="button" class="btn btn--primary" id="cf-ok"></button></div></div></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<noscript><p style="padding:24px;text-align:center">JavaScript is required.</p></noscript>
+<script>
+(()=>{'use strict';
+const DICT={
+en:{'app.name':'Q Proxy','app.tagline':'Cloudflare proxy panel','nav.home':'Home','nav.settings':'Settings','nav.checker':'IP Checker','nav.logout':'Log out','lang.en':'English','login.title':'Sign in to Q Proxy','login.password':'Passphrase','common.apply':'Apply changes','common.applying':'Applying…','common.saved':'Saved','common.discard':'Discard','common.cancel':'Cancel','common.close':'Close','common.confirm':'Confirm','common.copy':'Copy','common.copied':'Copied','common.generate':'Generate','common.generated':'Generated — Apply to save.','common.reveal':'Reveal','common.hide':'Hide','common.add':'Add','common.remove':'Remove','common.resetDefaults':'Reset to defaults','common.unsaved':'Unsaved changes','common.error':'Something went wrong','common.loading':'Loading…','common.optional':'optional','common.on':'On','common.off':'Off','common.enabled':'Enabled','common.disabled':'Disabled','common.yes':'Yes','common.no':'No','common.retry':'Retry','common.openChecker':'Open IP Checker','common.fixErrors':'Fix {count} error(s)','home.subs.title':'Subscriptions','home.subs.desc':'Import these URLs into your proxy client.','home.subs.mode.normal':'Normal','home.subs.mode.fragment':'Fragment','home.stats.title':'My IP & egress','home.stats.refresh':'Refresh','home.stats.via_cf':'Via Cloudflare targets','home.stats.via_other':'Via other targets','home.stats.ip':'IP','home.stats.country':'Country','home.stats.city':'City','home.stats.isp':'ISP','home.stats.asn':'ASN','home.stats.colo':'CF colo','home.stats.updated':'Fetched just now · refreshes on demand','home.stats.failed':'Could not fetch IP info.','home.stats.link':'Open summary','home.kill.title':'Kill switch','home.kill.paused':'Traffic paused','home.kill.active':'Traffic serving','home.kill.desc_paused':'Clients receive HTTP 503; this panel stays reachable.','home.kill.desc_active':'Proxy traffic is being served normally.','home.status.title':'Worker status','home.status.version':'Version','home.status.colo':'Colo','home.status.today':'Requests today','home.status.total':'Requests total','tabs.settings.general':'General','tabs.settings.protocols':'Protocols','tabs.settings.ports':'Ports & Domains','tabs.settings.proxyip':'Proxy IP','tabs.settings.fragment':'Fragment','tabs.settings.chain':'Chain proxy','tabs.settings.advanced':'Advanced','general.securePath.label':'Secure path','general.securePath.hint':'Secret prefix for this panel and all subscription URLs. Changing it invalidates every URL.','general.killSwitch.label':'Kill switch','general.killSwitch.hint':'Instantly pause all proxy traffic (clients get 503).','general.language.label':'Panel language','general.profileTitle.label':'Profile title','general.profileTitle.hint':'Name shown in proxy clients.','general.debugLogging.label':'Debug logging','general.debugLogging.hint':'Write verbose diagnostics to worker logs.','general.danger.title':'Danger zone','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.enable':'Enable {proto}','protocols.disabled_hint':'Disabled — no configs are generated for this protocol.','protocols.uuid':'UUID','protocols.password':'Password','protocols.cipher':'Cipher method','protocols.common.title':'Common options','protocols.path.label':'WebSocket path','protocols.path.hint':'URL prefix of this protocol tunnel.','protocols.earlyData.label':'Early data (0-RTT)','protocols.earlyData.hint':'Allows clients to send the first payload inside the handshake path parameter.','protocols.earlyData.max':'Max early data (bytes)','protocols.fingerprint.label':'TLS fingerprint','protocols.sniCase.label':'Randomize SNI case','protocols.sniCase.hint':'Randomizes letter case of the SNI hostname.','protocols.alpn.label':'ALPN protocols','protocols.alpn.hint':'One protocol per line, e.g. http/1.1 or h2.','ports.domains.label':'Custom domains','ports.domains.hint':'Hostnames orange-clouded to this Worker; every enabled port serves them.','ports.hostnameOverride.label':'Hostname override','ports.hostnameOverride.hint':'Force this hostname in generated configs instead of the request host.','ports.matrix.legend_tls':'TLS ports','ports.matrix.legend_plain':'Plaintext ports','ports.matrix.hint':'Plaintext ports apply only to workers.dev hostnames without custom domains.','ports.policy.label':'Plaintext port policy','ports.policy.always':'Always','ports.policy.workersdev':'Only workers.dev','ports.policy.never':'Never','ports.cleanAddrs.label':'Clean addresses','ports.cleanAddrs.hint':'One IP or hostname per line; added to generated configs as preferred addresses.','ports.remoteSubs.label':'Remote subscriptions to merge','ports.remoteSubs.hint':'One https:// URL per line; fetched at subscription time and merged into the raw list.','ports.cdn.title':'CDN fronting','ports.cdn.enabled.label':'Route through CDN','ports.cdn.addresses.label':'CDN addresses','ports.cdn.addresses.hint':'One address per line; used as connect address when CDN fronting is on.','ports.cdn.host.label':'CDN host','ports.cdn.sni.label':'CDN SNI','proxyip.mode.label':'Mode','proxyip.mode.list':'Static list','proxyip.mode.nat64':'NAT64 prefixes','proxyip.list.label':'Proxy IP list','proxyip.list.hint':'One entry per line; host:port allowed. Used when the direct connection fails.','proxyip.nat64.label':'NAT64 prefixes','proxyip.nat64.hint':'One IPv6 prefix per line (e.g. 2a02:898:146:64::).','checker.title':'Proxy IP checker','checker.desc':'Tests reachability and latency of each target against the Cloudflare trace endpoint from your browser.','checker.targets.label':'Targets','checker.targets.hint':'One IP or host:port per line — up to 100.','checker.run':'Run test','checker.stop':'Stop','checker.running':'Testing…','checker.results':'Results','checker.empty':'No results yet.','checker.col.target':'Target','checker.col.latency':'Avg latency','checker.col.rate':'Success','checker.col.status':'Status','checker.status.ok':'Healthy','checker.status.partial':'Partial','checker.status.failed':'Failed','checker.summary':'{ok} healthy of {total}.','checker.tooMany':'Maximum 100 targets.','fragment.enable':'Enable fragmentation','fragment.preset.label':'Preset','fragment.preset.off':'Off','fragment.preset.low':'Low','fragment.preset.medium':'Medium','fragment.preset.high':'High','fragment.preset.severe':'Severe','fragment.preset.custom':'Custom','fragment.length':'Length min–max (bytes)','fragment.delay':'Delay min–max (ms)','fragment.split':'Max split min–max','fragment.packets':'Packets pattern','chain.enable':'Enable chain proxy','chain.uri.label':'Upstream URI','chain.uri.hint':'socks5://user:pass@host:port or http://host:port','advanced.doh.label':'DoH upstream','advanced.doh.hint':'DNS-over-HTTPS resolver used behind your private endpoint below.','advanced.doh.private':'Your private DoH endpoint','advanced.remoteDns.label':'Remote DNS','advanced.localDns.label':'Local DNS fallback','advanced.udp53.label':'Enable UDP 53 relay','advanced.udp53.hint':'Answers client DNS queries over UDP by relaying through DoH.','advanced.behavior.title':'Subscriptions & behavior','advanced.subInterval.label':'Sub update interval (hours)','advanced.maxNodes.label':'Max nodes per format','advanced.urlTest.label':'URL test interval (seconds)','advanced.camouflage.label':'Camouflage page','advanced.camouflage.none':'None (plain 404)','advanced.camouflage.static':'Static landing page','advanced.camouflage.proxy':'Reverse proxy URL','advanced.camouflage.url':'Camouflage URL','advanced.speedtest.label':'Intercept speed tests','advanced.speedtest.hint':'Answer speedtest providers with synthetic throughput instead of proxying them.','qr.title':'Scan to import','qr.hint':'Open your proxy client and scan, or copy the link.','confirm.logout_title':'Log out?','confirm.logout_body':'Your session cookie is cleared on this device.','confirm.reset_title':'Reset to defaults?','confirm.reset_body':'All sections revert to factory values immediately. This cannot be undone.','confirm.killswitch_title':'Pause all traffic?','confirm.killswitch_body':'All clients lose connectivity immediately. The panel stays reachable so you can undo this.','confirm.yes':'Yes, continue','toast.settingsSaved':'Settings saved','toast.saveFailed':'Save failed','toast.pathRegenerated':'New secure path ready','toast.killOn':'Traffic paused','toast.killOff':'Traffic resumed','toast.langChanged':'Language updated','toast.networkError':'Network error — check your connection.','toast.tooLong':'URL too long for a QR code.','err.required':'Required field','err.url':'Enter a valid https:// URL','err.domain':'Invalid domain name','err.ip_or_host':'Not a valid IP or hostname','err.ipv6_prefix':'Invalid IPv6 prefix','err.port':'Port must be 1–65535','err.uuid':'Invalid UUID','err.number':'Enter a valid number','err.minmax':'Min must be ≤ max','err.duplicate':'Duplicate entry: {value}','err.invalid_line':'Invalid line: {line}'},
+
+fa:{'app.name':'Q Proxy','app.tagline':'پنل پراکسی کلادفلر','nav.home':'خانه','nav.settings':'تنظیمات','nav.checker':'بررسی آی‌پی','nav.logout':'خروج','lang.fa':'فارسی','login.title':'ورود به Q Proxy','login.password':'گذرواژه','common.apply':'اعمال تغییرات','common.applying':'در حال اعمال…','common.saved':'ذخیره شد','common.discard':'نادیده گرفتن','common.cancel':'انصراف','common.close':'بستن','common.confirm':'تأیید','common.copy':'کپی','common.copied':'کپی شد','common.generate':'تولید','common.generated':'تولید شد؛ برای ذخیره «اعمال تغییرات» را بزنید.','common.reveal':'نمایش','common.hide':'پنهان','common.add':'افزودن','common.remove':'حذف','common.resetDefaults':'بازگشت به پیش‌فرض‌ها','common.unsaved':'تغییرات ذخیره‌نشده','common.error':'خطایی رخ داد','common.loading':'در حال بارگذاری…','common.optional':'اختیاری','common.on':'روشن','common.off':'خاموش','common.enabled':'فعال','common.disabled':'غیرفعال','common.yes':'بله','common.no':'خیر','common.retry':'تلاش دوباره','common.openChecker':'باز کردن بررسی آی‌پی','common.fixErrors':'{count} خطا را برطرف کنید','home.subs.title':'اشتراک‌ها','home.subs.desc':'این نشانی‌ها را در کلاینت خود وارد کنید.','home.subs.mode.normal':'عادی','home.subs.mode.fragment':'فرگمنت','home.stats.title':'آی‌پی من و مسیر خروجی','home.stats.refresh':'بازخوانی','home.stats.via_cf':'از طریق مقصدهای کلادفلر','home.stats.via_other':'از طریق مقصدهای دیگر','home.stats.ip':'IP','home.stats.country':'کشور','home.stats.city':'شهر','home.stats.isp':'سرویس‌دهنده','home.stats.asn':'ASN','home.stats.colo':'دیتاسنتر کلادفلر','home.stats.updated':'همین حالا دریافت شد · با درخواست به‌روز می‌شود','home.stats.failed':'دریافت اطلاعات آی‌پی ممکن نشد.','home.stats.link':'مشاهدهٔ خلاصه','home.kill.title':'کیل سوییچ','home.kill.paused':'ترافیک متوقف است','home.kill.active':'ترافیک فعال است','home.kill.desc_paused':'کلاینت‌ها پاسخ ۵۰۳ می‌گیرند؛ این پنل در دسترس می‌ماند.','home.kill.desc_active':'ترافیک پراکسی به‌طور عادی سرویس می‌شود.','home.status.title':'وضعیت ورکر','home.status.version':'نسخه','home.status.colo':'دیتاسنتر','home.status.today':'درخواست‌های امروز','home.status.total':'مجموع درخواست‌ها','tabs.settings.general':'عمومی','tabs.settings.protocols':'پروتکل‌ها','tabs.settings.ports':'پورت‌ها و دامنه‌ها','tabs.settings.proxyip':'آی‌پی پراکسی','tabs.settings.fragment':'فرگمنت','tabs.settings.chain':'زنجیرهٔ پراکسی','tabs.settings.advanced':'پیشرفته','general.securePath.label':'مسیر امن','general.securePath.hint':'پیشوند محرمانهٔ این پنل و همهٔ نشانی‌های اشتراک. تغییر آن همهٔ نشانی‌ها را باطل می‌کند.','general.killSwitch.label':'کیل سوییچ','general.killSwitch.hint':'توقف فوری همهٔ ترافیک پراکسی (کلاینت‌ها ۵۰۳ می‌گیرند).','general.language.label':'زبان پنل','general.profileTitle.label':'عنوان پروفایل','general.profileTitle.hint':'نامی که در کلاینت‌های پراکسی نمایش داده می‌شود.','general.debugLogging.label':'ثبت خطایابی','general.debugLogging.hint':'نوشتن تشخیص‌های مفصل در لاگ ورکر.','general.danger.title':'بخش خطرناک','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.enable':'فعال‌سازی {proto}','protocols.disabled_hint':'غیرفعال است؛ برای این پروتکل کانفیگی ساخته نمی‌شود.','protocols.uuid':'UUID','protocols.password':'گذرواژه','protocols.cipher':'روش رمزنگاری','protocols.common.title':'گزینه‌های مشترک','protocols.path.label':'مسیر وب‌سوکت','protocols.path.hint':'پیشوند نشانی تونل این پروتکل.','protocols.earlyData.label':'دادهٔ زودهنگام (0-RTT)','protocols.earlyData.hint':'به کلاینت اجازه می‌دهد اولین داده را در پارامتر مسیر دست‌دهی بفرستد.','protocols.earlyData.max':'بیشنهٔ دادهٔ زودهنگام (بایت)','protocols.fingerprint.label':'اثر انگشت TLS','protocols.sniCase.label':'تصادفی‌سازی حروف SNI','protocols.sniCase.hint':'حالت حروف نام میزبان SNI را تصادفی می‌کند.','protocols.alpn.label':'پروتکل‌های ALPN','protocols.alpn.hint':'هر خط یک پروتکل، مثل http/1.1 یا h2.','ports.domains.label':'دامنه‌های سفارشی','ports.domains.hint':'دامنه‌هایی که با رکورد ابری به این ورکر متصل‌اند؛ همهٔ پورت‌های فعال روی آن‌ها سرویس می‌شود.','ports.hostnameOverride.label':'بازنویسی نام میزبان','ports.hostnameOverride.hint':'این نام میزبان به‌جای میزبان درخواست در کانفیگ‌ها گذاشته می‌شود.','ports.matrix.legend_tls':'پورت‌های TLS','ports.matrix.legend_plain':'پورت‌های بدون رمز','ports.matrix.hint':'پورت‌های بدون رمز فقط برای نشانی workers.dev بدون دامنهٔ سفارشی اعمال می‌شوند.','ports.policy.label':'سیاست پورت‌های بدون رمز','ports.policy.always':'همیشه','ports.policy.workersdev':'فقط workers.dev','ports.policy.never':'هرگز','ports.cleanAddrs.label':'آدرس‌های تمیز','ports.cleanAddrs.hint':'هر خط یک IP یا نام میزبان؛ به‌عنوان نشانی ترجیحی به کانفیگ‌ها اضافه می‌شود.','ports.remoteSubs.label':'اشتراک‌های خارجی برای ادغام','ports.remoteSubs.hint':'هر خط یک نشانی https؛ هنگام ساخت اشتراک دریافت و به فهرست خام اضافه می‌شود.','ports.cdn.title':'پوشش CDN','ports.cdn.enabled.label':'عبور از CDN','ports.cdn.addresses.label':'نشانی‌های CDN','ports.cdn.addresses.hint':'هر خط یک نشانی؛ وقتی عبور از CDN روشن است به‌عنوان نشانی اتصال استفاده می‌شود.','ports.cdn.host.label':'میزبان CDN','ports.cdn.sni.label':'SNI کلادفلر','proxyip.mode.label':'حالت','proxyip.mode.list':'فهرست ثابت','proxyip.mode.nat64':'پیشوندهای NAT64','proxyip.list.label':'فهرست آی‌پی پراکسی','proxyip.list.hint':'هر خط یک مورد؛ host:port مجاز است. زمانی که اتصال مستقیم شکست بخورد استفاده می‌شود.','proxyip.nat64.label':'پیشوندهای NAT64','proxyip.nat64.hint':'هر خط یک پیشوند IPv6 (مثلاً 2a02:898:146:64::).','checker.title':'بررسی آی‌پی پراکسی','checker.desc':'دسترس‌پذیری و تأخیر هر مقصد را از مرورگر شما مقابل نقطهٔ trace کلادفلر می‌سنجد.','checker.targets.label':'مقصدها','checker.targets.hint':'هر خط یک IP یا host:port — حداکثر ۱۰۰ مورد.','checker.run':'اجرای تست','checker.stop':'توقف','checker.running':'در حال تست…','checker.results':'نتایج','checker.empty':'هنوز نتیجه‌ای نیست.','checker.col.target':'مقصد','checker.col.latency':'میانگین تأخیر','checker.col.rate':'موفقیت','checker.col.status':'وضعیت','checker.status.ok':'سالم','checker.status.partial':'نیمه‌سالم','checker.status.failed':'ناموفق','checker.summary':'{ok} مورد سالم از {total}.','checker.tooMany':'حداکثر ۱۰۰ مقصد.','fragment.enable':'فعال‌سازی فرگمنت','fragment.preset.label':'حالت آماده','fragment.preset.off':'خاموش','fragment.preset.low':'کم','fragment.preset.medium':'متوسط','fragment.preset.high':'زیاد','fragment.preset.severe':'شدید','fragment.preset.custom':'سفارشی','fragment.length':'طول کمینه–بیشنه (بایت)','fragment.delay':'تأخیر کمینه–بیشنه (میلی‌ثانیه)','fragment.split':'بیشینهٔ شکست کمینه–بیشنه','fragment.packets':'الگوی بسته‌ها','chain.enable':'فعال‌سازی زنجیرهٔ پراکسی','chain.uri.label':'نشانی بالادست','chain.uri.hint':'‏socks5://user:pass@host:port یا http://host:port','advanced.doh.label':'بالادست DoH','advanced.doh.hint':'مبدل DoH که پشت نقطهٔ خصوصی زیر استفاده می‌شود.','advanced.doh.private':'نقطهٔ خصوصی DoH شما','advanced.remoteDns.label':'DNS از راه دور','advanced.localDns.label':'DNS محلی جایگزین','advanced.udp53.label':'فعال‌سازی رلهٔ UDP 53','advanced.udp53.hint':'پرس‌وجوهای DNS کلاینت را روی UDP با DoH پاسخ می‌دهد.','advanced.behavior.title':'اشتراک‌ها و رفتار','advanced.subInterval.label':'فاصلهٔ به‌روزرسانی اشتراک (ساعت)','advanced.maxNodes.label':'بیشینهٔ نود در هر قالب','advanced.urlTest.label':'فاصلهٔ تست نشانی (ثانیه)','advanced.camouflage.label':'صفحهٔ استتار','advanced.camouflage.none':'بدون استتار (۴۰۴ ساده)','advanced.camouflage.static':'صفحهٔ فرود ثابت','advanced.camouflage.proxy':'پراکسی معکوس نشانی','advanced.camouflage.url':'نشانی صفحهٔ استتار','advanced.speedtest.label':'رهگیری تست سرعت','advanced.speedtest.hint':'به سرویس‌های تست سرعت پاسخ ساختگی بدهید تا از پراکسی عبور نکنند.','qr.title':'برای افزودن اسکن کنید','qr.hint':'کلاینت خود را باز کنید و اسکن کنید یا لینک را کپی کنید.','confirm.logout_title':'خارج می‌شوید؟','confirm.logout_body':'کوکی نشست این دستگاه پاک می‌شود.','confirm.reset_title':'بازگشت به پیش‌فرض‌ها؟','confirm.reset_body':'همهٔ بخش‌ها بلافاصله به مقادیر کارخانه‌ای برمی‌گردند. قابل بازگشت نیست.','confirm.killswitch_title':'توقف همهٔ ترافیک؟','confirm.killswitch_body':'همهٔ کلاینت‌ها بلافاصله قطع می‌شوند. پنل در دسترس می‌ماند تا بتوانید این را برگردانید.','confirm.yes':'بله، ادامه','toast.settingsSaved':'تنظیمات ذخیره شد','toast.saveFailed':'ذخیره ناموفق بود','toast.pathRegenerated':'مسیر امن جدید آماده شد','toast.killOn':'ترافیک متوقف شد','toast.killOff':'ترافیک از سر گرفته شد','toast.langChanged':'زبان تغییر کرد','toast.networkError':'خطای شبکه — اتصال خود را بررسی کنید.','toast.tooLong':'نشانی برای کد QR بیش از حد طولانی است.','err.required':'این فیلد الزامی است','err.url':'یک نشانی معتبر https:// وارد کنید','err.domain':'نام دامنه نامعتبر است','err.ip_or_host':'IP یا نام میزبان معتبر نیست','err.ipv6_prefix':'پیشوند IPv6 نامعتبر است','err.port':'پورت باید بین ۱ تا ۶۵۵۳۵ باشد','err.uuid':'UUID نامعتبر است','err.number':'عدد معتبر وارد کنید','err.minmax':'کمینه باید از بیشنه کمتر یا مساوی آن باشد','err.duplicate':'مورد تکراری: {value}','err.invalid_line':'خط نامعتبر: {line}'}
+};
+const getLangCookie=()=>{const m=document.cookie.match(/(?:^|;\s*)qp_lang=(en|fa)/);return m&&m[1]||'fa'};
+let LANG=getLangCookie();
+const t=(k,p)=>{let s=(DICT[LANG]&&DICT[LANG][k])||(DICT.en[k]||k);if(p)for(const n in p)s=s.split('{'+n+'}').join(String(p[n]));return s};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const BASE=location.pathname.replace(/panel\/?$/,'');
+const TOAST_MS=3500,TOAST_ERR_MS=6000,PROBE_TIMEOUT=5000,PROBE_TRIES=3,MAX_TARGETS=100;
+function setLangCookie(l){document.cookie='qp_lang='+l+'; Path=/; Max-Age=31536000; SameSite=Lax'}
+function toast(msg,kind){const box=$('toasts');const el=document.createElement('div');el.className='toast'+(kind==='err'?' toast--err':kind==='ok'?' toast--ok':'');if(kind==='err')el.setAttribute('role','alert');el.textContent=msg;box.appendChild(el);while(box.children.length>3)box.firstChild.remove();setTimeout(()=>el.remove(),kind==='err'?TOAST_ERR_MS:TOAST_MS)}
+async function api(p,o={}){let r;try{const h=o.body!==undefined?{'Content-Type':'application/json','X-Q-Panel':'1'}:(o.mutate?{'X-Q-Panel':'1'}:{});r=await fetch(BASE+p,{credentials:'same-origin',method:o.method||'GET',headers:Object.assign(h,o.headers||{}),body:o.body!==undefined?JSON.stringify(o.body):undefined,signal:o.signal})}catch(e){if(e&&e.name==='AbortError')throw e;throw{status:0,code:'',message:''}}
+if(r.status===401){location.replace(BASE+'login');throw{status:401,code:'',message:''}}
+let j=null;try{j=await r.json()}catch(e){}
+if(!r.ok||!j||j.ok!==true)throw{status:r.status,code:j&&j.error?j.error.code:'',message:j&&j.error?j.error.message:'',fields:j&&j.fields||null,retryAfter:Number(r.headers.get('Retry-After'))||0};
+return j.data}
+function copyText(s){if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(s).catch(()=>fallbackCopy(s));return Promise.resolve(fallbackCopy(s))}
+function fallbackCopy(s){const ta=document.createElement('textarea');ta.value=s;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}ta.remove()}
+
+let modalReturnFocus=null;
+function openModal(id){modalReturnFocus=document.activeElement;const m=$(id);m.hidden=false;const f=m.querySelector('button,input,[href],[tabindex]');if(f)f.focus()}
+function closeModal(id){const m=$(id);m.hidden=true;if(modalReturnFocus&&modalReturnFocus.focus)modalReturnFocus.focus();modalReturnFocus=null}
+function trapFocus(modal,e){const list=[...modal.querySelectorAll('button,input,[href],[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&x.offsetParent!==null);if(!list.length)return;const first=list[0],last=list[list.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
+let confirmResolve=null;
+function confirmDialog(titleKey,bodyKey,danger){$('cf-title').textContent=t(titleKey);$('cf-body').textContent=t(bodyKey);$('cf-cancel').textContent=t('common.cancel');const ok=$('cf-ok');ok.textContent=t('confirm.yes');ok.className='btn '+(danger?'btn--ghost-danger':'btn--primary');openModal('m-confirm');setTimeout(()=>$('cf-cancel').focus(),0);return new Promise(res=>{confirmResolve=res})}
+function settleConfirm(v){if(confirmResolve){const r=confirmResolve;confirmResolve=null;$('m-confirm').hidden=true;if(modalReturnFocus&&modalReturnFocus.focus)modalReturnFocus.focus();modalReturnFocus=null;r(v)}}
+const QR=(()=>{
+const EC=[10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28];
+const NB=[1,1,1,2,2,4,4,4,5,5,5,8,9,9,10,10,11,13,14,16,17,17,18,20,21];
+const EXP=new Uint8Array(512),LOG=new Uint8Array(256);
+{let x=1;for(let i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x&256)x^=0x11d}for(let i=255;i<512;i++)EXP[i]=EXP[i-255]}
+const gmul=(a,b)=>a===0||b===0?0:EXP[LOG[a]+LOG[b]];
+function rsDiv(d){const r=[];for(let i=0;i<d-1;i++)r.push(0);r.push(1);let root=1;for(let i=0;i<d;i++){for(let j=0;j<r.length;j++){r[j]=gmul(r[j],root);root=gmul(root,2)}}return r}
+function rsRem(dat,div){const r=div.map(()=>0);for(let bi=0;bi<dat.length;bi++){const f=dat[bi]^r.shift();r.push(0);for(let i=0;i<div.length;i++)r[i]^=gmul(div[i],f)}return r}
+function rawMods(v){let r=(16*v+128)*v+64;if(v>=2){const n=Math.floor(v/7)+2;r-=(25*n-10)*n-55;if(v>=7)r-=36}return r}
+const dataCw=v=>Math.floor(rawMods(v)/8)-EC[v-1]*NB[v-1];
+function alignPos(v){if(v===1)return[];const n=Math.floor(v/7)+2;const step=v===32?26:Math.ceil((v*4+4)/(n*2-2))*2;const p=[6];for(let pos=v*4+10;p.length<n;pos-=step)p.splice(1,0,pos);return p}
+const MASKF=[(x,y)=>(x+y)%2===0,(x,y)=>y%2===0,(x,y)=>x%3===0,(x,y)=>(x+y)%3===0,(x,y)=>(Math.floor(x/3)+Math.floor(y/2))%2===0,(x,y)=>x*y%2+x*y%3===0,(x,y)=>(x*y%2+x*y%3)%2===0,(x,y)=>((x+y)%2+x*y%3)%2===0];
+const N1=3,N2=3,N3=40,N4=10;
+function gen(text){
+const bytes=new TextEncoder().encode(text);
+let ver=1;
+while(ver<=25&&dataCw(ver)*8-4-(ver<10?8:16)<bytes.length*8)ver++;
+if(ver>25)return null;
+const size=ver*4+17;
+const bits=[];
+const ab=(val,len)=>{for(let i=len-1;i>=0;i--)bits.push((val>>>i)&1)};
+ab(4,4);ab(bytes.length,ver<10?8:16);
+for(const b of bytes)ab(b,8);
+const dcw=dataCw(ver),total=dcw*8;
+const term=Math.min(4,total-bits.length);
+for(let i=0;i<term;i++)bits.push(0);
+while(bits.length%8!==0)bits.push(0);
+for(let p=236;bits.length<total;p^=253){for(let j=7;j>=0;j--)bits.push((p>>>j)&1)}
+const cw=new Uint8Array(dcw);
+for(let i=0;i<dcw;i++){let b=0;for(let j=0;j<8;j++)b=b<<1|bits[i*8+j];cw[i]=b}
+const nb=NB[ver-1],ecw=EC[ver-1],raw=Math.floor(rawMods(ver)/8),shortN=nb-raw%nb,shortL=Math.floor(raw/nb)-ecw;
+const div=rsDiv(ecw),blocks=[];
+for(let i=0,k=0;i<nb;i++){const dl=shortL+(i<shortN?0:1);const dat=cw.slice(k,k+dl);k+=dl;const ecc=rsRem(Array.from(dat),div);const blk=Array.from(dat);if(i<shortN)blk.push(0);blocks.push(blk.concat(ecc))}
+const out=[];
+for(let i=0;i<blocks[0].length;i++)for(let j=0;j<nb;j++)if(i!==shortL||j>=shortN)out.push(blocks[j][i]);
+const base=[],fn=[];
+for(let y=0;y<size;y++){base.push(new Uint8Array(size));fn.push(new Uint8Array(size))}
+const setFn=(x,y,d)=>{base[y][x]=d?1:0;fn[y][x]=1};
+for(let i=0;i<size;i++){setFn(6,i,i%2===0);setFn(i,6,i%2===0)}
+const finder=(cx,cy)=>{for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){const x=cx+dx,y=cy+dy;if(x>=0&&x<size&&y>=0&&y<size){const d=Math.max(Math.abs(dx),Math.abs(dy));setFn(x,y,d!==2&&d!==4)}}};
+finder(3,3);finder(size-4,3);finder(3,size-4);
+const ap=alignPos(ver),apLast=ap[ap.length-1];
+for(const ay of ap)for(const ax of ap){if((ax===6&&ay===6)||(ax===6&&ay===apLast)||(ay===6&&ax===apLast))continue;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)setFn(ax+dx,ay+dy,Math.max(Math.abs(dx),Math.abs(dy))!==1)}
+const fmtBits=m=>{let rem=m;for(let i=0;i<10;i++)rem=(rem<<1)^((rem>>>9)*0x537);return((m<<10|rem)^0x5412)>>>0};
+const drawFormat=(target,m)=>{const b=fmtBits(m);for(let i=0;i<=5;i++)target[i][8]=(b>>>i)&1;target[7][8]=(b>>>6)&1;target[8][8]=(b>>>7)&1;target[8][7]=(b>>>8)&1;for(let i=9;i<15;i++)target[8][14-i]=(b>>>i)&1;for(let i=0;i<8;i++)target[8][size-1-i]=(b>>>i)&1;for(let i=8;i<15;i++)target[size-15+i][8]=(b>>>i)&1;target[size-8][8]=1};
+drawFormat(base,0);
+if(ver>=7){let rem=ver;for(let i=0;i<12;i++)rem=(rem<<1)^((rem>>>11)*0x1F25);const bv=(ver<<12|rem)>>>0;for(let i=0;i<18;i++){const bit=(bv>>>i)&1;const a=size-11+i%3,b=Math.floor(i/6);setFn(a,b,bit);setFn(b,a,bit)}}
+let idx=0;
+const M=[];
+for(let y=0;y<size;y++)M.push(Uint8Array.from(base[y]));
+for(let right=size-1;right>=1;right-=2){if(right===6)right=5;for(let vt=0;vt<size;vt++)for(let j=0;j<2;j++){const x=right-j;const up=((right+1)&2)===0;const y=up?size-1-vt:vt;if(!fn[y][x]&&idx<out.length*8){M[y][x]=(out[idx>>3]>>(7-(idx&7)))&1;idx++}}}
+let bestM=null,bestScore=Infinity;
+for(let m=0;m<8;m++){
+const W=M.map(row=>Uint8Array.from(row));
+for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(!fn[y][x]&&MASKF[m](x,y))W[y][x]^=1;
+drawFormat(W,m);
+const s=score(W,size);
+if(s<bestScore){bestScore=s;bestM=W}}
+return{size,modules:bestM}}
+function addHist(len,hist,sz){if(hist[0]===0)len+=sz;hist.pop();hist.unshift(len)}
+function countPatterns(hist){const n=hist[1];const core=n>0&&hist[2]===n&&hist[3]===n*3&&hist[4]===n*4&&hist[5]===n*3&&hist[6]===n;return(core?1:0)+(core&&hist[0]>=n*4?1:0)}
+function terminateAndCount(color,len,hist,sz){if(color){addHist(len,hist,sz);len=0}len+=sz;addHist(len,hist,sz);return countPatterns(hist)}
+function score(M,sz){
+let result=0;
+for(let y=0;y<sz;y++){
+let runColor=!!M[y][0],runX=0;
+const hist=[0,0,0,0,0,0,0];
+for(let x=0;x<sz;x++){
+if(!!M[y][x]===runColor){runX++;if(runX===5)result+=N1;else if(runX>5)result++}
+else{addHist(runX,hist,sz);if(!runColor)result+=countPatterns(hist)*N3;runColor=!!M[y][x];runX=1}}
+result+=terminateAndCount(runColor,runX,hist,sz)*N3}
+for(let x=0;x<sz;x++){
+let runColor=!!M[0][x],runX=0;
+const hist=[0,0,0,0,0,0,0];
+for(let y=0;y<sz;y++){
+if(!!M[y][x]===runColor){runX++;if(runX===5)result+=N1;else if(runX>5)result++}
+else{addHist(runX,hist,sz);if(!runColor)result+=countPatterns(hist)*N3;runColor=!!M[y][x];runX=1}}
+result+=terminateAndCount(runColor,runX,hist,sz)*N3}
+for(let y=0;y<sz-1;y++)for(let x=0;x<sz-1;x++){const c=M[y][x];if(c===M[y][x+1]&&c===M[y+1][x]&&c===M[y+1][x+1])result+=N2}
+let dark=0;
+for(let y=0;y<sz;y++)for(let x=0;x<sz;x++)if(M[y][x])dark++;
+const total=sz*sz,k=Math.ceil(Math.abs(dark*20-total*10)/total)-1;
+return result+k*N4}
+function render(canvas,text){
+const q=gen(text);
+if(!q)return false;
+const size=q.size,dpr=2,dim=280*dpr;
+canvas.width=dim;canvas.height=dim;
+const ctx=canvas.getContext('2d');
+ctx.fillStyle='#ffffff';ctx.fillRect(0,0,dim,dim);
+const quiet=4,tot=size+quiet*2,scale=Math.max(1,Math.floor(dim/tot));
+const off=Math.floor((dim-tot*scale)/2);
+ctx.fillStyle='#0a0e14';
+for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(q.modules[y][x])ctx.fillRect(off+(x+quiet)*scale,off+(y+quiet)*scale,scale,scale);
+return true}
+return{render}})();
+
+const TLS_PORTS=[443,2053,2083,2087,2096,8443],PLAIN_PORTS=[80,8080,8880,2052,2082,2086,2095];
+const SS_METHODS=['aes-128-gcm','aes-256-gcm'];
+const FPS=['chrome','firefox','safari','ios','android','edge','360','qq','random','randomized'];
+const PACKETS=['tlshello','1-1','1-2','1-3','1-5'];
+const PRESETS={low:[100,200,1,1],medium:[50,100,1,5],high:[10,20,10,20],severe:[1,5,1,5]};
+const S={set:{},status:null,subs:[],snap:{},dirty:new Set(),subMode:'normal'};
+let UID=0;
+function getPath(o,p){return p.split('.').reduce((a,k)=>a==null?undefined:a[k],o)}
+function setPath(o,p,v){const ks=p.split('.');let c=o;for(let i=0;i<ks.length-1;i++){if(typeof c[ks[i]]!=='object'||c[ks[i]]===null)c[ks[i]]={};c=c[ks[i]]}c[ks[ks.length-1]]=v}
+function leaves(o,pre,out){for(const k in o){const p=pre?pre+'.'+k:k;const v=o[k];if(v&&typeof v==='object'&&!Array.isArray(v))leaves(v,p,out);else out[p]=v}return out}
+function buildShell(){
+$('tab-home').textContent=t('nav.home');
+$('tab-settings').textContent=t('nav.settings');
+$('tab-checker').textContent=t('nav.checker');
+$('home-h1').textContent=t('nav.home');
+$('settings-h1').textContent=t('nav.settings');
+$('checker-h1').textContent=t('nav.checker');
+$('logout-btn').setAttribute('aria-label',t('nav.logout'));
+$('logout-btn').title=t('nav.logout');
+$('dirty-label').textContent=t('common.unsaved');
+$('discard-btn').textContent=t('common.discard');
+$('apply-btn').textContent=t('common.apply');
+$('qr-title').textContent=t('qr.title');
+$('qr-hint').textContent=t('qr.hint');
+$('qr-close').textContent=t('common.close');
+document.title='Q Proxy';
+const seg=$('langseg');seg.innerHTML='';
+[['en','lang.en'],['fa','lang.fa']].forEach(([code,label])=>{const b=document.createElement('button');b.type='button';b.textContent=t(label);b.setAttribute('aria-checked',String(LANG===code));b.setAttribute('role','radio');b.addEventListener('click',()=>{if(code!==LANG){setLangCookie(code);location.reload()}});seg.appendChild(b)})}
+function parseRoute(){
+const h=location.hash.replace(/^#\/?/,'');
+const seg=h.split('/');
+if(seg[0]==='settings')return{view:'settings',sec:SECTIONS.some(s=>s.key===seg[1])?seg[1]:'general'};
+if(seg[0]==='checker')return{view:'checker'};
+return{view:'home'}}
+function navigate(){
+const r=parseRoute();
+const h=location.hash;
+if(r.view==='home'&&h!==''&&h!=='#'&&h!=='#/home')history.replaceState(null,'','#/home');
+if(r.view==='settings'&&SECTIONS.some(s=>s.key===r.sec))history.replaceState(null,'','#/settings/'+r.sec);
+['home','settings','checker'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
+document.querySelectorAll('#nav .tab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.view===r.view)));
+if(r.view==='settings')showSection(r.sec);
+window.scrollTo(0,0)}
+function showSection(sec){
+SECTIONS.forEach(s=>{const p=$('sp-'+s.key);if(p)p.hidden=s.key!==sec});
+document.querySelectorAll('#subtabs .subtab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.sec===sec)))}
+function buildSubtabs(){
+const bar=$('subtabs');bar.innerHTML='';
+SECTIONS.forEach(s=>{const a=document.createElement('button');a.type='button';a.className='subtab';a.role='tab';a.id='st-'+s.key;a.dataset.sec=s.key;a.textContent=t('tabs.settings.'+s.key);a.setAttribute('aria-selected','false');a.setAttribute('aria-controls','sp-'+s.key);a.addEventListener('click',()=>{location.hash='#/settings/'+s.key});bar.appendChild(a)})}
+function subUrlWithMode(u){
+if(S.subMode!=='fragment')return u;
+return u+(u.includes('?')?'&':'?')+'mode=fragment'}
+function copyFieldHtml(value,idAttr){
+return '<div class="copy-field"><code id="'+idAttr+'" dir="ltr">'+esc(value)+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-id="'+idAttr+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm" data-action="qr" data-qr="'+esc(value)+'" aria-label="QR"><svg aria-hidden="true"><use href="#i-qr"/></svg></button></div>'}
+function renderHome(){
+const body=$('home-body');
+body.innerHTML='';
+const subs=document.createElement('section');subs.className='card';
+let sh='<div class="card__head"><div><div class="card__title">'+esc(t('home.subs.title'))+'</div><div class="field__hint">'+esc(t('home.subs.desc'))+'</div></div><div class="seg" role="radiogroup" aria-label="'+esc(t('home.subs.mode.normal'))+'/'+esc(t('home.subs.mode.fragment'))+'">';
+[['normal','home.subs.mode.normal'],['fragment','home.subs.mode.fragment']].forEach(([m,k])=>{sh+='<button type="button" aria-checked="'+String(S.subMode===m)+'" data-mode="'+m+'">'+esc(t(k))+'</button>'});
+sh+='</div></div>';
+const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
+urls.forEach((entry,i)=>{sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(entry.label||entry.format)+'</span>'+copyFieldHtml(subUrlWithMode(entry.url),'sub-u'+i)+'</div>'});
+if(!urls.length)sh+='<p class="field__hint">'+esc(t('checker.empty'))+'</p>';
+subs.innerHTML=sh;
+body.appendChild(subs);
+const right=document.createElement('div');
+const kill=document.createElement('section');kill.className='card';
+kill.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.kill.title'))+'</div><span class="chip-status ok" id="kill-chip"></span></div><p class="field__hint" id="kill-desc"></p><div class="row" style="border:0"><label class="switch"><input type="checkbox" role="switch" data-kill'+(S.status&&S.status.killSwitch?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t('general.killSwitch.label'))+'</span></label></div>';
+right.appendChild(kill);
+const ip=document.createElement('section');ip.className='card';
+ip.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.stats.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="refresh-ip"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="ip-body"><span class="field__hint">'+esc(t('common.loading'))+'</span></div><p class="field__hint">'+esc(t('home.stats.updated'))+' · <a href="'+esc(BASE)+'my-ip" target="_blank" rel="noopener">'+esc(t('home.stats.link'))+'</a></p>';
+right.appendChild(ip);
+if(S.status){
+const st=document.createElement('section');st.className='card';
+const u=S.status.usage||{requestsToday:0,requestsTotal:0};
+st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(String(u.requestsToday!=null?u.requestsToday:'—'))+'</span><span class="mono">'+esc(String(u.requestsTotal!=null?u.requestsTotal:'—'))+'</span></div>';
+right.appendChild(st)}
+body.appendChild(right);
+syncKillUI();
+loadMyIp()}
+function syncKillUI(){
+const on=!!(S.status&&S.status.killSwitch);
+document.querySelectorAll('[data-kill]').forEach(b=>{b.checked=on});
+const chip=$('kill-chip'),desc=$('kill-desc');
+if(chip){chip.textContent=t(on?'home.kill.paused':'home.kill.active');chip.className='chip-status '+(on?'bad':'ok')}
+if(desc)desc.textContent=t(on?'home.kill.desc_paused':'home.kill.desc_active')}
+async function setKillSwitch(on){
+if(on&&!(await confirmDialog('confirm.killswitch_title','confirm.killswitch_body',true))){syncKillUI();return}
+document.querySelectorAll('[data-kill]').forEach(b=>b.closest('.switch').classList.add('pending'));
+try{const d=await api('api/killswitch',{method:'POST',body:{enabled:on}});
+if(S.status&&d&&typeof d.killSwitch==='boolean')S.status.killSwitch=d.killSwitch;
+else if(S.status)S.status.killSwitch=on;
+syncKillUI();toast(t(on?'toast.killOn':'toast.killOff'),'ok')}
+catch(e){syncKillUI();toastErr(e)}
+finally{document.querySelectorAll('[data-kill]').forEach(b=>b.closest('.switch').classList.remove('pending'))}}
+function toastErr(e){toast(!e||e.status===0?t('toast.networkError'):e.message||t('common.error'),'err')}
+async function loadMyIp(){
+const box=$('ip-body');
+if(!box)return;
+box.innerHTML='<span class="field__hint">'+esc(t('common.loading'))+'</span>';
+try{
+const d=await fetch(BASE+'my-ip',{credentials:'same-origin',headers:{Accept:'application/json'}});
+if(!d.ok)throw 0;
+const j=await d.json();
+const data=j&&j.ok!==undefined?j.data:j;
+box.innerHTML='<table class="tbl"><tbody>'
++'<tr><td data-l="'+esc(t('home.stats.via_cf'))+'"><code dir="ltr" class="mono">'+esc(data.cfEgressIp||'—')+(data.colo?' · '+esc(data.colo):'')+'</code></td><td class="h-cell" data-l="'+esc(t('home.stats.via_other'))+'"><code dir="ltr" class="mono">'+esc(data.ip||'—')+'</code></td></tr>'
++'<tr><td data-l="'+esc(t('home.stats.colo'))+'">'+esc(data.colo||'—')+'</td><td data-l="'+esc(t('home.stats.country'))+'">'+esc(data.country||'—')+'</td></tr>'
++'<tr><td data-l="'+esc(t('home.stats.city'))+'">'+esc(data.city||'—')+'</td><td data-l="'+esc(t('home.stats.asn'))+'">'+esc(data.asn||'—')+'</td></tr>'
++'</tbody></table>'}
+catch(e){box.innerHTML='<p class="field__error" style="display:block">'+esc(t('home.stats.failed'))+'</p>'}}
+
+const FL=(path,type,label,hint,extra)=>Object.assign({path,type,label,hint:hint||null},extra||{});
+const SECTIONS=[
+{key:'general',cards:[
+{title:null,fields:[
+FL('securePath','secret','general.securePath.label','general.securePath.hint',{gen:'hex12',copy:true}),
+FL('profileTitle','str','general.profileTitle.label','general.profileTitle.hint'),
+FL('debugLogging','bool','general.debugLogging.label','general.debugLogging.hint')]},
+{title:'home.kill.title',fields:[
+FL('killSwitch','instantbool','general.killSwitch.label','general.killSwitch.hint'),
+FL('language','lang','general.language.label',null)]},
+{title:'general.danger.title',danger:true,fields:[]}]},
+{key:'protocols',cards:[
+{title:'protocols.vless.title',protoCard:'vlessEnabled',fields:[
+FL('vlessEnabled','bool',null,null,{protoLabelKey:'protocols.vless.title'}),
+FL('vlessUuid','secret','protocols.uuid',null,{gen:'uuid',copy:true}),
+FL('vlessPath','str','protocols.path.label','protocols.path.hint',{mono:true})]},
+{title:'protocols.vmess.title',protoCard:'vmessEnabled',fields:[
+FL('vmessEnabled','bool',null,null,{protoLabelKey:'protocols.vmess.title'}),
+FL('vmessUuid','secret','protocols.uuid',null,{gen:'uuid',copy:true}),
+FL('vmessPath','str','protocols.path.label','protocols.path.hint',{mono:true})]},
+{title:'protocols.trojan.title',protoCard:'trojanEnabled',fields:[
+FL('trojanEnabled','bool',null,null,{protoLabelKey:'protocols.trojan.title'}),
+FL('trojanPassword','secret','protocols.password',null,{gen:'pass',copy:true}),
+FL('trojanPath','str','protocols.path.label','protocols.path.hint',{mono:true})]},
+{title:'protocols.ss.title',protoCard:'ssEnabled',fields:[
+FL('ssEnabled','bool',null,null,{protoLabelKey:'protocols.ss.title'}),
+FL('ssPassword','secret','protocols.password',null,{gen:'pass',copy:true}),
+FL('ssMethod','select','protocols.cipher',null,{opts:SS_METHODS}),
+FL('ssPath','str','protocols.path.label','protocols.path.hint',{mono:true})]},
+{title:'protocols.common.title',fields:[
+FL('earlyDataEnabled','bool','protocols.earlyData.label','protocols.earlyData.hint'),
+FL('earlyDataMaxBytes','num','protocols.earlyData.max',null),
+FL('fingerprint','select','protocols.fingerprint.label',null,{opts:FPS}),
+FL('randomizeSniCase','bool','protocols.sniCase.label','protocols.sniCase.hint'),
+FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
+{key:'ports',cards:[
+{title:'ports.domains.label',fields:[
+FL('customDomains','list','ports.domains.label','ports.domains.hint',{validate:'domain'}),
+FL('hostnameOverride','str','ports.hostnameOverride.label','ports.hostnameOverride.hint',{mono:true})]},
+{title:null,fields:[
+FL('tlsPorts','ports','ports.matrix.legend_tls','ports.matrix.hint',{family:'tls'}),
+FL('plainPorts','ports','ports.matrix.legend_plain',null,{family:'plain'}),
+FL('plainPortPolicy','chips','ports.policy.label',null,{opts:[['always','ports.policy.always'],['workers-dev','ports.policy.workersdev'],['never','ports.policy.never']]})]},
+{title:'ports.cdn.title',fields:[
+FL('cdn.enabled','bool','ports.cdn.enabled.label',null),
+FL('cdn.addresses','list','ports.cdn.addresses.label','ports.cdn.addresses.hint',{validate:'ip_or_host'}),
+FL('cdn.host','str','ports.cdn.host.label',null,{mono:true}),
+FL('cdn.sni','str','ports.cdn.sni.label',null,{mono:true})]},
+{title:'ports.cleanAddrs.label',fields:[
+FL('cleanIps','list','ports.cleanAddrs.label','ports.cleanAddrs.hint',{validate:'ip_or_host'})]},
+{title:'ports.remoteSubs.label',fields:[
+FL('remoteSubUrls','list','ports.remoteSubs.label','ports.remoteSubs.hint',{validate:'url'})]}]},
+{key:'proxyip',cards:[
+{title:null,fields:[
+FL('proxyIpMode','chips','proxyip.mode.label',null,{opts:[['proxyip','proxyip.mode.list'],['nat64','proxyip.mode.nat64']]}),
+FL('proxyIps','list','proxyip.list.label','proxyip.list.hint',{validate:'ip_or_host',showIf:v=>getPath(v,'proxyIpMode')!=='nat64'}),
+FL('nat64Prefixes','list','proxyip.nat64.label','proxyip.nat64.hint',{validate:'ipv6_prefix',showIf:v=>getPath(v,'proxyIpMode')==='nat64'})]}]},
+{key:'fragment',cards:[
+{title:null,fields:[
+FL('fragment.mode','fpreset','fragment.enable',null),
+FL('fragment.packets','select','fragment.packets',null,{opts:PACKETS}),
+FL(['fragment.lengthMin','fragment.lengthMax'],'range','fragment.length',null),
+FL(['fragment.delayMin','fragment.delayMax'],'range','fragment.delay',null),
+FL(['fragment.maxSplitMin','fragment.maxSplitMax'],'range','fragment.split',null)]}]},
+{key:'chain',cards:[
+{title:null,fields:[
+FL('chainProxy.enabled','bool','chain.enable',null),
+FL('chainProxy.uri','str','chain.uri.label','chain.uri.hint',{mono:true})]}]},
+{key:'advanced',cards:[
+{title:'advanced.doh.label',fields:[
+FL('dohUpstream','str','advanced.doh.label','advanced.doh.hint',{mono:true}),
+FL('remoteDns','str','advanced.remoteDns.label',null,{mono:true}),
+FL('localDns','str','advanced.localDns.label',null,{mono:true}),
+FL('enableUdp53','bool','advanced.udp53.label','advanced.udp53.hint'),
+FL('__privateDoh','copyonly','advanced.doh.private',null)]},
+{title:'advanced.behavior.title',fields:[
+FL('urlTestIntervalSec','num','advanced.urlTest.label',null),
+FL('subUpdateIntervalHours','num','advanced.subInterval.label',null),
+FL('maxNodesPerFormat','num','advanced.maxNodes.label',null)]},
+{title:'advanced.camouflage.label',fields:[
+FL('camouflage.mode','select','advanced.camouflage.label',null,{opts:[['off','advanced.camouflage.none'],['static','advanced.camouflage.static'],['proxy','advanced.camouflage.proxy']]}),
+FL('camouflage.url','str','advanced.camouflage.url',null,{mono:true}),
+FL('speedtestIntercept','bool','advanced.speedtest.label','advanced.speedtest.hint')]}]}
+];
+function fieldWrap(id,label,hint){
+return '<div class="field" id="fw-'+id+'">'+(label?'<label class="field__label" for="'+id+'">'+esc(t(label))+'</label>':'')+'{B}'+(hint?'<p class="field__hint">'+esc(t(hint))+'</p>':'')+'<p class="field__error"></p></div>'}
+
+function lines(v){return Array.isArray(v)?v.map(x=>String(x)).filter(x=>x.trim().length>0):[]}
+function bindHtml(f){
+const paths=Array.isArray(f.path)?f.path:[f.path];
+const id='f'+(++UID);
+switch(f.type){
+case 'str':{
+const val=String(getPath(S.set,paths[0])??'');
+return fieldWrap(id,f.label,f.hint).replace('{B}','<input type="text" class="input'+(f.mono?' input--mono':'')+'" id="'+id+'" data-bind="'+paths[0]+'" autocomplete="off" spellcheck="false" dir="'+(f.mono?'ltr':'auto')+'" value="'+esc(val)+'">')}
+case 'num':{
+const val=getPath(S.set,paths[0]);
+return fieldWrap(id,f.label,f.hint).replace('{B}','<input type="number" step="1" class="input" id="'+id+'" data-bind="'+paths[0]+'" value="'+esc(val==null?'':String(val))+'">')}
+case 'secret':{
+const val=String(getPath(S.set,paths[0])??'');
+let h='<div class="secret-field"><input type="password" class="input input--mono" style="flex:1;min-width:0" id="'+id+'" data-bind="'+paths[0]+'" autocomplete="off" spellcheck="false" dir="ltr" aria-label="'+esc(t(f.label))+'" value="'+esc(val)+'">';
+h+='<button type="button" class="btn btn--icon btn--ghost" data-action="reveal" data-target="'+id+'" aria-label="'+esc(t('common.reveal'))+'" aria-pressed="false"><svg aria-hidden="true"><use href="#i-eye"/></svg></button>';
+if(f.copy)h+='<button type="button" class="btn btn--icon btn--ghost" data-action="copy" data-copy-id="'+id+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button>';
+if(f.gen)h+='<button type="button" class="btn btn--icon btn--ghost" data-action="generate" data-gen="'+f.gen+'" data-target="'+id+'" aria-label="'+esc(t('common.generate'))+'"><svg aria-hidden="true"><use href="#i-dice"/></svg></button>';
+return fieldWrap(id,f.label,f.hint).replace('{B}',h+'</div>')}
+case 'bool':{
+const on=!!getPath(S.set,paths[0]);
+const label=f.protoLabelKey?esc(t(f.protoLabelKey)):esc(t(f.label));
+const hintTxt=f.protoLabelKey?'<p class="field__hint">'+esc(t('protocols.disabled_hint'))+'</p>':(f.hint?'<p class="field__hint">'+esc(t(f.hint))+'</p>':'');
+return '<div class="field" id="fw-'+id+'"><div class="row"><label class="switch"><input type="checkbox" role="switch" id="'+id+'" data-bind="'+paths[0]+'"'+(on?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+label+'</span></label></div>'+hintTxt+'<p class="field__error"></p></div>'}
+case 'instantbool':{
+const on=!!(S.status&&S.status.killSwitch);
+return '<div class="field" id="fw-'+id+'"><div class="row"><label class="switch"><input type="checkbox" role="switch" id="'+id+'" data-kill'+(on?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t(f.label))+'</span></label><span class="chip-status ok" data-kill-chip></span></div>'+(f.hint?'<p class="field__hint">'+esc(t(f.hint))+'</p>':'')+'</div>'}
+case 'lang':{
+return '<div class="field" id="fw-'+id+'"><label class="field__label" for="'+id+'">'+esc(t(f.label))+'</label><select class="select" id="'+id+'" data-lang-sel><option value="en"'+(LANG==='en'?' selected':'')+'>English</option><option value="fa"'+(LANG==='fa'?' selected':'')+'>فارسی</option></select></div>'}
+case 'select':{
+const cur=String(getPath(S.set,paths[0])??'');
+let h='<select class="select" id="'+id+'" data-bind="'+paths[0]+'">'+f.opts.map(o=>{const v=Array.isArray(o)?o[0]:o;const k=Array.isArray(o)?o[1]:null;return '<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(k?t(k):v)+'</option>'}).join('')+'</select>';
+return fieldWrap(id,f.label,f.hint).replace('{B}',h)}
+case 'chips':{
+const cur=String(getPath(S.set,paths[0])??'');
+let h='<div role="radiogroup" class="chip-row" data-bind="'+paths[0]+'" data-type="chips" aria-label="'+esc(t(f.label))+'">'+f.opts.map(([v,k])=>'<button type="button" role="radio" class="chip" data-chip="'+esc(v)+'" aria-checked="'+String(cur===v)+'">'+esc(t(k))+'</button>').join('')+'</div>';
+return fieldWrap(id,f.label,f.hint).replace('{B}',h)}
+case 'ports':{
+const fam=f.family==='tls'?TLS_PORTS:PLAIN_PORTS;
+const cur=lines(getPath(S.set,paths[0])).map(Number);
+let h='<fieldset class="port-matrix" style="margin-block-end:12px"><legend style="font-size:var(--fs-sm);color:var(--text-dim);font-weight:600;padding-inline:6px">'+esc(t(f.label))+' <label class="btn btn--icon btn--sm" title="'+esc(t('common.yes'))+'/'+esc(t('common.no'))+'"><input type="checkbox" data-port-master data-family="'+f.family+'" style="position:absolute;opacity:0;width:1px;height:1px" aria-label="'+esc(t(f.label))+' all"></label></legend><div class="port-cells" data-bind="'+paths[0]+'" data-type="ports" data-family="'+f.family+'">'+fam.map(p=>'<label class="port-cell"><input type="checkbox" value="'+p+'" data-port-opt'+(cur.includes(p)?' checked':'')+'><span>'+p+'</span></label>').join('')+'</div></fieldset>';
+return fieldWrap(id,f.label,null).replace('{B}',h)}
+case 'list':{
+const arr=lines(getPath(S.set,paths[0]));
+let h='<div class="line-editor"><textarea rows="5" class="input textarea textarea--mono" id="'+id+'" data-bind="'+paths[0]+'" data-validate="'+(f.validate||'')+'" dir="ltr" spellcheck="false" autocomplete="off">'+esc(arr.join('\n'))+'</textarea><div class="meta"><span class="cnt"></span><span class="bad"></span></div></div>';
+let out=fieldWrap(id,f.label,f.hint).replace('{B}',h);
+if(f.showIf)out=out.replace('<div class="field"','<div class="field" data-fpath="'+paths[0]+'"');
+return out}
+case 'range':{
+const mn=getPath(S.set,paths[0]),mx=getPath(S.set,paths[1]);
+let h='<div class="btn-row"><input type="number" step="1" class="input" style="max-width:120px" id="'+id+'a" data-bind="'+paths[0]+'" value="'+esc(mn==null?'':String(mn))+'" aria-label="'+esc(t(f.label))+' min"><span aria-hidden="true">–</span><input type="number" step="1" class="input" style="max-width:120px" id="'+id+'b" data-bind="'+paths[1]+'" value="'+esc(mx==null?'':String(mx))+'" aria-label="'+esc(t(f.label))+' max"></div>';
+return fieldWrap(id,f.label,f.hint).replace('{B}',h)}
+case 'fpreset':{
+const cur=String(getPath(S.set,'fragment.mode')||'off');
+let h='<div role="radiogroup" class="chip-row" data-bind="fragment.mode" data-type="chips" data-fpreset aria-label="'+esc(t('fragment.preset.label'))+'">';
+[['off','fragment.preset.off'],['low','fragment.preset.low'],['medium','fragment.preset.medium'],['high','fragment.preset.high'],['severe','fragment.preset.severe'],['custom','fragment.preset.custom']].forEach(([v,k])=>{h+='<button type="button" role="radio" class="chip" data-chip="'+v+'" data-preset="'+v+'" aria-checked="'+String(cur===v)+'">'+esc(t(k))+'</button>'});
+h+='</div>';
+return fieldWrap(id,'fragment.preset.label',null).replace('{B}',h)}
+case 'copyonly':{
+return fieldWrap(id,f.label,null).replace('{B}','<div class="copy-field"><code dir="ltr">'+esc(BASE+'doh')+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-value="'+esc(BASE+'doh')+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>')}
+default:return ''}
+}
+function cardHtml(card){
+if(card.danger&&!card.fields.length){
+return '<section class="card"><div class="card__head"><div class="card__title hint-danger">'+esc(t(card.title))+'</div></div><button type="button" class="btn btn--ghost-danger" data-action="reset-defaults">'+esc(t('common.resetDefaults'))+'</button></section>'}
+const dim=card.protoCard&&getPath(S.set,card.protoCard)===false;
+let h='<section class="card'+(dim?' card--dim':'')+'"'+(card.protoCard?' data-proto-card="'+card.protoCard+'"':'')+'><div class="card__head"><div class="card__title">'+esc(t(card.title))+'</div></div>';
+card.fields.forEach(f=>{h+=bindHtml(f)});
+return h+'</section>'}
+function renderSettings(){
+buildSubtabs();
+const wrap=$('settings-panels');
+wrap.innerHTML='';
+SECTIONS.forEach(s=>{
+const p=document.createElement('div');
+p.id='sp-'+s.key;p.role='tabpanel';p.setAttribute('aria-labelledby','st-'+s.key);
+p.hidden=true;
+let h='';
+s.cards.forEach(c=>{h+=cardHtml(c)});
+p.innerHTML=h;
+wrap.appendChild(p)});
+SECTIONS.forEach(s=>{S.snap[s.key]=JSON.stringify(collectSection(s.key))});
+S.dirty.clear();
+updateApplyBar();
+applyProtoDim();
+updatePortMasters();
+updateInstantKillChip();
+refreshShowIf();
+validateAllLineEditors()}
+function applyProtoDim(){
+document.querySelectorAll('[data-proto-card]').forEach(card=>{
+const key=card.dataset.protoCard;
+const on=getPath(S.set,key)!==false;
+card.classList.toggle('card--dim',!on);
+card.querySelectorAll('[data-bind]').forEach(el=>{
+if(el.closest('.row'))return;
+el.disabled=!on})})}
+function updatePortMasters(){
+document.querySelectorAll('[data-port-master]').forEach(master=>{
+const cells=master.closest('fieldset').querySelectorAll('[data-port-opt]');
+const checked=[...cells].filter(c=>c.checked).length;
+master.checked=checked===cells.length;
+master.indeterminate=checked>0&&checked<cells.length})}
+function updateInstantKillChip(){
+const on=!!(S.status&&S.status.killSwitch);
+document.querySelectorAll('[data-kill-chip]').forEach(ch=>{
+ch.textContent=t(on?'home.kill.paused':'home.kill.active');
+ch.className='chip-status '+(on?'bad':'ok')})}
+function refreshShowIf(){
+SECTIONS.forEach(s=>s.cards.forEach(c=>c.fields.forEach(f=>{
+if(!f.showIf)return;
+const paths=Array.isArray(f.path)?f.path:[f.path];
+const el=$('sp-'+s.key).querySelector('[data-fpath="'+paths[0]+'"]');
+if(el)el.hidden=!f.showIf(collectSection(s.key))})))}
+
+function readBind(el){
+if(el.dataset.type==='ports'){
+const fam=el.dataset.family==='tls'?TLS_PORTS:PLAIN_PORTS;
+return fam.filter(p=>el.querySelector('input[data-port-opt][value="'+p+'"]').checked)}
+if(el.dataset.type==='chips'){
+const c=el.querySelector('.chip[aria-checked="true"]');
+return c?c.dataset.chip:''}
+if(el.tagName==='TEXTAREA')return lines(el.value);
+if(el.type==='checkbox')return el.checked;
+if(el.tagName==='SELECT')return el.value;
+if(el.type==='number'){const n=Number(el.value);return Number.isFinite(n)?n:0}
+return el.value.trim()}
+function writeBind(el,v){
+if(el.dataset.type==='ports'){
+const arr=lines(v).map(Number);
+el.querySelectorAll('input[data-port-opt]').forEach(c=>{c.checked=arr.includes(Number(c.value))});
+return}
+if(el.dataset.type==='chips'){
+el.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked',String(c.dataset.chip===v)));
+return}
+if(el.tagName==='TEXTAREA'){el.value=lines(v).join('\n');return}
+if(el.type==='checkbox'){el.checked=!!v;return}
+if(el.tagName==='SELECT'){el.value=String(v);return}
+el.value=v==null?'':Array.isArray(v)?lines(v).join('\n'):String(v)}
+function collectSection(sec){
+const panel=$('sp-'+sec);
+const out={};
+if(!panel)return out;
+panel.querySelectorAll('[data-bind]').forEach(el=>{
+setPath(out,el.dataset.bind,readBind(el))});
+return out}
+function diffSection(sec){
+const cur=collectSection(sec);
+let snap={};
+try{snap=JSON.parse(S.snap[sec]||'{}')}catch(e){}
+const lc=leaves(cur,'',{}),ls=leaves(snap,'',{});
+const patch={};
+for(const p in lc)if(JSON.stringify(lc[p])!==JSON.stringify(ls[p]))setPath(patch,p,lc[p]);
+return{cur,patch}}
+function markDirty(){
+S.dirty.clear();
+SECTIONS.forEach(s=>{
+try{if(JSON.stringify(collectSection(s.key))!==S.snap[s.key])S.dirty.add(s.key)}catch(e){}});
+updateApplyBar()}
+function updateApplyBar(){
+$('applybar').hidden=S.dirty.size===0;
+$('apply-btn').disabled=false;
+$('apply-btn').textContent=t('common.apply')}
+async function applySection(sec){
+const btn=$('apply-btn');
+btn.disabled=true;btn.textContent=t('common.applying');
+clearFieldErrors(sec);
+try{
+const{cur,patch}=diffSection(sec);
+if(Object.keys(patch).length===0){markDirty();return}
+await api('api/settings/save',{method:'PUT',body:patch});
+Object.assign(S.set,JSON.parse(JSON.stringify(cur)));
+S.snap[sec]=JSON.stringify(cur);
+markDirty();
+toast(t('toast.settingsSaved'),'ok')}
+catch(e){
+if(e&&e.fields&&Object.keys(e.fields).length){
+let n=0;
+for(const path in e.fields){
+showFieldError(path,e.fields[path]);
+n++}
+toast(t('common.fixErrors',{count:n}),'err')}
+else toastErr(e)}
+finally{btn.disabled=false;updateApplyBar()}}
+function discardSection(sec){
+let snap={};
+try{snap=JSON.parse(S.snap[sec]||'{}')}catch(e){}
+const panel=$('sp-'+sec);
+if(panel)panel.querySelectorAll('[data-bind]').forEach(el=>{
+writeBind(el,getPath(snap,el.dataset.bind));
+clearFieldErrorEl(el)});
+markDirty();
+refreshShowIf();
+updatePortMasters();
+applyProtoDim()}
+function fieldWrapOf(bindEl){
+return bindEl.closest('.field')}
+function showFieldError(path,msg){
+document.querySelectorAll('#settings-panels [data-bind="'+CSS.escape(path)+'"]').forEach(el=>{
+const fw=fieldWrapOf(el);
+if(!fw)return;
+fw.classList.add('field--error');
+const err=fw.querySelector('.field__error');
+if(err)err.textContent=/\s/.test(msg)||!DICT[LANG][msg]&&!DICT.en[msg]?msg:t(msg);
+el.setAttribute('aria-invalid','true');
+const errId='err-'+(++UID);
+err.id=errId;
+el.setAttribute('aria-describedby',errId)})}
+function clearFieldErrors(sec){
+const panel=$('sp-'+sec);
+if(!panel)return;
+panel.querySelectorAll('.field--error').forEach(fw=>{
+fw.classList.remove('field--error');
+fw.querySelectorAll('[aria-invalid]').forEach(el=>el.removeAttribute('aria-invalid'))})}
+function clearFieldErrorEl(el){
+const fw=fieldWrapOf(el);
+if(fw)fw.classList.remove('field--error')}
+const RE_DOMAIN=/^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+const RE_IPV4=/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+const RE_HOST=/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+const RE_V6PREFIX=/^[\da-f:]{2,45}$/i;
+function validIpOrHost(line){
+const s=line.replace(/^\[|\]$/g,'');
+if(RE_IPV4.test(s))return true;
+if(RE_V6PREFIX.test(s)&&s.includes(':'))return true;
+return RE_HOST.test(s)&&s.includes('.')||(RE_HOST.test(s)&&!s.includes('.'))}
+function validateLine(kind,line){
+if(!line)return false;
+switch(kind){
+case 'domain':return RE_DOMAIN.test(line);
+case 'url':return /^https:\/\/\S+$/.test(line);
+case 'ipv6_prefix':return RE_V6PREFIX.test(line)&&line.includes(':');
+case 'ip_or_host':return validIpOrHost(line);
+default:return true}}
+let leTimer=null;
+function validateLineEditors(scope){
+clearTimeout(leTimer);
+leTimer=setTimeout(()=>{
+(scope||document).querySelectorAll('textarea[data-validate]').forEach(validateOneEditor)},250)}
+function validateOneEditor(ta){
+const kind=ta.dataset.validate;
+const wrap=ta.closest('.line-editor');
+const allLines=ta.value.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+const seen=new Set(),bad=[],dups=[];
+allLines.forEach(l=>{
+if(!validateLine(kind,l)){bad.push(l);return}
+if(seen.has(l.toLowerCase()))dups.push(l);
+seen.add(l.toLowerCase())});
+if(wrap){
+const cnt=wrap.querySelector('.cnt'),badEl=wrap.querySelector('.bad');
+if(cnt)cnt.textContent=allLines.length+(ta.id.indexOf('checker-targets')===0?' / '+MAX_TARGETS:'');
+if(badEl)badEl.textContent=[...bad.slice(0,2).map(l=>t('err.invalid_line',{line:l})),...(dups.length?[t('err.duplicate',{value:dups[0]})]:[])].join(' · ');
+ta.setAttribute('aria-invalid',bad.length?'true':'false')}}
+function validateAllLineEditors(){validateLineEditors(document)}
+function randomPass(){
+const cs='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const a=new Uint8Array(24);crypto.getRandomValues(a);
+let s='';a.forEach(b=>{s+=cs[b%cs.length]});
+return s}
+function randomHex(nBytes){
+const a=new Uint8Array(nBytes);crypto.getRandomValues(a);
+return[...a].map(b=>b.toString(16).padStart(2,'0')).join('')}
+
+const CK={running:false,stop:false,ctl:null};
+function renderChecker(){
+const body=$('checker-body');
+body.innerHTML='';
+const card=document.createElement('section');card.className='card';
+card.innerHTML='<div class="card__head"><div><div class="card__title">'+esc(t('checker.title'))+'</div><div class="field__hint">'+esc(t('checker.desc'))+'</div></div></div>'
++'<div class="field"><label class="field__label" for="ck-targets">'+esc(t('checker.targets.label'))+'</label><div class="line-editor"><textarea id="ck-targets" rows="6" class="input textarea textarea--mono" dir="ltr" spellcheck="false" placeholder="1.2.3.4:443"></textarea><div class="meta"><span class="cnt"></span><span class="bad"></span></div></div><p class="field__hint">'+esc(t('checker.targets.hint'))+'</p></div>'
++'<div class="btn-row"><button type="button" class="btn btn--primary" id="ck-run" data-action="run-test"><svg aria-hidden="true"><use href="#i-play"/></svg>'+esc(t('checker.run'))+'</button><button type="button" class="btn btn--ghost" id="ck-stop" data-action="stop-test" disabled><svg aria-hidden="true"><use href="#i-stop"/></svg>'+esc(t('checker.stop'))+'</button></div>';
+body.appendChild(card);
+const prog=document.createElement('section');prog.className='card';prog.hidden=true;prog.id='ck-progress-card';
+prog.innerHTML='<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="ck-fill"></i></div><p class="field__hint" id="ck-count"></p>';
+body.appendChild(prog);
+const res=document.createElement('section');res.className='card';
+res.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('checker.results'))+'</div></div><table class="tbl"><thead><tr><th>'+esc(t('checker.col.target'))+'</th><th>'+esc(t('checker.col.latency'))+'</th><th>'+esc(t('checker.col.rate'))+'</th><th>'+esc(t('checker.col.status'))+'</th></tr></thead><tbody id="ck-rows"></tbody></table>';
+body.appendChild(res);
+addEmptyRow();
+validateOneEditor($('ck-targets'))}
+function addEmptyRow(){
+$('ck-rows').innerHTML='<tr><td colspan="4"><span class="field__hint">'+esc(t('checker.empty'))+'</span></td></tr>'}
+function parseTargets(){
+const ta=$('ck-targets');
+if(!ta)return[];
+const raw=ta.value.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+const seen=new Set(),ok=[],bad=[];
+raw.forEach(l=>{
+if(!validateLine('',l)||(!RE_IPV4.test(l)&&!validIpOrHost(stripPort(l)))){bad.push(l);return}
+const key=l.toLowerCase();
+if(seen.has(key))return;
+seen.add(key);ok.push(l)});
+return{ok,bad,total:raw.length}}
+function stripPort(s){
+const m=s.match(/^(.+):(\d+)$/);
+return m?m[1]:s}
+function normalizeTarget(t){
+let host=t,port='443';
+const m=t.match(/^(.+):(\d+)$/);
+if(m){host=m[1];port=m[2]}
+return 'https://'+host+':'+port+'/cdn-cgi/trace'}
+async function runTest(){
+if(CK.running)return;
+const{ok,bad}=parseTargets();
+validateOneEditor($('ck-targets'));
+if(bad.length)toast(t('err.invalid_line',{line:bad[0]}),'err');
+if(!ok.length)return;
+if(ok.length>MAX_TARGETS){toast(t('checker.tooMany'),'err');return}
+CK.running=true;CK.stop=false;
+$('ck-run').disabled=true;
+$('ck-stop').disabled=false;
+const prog=$('ck-progress-card');
+prog.hidden=false;
+const rows=$('ck-rows');
+rows.innerHTML='';
+let done=0,healthy=0;
+for(const target of ok){
+if(CK.stop)break;
+const r=await probeTarget(target);
+done++;
+if(r.ok)healthy++;
+appendResultRow(target,r);
+updateProgress(done,ok.length);
+$('ck-live').textContent=done+' / '+ok.length}
+finishTest(done,ok.length,healthy)}
+function updateProgress(done,total){
+const pct=Math.round(done/total*100);
+const fill=$('ck-fill'),bar=fill.closest('.progress'),cnt=$('ck-count');
+fill.style.width=pct+'%';
+bar.setAttribute('aria-valuenow',String(pct));
+cnt.textContent=done+' / '+total}
+function finishTest(done,total,healthy){
+CK.running=false;CK.stop=false;CK.ctl=null;
+$('ck-run').disabled=false;
+$('ck-stop').disabled=true;
+if(done>0)toast(t('checker.summary',{ok:healthy,total:done}),'ok')}
+async function probeTarget(target){
+let ok=0,sum=0,made=0;
+for(let i=0;i<PROBE_TRIES;i++){
+if(CK.stop)break;
+made++;
+const ctl=new AbortController();
+CK.ctl=ctl;
+const timer=setTimeout(()=>ctl.abort(),PROBE_TIMEOUT);
+const t0=performance.now();
+try{
+await fetch(normalizeTarget(target),{mode:'no-cors',cache:'no-store',credentials:'omit',signal:ctl.signal});
+sum+=performance.now()-t0;ok++}
+catch(e){}
+finally{clearTimeout(timer)}}
+return{ok:ok>0,avg:ok?Math.round(sum/ok):null,rate:made?Math.round(ok/made*100):0}}
+
+function appendResultRow(target,r){
+const rows=$('ck-rows');
+if(rows.querySelector('[data-empty]'))rows.innerHTML='';
+const tr=document.createElement('tr');
+const glyph=r.ok&&r.rate===100?'<span class="glyph-ok">✓</span>':r.ok?'<span class="glyph-warn">⚠</span>':'<span class="glyph-bad">✗</span>';
+tr.innerHTML='<td data-l="'+esc(t('checker.col.target'))+'"><code dir="ltr" class="mono">'+esc(target)+'</code></td>'
++'<td data-l="'+esc(t('checker.col.latency'))+'">'+(r.avg!=null?r.avg+' ms':'—')+'</td>'
++'<td data-l="'+esc(t('checker.col.rate'))+'">'+r.rate+' %</td>'
++'<td data-l="'+esc(t('checker.col.status'))+'">'+glyph+' '+esc(r.ok?(r.rate===100?t('checker.status.ok'):t('checker.status.partial')):t('checker.status.failed'))+'</td>';
+rows.appendChild(tr)}
+function stopTest(){
+CK.stop=true;
+CK.running=false;
+$('ck-run').disabled=false;
+$('ck-stop').disabled=true;
+if(CK.ctl)CK.ctl.abort()}
+function genFor(kind){
+if(kind==='uuid')return crypto.randomUUID();
+if(kind==='hex12')return randomHex(12);
+return randomPass()}
+const ACTIONS={
+copy(el){
+const valEl=el.dataset.copyId?$(el.dataset.copyId):null;
+const val=el.dataset.copyValue||(valEl?valEl.textContent:'');
+copyText(val||'').then(()=>{
+el.classList.add('copied');
+const use=el.querySelector('use');
+if(use){use.setAttribute('href','#i-check');setTimeout(()=>{use.setAttribute('href','#i-copy');el.classList.remove('copied')},900)}
+toast(t('common.copied'),'ok')})},
+reveal(el){
+const inp=$(el.dataset.target);
+if(!inp)return;
+const show=inp.type==='password';
+inp.type=show?'text':'password';
+el.setAttribute('aria-pressed',String(show));
+el.setAttribute('aria-label',t(show?'common.hide':'common.reveal'));
+const use=el.querySelector('use');
+if(use)use.setAttribute('href',show?'#i-eye-off':'#i-eye')},
+generate(el){
+const inp=$(el.dataset.target);
+if(!inp)return;
+inp.value=genFor(el.dataset.gen);
+inp.dispatchEvent(new Event('change',{bubbles:true}));
+toast(t('common.generated'),'ok')},
+qr(el){openQr(el.dataset.qr)},
+'close-modal'(){closeModal('m-qr')},
+logout(){
+confirmDialog('confirm.logout_title','confirm.logout_body',true).then(async yes=>{
+if(!yes)return;
+try{await api('api/auth/logout',{method:'POST',mutate:true})}catch(err){}
+location.replace(BASE+'login')})},
+apply(){
+(async()=>{for(const sec of[...S.dirty])await applySection(sec)})()},
+discard(){
+[...S.dirty].forEach(sec=>discardSection(sec))},
+'reset-defaults'(){
+confirmDialog('confirm.reset_title','confirm.reset_body',true).then(async yes=>{
+if(!yes)return;
+try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}catch(err){toastErr(err)}})},
+'refresh-ip'(){loadMyIp()},
+'run-test'(){runTest()},
+'stop-test'(){stopTest()}};
+function onDocClick(e){
+const el=e.target.closest('[data-action]');
+if(el){
+const fn=ACTIONS[el.dataset.action];
+if(fn)fn(el);
+return}
+const chip=e.target.closest('[data-chip]');
+if(chip){handleChip(chip);return}
+const mode=e.target.closest('[data-mode]');
+if(mode){
+S.subMode=mode.dataset.mode;
+mode.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===mode)));
+renderHome()}}
+function handleChip(chip){
+const group=chip.closest('[data-type="chips"]');
+if(!group)return;
+group.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked','false'));
+chip.setAttribute('aria-checked','true');
+markDirty();
+clearTimeout(leTimer);
+if(group.hasAttribute('data-fpreset')){
+const preset=chip.dataset.preset;
+const panel=group.closest('#sp-fragment');
+if(panel){
+['lengthMin','lengthMax','delayMin','delayMax'].forEach((k,idx)=>{
+const el=panel.querySelector('[data-bind="fragment.'+k+'"]');
+if(!el)return;
+if(PRESETS[preset]){el.value=String(PRESETS[preset][idx]);el.disabled=true}
+else el.disabled=false});
+panel.querySelectorAll('[data-bind^="fragment."]').forEach(el=>{
+if(el.tagName==='SELECT')el.disabled=preset==='off'})}}
+refreshShowIf();
+validateAllLineEditors()}
+function onChange(e){
+if(e.target.closest('[data-kill]')){setKillSwitch(e.target.checked);return}
+if(e.target.closest('[data-lang-sel]')){setLangCookie(e.target.value);location.reload();return}
+if(e.target.closest('[data-port-master]')){
+const master=e.target;
+master.closest('fieldset').querySelectorAll('[data-port-opt]').forEach(c=>{c.checked=master.checked});
+markDirty();
+updatePortMasters();
+return}
+const bind=e.target.closest('[data-bind]');
+if(bind){
+if(bind.tagName==='TEXTAREA')validateOneEditor(bind);
+markDirty();
+updatePortMasters();
+if(/^vlessEnabled$|^vmessEnabled$|^trojanEnabled$|^ssEnabled$/.test(bind.dataset.bind))applyProtoDim()}}
+function onInput(e){
+const bind=e.target.closest('[data-bind]');
+if(!bind)return;
+if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250)}
+markDirty()}
+function wireEvents(){
+document.addEventListener('click',onDocClick);
+document.addEventListener('change',onChange);
+document.addEventListener('input',onInput);
+$('m-confirm').addEventListener('click',e=>{if(e.target===$('m-confirm'))settleConfirm(false)});
+$('m-qr').addEventListener('click',e=>{if(e.target===$('m-qr'))closeModal('m-qr')});
+$('cf-cancel').addEventListener('click',()=>settleConfirm(false));
+$('cf-ok').addEventListener('click',()=>settleConfirm(true));
+$('m-qr').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-qr'),e)});
+$('m-confirm').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-confirm'),e)});
+document.addEventListener('keydown',e=>{
+if(e.key==='Escape'){
+if(!$('m-confirm').hidden)settleConfirm(false);
+else if(!$('m-qr').hidden)closeModal('m-qr')}});
+window.addEventListener('hashchange',navigate);
+window.addEventListener('beforeunload',e=>{
+if(S.dirty.size){e.preventDefault();e.returnValue=''}});
+wireTabKeys($('nav'),'.tab');
+wireTabKeys($('subtabs'),'.subtab')}
+function wireTabKeys(bar,sel){
+bar.addEventListener('keydown',e=>{
+const tabs=[...bar.querySelectorAll(sel)];
+const idx=tabs.indexOf(document.activeElement);
+if(idx<0)return;
+let next=null;
+if(e.key==='ArrowRight'||e.key==='ArrowLeft')next=(idx+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+else if(e.key==='Home')next=0;
+else if(e.key==='End')next=tabs.length-1;
+if(next!=null){e.preventDefault();tabs[next].focus();tabs[next].click()}})}
+function openQr(url){
+$('qr-caption').innerHTML='<div class="copy-field"><code dir="ltr">'+esc(url)+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-value="'+esc(url)+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>';
+if(!QR.render($('qr-canvas'),url)){toast(t('toast.tooLong'),'err');return}
+openModal('m-qr')}
+function currentSection(){
+const r=parseRoute();
+return r.view==='settings'?r.sec:'general'}
+async function boot(){
+buildShell();
+wireEvents();
+try{
+const results=await Promise.all([api('api/settings'),api('api/status').catch(()=>null),api('api/suburls').catch(()=>null)]);
+S.set=results[0]||{};
+S.status=results[1];
+S.subs=(results[2]&&results[2].urls)||[]}
+catch(e){
+if(e&&e.status===401)return;
+S.set={};
+toastErr(e);
+return}
+renderSettings();
+renderChecker();
+renderHome();
+navigate()}
+boot();
+})();
+</script>
+</body>
+</html>

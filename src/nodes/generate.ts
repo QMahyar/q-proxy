@@ -1,0 +1,196 @@
+import type { NodeBuilderContext } from "../types/context";
+import type { NodeTag, ProxyNode, SSNode, TrojanNode, VMessNode, VlessNode } from "../types/node";
+import type { Settings } from "../types/settings";
+import { fragmentQuery } from "./fragments";
+import { renderName } from "./naming";
+
+interface AddressEntry {
+  address: string;
+  host: string;
+  sni: string;
+  tags: NodeTag[];
+}
+
+interface ProtoSpec {
+  kind: ProxyNode["kind"];
+  enabled: boolean;
+  cred: string;
+}
+
+function collectAddresses(s: Settings, hostname: string): AddressEntry[] {
+  const out: AddressEntry[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string, host: string, sni: string, tags: NodeTag[]): void => {
+    const address = raw.trim();
+    if (address.length === 0) return;
+    const key = address.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ address, host, sni, tags });
+  };
+  push(hostname, hostname, hostname, []);
+  for (const d of s.customDomains) push(d, d.trim(), d.trim(), ["custom-domain"]);
+  for (const ip of s.cleanIps) push(ip, hostname, hostname, ["clean-ip"]);
+  if (s.cdn.enabled) {
+    const cdnHost = s.cdn.host.trim().length > 0 ? s.cdn.host.trim() : hostname;
+    const cdnSni = s.cdn.sni.trim().length > 0 ? s.cdn.sni.trim() : cdnHost;
+    for (const a of s.cdn.addresses) push(a, cdnHost, cdnSni, ["cdn"]);
+  }
+  return out;
+}
+
+function fnv1a(input: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function scrambleSni(sni: string, seedKey: string): string {
+  let h = fnv1a(seedKey);
+  let out = "";
+  for (const ch of sni) {
+    h = (Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0) || 1;
+    const isLower = ch >= "a" && ch <= "z";
+    const isUpper = ch >= "A" && ch <= "Z";
+    if ((h & 1) === 0 && isUpper) out += ch.toLowerCase();
+    else if ((h & 1) === 1 && isLower) out += ch.toUpperCase();
+    else out += ch;
+  }
+  return out;
+}
+
+function tunnelSuffix(cred: string, securePath: string): string {
+  const cleanChars: string[] = [];
+  for (const ch of cred) {
+    if (/[A-Za-z0-9]/.test(ch)) cleanChars.push(ch);
+    if (cleanChars.length === 16) break;
+  }
+  let suffix = cleanChars.join("");
+  for (const ch of securePath) {
+    if (suffix.length >= 8) break;
+    if (/[A-Za-z0-9]/.test(ch)) suffix += ch;
+  }
+  while (suffix.length < 8) suffix += "0";
+  return suffix;
+}
+
+function buildPath(
+  prefix: string,
+  cred: string,
+  securePath: string,
+  earlyData: number,
+  fragQ: string,
+): string {
+  let path = `/${prefix}/${tunnelSuffix(cred, securePath)}`;
+  if (earlyData > 0) path += `?ed=${earlyData}`;
+  if (fragQ.length > 0) path += `${path.includes("?") ? "&" : "?"}${fragQ}`;
+  return path;
+}
+
+export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
+  const s = ctx.settings;
+  const limit = Math.max(0, Math.floor(s.maxNodesPerFormat));
+  if (limit === 0) return [];
+  const cf = ctx.request.cf as { country?: string } | undefined;
+  const country = typeof cf?.country === "string" ? cf.country : null;
+  const allowPlain =
+    s.plainPortPolicy === "always" ||
+    (s.plainPortPolicy === "workers-dev" && ctx.hostname.endsWith(".workers.dev"));
+  const fragOn = s.fragment.mode !== "off";
+  const fragQ = fragOn ? fragmentQuery(s.fragment) : "";
+  const tlsPorts = [...new Set(s.tlsPorts)];
+  const plainPorts = [...new Set(s.plainPorts)];
+  const addresses = collectAddresses(s, ctx.hostname);
+
+  const protos: ProtoSpec[] = [
+    { kind: "vless", enabled: s.vlessEnabled, cred: s.vlessUuid },
+    { kind: "vmess", enabled: s.vmessEnabled, cred: s.vmessUuid },
+    { kind: "trojan", enabled: s.trojanEnabled, cred: s.trojanPassword },
+    { kind: "ss", enabled: s.ssEnabled, cred: s.ssPassword },
+  ];
+
+  const out: ProxyNode[] = [];
+  for (const proto of protos) {
+    if (!proto.enabled || proto.cred.length === 0) continue;
+    const prefix =
+      proto.kind === "vless"
+        ? s.vlessPath
+        : proto.kind === "vmess"
+          ? s.vmessPath
+          : proto.kind === "trojan"
+            ? s.trojanPath
+            : s.ssPath;
+    for (const entry of addresses) {
+      const portFamilies: Array<{ ports: number[]; security: "tls" | "none" }> = [
+        { ports: tlsPorts, security: "tls" },
+        ...(allowPlain ? [{ ports: plainPorts, security: "none" as const }] : []),
+      ];
+      for (const family of portFamilies) {
+        for (const port of family.ports) {
+          const variants: Array<"normal" | "fragment"> = ["normal"];
+          if (fragOn && family.security === "tls" && !entry.tags.includes("cdn")) {
+            variants.push("fragment");
+          }
+          for (const variant of variants) {
+            const earlyData =
+              proto.kind === "ss" ? 0 : s.earlyDataEnabled ? Math.max(0, s.earlyDataMaxBytes) : 0;
+            const path = buildPath(prefix, proto.cred, s.securePath, earlyData, variant === "fragment" ? fragQ : "");
+            const tags: NodeTag[] = [...entry.tags];
+            if (ctx.hostname.endsWith(".workers.dev")) tags.push("workers-dev");
+            if (family.security === "none") tags.push("no-tls");
+            if (variant === "fragment") tags.push("fragment");
+            const sni =
+              family.security === "tls"
+                ? s.randomizeSniCase
+                  ? scrambleSni(entry.sni, `${entry.address}:${port}:${variant}`)
+                  : entry.sni
+                : null;
+            const base = {
+              name: "",
+              address: entry.address,
+              port,
+              security: family.security,
+              sni,
+              host: entry.host,
+              path,
+              earlyData,
+              fingerprint: family.security === "tls" ? s.fingerprint : null,
+              alpn: family.security === "tls" ? [...s.alpn] : [],
+              variant,
+              tags,
+            };
+            let node: ProxyNode;
+            if (proto.kind === "vless") {
+              node = { ...base, kind: "vless", uuid: proto.cred } satisfies VlessNode;
+            } else if (proto.kind === "vmess") {
+              node = {
+                ...base,
+                kind: "vmess",
+                uuid: proto.cred,
+                cipher: "auto",
+                alterId: 0,
+              } satisfies VMessNode;
+            } else if (proto.kind === "trojan") {
+              node = { ...base, kind: "trojan", password: proto.cred } satisfies TrojanNode;
+            } else {
+              node = {
+                ...base,
+                kind: "ss",
+                method: s.ssMethod,
+                password: proto.cred,
+              } satisfies SSNode;
+            }
+            node.name = renderName(node, country);
+            out.push(node);
+          }
+        }
+      }
+      if (out.length >= limit) break;
+    }
+    if (out.length >= limit) break;
+  }
+  return out.slice(0, limit);
+}

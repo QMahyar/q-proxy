@@ -1,0 +1,23 @@
+{
+  "name": "q-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "node scripts/build-single-file.mjs",
+    "dev": "wrangler dev",
+    "deploy": "node scripts/build-single-file.mjs && wrangler deploy",
+    "version": "node scripts/version.mjs",
+    "release": "node scripts/release.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260822.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.125.0"
+  }
+}

@@ -1,0 +1,134 @@
+import { describe, expect, it } from "vitest";
+import { createTrojanInbound } from "../../src/protocols/trojan";
+import { sha224Hex } from "../../src/crypto/sha224";
+import { concatBytes, hexToBytes, u16be, utf8Encode } from "../../src/utils/bytes";
+
+const PASSWORD = "secretpassword123";
+
+function trojanFrame(opts: {
+  password?: string;
+  cmd?: number;
+  port?: number;
+  atype: number;
+  addrBytes: Uint8Array;
+  payload?: Uint8Array;
+}): Uint8Array {
+  const hash = utf8Encode(sha224Hex(opts.password ?? PASSWORD));
+  return concatBytes(
+    hash,
+    new Uint8Array([0x0d, 0x0a]),
+    new Uint8Array([opts.cmd ?? 1]),
+    opts.atype === 3
+      ? concatBytes(new Uint8Array([3, opts.addrBytes.length]), opts.addrBytes)
+      : concatBytes(new Uint8Array([opts.atype]), opts.addrBytes),
+    u16be(opts.port ?? 443),
+    opts.payload ?? new Uint8Array(0),
+  );
+}
+
+function domain(host = "example.com"): Uint8Array {
+  return utf8Encode(host);
+}
+
+describe("createTrojanInbound", () => {
+  it("parses a tcp request with domain target and payload", async () => {
+    const inbound = createTrojanInbound(PASSWORD);
+    const outcome = await inbound.push(
+      trojanFrame({ atype: 3, addrBytes: domain(), payload: utf8Encode("PING") }),
+    );
+    expect(outcome.state).toBe("ready");
+    if (outcome.state !== "ready") return;
+    expect(outcome.parsed.command).toBe("tcp");
+    expect(outcome.parsed.target).toEqual({ host: "example.com", port: 443 });
+    expect(new TextDecoder().decode(outcome.rest)).toBe("PING");
+  });
+
+  it("parses ipv4 and ipv6 targets", async () => {
+    const v4 = await createTrojanInbound(PASSWORD).push(
+      trojanFrame({ atype: 1, addrBytes: hexToBytes("01020304")!, port: 80 }),
+    );
+    expect(v4.state).toBe("ready");
+    if (v4.state === "ready") expect(v4.parsed.target).toEqual({ host: "1.2.3.4", port: 80 });
+
+    const v6 = await createTrojanInbound(PASSWORD).push(
+      trojanFrame({ atype: 4, addrBytes: hexToBytes("26064700470000000000000000000068")!, port: 443 }),
+    );
+    expect(v6.state).toBe("ready");
+    if (v6.state === "ready") expect(v6.parsed.target.host).toBe("2606:4700:4700:0:0:0:0:68");
+  });
+
+  it("rejects a wrong password hash (constant-time compare path)", async () => {
+    const outcome = await createTrojanInbound(PASSWORD).push(
+      trojanFrame({ password: "wrong-password", atype: 3, addrBytes: domain() }),
+    );
+    expect(outcome.state).toBe("reject");
+  });
+
+  it("rejects a malformed auth section missing CRLF", async () => {
+    const bad = concatBytes(utf8Encode(sha224Hex(PASSWORD)), new Uint8Array([0x0a, 0x0d]));
+    const outcome = await createTrojanInbound(PASSWORD).push(bad);
+    expect(outcome).toMatchObject({ state: "reject", reason: expect.stringContaining("CR LF") });
+  });
+
+  it("allows udp associate only for port 53", async () => {
+    const dns = await createTrojanInbound(PASSWORD).push(
+      trojanFrame({ cmd: 3, port: 53, atype: 1, addrBytes: hexToBytes("01010101")! }),
+    );
+    expect(dns.state).toBe("ready");
+    if (dns.state === "ready") expect(dns.parsed.command).toBe("udp");
+
+    const blocked = await createTrojanInbound(PASSWORD).push(
+      trojanFrame({ cmd: 3, port: 5353, atype: 1, addrBytes: hexToBytes("01010101")! }),
+    );
+    expect(blocked.state).toBe("reject");
+  });
+
+  it("rejects unsupported command bytes", async () => {
+    const outcome = await createTrojanInbound(PASSWORD).push(
+      trojanFrame({ cmd: 2, atype: 1, addrBytes: hexToBytes("01020304")! }),
+    );
+    expect(outcome.state).toBe("reject");
+  });
+
+  it("returns null response header", () => {
+    expect(createTrojanInbound(PASSWORD).responseHeader()).toBeNull();
+  });
+
+  it("handles odd chunk splits across push() calls", async () => {
+    const frame = trojanFrame({
+      atype: 3,
+      addrBytes: domain("cf.example.org"),
+      port: 2053,
+      payload: utf8Encode("0".repeat(128)),
+    });
+    for (const [first, second] of [
+      [1, 13],
+      [57, 1],
+      [40, 40],
+    ]) {
+      const a = first!;
+      const b = second!;
+      const inbound = createTrojanInbound(PASSWORD);
+      let outcome = await inbound.push(frame.subarray(0, a));
+      let idx = a;
+      while (outcome.state === "need-more") {
+        outcome = await inbound.push(frame.subarray(idx, idx + b));
+        idx += b;
+        if (idx > frame.length + 16) break;
+      }
+      expect(outcome.state).toBe("ready");
+      if (outcome.state === "ready") {
+        expect(outcome.parsed.target.port).toBe(2053);
+        expect(outcome.rest.length).toBeLessThanOrEqual(128);
+      }
+    }
+  });
+
+  it("rejects buffers beyond the 16 KiB handshake cap", async () => {
+    const outcome = await createTrojanInbound(PASSWORD).push(new Uint8Array(16385));
+    expect(outcome).toMatchObject({ state: "reject", reason: "handshake too large" });
+  });
+});
+
+
+

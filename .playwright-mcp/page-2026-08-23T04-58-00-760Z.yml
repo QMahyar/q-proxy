@@ -1,0 +1,18 @@
+- generic [ref=f1e1]:
+  - main [ref=f1e3]:
+    - heading "◆ Q Proxy" [level=1] [ref=f1e4]
+    - paragraph [ref=f1e5]: پنل پراکسی کلادفلر
+    - generic [ref=f1e6]:
+      - heading "ورود به Q Proxy" [level=2] [ref=f1e7]
+      - generic [ref=f1e8]:
+        - generic [ref=f1e9]:
+          - generic [ref=f1e10]: گذرواژه
+          - generic [ref=f1e11]:
+            - textbox "گذرواژه" [active] [ref=f1e12]
+            - button "نمایش" [ref=f1e13] [cursor=pointer]
+        - button "ورود" [ref=f1e16] [cursor=pointer]
+    - navigation "Language" [ref=f1e17]:
+      - group [ref=f1e18]:
+        - button "English" [ref=f1e19] [cursor=pointer]
+        - button "فارسی" [pressed] [ref=f1e20] [cursor=pointer]
+  - status
