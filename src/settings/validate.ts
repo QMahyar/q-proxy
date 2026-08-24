@@ -7,15 +7,16 @@ import type {
   SsMethod,
   Settings,
 } from "../types/settings";
-import { DEFAULT_SETTINGS } from "../types/settings";
+import { CF_PLAIN_PORTS, CF_TLS_PORTS, DEFAULT_SETTINGS } from "../types/settings";
 import { isPlainObject } from "./migrate";
+import { isIPv4, isIPv6, parseHostPort } from "../utils/net";
 
 export type ValidationResult =
   | { ok: true; value: Settings }
   | { ok: false; fields: Record<string, string> };
 
-const CF_TLS_PORTS = [443, 2053, 2083, 2087, 2096, 8443];
-const CF_PLAIN_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095];
+const CF_TLS_PORT_LIST: readonly number[] = CF_TLS_PORTS;
+const CF_PLAIN_PORT_LIST: readonly number[] = CF_PLAIN_PORTS;
 const KNOWN_ALPN = ["h2", "http/1.1", "h3"];
 
 const LANGUAGES: readonly Language[] = ["en", "fa"];
@@ -250,6 +251,41 @@ function urlListField(
   (out as unknown as Record<string, unknown>)[key] = cleaned;
 }
 
+export function normalizeCleanAddress(raw: string): string | null {
+  const hp = parseHostPort(raw.trim(), 0);
+  if (hp === null || hp.host.length === 0) return null;
+  const host = hp.host.toLowerCase();
+  const isAddr = isIPv4(host) || isIPv6(host);
+  const looksDomain = host.includes(".") && /^[a-z0-9.-]+$/.test(host) && !host.startsWith(".") && !host.endsWith("-");
+  if (!isAddr && !looksDomain) return null;
+  const display = isIPv6(host) ? `[${host}]` : host;
+  return hp.port > 0 ? `${display}:${hp.port}` : display;
+}
+
+function cleanAddrListField(
+  patch: Record<string, unknown>,
+  out: Settings,
+  key: string,
+  fields: Record<string, string>,
+  maxItems: number,
+): void {
+  const v = patch[key];
+  if (v === undefined) return;
+  if (!Array.isArray(v)) {
+    fail(fields, key, "must be an array of strings");
+    return;
+  }
+  const seen = new Set<string>();
+  for (const raw of v) {
+    if (typeof raw !== "string") continue;
+    const norm = normalizeCleanAddress(raw);
+    if (norm === null || seen.has(norm)) continue;
+    seen.add(norm);
+    if (seen.size >= maxItems) break;
+  }
+  (out as unknown as Record<string, unknown>)[key] = [...seen];
+}
+
 function validateNested(
   patch: Record<string, unknown>,
   key: string,
@@ -319,10 +355,10 @@ export function validateSettings(input: unknown): ValidationResult {
   if (v !== undefined && !validHostnameOrEmpty(v)) fail(fields, "hostnameOverride", "must be a hostname");
   else if (v !== undefined) out.hostnameOverride = v;
   strArrayField(patch, out, "customDomains", fields, { maxItems: 16, pattern: HOSTNAME_RE });
-  strArrayField(patch, out, "cleanIps", fields, { maxItems: 64, pattern: HOST_TOKEN_RE });
-  const tlsPorts = portListField(patch, "tlsPorts", CF_TLS_PORTS, fields);
+  cleanAddrListField(patch, out, "cleanIps", fields, 64);
+  const tlsPorts = portListField(patch, "tlsPorts", CF_TLS_PORT_LIST, fields);
   if (tlsPorts !== undefined) out.tlsPorts = tlsPorts;
-  const plainPorts = portListField(patch, "plainPorts", CF_PLAIN_PORTS, fields);
+  const plainPorts = portListField(patch, "plainPorts", CF_PLAIN_PORT_LIST, fields);
   if (plainPorts !== undefined) out.plainPorts = plainPorts;
   const overlap = out.tlsPorts.filter((p) => out.plainPorts.includes(p));
   if (overlap.length > 0) {

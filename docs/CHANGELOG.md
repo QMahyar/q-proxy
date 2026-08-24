@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.5 — 2026-08-24
+
+### Added
+- **Pinned ports on clean addresses**: the clean-address list now accepts `ip:port`, `[ipv6]:port`, and `host:port` entries. An entry with an explicit port generates nodes for that port only (security derived from Cloudflare's canonical TLS/plain port families); bare entries keep using the global TLS/plain port selection. Invalid lines are dropped at save time and the rest are normalized/deduped.
+- Panel hint text (EN/FA) documents the syntax.
+
+### Changed
+- `generateNodes` treats a pinned port as a single-entry family; all invariants (fragment ⇒ TLS, SS earlyData=0, naming) apply unchanged.
+
 ## 1.0.4 — 2026-08-24
 
 ### Fixed

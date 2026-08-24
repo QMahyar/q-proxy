@@ -198,3 +198,47 @@ describe("empty tlsPorts guard", () => {
     expect(result.ok).toBe(true);
   });
 });
+
+describe("cleanIps with pinned ports", () => {
+  it("normalizes ip:port entries and drops invalid lines", () => {
+    const result = validateSettings({
+      cleanIps: [
+        "1.2.3.4:2053",
+        " 5.6.7.8 ",
+        "[2606:4700::1]:8443",
+        "2606:4700::99",
+        "edge.example.com",
+        "edge.example.com:2096",
+        "ijasdijkabd",
+        "1.2.3.4:99999",
+        "1.2.3.4:abc",
+        ":8080",
+        "",
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.cleanIps).toEqual([
+        "1.2.3.4:2053",
+        "5.6.7.8",
+        "[2606:4700::1]:8443",
+        "[2606:4700::99]",
+        "edge.example.com",
+        "edge.example.com:2096",
+      ]);
+    }
+  });
+
+  it("dedupes entries after normalization", () => {
+    const result = validateSettings({ cleanIps: ["1.2.3.4:443", "1.2.3.4:443", "  1.2.3.4:443 "] });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cleanIps).toEqual(["1.2.3.4:443"]);
+  });
+
+  it("caps the list at 64 normalized entries", () => {
+    const list = Array.from({ length: 80 }, (_, i) => `10.0.0.${i + 1}:443`);
+    const result = validateSettings({ cleanIps: list });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cleanIps.length).toBe(64);
+  });
+});

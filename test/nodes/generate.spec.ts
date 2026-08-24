@@ -108,6 +108,35 @@ describe("generateNodes address axis and tags", () => {
     expect(nodes.filter((n) => n.address === "worker.example.workers.dev").length).toBe(4 * 13);
   });
 
+  it("pins clean-ip entries with an explicit port to that port only", () => {
+    const s = settings();
+    s.cleanIps = ["1.2.3.4:2053", "5.6.7.8", "[2606:4700::1]:8443", "junkline"];
+    const nodes = generateNodes(ctx(s));
+
+    const pinned2053 = nodes.filter((n) => n.address === "1.2.3.4");
+    expect(pinned2053.length).toBe(4);
+    expect(new Set(pinned2053.map((n) => n.port))).toEqual(new Set([2053]));
+    expect(pinned2053.every((n) => n.security === "tls")).toBe(true);
+
+    const pinnedV6 = nodes.filter((n) => n.address === "[2606:4700::1]");
+    expect(pinnedV6.length).toBe(4);
+    expect(new Set(pinnedV6.map((n) => n.port))).toEqual(new Set([8443]));
+    expect(pinnedV6.every((n) => n.security === "tls" && n.tags.includes("clean-ip"))).toBe(true);
+
+    const bare = nodes.filter((n) => n.address === "5.6.7.8");
+    expect(bare.length).toBe(4 * (6 + 7));
+    expect(new Set(bare.map((n) => n.port)).size).toBe(13);
+    expect(nodes.some((n) => n.address === "junkline")).toBe(false);
+  });
+
+  it("treats a pinned non-CF port as plaintext family", () => {
+    const s = settings();
+    s.cleanIps = ["1.2.3.4:9999"];
+    const nodes = generateNodes(ctx(s)).filter((n) => n.address === "1.2.3.4");
+    expect(nodes.length).toBeGreaterThan(0);
+    expect(nodes.every((n) => n.security === "none" && n.port === 9999 && n.sni === null)).toBe(true);
+  });
+
   it("masks cdn addresses with cdn host/sni and tags them cdn", () => {
     const s = settings();
     s.cdn = { enabled: true, addresses: ["104.16.1.1"], host: "cdn.example.net", sni: "" };

@@ -1,14 +1,17 @@
 import type { NodeBuilderContext } from "../types/context";
 import type { NodeTag, ProxyNode, SSNode, TrojanNode, VMessNode, VlessNode } from "../types/node";
-import type { Settings } from "../types/settings";
+import { CF_TLS_PORTS, type Settings } from "../types/settings";
 import { fragmentQuery } from "./fragments";
 import { renderName } from "./naming";
+import { isIPv6, parseHostPort } from "../utils/net";
+import { normalizeCleanAddress } from "../settings/validate";
 
 interface AddressEntry {
   address: string;
   host: string;
   sni: string;
   tags: NodeTag[];
+  pinnedPort?: number;
 }
 
 interface ProtoSpec {
@@ -20,17 +23,24 @@ interface ProtoSpec {
 function collectAddresses(s: Settings, hostname: string): AddressEntry[] {
   const out: AddressEntry[] = [];
   const seen = new Set<string>();
-  const push = (raw: string, host: string, sni: string, tags: NodeTag[]): void => {
+  const push = (raw: string, host: string, sni: string, tags: NodeTag[], pinnedPort?: number): void => {
     const address = raw.trim();
     if (address.length === 0) return;
     const key = address.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ address, host, sni, tags });
+    out.push({ address, host, sni, tags, pinnedPort });
   };
   push(hostname, hostname, hostname, []);
   for (const d of s.customDomains) push(d, d.trim(), d.trim(), ["custom-domain"]);
-  for (const ip of s.cleanIps) push(ip, hostname, hostname, ["clean-ip"]);
+  for (const raw of s.cleanIps) {
+    const norm = normalizeCleanAddress(raw);
+    if (norm === null) continue;
+    const hp = parseHostPort(norm, 0);
+    if (hp === null) continue;
+    const display = isIPv6(hp.host) ? `[${hp.host}]` : hp.host;
+    push(display, hostname, hostname, ["clean-ip"], hp.port > 0 ? hp.port : undefined);
+  }
   if (s.cdn.enabled) {
     const cdnHost = s.cdn.host.trim().length > 0 ? s.cdn.host.trim() : hostname;
     const cdnSni = s.cdn.sni.trim().length > 0 ? s.cdn.sni.trim() : cdnHost;
@@ -124,11 +134,19 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
             ? s.trojanPath
             : s.ssPath;
     for (const entry of addresses) {
-      const portFamilies: Array<{ ports: number[]; security: "tls" | "none" }> = [
-        { ports: tlsPorts, security: "tls" },
-        ...(allowPlain ? [{ ports: plainPorts, security: "none" as const }] : []),
-      ];
-      for (const family of portFamilies) {
+      const familySets: Array<{ ports: number[]; security: "tls" | "none" }> =
+        entry.pinnedPort !== undefined
+          ? [
+              {
+                ports: [entry.pinnedPort],
+                security: (CF_TLS_PORTS as readonly number[]).includes(entry.pinnedPort) ? "tls" : "none",
+              },
+            ]
+          : [
+              { ports: tlsPorts, security: "tls" },
+              ...(allowPlain ? [{ ports: plainPorts, security: "none" as const }] : []),
+            ];
+      for (const family of familySets) {
         for (const port of family.ports) {
           const variants: Array<"normal" | "fragment"> = ["normal"];
           if (fragOn && family.security === "tls" && !entry.tags.includes("cdn")) {
