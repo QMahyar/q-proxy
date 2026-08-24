@@ -40,10 +40,6 @@ export function appendChunk(buffer: Uint8Array[], data: Uint8Array): boolean {
   return true;
 }
 
-export function bufferedLength(buffer: Uint8Array[]): number {
-  return buffer.reduce((n, c) => n + c.length, 0);
-}
-
 export function drainChunks(buffer: Uint8Array[], length?: number): Uint8Array {
   let total = 0;
   for (const c of buffer) total += c.length;

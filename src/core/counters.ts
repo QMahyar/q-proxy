@@ -65,11 +65,13 @@ export async function recordConnection(env: Env): Promise<void> {
   buffer.lastFlushMs = Date.now();
   try {
     const stored = await readStored(env);
-    const requestsToday = (stored.day === today ? stored.requestsToday : 0) + capturedToday;
+    const writeDay = dayKeyUtc();
+    const requestsToday =
+      (stored.day === writeDay ? stored.requestsToday : 0) + (writeDay === today ? capturedToday : 0);
     const requestsTotal = stored.requestsTotal + capturedTotal;
     const put = env.QPROXY_KV.put(
       KV_KEY,
-      JSON.stringify({ day: today, requestsToday, requestsTotal, updatedAt: Date.now() }),
+      JSON.stringify({ day: writeDay, requestsToday, requestsTotal, updatedAt: Date.now() }),
     );
     waitUntil(put.then(() => undefined));
     await put.catch(() => {});

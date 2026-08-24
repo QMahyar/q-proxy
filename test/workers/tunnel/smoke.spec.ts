@@ -22,7 +22,7 @@ describe("tunnel upgrade smoke", () => {
     const res = await SELF.fetch("https://example.com/vl/abcd1234efgh5678", {
       headers: UPGRADE_HEADERS,
     });
-    expect(res.status).toBeLessThan(500);
+    expect([101, 200]).toContain(res.status);
     if (res.status === 101 && res.webSocket !== null) {
       const ws = res.webSocket;
       ws.accept();
@@ -36,12 +36,14 @@ describe("tunnel upgrade smoke", () => {
       await closed;
       expect([2, 3]).toContain(ws.readyState);
     } else {
-      expect(res.status).toBeLessThan(500);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("text/html");
     }
   });
 
   it("does not upgrade non-websocket requests on tunnel paths", async () => {
     const res = await SELF.fetch("https://example.com/vl/abcd1234efgh5678");
-    expect(res.status).toBeLessThan(500);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/html");
   });
 });

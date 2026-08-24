@@ -22,20 +22,6 @@ export function randomString(length: number, charset: string = ALNUM_CHARSET): s
   return s;
 }
 
-export function randomInt(minInclusive: number, maxExclusive: number): number {
-  const range = maxExclusive - minInclusive;
-  if (range <= 0) return minInclusive;
-  const max = 0x100000000;
-  const limit = max - (max % range);
-  const buf = new Uint32Array(1);
-  let v = 0;
-  do {
-    crypto.getRandomValues(buf);
-    v = buf[0]!;
-  } while (v >= limit);
-  return minInclusive + (v % range);
-}
-
 export function constantTimeEqual(a: string, b: string): boolean {
   const max = Math.max(a.length, b.length);
   let acc = 0;
@@ -43,8 +29,4 @@ export function constantTimeEqual(a: string, b: string): boolean {
     acc |= (a.charCodeAt(i) || 0x10000) ^ (b.charCodeAt(i) || 0x10000);
   }
   return acc === 0 && a.length === b.length;
-}
-
-export function generateUuid(): string {
-  return crypto.randomUUID();
 }

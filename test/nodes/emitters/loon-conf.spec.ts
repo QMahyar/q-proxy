@@ -61,9 +61,9 @@ describe("emitLoonConf golden", () => {
       "loglevel = notify",
       "",
       "[Proxy]",
-      "VLESS example.com 443 = vless, example.com, 443, username=d342d11e-d424-4583-b36e-524ab1f0afa4, over-tls=true, sni=example.com, transporter=ws, path=/vm/abcd1234?ed=2048, host=example.com",
-      "VMESS example.com 443 = vmess, example.com, 443, username=1386f85e-657b-4d6e-9d56-78badb75e1fd, cipher=auto, alterId=0, udp=true, tls=true, sni=example.com, transporter=ws, path=/vm/abcd1234?ed=2048, host=example.com",
-      "TROJAN example.com 443 = trojan, example.com, 443, password=secretpass123, udp=true, sni=example.com, transporter=ws, path=/tr/abcd1234?ed=2048, host=example.com",
+      'VLESS example.com 443 = vless, example.com, 443, "d342d11e-d424-4583-b36e-524ab1f0afa4", udp=true, over-tls=true, sni=example.com, transport=ws, path=/vm/abcd1234?ed=2048, host=example.com',
+      'VMESS example.com 443 = vmess, example.com, 443, auto, "1386f85e-657b-4d6e-9d56-78badb75e1fd", alterId=0, udp=true, over-tls=true, sni=example.com, transport=ws, path=/vm/abcd1234?ed=2048, host=example.com',
+      'TROJAN example.com 443 = trojan, example.com, 443, "secretpass123", udp=true, sni=example.com, over-tls=true, transport=ws, path=/tr/abcd1234?ed=2048, host=example.com',
       "",
       "[Proxy Group]",
       "PROXY = url-test, VLESS example.com 443, VMESS example.com 443, TROJAN example.com 443, url=https://www.gstatic.com/generate_204, interval=300, tolerance=50, timeout=5",
@@ -88,7 +88,7 @@ describe("emitLoonConf golden", () => {
     const plainTr: TrojanNode = { ...trojan(), port: 80, security: "none", name: "PLAINTR" };
     const out = emitLoonConf([plainVm, plainTr], OPTS);
     expect(out).toContain(
-      "PLAINVM = vmess, example.com, 80, username=1386f85e-657b-4d6e-9d56-78badb75e1fd, cipher=auto, alterId=0, udp=true, tls=false, transporter=ws, path=/vm/abcd1234?ed=2048, host=example.com",
+      'PLAINVM = vmess, example.com, 80, auto, "1386f85e-657b-4d6e-9d56-78badb75e1fd", alterId=0, udp=true, over-tls=false, transport=ws, path=/vm/abcd1234?ed=2048, host=example.com',
     );
     expect(out).not.toContain("PLAINTR");
   });

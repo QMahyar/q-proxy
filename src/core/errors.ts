@@ -4,6 +4,7 @@ export class AppError extends Error {
     readonly status: number,
     readonly code: string,
     readonly expose: boolean = true,
+    readonly headers: Record<string, string> = {},
   ) {
     super(message);
     this.name = new.target.name;
@@ -43,8 +44,10 @@ export class ValidationError extends AppError {
 }
 
 export class RateLimitedError extends AppError {
-  constructor(message = "too many attempts") {
-    super(message, 429, "RATE_LIMITED");
+  constructor(retryAfterSeconds?: number, message = "too many attempts") {
+    const headers: Record<string, string> = {};
+    if (retryAfterSeconds !== undefined) headers["Retry-After"] = String(Math.max(1, retryAfterSeconds));
+    super(message, 429, "RATE_LIMITED", true, headers);
   }
 }
 

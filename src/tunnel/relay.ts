@@ -293,29 +293,3 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   return { feedClient, clientClosed, run };
 }
 
-export function pump(
-  ws: WebSocket,
-  established: EstablishedEgress,
-  opts: RelayOptions = {},
-): Promise<void> {
-  const sink: RelayClientSink = {
-    send: (data) => {
-      try {
-        ws.send(data);
-      } catch (err) {
-        log.debug("relay", "ws send discarded", String(err));
-      }
-    },
-    close: (code) => {
-      try {
-        if (ws.readyState !== WS_CLOSED) ws.close(code);
-      } catch {}
-    },
-  };
-  const handle = createRelay(sink, opts);
-  const onClose = (): void => handle.clientClosed();
-  ws.addEventListener("close", onClose);
-  return handle.run(established).finally(() => {
-    ws.removeEventListener("close", onClose);
-  });
-}

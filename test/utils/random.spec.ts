@@ -3,7 +3,6 @@ import {
   ALNUM_CHARSET,
   constantTimeEqual,
   randomHex,
-  randomInt,
   randomString,
 } from "../../src/utils/random";
 
@@ -27,16 +26,6 @@ describe("randomString", () => {
     for (let i = 0; i < 50; i++) {
       const s = randomString(24);
       for (const ch of s) expect(ALNUM_CHARSET.includes(ch)).toBe(true);
-    }
-  });
-});
-
-describe("randomInt", () => {
-  it("stays in range", () => {
-    for (let i = 0; i < 500; i++) {
-      const v = randomInt(5, 10);
-      expect(v).toBeGreaterThanOrEqual(5);
-      expect(v).toBeLessThan(10);
     }
   });
 });

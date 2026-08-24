@@ -54,19 +54,18 @@ function vless(): VlessNode {
 }
 
 describe("emitSurgeConf golden", () => {
-  it("emits exact INI for vmess+vless+trojan and omits ss", () => {
+  it("emits exact INI for vmess+trojan and omits vless/ss (vless unsupported by Surge)", () => {
     const nodes: ProxyNode[] = [vless(), vmess(), trojan()];
     const expected = [
       "[General]",
       "loglevel = notify",
       "",
       "[Proxy]",
-      "VLESS example.com 443 = vless, example.com, 443, username=d342d11e-d424-4583-b36e-524ab1f0afa4, tls=true, ws=true, ws-path=/vm/abcd1234?ed=2048, ws-headers=Host:example.com, sni=example.com",
       "VMESS example.com 443 = vmess, example.com, 443, username=1386f85e-657b-4d6e-9d56-78badb75e1fd, tls=true, vmess-aead=true, ws=true, ws-path=/vm/abcd1234?ed=2048, ws-headers=Host:example.com, sni=example.com",
       "TROJAN example.com 443 = trojan, example.com, 443, password=secretpass123, tls=true, ws=true, ws-path=/tr/abcd1234?ed=2048, ws-headers=Host:example.com, sni=example.com",
       "",
       "[Proxy Group]",
-      "PROXY = url-test, VLESS example.com 443, VMESS example.com 443, TROJAN example.com 443, url=https://www.gstatic.com/generate_204, interval=300, tolerance=50",
+      "PROXY = url-test, VMESS example.com 443, TROJAN example.com 443, url=https://www.gstatic.com/generate_204, interval=300, tolerance=50",
       "",
       "[Rule]",
       "FINAL,PROXY",
@@ -75,11 +74,20 @@ describe("emitSurgeConf golden", () => {
     expect(emitSurgeConf(nodes, OPTS)).toBe(expected);
   });
 
+  it("prepends a managed-config header when subscriptionUrl is provided", () => {
+    const out = emitSurgeConf([vmess()], {
+      ...OPTS,
+      subscriptionUrl: "https://w.test/sp/sub?target=surge",
+      updateIntervalHours: 12,
+    });
+    expect(out.startsWith(
+      "#!MANAGED-CONFIG https://w.test/sp/sub?target=surge interval=43200 strict=true\n",
+    )).toBe(true);
+  });
+
   it("selects single node and falls back to DIRECT group when nothing is emittable", () => {
     const one = emitSurgeConf([vmess()], OPTS);
     expect(one).toContain("[Proxy Group]\nPROXY = select, VMESS example.com 443");
-    const oneVless = emitSurgeConf([vless()], OPTS);
-    expect(oneVless).toContain("[Proxy Group]\nPROXY = select, VLESS example.com 443");
     const empty = emitSurgeConf([], OPTS);
     expect(empty).toContain("[Proxy]\n\n[Proxy Group]");
     expect(empty).toContain("PROXY = select, DIRECT");

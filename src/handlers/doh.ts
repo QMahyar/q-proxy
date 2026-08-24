@@ -20,15 +20,19 @@ export const handleDoh: RouteHandler = async (req, _env, s) => {
   };
   let init: RequestInit;
   if (req.method === "POST") {
+    const declared = Number(req.headers.get("content-length") ?? "0");
+    if (Number.isFinite(declared) && declared > MAX_DOH_BODY_BYTES) {
+      throw new BadRequestError("dns query body exceeds the 10 MiB cap");
+    }
     const body = await req.arrayBuffer();
     if (body.byteLength === 0) throw new BadRequestError("empty dns query body");
     if (body.byteLength > MAX_DOH_BODY_BYTES) {
       throw new BadRequestError("dns query body exceeds the 10 MiB cap");
     }
     headers["Content-Type"] = req.headers.get("content-type") ?? "application/dns-message";
-    init = { method: "POST", headers, body };
+    init = { method: "POST", headers, body, signal: AbortSignal.timeout(5000) };
   } else {
-    init = { method: "GET", headers };
+    init = { method: "GET", headers, signal: AbortSignal.timeout(5000) };
   }
   let resp: Response;
   try {

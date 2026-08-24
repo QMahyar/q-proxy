@@ -20,14 +20,14 @@ function vmessLine(node: Extract<ProxyNode, { kind: "vmess" }>): string {
     `${node.name} = vmess`,
     node.address,
     String(node.port),
-    `username=${node.uuid}`,
-    "cipher=auto",
+    node.cipher,
+    `"${node.uuid}"`,
     `alterId=${node.alterId}`,
     "udp=true",
-    node.security === "tls" ? "tls=true" : "tls=false",
+    node.security === "tls" ? "over-tls=true" : "over-tls=false",
   ];
   if (node.security === "tls" && node.sni !== null) parts.push(`sni=${node.sni}`);
-  parts.push("transporter=ws", `path=${node.path}`, `host=${node.host}`);
+  parts.push("transport=ws", `path=${node.path}`, `host=${node.host}`);
   return parts.join(", ");
 }
 
@@ -36,11 +36,12 @@ function trojanLine(node: Extract<ProxyNode, { kind: "trojan" }>): string {
     `${node.name} = trojan`,
     node.address,
     String(node.port),
-    `password=${node.password}`,
+    `"${node.password}"`,
     "udp=true",
   ];
   if (node.sni !== null) parts.push(`sni=${node.sni}`);
-  parts.push("transporter=ws", `path=${node.path}`, `host=${node.host}`);
+  if (node.security === "tls") parts.push("over-tls=true");
+  parts.push("transport=ws", `path=${node.path}`, `host=${node.host}`);
   return parts.join(", ");
 }
 
@@ -49,11 +50,14 @@ function vlessLine(node: Extract<ProxyNode, { kind: "vless" }>): string {
     `${node.name} = vless`,
     node.address,
     String(node.port),
-    `username=${node.uuid}`,
-    node.security === "tls" ? "over-tls=true" : "over-tls=false",
+    `"${node.uuid}"`,
+    "udp=true",
   ];
-  if (node.security === "tls" && node.sni !== null) parts.push(`sni=${node.sni}`);
-  parts.push("transporter=ws", `path=${node.path}`, `host=${node.host}`);
+  if (node.security === "tls") {
+    parts.push("over-tls=true");
+    if (node.sni !== null) parts.push(`sni=${node.sni}`);
+  }
+  parts.push("transport=ws", `path=${node.path}`, `host=${node.host}`);
   return parts.join(", ");
 }
 
@@ -66,7 +70,7 @@ export function emitLoonConf(nodes: readonly ProxyNode[], opts: EmitOptions): st
       ? `PROXY = url-test, ${names.join(", ")}, url=${TEST_URL}, interval=${opts.urlTestIntervalSec}, tolerance=50, timeout=5`
       : names.length === 1
         ? `PROXY = select, ${names[0]}`
-        : "PROXY = select, DIRECT";
+        : `PROXY = select, DIRECT`;
   const sections = [
     "[General]\nloglevel = notify",
     `[Proxy]\n${lines.join("\n")}`.trimEnd(),

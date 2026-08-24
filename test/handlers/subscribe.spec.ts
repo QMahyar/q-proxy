@@ -110,7 +110,7 @@ describe("handleSubscribe", () => {
     expect(parsed.outbounds.length).toBeGreaterThan(1);
   });
 
-  it("emits vless+vmess+trojan and omits ss from surge output", async () => {
+  it("emits vmess+trojan and omits vless/ss from surge output (vless unsupported by Surge)", async () => {
     const res = await handleSubscribe(
       request("https://w.test/sp12345678/sub?target=surge"),
       envStub(),
@@ -118,10 +118,11 @@ describe("handleSubscribe", () => {
     );
     expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     const body = await res.text();
+    expect(body).toContain("#!MANAGED-CONFIG https://w.test/sp12345678/sub?target=surge interval=43200 strict=true");
     expect(body).toContain("[Proxy]");
-    expect(body).toContain("= vless,");
     expect(body).toContain("= vmess,");
     expect(body).toContain("= trojan,");
+    expect(body).not.toContain("= vless");
     expect(body).not.toContain("= ss");
   });
 

@@ -164,12 +164,12 @@ describe("router dispatch", () => {
     expect(res.headers.get("Content-Type")).toContain("yaml");
 
     res = await SELF.fetch(`${BASE}/sub`);
-    expect(res.status).toBeLessThan(500);
+    expect(res.status).toBe(200);
 
     res = await SELF.fetch(`${BASE}/doh?dns=q80BAAABAAAAAAAAA2NvbQdhZXJvcGlhA2NvbQAAAQAB`, {
       headers: { Accept: "application/dns-message" },
     });
-    expect(res.status).toBeLessThan(500);
+    expect([200, 502]).toContain(res.status);
 
     res = await SELF.fetch(`${BASE}/api/settings/reset`, post({}, csrf));
     expect(res.status).toBe(200);

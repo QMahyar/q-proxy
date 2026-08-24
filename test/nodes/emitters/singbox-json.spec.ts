@@ -185,7 +185,8 @@ describe("emitSingBoxJson golden", () => {
         "SS example.com 443"
       ],
       "url": "https://www.gstatic.com/generate_204",
-      "interval": "300s"
+      "interval": "300s",
+      "tolerance": 50
     },
     {
       "type": "direct",

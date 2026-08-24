@@ -32,10 +32,14 @@ export function jsonError(
 export function errorToResponse(err: unknown, debug: boolean): Response {
   if (err instanceof AppError) {
     const showMessage = err.expose || (debug && err.status >= 500);
+    let res: Response;
     if (err instanceof ValidationError) {
-      return jsonError(err.status, err.code, err.message, err.fields);
+      res = jsonError(err.status, err.code, err.message, err.fields);
+    } else {
+      res = jsonError(err.status, err.code, showMessage ? err.message : GENERIC_MESSAGE);
     }
-    return jsonError(err.status, err.code, showMessage ? err.message : GENERIC_MESSAGE);
+    for (const [k, v] of Object.entries(err.headers)) res.headers.set(k, v);
+    return res;
   }
   return jsonError(500, "INTERNAL", GENERIC_MESSAGE);
 }

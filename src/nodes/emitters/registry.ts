@@ -10,6 +10,8 @@ export interface EmitOptions {
   remoteDns: string;
   urlTestIntervalSec: number;
   isFragment: boolean;
+  subscriptionUrl?: string;
+  updateIntervalHours?: number;
 }
 
 export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;

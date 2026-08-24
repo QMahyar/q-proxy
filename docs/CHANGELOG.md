@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.2 — 2026-08-24
+
+### Fixed
+- Surge emitter no longer emits VLESS nodes — VLESS is not a supported Surge proxy type (manual.nssurge.com); previously produced configs Surge would reject.
+- Loon emitter aligned to official nsloon.app grammar: `transport=` (was `transporter=`), `over-tls=` for vmess, positional cipher/uuid/password, `udp=true` on vless/trojan.
+- Surge subscriptions now prepend `#!MANAGED-CONFIG` so URL-imported profiles auto-refresh.
+- sing-box urltest group now emits explicit `tolerance: 50`.
+- Login rate-limit responses carry a computed `Retry-After` header (the UI already parsed it).
+- `/sub?view=html` now forces the info page regardless of User-Agent, matching the link shown in the panel.
+- DoH upstream fetch has a 5s timeout; POST bodies are size-checked before buffering via Content-Length pre-check.
+- Counters flush straddling midnight files counts under the correct day key.
+- Flaky network-dependent unit test in the egress suite stubs fetch.
+
+### Changed
+- Dead code removed: relay `pump()`, `randomInt`, `generateUuid`, `SMART_SWEEP_LENGTHS`, `bufferedLength`.
+- Stronger test assertions: chacha20 AEAD full-vector compare vs node oracle, tunnel smoke and router sub/doh exact statuses.
+
+### Docs
+- ARCHITECTURE.md Rev note amended: Surge/Loon protocol coverage corrected after upstream research.
+- AGENTS.md: wrangler dev wedged-session workaround, expanded known-gaps list.
+
 ## 1.0.1 — 2026-08-24
 
 ### Security

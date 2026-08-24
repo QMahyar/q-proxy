@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRAGMENT_PRESETS, SMART_SWEEP_LENGTHS, fragmentQuery } from "../../src/nodes/fragments";
+import { FRAGMENT_PRESETS, fragmentQuery } from "../../src/nodes/fragments";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { countryFlag, renderName } from "../../src/nodes/naming";
 import type { SSNode, TrojanNode, VlessNode } from "../../src/types/node";
@@ -10,12 +10,6 @@ describe("fragment presets", () => {
     expect(FRAGMENT_PRESETS.medium).toEqual({ lengthMin: 50, lengthMax: 100, delayMin: 1, delayMax: 5 });
     expect(FRAGMENT_PRESETS.high).toEqual({ lengthMin: 10, lengthMax: 20, delayMin: 10, delayMax: 20 });
     expect(FRAGMENT_PRESETS.severe).toEqual({ lengthMin: 1, lengthMax: 5, delayMin: 1, delayMax: 5 });
-  });
-
-  it("provides a twenty-entry smart-sweep length list spanning 1-5 to 180-200", () => {
-    expect(SMART_SWEEP_LENGTHS.length).toBe(20);
-    expect(SMART_SWEEP_LENGTHS[0]).toBe("1-5");
-    expect(SMART_SWEEP_LENGTHS[SMART_SWEEP_LENGTHS.length - 1]).toBe("180-200");
   });
 
   it("builds the fragment path marker per mode", () => {

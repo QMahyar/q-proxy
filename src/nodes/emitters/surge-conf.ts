@@ -3,15 +3,13 @@ import type { EmitOptions } from "./registry";
 
 const TEST_URL = "https://www.gstatic.com/generate_204";
 
-type SurgeNode = Extract<ProxyNode, { kind: "vmess" | "trojan" | "vless" }>;
+type SurgeNode = Extract<ProxyNode, { kind: "vmess" | "trojan" }>;
 
 function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): SurgeNode[] {
   return nodes.filter(
     (n): n is SurgeNode =>
       (isFragment || n.variant !== "fragment") &&
-      (n.kind === "vmess" ||
-        (n.kind === "vless" && n.security === "tls") ||
-        (n.kind === "trojan" && n.security === "tls")),
+      (n.kind === "vmess" || (n.kind === "trojan" && n.security === "tls")),
   );
 }
 
@@ -46,24 +44,12 @@ function trojanLine(node: Extract<ProxyNode, { kind: "trojan" }>): string {
   return parts.join(", ");
 }
 
-function vlessLine(node: Extract<ProxyNode, { kind: "vless" }>): string {
-  const parts = [
-    `${node.name} = vless`,
-    node.address,
-    String(node.port),
-    `username=${node.uuid}`,
-    node.security === "tls" ? "tls=true" : "tls=false",
-    "ws=true",
-    `ws-path=${node.path}`,
-    `ws-headers=Host:${node.host}`,
-  ];
-  if (node.security === "tls" && node.sni !== null) parts.push(`sni=${node.sni}`);
-  return parts.join(", ");
-}
-
-export function emitSurgeConf(nodes: readonly ProxyNode[], opts: EmitOptions): string {
+export function emitSurgeConf(
+  nodes: readonly ProxyNode[],
+  opts: EmitOptions,
+): string {
   const visible = visibleNodes(nodes, opts.isFragment);
-  const lines = visible.map((n) => (n.kind === "vmess" ? vmessLine(n) : n.kind === "vless" ? vlessLine(n) : trojanLine(n)));
+  const lines = visible.map((n) => (n.kind === "vmess" ? vmessLine(n) : trojanLine(n)));
   const names = lines.map((l) => l.slice(0, l.indexOf(" =")));
   const group =
     names.length > 1
@@ -71,11 +57,15 @@ export function emitSurgeConf(nodes: readonly ProxyNode[], opts: EmitOptions): s
       : names.length === 1
         ? `PROXY = select, ${names[0]}`
         : "PROXY = select, DIRECT";
+  const managed =
+    opts.subscriptionUrl !== undefined && opts.updateIntervalHours !== undefined
+      ? `#!MANAGED-CONFIG ${opts.subscriptionUrl} interval=${opts.updateIntervalHours * 3600} strict=true\n`
+      : "";
   const sections = [
     "[General]\nloglevel = notify",
     `[Proxy]\n${lines.join("\n")}`.trimEnd(),
     `[Proxy Group]\n${group}`,
     "[Rule]\nFINAL,PROXY",
   ];
-  return `${sections.join("\n\n")}\n`;
+  return `${managed}${sections.join("\n\n")}\n`;
 }

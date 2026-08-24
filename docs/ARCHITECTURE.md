@@ -1,7 +1,7 @@
 # Q Proxy — Architecture v1.0 (FROZEN CONTRACT) + Rev 2026-08-24
 
 > Single source of truth for parallel implementers. Everything marked **FROZEN** (types, signatures, route table, KV keys, API JSON shapes, file ownership) must be copied verbatim and only changes via an explicit architecture revision.
-> **Rev 2026-08-24 amendments (post-audit):** §2.7 `ProtocolInbound` now includes `BodyCodec`/`DownlinkEncoder` + `bodyCodec()` (was frozen without); `killSwitch` gate lives in `core/router.ts:155` not `worker.ts`; `src/nodes/naming.ts` is fixed-format renderer not `{PROTO} {ADDR}` template engine; `/{sp}/api/settings/save` alias + 4-segment `/api/auth/*` alias are reachable (table addition); `/{sp}/my-ip` now requires auth (F-40); surge/loon now emit vless(ws,tls) per §2.5.
+> **Rev 2026-08-24 amendments (post-audit):** §2.7 `ProtocolInbound` now includes `BodyCodec`/`DownlinkEncoder` + `bodyCodec()` (was frozen without); `killSwitch` gate lives in `core/router.ts:155` not `worker.ts`; `src/nodes/naming.ts` is fixed-format renderer not `{PROTO} {ADDR}` template engine; `/{sp}/api/settings/save` alias + 4-segment `/api/auth/*` alias are reachable (table addition); `/{sp}/my-ip` now requires auth (F-40). §2.5 amended after upstream research: Surge emits vmess+trojan only — VLESS is not a supported Surge proxy type per manual.nssurge.com — and prepends `#!MANAGED-CONFIG`; Loon emits vless+vmess+trojan using official nsloon.app grammar (`transport=` not `transporter=`, `over-tls=`, positional cipher/uuid/password, `udp=true`).
 >
 > Inputs: `docs/research/01-bpb-panel.md`, `02-edgetunnel.md`, `03-nahan.md`, `04-protocol-formats.md` (referenced as R1–R4).
 >
@@ -399,7 +399,7 @@ Emitter contracts:
 - **base64**: `\n`-joined share URIs → standard padded base64; tolerate both alphabets when parsing merged remote subs (R4 gotcha #9).
 - **clash**: real YAML via `yaml-writer` (fixes R1 G.10); mihomo schema per R4 §2.2: `servername:` for vless/vmess but `sni:` for trojan; `client-fingerprint` (uTLS) ≠ cert `fingerprint`; ws-opts carry `max-early-data` + `early-data-header-name: Sec-WebSocket-Protocol` consistent with `?ed=N` paths (gotcha #8); SS via `plugin: v2ray-plugin` + plugin-opts; ends with catch-all rule `MATCH,PROXY`.
 - **singbox**: full profile per R4 §2.3: tun+mixed inbounds, DNS detouring PROXY, hijack-dns + private-direct + final rules, urltest group when >1 node; shadowsocks outbound uses built-in `plugin:"v2ray-plugin"` and has NO tls/transport objects.
-- **surge**/**loon**: `[Proxy]` lines + select/url-test groups + minimal rules; **SS nodes omitted** (no v2ray-plugin support there — documented omission); vmess/trojan/vless(ws,tls) emitted.
+- **surge**/**loon**: `[Proxy]` lines + select/url-test groups + minimal rules; **SS nodes omitted** (no v2ray-plugin support there — documented omission). Surge: vmess+trojan only (VLESS unsupported by Surge per manual.nssurge.com), `#!MANAGED-CONFIG` header prepended when served as subscription. Loon: vmess+vless+trojan, official nsloon.app grammar.
 - Fragment-variant nodes included only when `opts.isFragment`.
 
 URI grammar rules (R4 §1): percent-encode all param values; `encryption=none` explicit for vless; VMess = base64(JSON) `"v":"2"`, `aid:"0"`, port as string; SIP002 for SS with websafe-base64 userinfo (AEAD classic ciphers) and `plugin=v2ray-plugin;mode=websocket;host=…;path=…`; IPv6 hosts bracketed; no `flow` ever (ws only).

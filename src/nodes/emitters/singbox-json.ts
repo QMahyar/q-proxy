@@ -91,6 +91,7 @@ export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions):
           outbounds: names,
           url: TEST_URL,
           interval: `${opts.urlTestIntervalSec}s`,
+          tolerance: 50,
         }
       : { type: "selector", tag: "PROXY", outbounds: names }
     : null;

@@ -45,7 +45,7 @@ export function clientIp(req: Request): string {
 export function assertLoginAllowed(ip: string): void {
   const rec = failures.get(ip);
   if (rec !== undefined && rec.resetAt > Date.now() && rec.count >= MAX_FAILURES) {
-    throw new RateLimitedError();
+    throw new RateLimitedError(Math.ceil((rec.resetAt - Date.now()) / 1000));
   }
 }
 

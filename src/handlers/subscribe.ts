@@ -102,6 +102,8 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
     remoteDns: s.remoteDns,
     urlTestIntervalSec: s.urlTestIntervalSec,
     isFragment: isFragmentMode,
+    subscriptionUrl: `${origin}${url.pathname}?target=${format}`,
+    updateIntervalHours: s.subUpdateIntervalHours,
   };
 
   let body: string;

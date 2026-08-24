@@ -60,6 +60,10 @@ describe("makeFailoverStrategy", () => {
   });
 
   it("keeps direct for ordinary domains and public IPs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ Status: 0, Answer: [{ type: 1, data: "93.184.216.34" }] }), { status: 200 })),
+    );
     const s = makeTestSettings({ proxyIpMode: "nat64" });
     const domainStrategy = await makeFailoverStrategy(s, TARGET);
     expect(domainStrategy.candidates[0]!.via).toBe("direct");

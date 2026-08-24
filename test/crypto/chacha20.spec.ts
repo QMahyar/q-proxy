@@ -55,13 +55,13 @@ describe("Poly1305 (RFC 8439 2.5.2)", () => {
   it("handles messages crossing many block boundaries", () => {
     const key = randomBytes(32);
     const msg = randomBytes(1000);
-    const cipher = createCipheriv("chacha20-poly1305", key, randomBytes(12), {
+    const nonce = randomBytes(12);
+    const cipher = createCipheriv("chacha20-poly1305", key, nonce, {
       authTagLength: 16,
     });
-    const ct = Buffer.concat([cipher.update(Buffer.from(msg)), cipher.final()]);
-    void ct;
-    const otk = chacha20Block(key, 0, new Uint8Array(12)).subarray(0, 32);
-    expect(poly1305(new Uint8Array(0), otk)).toBeDefined();
+    const nodeSealed = Buffer.concat([cipher.update(Buffer.from(msg)), cipher.final(), cipher.getAuthTag()]);
+    const ours = chacha20Poly1305Seal(key, nonce, msg, null);
+    expect(Array.from(ours)).toEqual(Array.from(nodeSealed));
   });
 });
 
@@ -75,6 +75,14 @@ describe("chacha20-poly1305 AEAD (RFC 8439 2.8.2)", () => {
     expect(sealed.length).toBe(RFC_PLAINTEXT.length + 16);
     expect(toHex(sealed.subarray(0, 16))).toBe("d31a8d34648e60db7b86afbc53ef7ec2");
     expect(toHex(sealed.subarray(sealed.length - 16))).toBe("1ae10b594f09e26a7e902ecbd0600691");
+    const nodeCipher = createCipheriv("chacha20-poly1305", KEY, NONCE, { authTagLength: 16 });
+    nodeCipher.setAAD(AAD);
+    const oracle = Buffer.concat([
+      nodeCipher.update(Buffer.from(RFC_PLAINTEXT)),
+      nodeCipher.final(),
+      nodeCipher.getAuthTag(),
+    ]);
+    expect(toHex(sealed)).toBe(oracle.toString("hex"));
   });
 
   it("opens the documented ciphertext back to plaintext", () => {

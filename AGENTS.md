@@ -22,12 +22,14 @@ npm run typecheck    # tsc --noEmit — must pass before commit
 npm test             # vitest run (both projects)
 npx vitest run --project unit     # pure logic, no workerd
 npx vitest run --project workers  # full fetch through src/worker.ts
-npm run dev          # wrangler dev → http://127.0.0.1:8787
+npm run dev          # wrangler dev → http://127.0.0.1:8787 (local miniflare KV; use `--remote` for prod KV)
 npm run build        # → dist/q-proxy.js (~228 KB)
-npm run deploy       # build + wrangler deploy
+npm run deploy       # build + wrangler deploy (prefers wrangler.local.toml)
 node scripts/version.mjs        # print version (from git tag)
 node scripts/release.mjs <version> [--dry]  # tag + changelog check + build
 ```
+
+If a local `wrangler dev` wedges (workerd accepts connections but never responds): kill the stray workerd process on the port, then relaunch on another port (`npx wrangler dev --port 8788`).
 
 Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY` (Global Key, cfk_-style) + `$env:CLOUDFLARE_EMAIL` + `$env:CLOUDFLARE_ACCOUNT_ID`. Using `CLOUDFLARE_API_TOKEN` with a Global Key fails `[code: 9109]`. Private deploy targets live in `wrangler.local.toml` (gitignored, same shape as `wrangler.toml`) — `npm run deploy` picks it up when present via `scripts/deploy.mjs`.
 
@@ -98,9 +100,11 @@ Adding an emitter:
 
 Protocol changes: validate against Xray-core fixtures first (`docs/research/04-protocol-formats.md`), keep parsers throwing never.
 
-## Known Gaps (v1.0.1)
+## Known Gaps (v1.0.2)
 
 - Change-password endpoint absent — logout is client-side cookie clear only; sessions revoke only via secret rotation (not exposed)
 - Early-data oversize drops silently instead of closing 1009
 - Login throttle is per-isolate memory (best-effort)
 - Counters are estimates (`download = requestsTotal × 1 MiB`)
+- `settings.language` is saved but the UI reads only the `qp_lang` cookie
+- Stale-cache read-modify-write: `handleKillSwitch`/`handleSaveSettings` merge from the 15s cached settings — concurrent edits in another isolate can be reverted within the TTL window
