@@ -45,7 +45,7 @@ describe("settings store", () => {
     expect(blob.data.securePath).toBe(s.securePath);
   });
 
-  it("caches reads for the 15 second TTL", async () => {
+  it("caches reads for the 60 second TTL", async () => {
     invalidateSettingsCache();
     const kv = new FakeKV();
     await loadSettings(kv.asEnv() as never);
@@ -53,7 +53,7 @@ describe("settings store", () => {
     await loadSettings(kv.asEnv() as never);
     expect(kv.getCalls).toBe(1);
     vi.useFakeTimers();
-    vi.advanceTimersByTime(15_001);
+    vi.advanceTimersByTime(60_001);
     await loadSettings(kv.asEnv() as never);
     expect(kv.getCalls).toBeGreaterThanOrEqual(2);
   });
@@ -70,6 +70,17 @@ describe("settings store", () => {
     expect(blob.updatedAt).toBeGreaterThanOrEqual(0);
     const reloaded = await loadSettings(kv.asEnv() as never);
     expect(reloaded.profileTitle).toBe("Saved Title");
+  });
+
+  it("skips the KV write when settings are unchanged", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const s = await loadSettings(kv.asEnv() as never);
+    kv.putCalls.set("qproxy:settings", 0);
+    await saveSettings(kv.asEnv() as never, structuredClone(s));
+    expect(kv.putCalls.get("qproxy:settings")).toBe(0);
+    await saveSettings(kv.asEnv() as never, { ...structuredClone(s), profileTitle: "Changed" });
+    expect(kv.putCalls.get("qproxy:settings")).toBe(1);
   });
 
   it("ensureInitialized writes the meta row exactly once", async () => {

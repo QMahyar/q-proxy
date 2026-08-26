@@ -6,33 +6,63 @@
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="noindex,nofollow">
 <title>Q Proxy</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233b82f6'/%3E%3Cstop offset='1' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Ccircle cx='15' cy='15' r='8' fill='none' stroke='white' stroke-width='2.5'/%3E%3Cpath d='m18.5 18.5 6.5 6.5' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
 <script>
-(()=>{const m=document.cookie.match(/(?:^|;\s*)qp_lang=(en|fa)/);const l=m&&m[1]||'fa';document.documentElement.lang=l;document.documentElement.dir=l==='fa'?'rtl':'ltr'})();
+(()=>{const m=document.cookie.match(/(?:^|;\s*)qp_lang=(en|fa)/);const l=m&&m[1]||'fa';document.documentElement.lang=l;document.documentElement.dir=l==='fa'?'rtl':'ltr';try{const a=localStorage.getItem('qp_accent');if(a&&a!=='cyan')document.documentElement.dataset.accent=a}catch(e){}})();
 </script>
 <style>
-:root{--bg:#0a0e14;--surface:#101720;--surface-2:#16202b;--surface-3:#1d2937;--border:#24303f;--border-strong:#33465c;--text:#e7eef5;--text-dim:#96a7b8;--text-faint:#61758a;--accent:#22d3ee;--accent-hover:#5ce1f5;--accent-down:#0ea5c9;--accent-ink:#052430;--accent-bg:rgba(34,211,238,.10);--success:#43d17c;--success-bg:rgba(67,209,124,.12);--warning:#f5b83d;--warning-bg:rgba(245,184,61,.12);--danger:#f4718a;--danger-bg:rgba(244,113,138,.12);--ring:#7fe3f7;--overlay:rgba(4,7,10,.72);--font-sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Vazirmatn","Vazir","IRANSansX","Noto Sans Arabic","Noto Sans",Tahoma,sans-serif;--font-mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,Menlo,"Courier New",monospace;--fs-xs:11px;--fs-sm:12px;--fs-md:13px;--fs-lg:15px;--fs-xl:18px;--r-sm:6px;--r-md:10px;--r-lg:14px;--r-full:999px;--shadow-pop:0 8px 24px rgba(0,0,0,.45);--shadow-modal:0 24px 64px rgba(0,0,0,.55)}
+:root{--bg:#05080f;--bg-raised:#0b111d;--surface:rgba(255,255,255,.03);--surface-2:rgba(255,255,255,.05);--surface-3:rgba(255,255,255,.09);--border:rgba(255,255,255,.06);--border-strong:rgba(255,255,255,.10);--text:#f3f4f6;--text-mid:#d1d5db;--text-dim:#9ca3af;--text-faint:#94a3b8;--text-ghost:#76808f;--accent-rgb:34,211,238;--accent-bright-rgb:103,232,249;--accent-pale-rgb:165,243,252;--cyan:#22d3ee;--cyan-bright:#67e8f9;--cyan-pale:#a5f3fc;--accent:var(--cyan);--accent-hover:var(--cyan-bright);--accent-down:var(--cyan);--accent-ink:#03141c;--accent-bg:rgba(var(--accent-rgb),.09);--success:#34d399;--success-bg:rgba(52,211,153,.12);--warning:#fbbf24;--warning-bg:rgba(251,191,36,.12);--danger:#f87171;--danger-strong:#ef4444;--danger-bg:rgba(239,68,68,.12);--violet:#c4b5fd;--ring:rgba(var(--accent-rgb),.65);--overlay:rgba(0,0,0,.7);--font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Vazirmatn","Vazir","IRANSansX","Noto Sans Arabic","Noto Sans",Tahoma,sans-serif;--font-mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,Menlo,"Courier New",monospace;--fs-xs:11px;--fs-sm:12px;--fs-md:13px;--fs-lg:15px;--fs-xl:18px;--r-sm:8px;--r-md:12px;--r-lg:16px;--r-full:999px;--ease:cubic-bezier(.16,1,.3,1);--shadow-pop:0 1px 2px rgba(2,6,17,.4),0 8px 24px -12px rgba(2,6,17,.55),inset 0 1px 0 rgba(255,255,255,.03);--shadow-modal:0 24px 48px -16px rgba(2,6,17,.7),inset 0 1px 0 rgba(255,255,255,.04)}
+html[data-accent="violet"]{--accent-rgb:167,139,250;--accent-bright-rgb:196,181,253;--accent-pale-rgb:221,214,254;--cyan:#a78bfa;--cyan-bright:#c4b5fd;--cyan-pale:#ddd6fe}
+html[data-accent="green"]{--accent-rgb:52,211,153;--accent-bright-rgb:110,231,183;--accent-pale-rgb:167,243,208;--cyan:#34d399;--cyan-bright:#6ee7b7;--cyan-pale:#a7f3d0}
+html[data-accent="amber"]{--accent-rgb:251,191,36;--accent-bright-rgb:252,211,77;--accent-pale-rgb:253,230,138;--cyan:#fbbf24;--cyan-bright:#fcd34d;--cyan-pale:#fde68a}
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
 body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:var(--fs-md);line-height:1.5;min-height:100vh}
-:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-radius:inherit}
+::selection{background:rgba(var(--accent-rgb),.28);color:#eafcff}
+:focus-visible{outline:2px solid rgba(var(--accent-rgb),.65);outline-offset:2px;border-radius:inherit}
 [hidden]{display:none!important}
 .visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .mono{font-family:var(--font-mono)}
-.topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:var(--s-4,16px);background:var(--surface);border-block-end:1px solid var(--border);padding-inline:16px;min-height:52px}
-.brand{font-weight:700;font-size:var(--fs-lg);white-space:nowrap;display:flex;align-items:center;gap:8px}
-.brand .gem{color:var(--accent)}
-.tabs{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.texture-wrap{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.dotgrid{position:absolute;inset:0;background-image:radial-gradient(rgba(148,163,184,.11) 1px,transparent 1px);background-size:26px 26px;-webkit-mask-image:radial-gradient(ellipse 80% 70% at 55% 25%,black 22%,transparent 76%);mask-image:radial-gradient(ellipse 80% 70% at 55% 25%,black 22%,transparent 76%)}
+.noise{position:absolute;inset:0;opacity:.04;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");background-size:180px 180px}
+.blob{position:absolute;border-radius:50%;filter:blur(130px)}
+.blob-a{top:-10rem;left:50%;translate:-50% 0;width:900px;height:500px;background:rgba(var(--accent-rgb),.04);animation:drift-a 44s var(--ease) infinite alternate}
+.blob-b{bottom:-10rem;inset-inline-end:-10rem;width:600px;height:400px;background:rgba(37,99,235,.03);animation:drift-b 56s var(--ease) infinite alternate}
+@keyframes drift-a{to{translate:-40% 6%}}
+@keyframes drift-b{to{translate:6% -8%}}
+header.topbar,main,.applybar,.toasts{position:relative}
+header.topbar,main{z-index:1}
+.topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:var(--s-4,16px);background:rgba(5,8,15,.8);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-block-end:1px solid var(--border);padding-inline:16px;min-height:52px}
+.logo-tile{position:relative;width:34px;height:34px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:.75rem;background:linear-gradient(to bottom right,#2563eb,#06b6d4);color:#fff;box-shadow:0 10px 15px -3px rgba(59,130,246,.2),inset 0 1px 0 rgba(255,255,255,.3)}
+.logo-tile svg{width:18px;height:18px}
+.logo-tile::before{content:'';position:absolute;inset:-4px;border-radius:1rem;background:conic-gradient(from 0deg,transparent 0deg,rgba(var(--accent-bright-rgb),.5) 70deg,transparent 140deg);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));animation:spinring 8s linear infinite;opacity:.6}
+@keyframes spinring{to{rotate:360deg}}
+.brand{font-weight:700;font-size:var(--fs-lg);white-space:nowrap;display:flex;align-items:center;gap:10px}
+.brand .gem{display:none}
+.tabs{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:4px;border-radius:.75rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05);width:fit-content}
 .tabs::-webkit-scrollbar{display:none}
-.tab{display:inline-flex;align-items:center;height:44px;padding-inline:12px;color:var(--text-dim);text-decoration:none;font-weight:600;border-block-end:2px solid transparent;white-space:nowrap}
-.tab:hover{color:var(--text)}
-.tab[aria-selected=true]{color:var(--accent);border-block-end-color:var(--accent)}
+.tab{display:inline-flex;align-items:center;height:34px;padding-inline:12px;color:var(--text-dim);text-decoration:none;font-weight:600;border-radius:.6rem;white-space:nowrap;transition:color .2s,background-color .2s,box-shadow .2s}
+.tab:hover{color:var(--text-mid);background:rgba(255,255,255,.04)}
+.tab[aria-selected=true]{color:var(--cyan-pale);background:var(--accent-bg);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.18)}
 .topbar__end{display:flex;align-items:center;gap:8px;margin-inline-start:auto}
+.swatches{display:flex;gap:6px;align-items:center;padding-inline-end:6px}
+.swatch{width:18px;height:18px;border-radius:var(--r-full);border:1px solid rgba(255,255,255,.18);cursor:pointer;padding:0;transition:transform .15s var(--ease)}
+.swatch:hover{transform:scale(1.15)}
+.swatch[aria-pressed=true]{box-shadow:0 0 0 2px var(--bg),0 0 0 4px rgba(var(--accent-rgb),.55)}
+.swatch--cyan{background:linear-gradient(135deg,#22d3ee,#3b82f6)}
+.swatch--violet{background:linear-gradient(135deg,#a78bfa,#6366f1)}
+.swatch--green{background:linear-gradient(135deg,#34d399,#10b981)}
+.swatch--amber{background:linear-gradient(135deg,#fbbf24,#f97316)}
 main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
 @media(min-width:1024px){main{padding-inline:32px}}
-.view-title{font-size:var(--fs-xl);font-weight:700;margin-block:16px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;min-width:0;overflow:hidden}
+.view-title{font-size:1.25rem;font-weight:600;letter-spacing:-.01em;margin-block:16px;background:linear-gradient(180deg,#ffffff 30%,rgba(var(--accent-pale-rgb),.9) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:16px;min-width:0;overflow:hidden;box-shadow:var(--shadow-pop)}
 @media(min-width:768px){.card{padding:24px}}
 .card+.card,.home-grid .card+.card{margin-block-start:16px}
+.home-grid>.card{transition:transform .18s var(--ease),border-color .18s var(--ease),box-shadow .18s var(--ease)}
+.home-grid>.card:hover{border-color:rgba(var(--accent-rgb),.28);box-shadow:0 8px 32px -12px rgba(var(--accent-rgb),.15),0 0 0 1px rgba(var(--accent-rgb),.08);transform:translateY(-2px)}
+.card--danger{border-color:rgba(239,68,68,.1);box-shadow:inset 3px 0 0 rgba(239,68,68,.25)}
 .card__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-block-end:12px}
 .card__title{font-size:var(--fs-lg);font-weight:600}
 .card--dim{opacity:.55}
@@ -41,109 +71,196 @@ main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
 .home-grid{display:grid;gap:16px;min-width:0}
 .home-grid > *{min-width:0;contain:layout paint}
 @media(min-width:1024px){.home-grid{grid-template-columns:3fr 2fr;align-items:start}}
+.chips-row{display:flex;gap:8px;flex-wrap:wrap;margin-block-end:12px;grid-column:1/-1}
+.stat-chip{display:inline-flex;align-items:center;gap:.375rem;padding:.25rem .625rem;border-radius:.5rem;background:var(--surface);border:1px solid rgba(255,255,255,.05);font-family:var(--font-mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--text-dim)}
+.stat-chip .dot{width:4px;height:4px}
+.dot-cyan{background:rgba(var(--accent-rgb),.7)}
+.dot-violet{background:rgba(167,139,250,.7)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.home-grid>.card{animation:fadeUp .5s var(--ease) both}
+.home-grid>.card:nth-child(2){animation-delay:.06s}
+.home-grid>.card:nth-child(3){animation-delay:.12s}
+.home-grid>.card:nth-child(n+4){animation-delay:.18s}
 .field{margin-block-end:16px}
 .field:last-child{margin-block-end:0}
-.field__label{display:block;font-size:var(--fs-sm);color:var(--text-dim);font-weight:600;margin-block-end:6px}
+.field__label{display:block;font-size:var(--fs-sm);color:var(--text-mid);font-weight:500;margin-block-end:6px}
 .field__hint{font-size:var(--fs-sm);color:var(--text-faint);margin-block-start:6px}
 .field__error{display:none;font-size:var(--fs-sm);color:var(--danger);margin-block-start:6px}
 .field--error .field__error{display:block}
 .field--error .field__hint{display:none}
-.input,.select,.textarea{width:100%;height:38px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text);padding-inline:12px;font-family:inherit;font-size:var(--fs-md)}
+.field__label-row{display:flex;align-items:center;gap:6px;margin-block-end:6px}
+.field__label-row .field__label{margin-block-end:0}
+.field__label-row .char-count{margin-inline-start:auto}
+.field__label-row .help-wrap:last-child{margin-inline-start:auto}
+.help-wrap{position:relative;display:inline-flex;flex:none}
+.help-trigger{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;border:1px solid var(--border-strong);color:var(--text-ghost);background:transparent;cursor:help;padding:0;transition:color .15s,border-color .15s}
+.help-trigger svg{width:9px;height:9px}
+.help-trigger:hover,.help-wrap:focus-within .help-trigger{color:var(--accent);border-color:rgba(var(--accent-rgb),.5)}
+.help-pop{position:absolute;top:calc(100% + 6px);inset-inline-start:0;z-index:75;max-width:260px;width:max-content;background:var(--bg-raised);border:1px solid var(--border-strong);border-radius:var(--r-md);box-shadow:var(--shadow-modal);padding:8px 10px;font-size:12px;line-height:1.55;color:var(--text-mid);visibility:hidden;opacity:0;transition:opacity .15s var(--ease)}
+.help-wrap:hover .help-pop,.help-wrap:focus-within .help-pop{visibility:visible;opacity:1}
+.char-count{font-family:var(--font-mono);font-size:11px;color:var(--text-ghost);flex:none;font-variant-numeric:tabular-nums}
+.char-count.warn{color:var(--danger)}
+.input,.select,.textarea{width:100%;height:38px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--r-md);color:var(--text);padding-inline:12px;font-family:inherit;font-size:var(--fs-md);transition:border-color .15s,box-shadow .15s}
 .textarea{height:auto;min-height:88px;padding-block:8px;resize:vertical;line-height:1.6}
 .input--mono,.textarea--mono{font-family:var(--font-mono);word-break:break-all}
-.input:focus-visible,.textarea:focus-visible,.select:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-color:var(--accent)}
-.input[aria-invalid=true],.textarea[aria-invalid=true]{border-color:var(--danger)}
-.select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2396a7b8' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-inline-end:32px}
+.input:focus-visible,.textarea:focus-visible,.select:focus-visible{outline:none;border-color:rgba(var(--accent-rgb),.5);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.16)}
+.input[aria-invalid=true],.textarea[aria-invalid=true]{border-color:var(--danger-strong)}
+.select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-inline-end:32px}
 [dir=rtl] .select{background-position:left 10px center;padding-inline:32px 12px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding-inline:14px;border-radius:var(--r-sm);border:1px solid transparent;font-family:inherit;font-size:var(--fs-md);font-weight:600;color:var(--text);background:transparent;cursor:pointer;text-decoration:none;transition:background .12s ease-out,border-color .12s ease-out,color .12s ease-out}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding-inline:14px;border-radius:.75rem;border:1px solid transparent;font-family:inherit;font-size:var(--fs-md);font-weight:500;color:var(--text);background:transparent;cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s,color .15s,transform .1s var(--ease),box-shadow .18s var(--ease)}
 .btn svg{width:16px;height:16px;flex:none}
-.btn--primary{background:var(--accent);color:var(--accent-ink)}
-.btn--primary:hover{background:var(--accent-hover)}
-.btn--primary:active{background:var(--accent-down)}
-.btn--ghost{border-color:var(--border-strong)}
+.btn--primary{position:relative;overflow:hidden;background:var(--cyan);color:var(--accent-ink);font-weight:600;box-shadow:0 10px 15px -3px rgba(var(--accent-rgb),.25),0 4px 6px -4px rgba(var(--accent-rgb),.2)}
+.btn--primary::after{content:'';position:absolute;inset:0;pointer-events:none;transform:translateX(-130%) skewX(-12deg);background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.35) 50%,transparent 65%);transition:transform .7s var(--ease)}
+.btn--primary:hover::after{transform:translateX(130%) skewX(-12deg)}
+.btn--primary:hover{background:var(--cyan-bright);box-shadow:0 10px 20px -3px rgba(var(--accent-rgb),.35),0 4px 8px -4px rgba(var(--accent-rgb),.3)}
+.btn--primary:active{transform:scale(.98)}
+.btn--ghost{background:var(--surface-2);border-color:var(--border-strong)}
 .btn--ghost:hover{background:var(--surface-3)}
-.btn--ghost-danger{border-color:var(--danger);color:var(--danger)}
-.btn--ghost-danger:hover{background:var(--danger-bg)}
-.btn--icon{width:36px;height:36px;padding:0;border-radius:var(--r-sm)}
+.btn--ghost-danger{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.3);color:var(--danger)}
+.btn--ghost-danger:hover{background:rgba(239,68,68,.3)}
+.btn--icon{width:36px;height:36px;padding:0;border-radius:.7rem}
 .btn--sm{height:28px;padding-inline:10px;font-size:var(--fs-sm)}
-.btn:disabled{opacity:.45;pointer-events:none}
+.btn:disabled{opacity:.5;pointer-events:none}
 .spin{width:14px;height:14px;border:2px solid currentColor;border-block-start-color:transparent;border-inline-end-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .btn-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .secret-field,.copy-field{display:flex;gap:8px;align-items:center;min-width:0}
-.copy-field{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:4px 4px 4px 12px;min-height:38px;overflow:hidden}
-.copy-field code{flex:1;min-width:0;width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-sm);direction:ltr;text-align:start;color:var(--accent);unicode-bidi:isolate}
+.copy-field{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--r-md);padding:4px 4px 4px 12px;min-height:38px;overflow:hidden}
+.copy-field code{flex:1;min-width:0;width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-sm);direction:ltr;text-align:start;color:var(--cyan-pale);unicode-bidi:isolate}
 .copy-field .btn{flex:none}
 .switch{display:inline-flex;align-items:center;gap:12px;cursor:pointer;min-height:38px}
 .switch input{position:absolute;opacity:0;width:1px;height:1px}
-.switch__track{width:40px;height:22px;border-radius:var(--r-full);background:var(--surface-3);border:1px solid var(--border-strong);position:relative;transition:background .12s ease-out;flex:none}
-.switch__thumb{position:absolute;top:2px;inset-inline-start:2px;width:16px;height:16px;border-radius:50%;background:var(--text-dim);transition:translate .16s ease-out,background .12s ease-out}
-.switch input:checked~.switch__track{background:var(--accent);border-color:var(--accent)}
+.switch__track{width:40px;height:22px;border-radius:var(--r-full);background:var(--surface-3);border:1px solid var(--border-strong);position:relative;transition:background .15s,border-color .15s,box-shadow .15s;flex:none}
+.switch__thumb{position:absolute;top:2px;inset-inline-start:2px;width:16px;height:16px;border-radius:50%;background:var(--text-dim);transition:translate .16s var(--ease),background .12s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.switch input:checked~.switch__track{background:var(--cyan);border-color:var(--cyan);box-shadow:0 0 12px -2px rgba(var(--accent-rgb),.5)}
+.switch input:checked~.switch__track .switch__thumb{background:var(--accent-ink)}
 [dir=rtl] .switch input:checked~.switch__track .switch__thumb{translate:-18px 0}
 [dir=ltr] .switch input:checked~.switch__track .switch__thumb{translate:18px 0}
-.switch input:focus-visible~.switch__track{outline:2px solid var(--ring);outline-offset:2px}
+.switch input:focus-visible~.switch__track{outline:2px solid rgba(var(--accent-rgb),.65);outline-offset:2px}
 .switch.pending{opacity:.6;pointer-events:none}
 .switch__label{font-weight:600}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:8px;min-width:0}
 .row+.row,.rows>.row+div{border-block-start:1px solid var(--border)}
 .chip-row{display:flex;flex-wrap:wrap;gap:8px}
-.chip{display:inline-flex;align-items:center;height:34px;padding-inline:14px;border-radius:var(--r-full);border:1px solid var(--border-strong);background:transparent;color:var(--text-dim);font-family:inherit;font-size:var(--fs-md);font-weight:600;cursor:pointer}
+.chip{display:inline-flex;align-items:center;height:34px;padding-inline:14px;border-radius:.7rem;border:1px solid var(--border-strong);background:transparent;color:var(--text-dim);font-family:inherit;font-size:var(--fs-md);font-weight:500;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
 .chip:hover{background:var(--surface-3)}
-.chip[aria-checked=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-full);padding:2px}
-.seg button{height:30px;padding-inline:14px;border:0;background:transparent;color:var(--text-dim);font-family:inherit;font-size:var(--fs-sm);font-weight:600;border-radius:var(--r-full);cursor:pointer}
-.seg button[aria-checked=true]{background:var(--accent-bg);color:var(--accent)}
+.chip[aria-checked=true]{color:var(--cyan-pale);background:var(--accent-bg);border-color:rgba(var(--accent-rgb),.3);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.18)}
+.seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05);border-radius:.75rem;padding:3px}
+.seg button{height:30px;padding-inline:14px;border:0;background:transparent;color:var(--text-dim);font-family:inherit;font-size:var(--fs-sm);font-weight:600;border-radius:.55rem;cursor:pointer;transition:color .2s,background-color .2s,box-shadow .2s}
+.seg button:hover{color:var(--text-mid)}
+.seg button[aria-checked=true]{color:var(--cyan-pale);background:var(--accent-bg);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.18)}
 .port-matrix{border:1px solid var(--border);border-radius:var(--r-md);padding:12px}
-.port-matrix legend{font-size:var(--fs-sm);color:var(--text-dim);font-weight:600;padding-inline:6px;display:flex;align-items:center;gap:8px}
+.port-matrix legend{font-size:var(--fs-sm);color:var(--text-mid);font-weight:500;padding-inline:6px;display:flex;align-items:center;gap:8px}
 .port-cells{display:flex;flex-wrap:wrap;gap:8px}
 .port-cell input{position:absolute;opacity:0;width:1px;height:1px}
-.port-cell span{display:inline-flex;align-items:center;justify-content:center;min-width:52px;height:38px;padding-inline:8px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-dim);font-family:var(--font-mono);cursor:pointer}
-.port-cell input:checked+span{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-.port-cell input:focus-visible+span{outline:2px solid var(--ring);outline-offset:2px}
+.port-cell span{display:inline-flex;align-items:center;justify-content:center;min-width:52px;height:38px;padding-inline:8px;border-radius:.7rem;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-dim);font-family:var(--font-mono);cursor:pointer;transition:all .15s}
+.port-cell input:checked+span{color:var(--cyan-pale);background:var(--accent-bg);border-color:rgba(var(--accent-rgb),.3);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.18)}
+.port-cell input:focus-visible+span{outline:2px solid rgba(var(--accent-rgb),.65);outline-offset:2px}
 .line-editor .meta{display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-xs);margin-block-start:4px}
 .line-editor .cnt{color:var(--text-faint)}
 .line-editor .bad{color:var(--danger);text-align:end;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%}
-.subtabs{display:flex;gap:8px;overflow-x:auto;padding-block:8px 12px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 92%,transparent);mask-image:linear-gradient(90deg,#000 92%,transparent)}
+.subtabs{display:flex;gap:6px;overflow-x:auto;padding-block:8px 12px;scrollbar-width:none}
 .subtabs::-webkit-scrollbar{display:none}
-.subtab{flex:none;display:inline-flex;align-items:center;height:34px;padding-inline:16px;border-radius:var(--r-full);border:1px solid var(--border);background:var(--surface);color:var(--text-dim);text-decoration:none;font-size:var(--fs-md);font-weight:600;cursor:pointer}
-.subtab[aria-selected=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.subtab{flex:none;display:inline-flex;align-items:center;height:32px;padding-inline:14px;border-radius:.65rem;border:1px solid transparent;background:rgba(255,255,255,.04);color:var(--text-dim);text-decoration:none;font-size:var(--fs-md);font-weight:500;cursor:pointer;transition:color .2s,background-color .2s,box-shadow .2s}
+.subtab:hover{color:var(--text-mid)}
+.subtab[aria-selected=true]{color:var(--cyan-pale);background:var(--accent-bg);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.18)}
 table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
-.tbl th{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);text-align:start;font-weight:600;padding:6px 8px;border-block-end:1px solid var(--border)}
-.tbl td{padding:8px;border-block-end:1px solid var(--border);vertical-align:middle}
+.tbl th{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.08em;color:var(--text-ghost);text-align:start;font-weight:600;padding:6px 8px;border-block-end:1px solid var(--border)}
+.tbl td{padding:8px;border-block-end:1px solid var(--border);vertical-align:middle;font-variant-numeric:tabular-nums}
 .tbl tr:last-child td{border-block-end:0}
 .glyph-ok{color:var(--success)}.glyph-warn{color:var(--warning)}.glyph-bad{color:var(--danger)}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
-.dot--ok{background:var(--success)}.dot--warn{background:var(--warning)}.dot--bad{background:var(--danger)}
+.dot--ok{background:var(--success)}.dot--warn{background:var(--warning)}.dot--bad{background:var(--danger-strong)}
 .chip-status{display:inline-flex;align-items:center;gap:6px;height:22px;padding-inline:10px;border-radius:var(--r-full);font-size:var(--fs-xs);font-weight:700;letter-spacing:.03em}
 .chip-status.ok{background:var(--success-bg);color:var(--success)}
 .chip-status.bad{background:var(--danger-bg);color:var(--danger)}
 .progress{height:6px;background:var(--surface-3);border-radius:var(--r-full);overflow:hidden}
-.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .16s ease-out}
+.progress i{display:block;height:100%;width:0;background:var(--cyan);transition:width .16s ease-out}
+.skeleton{background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.06) 50%,rgba(255,255,255,.03) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:.375rem}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel-card{border-radius:1rem;border:1px solid var(--line,rgba(255,255,255,.06));background:rgba(255,255,255,.02);padding:1rem;display:flex;flex-direction:column;gap:.75rem}
+.skel-row{display:flex;align-items:center;gap:.75rem}
+.skel-col{flex:1;display:flex;flex-direction:column;gap:.5rem}
+.skel-avatar{width:2.5rem;height:2.5rem;border-radius:.75rem}
+.skel-a{height:.75rem;width:6rem}
+.skel-b{height:.625rem;width:4rem}
+.skel-c{height:.625rem;width:8rem}
+.skel-pill{height:1.25rem;width:3.5rem;border-radius:var(--r-full)}
+.empty-card{position:relative;overflow:hidden;border-radius:1rem;border:1px dashed rgba(255,255,255,.09);background:rgba(255,255,255,.015);padding:3rem 2rem;display:flex;flex-direction:column;align-items:center;text-align:center}
+.empty-icon{position:relative;width:3.5rem;height:3.5rem;border-radius:1rem;background:rgba(var(--accent-rgb),.08);border:1px solid rgba(var(--accent-rgb),.2);display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem;color:var(--cyan);box-shadow:0 0 40px -10px rgba(var(--accent-rgb),.25)}
+.empty-icon svg{width:22px;height:22px}
+.empty-title{font-size:1rem;font-weight:600;letter-spacing:-.01em;color:#e5e7eb;margin-bottom:.375rem}
+.empty-msg{font-size:.875rem;color:var(--text-faint);max-width:20rem;line-height:1.625}
+.empty-actions{margin-top:1.5rem;display:flex;gap:.5rem}
+.warp-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-block-end:16px}
+.warp-grid{display:grid;gap:12px;grid-template-columns:1fr}
+@media(min-width:768px){.warp-grid{grid-template-columns:1fr 1fr}}
+.acct-card{position:relative;display:flex;align-items:center;gap:12px;border-radius:1rem;border:1px solid var(--border);background:rgba(255,255,255,.02);padding:1rem;cursor:pointer;text-decoration:none;color:inherit;transition:transform .18s var(--ease),border-color .18s var(--ease),box-shadow .18s var(--ease)}
+.acct-card:hover{border-color:rgba(var(--accent-rgb),.28);box-shadow:0 8px 32px -12px rgba(var(--accent-rgb),.15),0 0 0 1px rgba(var(--accent-rgb),.08);transform:translateY(-2px)}
+.avatar-tile{position:relative;width:2.5rem;height:2.5rem;flex:none;display:flex;align-items:center;justify-content:center;border-radius:.75rem;color:#fff;font-weight:700;font-size:1rem;text-shadow:0 1px 2px rgba(0,0,0,.3)}
+.grad-1{background-image:linear-gradient(to bottom right,#3b82f6,#22d3ee)}
+.grad-2{background-image:linear-gradient(to bottom right,#f43f5e,#fb923c)}
+.grad-3{background-image:linear-gradient(to bottom right,#f97316,#f87171)}
+.grad-4{background-image:linear-gradient(to bottom right,#10b981,#2dd4bf)}
+.grad-5{background-image:linear-gradient(to bottom right,#6366f1,#38bdf8)}
+.grad-6{background-image:linear-gradient(to bottom right,#f59e0b,#facc15)}
+.acct-info{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.acct-name{font-size:.875rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct-date{font-family:var(--font-mono);font-size:11px;color:var(--text-ghost)}
+.amz-tag{flex:none;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--violet);background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);border-radius:.375rem;padding:2px 6px}
+.token-panel{position:relative;overflow:hidden;border-radius:1rem;border:1px solid var(--line);background:linear-gradient(to bottom right,rgba(var(--accent-rgb),.04),transparent);padding:1rem;margin-block-end:16px;box-shadow:var(--shadow-pop)}
+.token-panel::before{content:'';position:absolute;top:0;left:10%;right:10%;height:1px;background:linear-gradient(to right,transparent,rgba(var(--accent-rgb),.3),transparent)}
+.fmt-icon{width:2rem;height:2rem;flex:none;display:flex;align-items:center;justify-content:center;border-radius:.6rem;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.fmt-icon svg{width:14px;height:14px}
+.fmt-row{display:flex;align-items:center;gap:10px;padding-block:8px;min-width:0}
+.fmt-row+.fmt-row{border-block-start:1px solid var(--border)}
+.fmt-label{flex:none;width:38%;min-width:130px;font-size:var(--fs-sm);font-weight:600;color:var(--text-mid)}
+.back-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:.7rem;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-mid);cursor:pointer;text-decoration:none}
+.back-btn:hover{background:var(--surface-3);color:var(--text)}
+.back-btn svg{width:16px;height:16px}
+[dir=rtl] .back-btn svg{transform:scaleX(-1)}
+.detail-title{display:flex;align-items:center;gap:12px;margin-block:16px}
+.detail-title .view-title{margin-block:0}
+.amz-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .applybar{position:fixed;inset-inline:0;bottom:calc(16px + env(safe-area-inset-bottom));z-index:45;display:flex;justify-content:center;pointer-events:none}
-.applybar__inner{pointer-events:auto;display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-md);box-shadow:var(--shadow-pop);padding:10px 14px;max-width:min(560px,94vw)}
+.applybar__inner{pointer-events:auto;display:flex;align-items:center;gap:12px;background:rgba(10,17,29,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(var(--accent-rgb),.2);border-radius:1rem;box-shadow:var(--shadow-modal);padding:10px 14px;max-width:min(560px,94vw)}
 .applybar__label{color:var(--warning);font-weight:600;display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)}
-.modal{position:fixed;inset:0;background:var(--overlay);display:grid;place-items:center;z-index:100;padding:16px}
-.modal__panel{background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-lg);max-width:min(380px,94vw);width:100%;box-shadow:var(--shadow-modal);padding:24px;animation:mIn .16s ease-out}
-@keyframes mIn{from{opacity:0;translate:0 8px}}
+.modal{position:fixed;inset:0;background:var(--overlay);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:flex-end;justify-content:center;z-index:100}
+.modal__panel{background:var(--bg-raised);border:1px solid rgba(255,255,255,.08);border-radius:20px 20px 0 0;max-width:min(420px,100vw);width:100%;max-height:calc(100dvh - 2rem);overflow-y:auto;box-shadow:var(--shadow-modal);padding:24px;padding-bottom:max(24px,env(safe-area-inset-bottom));animation:mIn .22s var(--ease)}
+@media(min-width:640px){.modal{align-items:center;padding:16px}.modal__panel{border-radius:20px;max-width:min(420px,94vw)}}
+@keyframes mIn{from{opacity:0;scale:.96;translate:0 8px}}
 .modal__title{font-size:var(--fs-lg);font-weight:700;margin-block-end:12px}
 .modal__body{color:var(--text-dim);margin-block-end:16px}
 .modal__actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .qr-wrap{display:grid;place-items:center;background:#fff;border-radius:var(--r-md);padding:10px;margin-block-end:12px}
-.toasts{position:fixed;inset-inline:0;bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:8px;z-index:120;pointer-events:none}
-.toast{pointer-events:auto;background:var(--surface);border:1px solid var(--border);border-inline-start:3px solid var(--accent);border-radius:var(--r-md);padding:10px 14px;box-shadow:var(--shadow-pop);max-width:min(420px,92vw);animation:tIn .16s ease-out}
-.toast--err{border-inline-start-color:var(--danger)}
-.toast--ok{border-inline-start-color:var(--success)}
-@keyframes tIn{from{opacity:0;translate:0 8px}}
+.toasts{position:fixed;top:calc(16px + env(safe-area-inset-top));inset-inline-end:16px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:120;pointer-events:none}
+.toast{pointer-events:auto;position:relative;overflow:hidden;display:flex;align-items:center;gap:.625rem;padding:.625rem .5rem .625rem .75rem;border-radius:.75rem;font-size:var(--fs-md);font-weight:500;box-shadow:var(--shadow-modal);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(var(--accent-rgb),.2);background:rgba(10,20,27,.95);color:var(--text);max-width:min(420px,92vw);animation:tIn .3s var(--ease)}
+[dir=rtl] .toast{animation-name:tInR}
+.toast--err{background:rgba(23,13,17,.95);border-color:rgba(248,113,113,.25);color:#fee2e2}
+.toast--out{animation:tOut .2s ease-in forwards}
+@keyframes tIn{from{opacity:0;translate:100% 0}}
+@keyframes tInR{from{opacity:0;translate:-100% 0}}
+@keyframes tOut{to{opacity:0;translate:0 -6px}}
+.toast .ticon{width:16px;height:16px;flex:none;color:var(--success)}
+.toast--err .ticon{color:var(--danger)}
+.toast__msg{flex:1;min-width:0}
+.toast__close{flex:none;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:inherit;opacity:.6;cursor:pointer;border-radius:.5rem}
+.toast__close:hover{opacity:1;background:rgba(255,255,255,.06)}
+.toast__close svg{width:13px;height:13px}
+.toast-bar{position:absolute;bottom:0;inset-inline-start:0;height:2px;border-radius:var(--r-full);background:rgba(52,211,153,.6);animation:toastprogress 3.5s linear forwards}
+.toast--err .toast-bar{background:rgba(248,113,113,.6)}
+@keyframes toastprogress{from{width:100%}to{width:0}}
 .stat-grid{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 12px;align-items:center}
 .stat-grid .lbl{color:var(--text-faint);font-size:var(--fs-sm)}
 .hint-danger{color:var(--danger)}
-@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
-@media(pointer:coarse),(max-width:767px){.btn{height:44px}.btn--icon{width:44px;height:44px}.chip{height:44px}.seg button{height:38px}.port-cell span{height:44px}}
-@media(max-width:767px){.topbar{flex-wrap:wrap;padding-block:4px 0}.tabs{order:3;width:100%}.stat-grid{grid-template-columns:auto 1fr}.stat-grid .h-cell{display:none}.tbl thead{display:none}.tbl td{display:block;border-block-end:0;padding:3px 8px}.tbl tr{display:block;border-block-end:1px solid var(--border);padding-block:6px}.tbl td::before{content:attr(data-l) ": ";color:var(--text-faint);font-size:var(--fs-xs)}}
+@media(prefers-reduced-motion:reduce){*,.blob-a,.blob-b,.logo-tile::before{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@media(pointer:coarse),(max-width:767px){.btn{height:44px}.btn--icon{width:44px;height:44px}.chip{height:44px}.seg button{height:38px}.port-cell span{height:44px}.input,.select{height:44px;font-size:16px}}
+@media(max-width:767px){.topbar{flex-wrap:wrap;padding-block:4px 0}.tabs{order:3;width:100%}.swatches{display:none}.stat-grid{grid-template-columns:auto 1fr}.stat-grid .h-cell{display:none}.tbl thead{display:none}.tbl td{display:block;border-block-end:0;padding:3px 8px}.tbl tr{display:block;border-block-end:1px solid var(--border);padding-block:6px}.tbl td::before{content:attr(data-l) ": ";color:var(--text-faint);font-size:var(--fs-xs)}}
 </style>
 
 </head>
 <body>
+<div class="texture-wrap" aria-hidden="true"><div class="dotgrid"></div><div class="noise"></div><div class="blob blob-a"></div><div class="blob blob-b"></div></div>
 <svg hidden xmlns="http://www.w3.org/2000/svg">
 <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
 <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12A3 3 0 1 1 9.88 9.88"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
@@ -156,15 +273,25 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></symbol>
 <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 4 14 8-14 8V4z"/></symbol>
 <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
 </svg>
 <header class="topbar">
-<div class="brand"><span class="gem">&#9670;</span> Q Proxy</div>
+<div class="brand"><span class="logo-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m15.5 15.5 5 5"/></svg></span> Q Proxy</div>
 <nav class="tabs" role="tablist" aria-label="Views" id="nav">
 <a class="tab" role="tab" id="tab-home" href="#/home" data-view="home"></a>
 <a class="tab" role="tab" id="tab-settings" href="#/settings/general" data-view="settings"></a>
+<a class="tab" role="tab" id="tab-warp" href="#/warp" data-view="warp"></a>
 <a class="tab" role="tab" id="tab-checker" href="#/checker" data-view="checker"></a>
 </nav>
 <div class="topbar__end">
+<div class="swatches" role="group" aria-label="Accent">
+<button type="button" class="swatch swatch--cyan" data-action="accent" data-accent="cyan" aria-label="Cyan" aria-pressed="true"></button>
+<button type="button" class="swatch swatch--violet" data-action="accent" data-accent="violet" aria-label="Violet" aria-pressed="false"></button>
+<button type="button" class="swatch swatch--green" data-action="accent" data-accent="green" aria-label="Green" aria-pressed="false"></button>
+<button type="button" class="swatch swatch--amber" data-action="accent" data-accent="amber" aria-label="Amber" aria-pressed="false"></button>
+</div>
 <div class="seg" role="group" aria-label="Language" id="langseg"></div>
 <button type="button" class="btn btn--icon btn--ghost-danger" id="logout-btn" data-action="logout"><svg aria-hidden="true"><use href="#i-power"/></svg></button>
 </div>
@@ -179,6 +306,11 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 <div class="subtabs" role="tablist" aria-label="Settings sections" id="subtabs"></div>
 <div id="settings-panels"></div>
 </section>
+<section id="view-warp" hidden>
+<h1 class="view-title" id="warp-h1"></h1>
+<div id="warp-body"></div>
+<span class="visually-hidden" id="warp-live" aria-live="polite"></span>
+</section>
 <section id="view-checker" hidden>
 <h1 class="view-title" id="checker-h1"></h1>
 <div id="checker-body"></div>
@@ -188,14 +320,19 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 <div class="applybar" id="applybar" hidden><div class="applybar__inner"><span class="applybar__label"><span class="dot dot--warn"></span><span id="dirty-label"></span></span><button type="button" class="btn btn--ghost btn--sm" id="discard-btn" data-action="discard"></button><button type="button" class="btn btn--primary btn--sm" id="apply-btn" data-action="apply"></button></div></div>
 <div class="modal" id="m-qr" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="qr-title"><div class="modal__title" id="qr-title"></div><div class="qr-wrap"><canvas id="qr-canvas" width="560" height="560" style="width:280px;height:280px;display:block;max-width:64vw;max-height:64vw"></canvas></div><p class="field__hint" id="qr-hint" style="margin-block-end:12px"></p><div id="qr-caption"></div><div class="modal__actions" style="margin-block-start:16px"><button type="button" class="btn btn--ghost" id="qr-close" data-action="close-modal"></button></div></div></div>
 <div class="modal" id="m-confirm" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="cf-title"><div class="modal__title" id="cf-title"></div><div class="modal__body" id="cf-body"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="cf-cancel"></button><button type="button" class="btn btn--primary" id="cf-ok"></button></div></div></div>
+<div class="modal" id="m-warp-generate" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wg-title"><div class="modal__title" id="wg-title"></div><p class="field__hint" id="wg-desc" style="margin-block-end:12px"></p><div class="field"><label class="field__label" for="wg-name" id="wg-name-label"></label><input class="input" type="text" id="wg-name" maxlength="100" autocomplete="off"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wg-cancel" data-action="close-warp-modal" data-modal="m-warp-generate"></button><button type="button" class="btn btn--primary" id="wg-go"></button></div></div></div>
+<div class="modal" id="m-warp-import" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wi-title"><div class="modal__title" id="wi-title"></div><p class="field__hint" id="wi-desc" style="margin-block-end:12px"></p><div class="field"><label class="field__label" for="wi-name" id="wi-name-label"></label><input class="input" type="text" id="wi-name" maxlength="100" autocomplete="off"></div><div class="field"><label class="field__label" for="wi-config" id="wi-config-label"></label><textarea class="input textarea textarea--mono" id="wi-config" rows="7" spellcheck="false" dir="ltr"></textarea><p class="field__error" id="wi-error"></p></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wi-cancel" data-action="close-warp-modal" data-modal="m-warp-import"></button><button type="button" class="btn btn--primary" id="wi-go"></button></div></div></div>
+<div class="modal" id="m-warp-preset" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wp-title"><div class="modal__title" id="wp-title"></div><div class="field"><label class="field__label" for="wp-name" id="wp-name-label"></label><input class="input" type="text" id="wp-name" maxlength="100" autocomplete="off"></div><div class="field"><label class="field__label" for="wp-endpoints" id="wp-endpoints-label"></label><textarea class="input textarea textarea--mono" id="wp-endpoints" rows="6" spellcheck="false" dir="ltr" placeholder="162.159.192.1:2408"></textarea><p class="field__hint" id="wp-hint"></p><p class="field__error" id="wp-error"></p></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wp-cancel" data-action="close-warp-modal" data-modal="m-warp-preset"></button><button type="button" class="btn btn--primary" id="wp-go"></button></div></div></div>
+<div class="modal" id="m-user" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="mu-title"><div class="modal__title" id="mu-title"></div><div class="field"><label class="field__label" for="mu-name" id="mu-name-label"></label><input class="input" type="text" id="mu-name" maxlength="100" autocomplete="off"></div><div class="field"><span class="field__label" id="mu-protocols-label"></span><div class="port-cells" id="mu-protocols"><label class="port-cell"><input type="checkbox" value="all" data-user-proto-all><span id="mu-proto-all-label"></span></label><label class="port-cell"><input type="checkbox" value="vless" data-user-proto><span>VLESS</span></label><label class="port-cell"><input type="checkbox" value="vmess" data-user-proto><span>VMess</span></label><label class="port-cell"><input type="checkbox" value="trojan" data-user-proto><span>Trojan</span></label><label class="port-cell"><input type="checkbox" value="ss" data-user-proto><span>SS</span></label></div></div><div class="field"><label class="field__label" for="mu-limit" id="mu-limit-label"></label><input class="input" type="number" id="mu-limit" min="1" step="1" autocomplete="off"><p class="field__hint" id="mu-limit-hint"></p></div><div class="field"><label class="field__label" for="mu-expiry" id="mu-expiry-label"></label><input class="input" type="datetime-local" id="mu-expiry" autocomplete="off"><p class="field__hint" id="mu-expiry-hint"></p></div><p class="field__error" id="mu-error" style="display:none;margin-block-end:12px"></p><div class="modal__actions"><button type="button" class="btn btn--ghost" id="mu-cancel" data-action="close-user-modal" data-modal="m-user"></button><button type="button" class="btn btn--primary" id="mu-go"></button></div></div></div>
+<div class="modal" id="m-wizard" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wiz-title"><div class="modal__title" id="wiz-title"></div><div id="wiz-body"></div><div class="modal__actions" style="margin-block-start:16px"><button type="button" class="btn btn--ghost" id="wiz-skip"></button><button type="button" class="btn btn--primary" id="wiz-next"></button></div></div></div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <noscript><p style="padding:24px;text-align:center">JavaScript is required.</p></noscript>
 <script>
 (()=>{'use strict';
 const DICT={
-en:{'app.name':'Q Proxy','app.tagline':'Cloudflare proxy panel','nav.home':'Home','nav.settings':'Settings','nav.checker':'IP Checker','nav.logout':'Log out','lang.en':'English','login.title':'Sign in to Q Proxy','login.password':'Passphrase','common.apply':'Apply changes','common.applying':'Applying…','common.saved':'Saved','common.discard':'Discard','common.cancel':'Cancel','common.close':'Close','common.confirm':'Confirm','common.copy':'Copy','common.copied':'Copied','common.generate':'Generate','common.generated':'Generated — Apply to save.','common.reveal':'Reveal','common.hide':'Hide','common.add':'Add','common.remove':'Remove','common.resetDefaults':'Reset to defaults','common.unsaved':'Unsaved changes','common.error':'Something went wrong','common.loading':'Loading…','common.optional':'optional','common.on':'On','common.off':'Off','common.enabled':'Enabled','common.disabled':'Disabled','common.yes':'Yes','common.no':'No','common.retry':'Retry','common.openChecker':'Open IP Checker','common.fixErrors':'Fix {count} error(s)','home.subs.title':'Subscriptions','home.subs.desc':'Import these URLs into your proxy client.','home.subs.mode.normal':'Normal','home.subs.mode.fragment':'Fragment','home.stats.title':'My IP & egress','home.stats.refresh':'Refresh','home.stats.via_cf':'Via Cloudflare targets','home.stats.via_other':'Via other targets','home.stats.ip':'IP','home.stats.country':'Country','home.stats.city':'City','home.stats.isp':'ISP','home.stats.asn':'ASN','home.stats.colo':'CF colo','home.stats.updated':'Fetched just now · refreshes on demand','home.stats.failed':'Could not fetch IP info.','home.stats.link':'Open summary','home.kill.title':'Kill switch','home.kill.paused':'Traffic paused','home.kill.active':'Traffic serving','home.kill.desc_paused':'Clients receive HTTP 503; this panel stays reachable.','home.kill.desc_active':'Proxy traffic is being served normally.','home.status.title':'Worker status','home.status.version':'Version','home.status.colo':'Colo','home.status.today':'Requests today','home.status.total':'Requests total','tabs.settings.general':'General','tabs.settings.protocols':'Protocols','tabs.settings.ports':'Ports & Domains','tabs.settings.proxyip':'Proxy IP','tabs.settings.fragment':'Fragment','tabs.settings.chain':'Chain proxy','tabs.settings.advanced':'Advanced','general.securePath.label':'Secure path','general.securePath.hint':'Secret prefix for this panel and all subscription URLs. Changing it invalidates every URL.','general.killSwitch.label':'Kill switch','general.killSwitch.hint':'Instantly pause all proxy traffic (clients get 503).','general.language.label':'Panel language','general.profileTitle.label':'Profile title','general.profileTitle.hint':'Name shown in proxy clients.','general.debugLogging.label':'Debug logging','general.debugLogging.hint':'Write verbose diagnostics to worker logs.','general.danger.title':'Danger zone','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.enable':'Enable {proto}','protocols.disabled_hint':'Disabled — no configs are generated for this protocol.','protocols.uuid':'UUID','protocols.password':'Password','protocols.cipher':'Cipher method','protocols.common.title':'Common options','protocols.path.label':'WebSocket path','protocols.path.hint':'URL prefix of this protocol tunnel.','protocols.earlyData.label':'Early data (0-RTT)','protocols.earlyData.hint':'Allows clients to send the first payload inside the handshake path parameter.','protocols.earlyData.max':'Max early data (bytes)','protocols.fingerprint.label':'TLS fingerprint','protocols.sniCase.label':'Randomize SNI case','protocols.sniCase.hint':'Randomizes letter case of the SNI hostname.','protocols.alpn.label':'ALPN protocols','protocols.alpn.hint':'One protocol per line, e.g. http/1.1 or h2.','ports.domains.label':'Custom domains','ports.domains.hint':'Hostnames orange-clouded to this Worker; every enabled port serves them.','ports.hostnameOverride.label':'Hostname override','ports.hostnameOverride.hint':'Force this hostname in generated configs instead of the request host.','ports.matrix.legend_tls':'TLS ports','ports.matrix.legend_plain':'Plaintext ports','ports.matrix.hint':'Plaintext ports apply only to workers.dev hostnames without custom domains.','ports.policy.label':'Plaintext port policy','ports.policy.always':'Always','ports.policy.workersdev':'Only workers.dev','ports.policy.never':'Never','ports.cleanAddrs.label':'Clean addresses','ports.cleanAddrs.hint':'One entry per line: IP or hostname, optionally with a pinned port (ip:port or [ipv6]:port). Pinned entries emit only that port; bare entries use the TLS/plain ports below. Invalid lines are dropped on save.','ports.remoteSubs.label':'Remote subscriptions to merge','ports.remoteSubs.hint':'One https:// URL per line; fetched at subscription time and merged into the raw list.','ports.cdn.title':'CDN fronting','ports.cdn.enabled.label':'Route through CDN','ports.cdn.addresses.label':'CDN addresses','ports.cdn.addresses.hint':'One address per line; used as connect address when CDN fronting is on.','ports.cdn.host.label':'CDN host','ports.cdn.sni.label':'CDN SNI','proxyip.mode.label':'Mode','proxyip.mode.list':'Static list','proxyip.mode.nat64':'NAT64 prefixes','proxyip.list.label':'Proxy IP list','proxyip.list.hint':'One entry per line; host:port allowed. Used when the direct connection fails.','proxyip.nat64.label':'NAT64 prefixes','proxyip.nat64.hint':'One IPv6 prefix per line (e.g. 2a02:898:146:64::).','checker.title':'Proxy IP checker','checker.desc':'Tests reachability and latency of each target against the Cloudflare trace endpoint from your browser.','checker.targets.label':'Targets','checker.targets.hint':'One IP or host:port per line — up to 100.','checker.run':'Run test','checker.stop':'Stop','checker.running':'Testing…','checker.results':'Results','checker.empty':'No results yet.','checker.col.target':'Target','checker.col.latency':'Avg latency','checker.col.rate':'Success','checker.col.status':'Status','checker.status.ok':'Healthy','checker.status.partial':'Partial','checker.status.failed':'Failed','checker.summary':'{ok} healthy of {total}.','checker.tooMany':'Maximum 100 targets.','fragment.enable':'Enable fragmentation','fragment.preset.label':'Preset','fragment.preset.off':'Off','fragment.preset.low':'Low','fragment.preset.medium':'Medium','fragment.preset.high':'High','fragment.preset.severe':'Severe','fragment.preset.custom':'Custom','fragment.length':'Length min–max (bytes)','fragment.delay':'Delay min–max (ms)','fragment.split':'Max split min–max','fragment.packets':'Packets pattern','chain.enable':'Enable chain proxy','chain.uri.label':'Upstream URI','chain.uri.hint':'socks5://user:pass@host:port or http://host:port','advanced.doh.label':'DoH upstream','advanced.doh.hint':'DNS-over-HTTPS resolver used behind your private endpoint below.','advanced.doh.private':'Your private DoH endpoint','advanced.remoteDns.label':'Remote DNS','advanced.localDns.label':'Local DNS fallback','advanced.udp53.label':'Enable UDP 53 relay','advanced.udp53.hint':'Answers client DNS queries over UDP by relaying through DoH.','advanced.behavior.title':'Subscriptions & behavior','advanced.subInterval.label':'Sub update interval (hours)','advanced.maxNodes.label':'Max nodes per format','advanced.urlTest.label':'URL test interval (seconds)','advanced.camouflage.label':'Camouflage page','advanced.camouflage.none':'None (plain 404)','advanced.camouflage.static':'Static landing page','advanced.camouflage.proxy':'Reverse proxy URL','advanced.camouflage.url':'Camouflage URL','advanced.speedtest.label':'Intercept speed tests','advanced.speedtest.hint':'Answer speedtest providers with synthetic throughput instead of proxying them.','qr.title':'Scan to import','qr.hint':'Open your proxy client and scan, or copy the link.','confirm.logout_title':'Log out?','confirm.logout_body':'Your session cookie is cleared on this device.','confirm.reset_title':'Reset to defaults?','confirm.reset_body':'All sections revert to factory values immediately. This cannot be undone.','confirm.killswitch_title':'Pause all traffic?','confirm.killswitch_body':'All clients lose connectivity immediately. The panel stays reachable so you can undo this.','confirm.yes':'Yes, continue','toast.settingsSaved':'Settings saved','toast.saveFailed':'Save failed','toast.pathRegenerated':'New secure path ready','toast.killOn':'Traffic paused','toast.killOff':'Traffic resumed','toast.langChanged':'Language updated','toast.networkError':'Network error — check your connection.','toast.tooLong':'URL too long for a QR code.','err.required':'Required field','err.url':'Enter a valid https:// URL','err.domain':'Invalid domain name','err.ip_or_host':'Not a valid IP or hostname','err.ipv6_prefix':'Invalid IPv6 prefix','err.port':'Port must be 1–65535','err.uuid':'Invalid UUID','err.number':'Enter a valid number','err.minmax':'Min must be ≤ max','err.duplicate':'Duplicate entry: {value}','err.invalid_line':'Invalid line: {line}'},
+en:{'app.name':'Q Proxy','app.tagline':'Cloudflare proxy panel','nav.home':'Home','nav.settings':'Settings','nav.warp':'WARP','nav.checker':'IP Checker','nav.logout':'Log out','lang.en':'English','login.title':'Sign in to Q Proxy','login.password':'Passphrase','common.apply':'Apply changes','common.applying':'Applying…','common.saved':'Saved','common.discard':'Discard','common.cancel':'Cancel','common.close':'Close','common.confirm':'Confirm','common.copy':'Copy','common.copied':'Copied','common.generate':'Generate','common.generated':'Generated — Apply to save.','common.reveal':'Reveal','common.hide':'Hide','common.add':'Add','common.remove':'Remove','common.resetDefaults':'Reset to defaults','common.unsaved':'Unsaved changes','common.error':'Something went wrong','common.loading':'Loading…','common.optional':'optional','common.on':'On','common.off':'Off','common.enabled':'Enabled','common.disabled':'Disabled','common.yes':'Yes','common.no':'No','common.retry':'Retry','common.openChecker':'Open IP Checker','common.fixErrors':'Fix {count} error(s)','home.subs.title':'Subscriptions','home.subs.desc':'Import these URLs into your proxy client.','home.subs.mode.normal':'Normal','home.subs.mode.fragment':'Fragment','home.chips.protocols':'{n} protocols on','home.chips.formats':'{n} formats','home.subs.empty_title':'No subscriptions yet','home.subs.empty_msg':'Enable a protocol in Settings to generate your first subscription URL.','home.subs.empty_cta':'Enable a protocol','home.stats.title':'My IP & egress','home.stats.refresh':'Refresh','home.stats.via_cf':'Via Cloudflare targets','home.stats.via_other':'Via other targets','home.stats.ip':'IP','home.stats.country':'Country','home.stats.city':'City','home.stats.isp':'ISP','home.stats.asn':'ASN','home.stats.colo':'CF colo','home.stats.updated':'Fetches on demand · use Refresh','home.stats.idle':'Hit Refresh to fetch IP info.','home.stats.failed':'Could not fetch IP info.','home.stats.link':'Open summary','home.kill.title':'Kill switch','home.kill.paused':'Traffic paused','home.kill.active':'Traffic serving','home.kill.desc_paused':'Clients receive HTTP 503; this panel stays reachable.','home.kill.desc_active':'Proxy traffic is being served normally.','home.status.title':'Worker status','home.status.version':'Version','home.status.colo':'Colo','home.status.today':'Requests today','home.status.total':'Requests total','tabs.settings.general':'General','tabs.settings.protocols':'Protocols','tabs.settings.ports':'Ports & Domains','tabs.settings.proxyip':'Proxy IP','tabs.settings.fragment':'Fragment','tabs.settings.chain':'Chain proxy','tabs.settings.advanced':'Advanced','general.securePath.label':'Secure path','general.killSwitch.label':'Kill switch','general.killSwitch.hint':'Instantly pause all proxy traffic (clients get 503).','general.language.label':'Panel language','general.profileTitle.label':'Profile title','general.profileTitle.hint':'Name shown in proxy clients.','general.debugLogging.label':'Debug logging','general.debugLogging.hint':'Write verbose diagnostics to worker logs.','general.danger.title':'Danger zone','general.backup.title':'Backup & restore','general.backup.export':'Export settings','general.backup.import':'Import settings','general.backup.import_hint':'Paste an exported settings JSON (secrets and URLs are never included).','general.backup.imported':'Settings imported','general.backup.badfile':'Not a valid settings export','home.status.checkUpdate':'Check for updates','home.status.updateAvailable':'Update available: {v}','home.status.upToDate':'Up to date','home.status.updateCheckFailed':'Could not reach GitHub','wizard.title':'Welcome to Q Proxy','wizard.s1_title':'Enable protocols','wizard.s1_body':'Pick at least one protocol in Settings → Protocols. VLESS over TLS is the usual starting point.','wizard.s1_cta':'Open Protocols','wizard.s2_title':'Import your subscription','wizard.s2_body':'Copy the Base64 URL below into your proxy client (v2rayNG, Hiddify, Clash…).','wizard.s3_title':'You are set','wizard.s3_body':'Generate WARP accounts from the WARP tab any time. This wizard will not show again.','wizard.done':'Finish','wizard.skip':'Skip','protocols.ech.label':'ECH (Encrypted ClientHello)','protocols.ech.server':'ECH server name (optional)','protocols.ech.server_hint':'Defaults to the node SNI when empty.','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.enable':'Enable {proto}','protocols.disabled_hint':'Disabled — no configs are generated for this protocol.','protocols.uuid':'UUID','protocols.password':'Password','protocols.cipher':'Cipher method','protocols.common.title':'Common options','protocols.path.label':'WebSocket path','protocols.path.hint':'URL prefix of this protocol tunnel.','protocols.earlyData.label':'Early data (0-RTT)','protocols.earlyData.hint':'Allows clients to send the first payload inside the handshake path parameter.','protocols.earlyData.max':'Max early data (bytes)','protocols.fingerprint.label':'TLS fingerprint','protocols.sniCase.label':'Randomize SNI case','protocols.sniCase.hint':'Randomizes letter case of the SNI hostname.','protocols.alpn.label':'ALPN protocols','protocols.alpn.hint':'One protocol per line, e.g. http/1.1 or h2.','ports.domains.label':'Custom domains','ports.domains.hint':'Hostnames orange-clouded to this Worker; every enabled port serves them.','ports.hostnameOverride.label':'Hostname override','ports.hostnameOverride.hint':'Force this hostname in generated configs instead of the request host.','ports.matrix.legend_tls':'TLS ports','ports.matrix.legend_plain':'Plaintext ports','ports.matrix.hint':'Plaintext ports apply only to workers.dev hostnames without custom domains.','ports.policy.label':'Plaintext port policy','ports.policy.always':'Always','ports.policy.workersdev':'Only workers.dev','ports.policy.never':'Never','ports.cleanAddrs.label':'Clean addresses','ports.remoteSubs.label':'Remote subscriptions to merge','ports.remoteSubs.hint':'One https:// URL per line; fetched at subscription time and merged into the raw list.','ports.cdn.title':'CDN fronting','ports.cdn.enabled.label':'Route through CDN','ports.cdn.addresses.label':'CDN addresses','ports.cdn.host.label':'CDN host','ports.cdn.sni.label':'CDN SNI','proxyip.mode.label':'Mode','proxyip.mode.list':'Static list','proxyip.mode.nat64':'NAT64 prefixes','proxyip.list.label':'Proxy IP list','proxyip.nat64.label':'NAT64 prefixes','checker.title':'Proxy IP checker','checker.desc':'Tests reachability and latency of each target against the Cloudflare trace endpoint from your browser.','checker.targets.label':'Targets','checker.targets.hint':'One IP or host:port per line — up to 100.','checker.run':'Run test','checker.stop':'Stop','checker.running':'Testing…','checker.results':'Results','checker.empty':'No results yet.','checker.col.target':'Target','checker.col.latency':'Avg latency','checker.col.rate':'Success','checker.col.status':'Status','checker.status.ok':'Healthy','checker.status.partial':'Partial','checker.status.failed':'Failed','checker.summary':'{ok} healthy of {total}.','checker.tooMany':'Maximum 100 targets.','warp.chips.accounts':'{n} accounts','warp.chips.presets':'{n} presets','warp.chips.formats':'{n} formats','warp.generate':'Generate Account','warp.import':'Import Config','warp.settings':'WARP Settings','warp.accounts':'Accounts','warp.back':'Back','warp.empty_title':'No WARP accounts yet','warp.empty_msg':'Generate a fresh Cloudflare WARP device or import an existing WireGuard config to get started.','warp.detail.token':'Subscription token','warp.detail.regen':'Regenerate','warp.detail.name':'Account name','warp.detail.preset':'Endpoint preset','warp.detail.custom_eps':'{n} custom endpoints','warp.detail.dns':'DNS (optional)','warp.detail.subs':'Subscription URLs','warp.detail.subs_desc':'One URL per client app. Amnezia variants embed the obfuscation parameters. These serve WireGuard configs directly — tunnel traffic never passes through the Worker.','warp.detail.amnezia_on':'Custom Amnezia overrides active','warp.detail.amnezia_off':'Using global Amnezia defaults','warp.detail.amnezia_reset':'Reset to global defaults','warp.detail.delete':'Delete account','warp.confirm.delete_title':'Delete this account?','warp.confirm.delete_body':'The account and its subscription token stop working immediately. The WARP device is removed from Cloudflare.','warp.confirm.regen_title':'Regenerate token?','warp.confirm.regen_body':'Old subscription URLs stop working. Clients must import the new token.','warp.gen.title':'Generate WARP account','warp.gen.desc':'Creates a real Cloudflare WARP device via the official API. Name is optional.','warp.imp.title':'Import WARP config','warp.imp.desc':'Paste a WireGuard .conf file or a wg:// / wireguard:// URI.','warp.imp.config':'Config','warp.toast.generated':'Account created','warp.toast.imported':'Account imported','warp.toast.deleted':'Account deleted','warp.toast.regen':'New token ready','warp.toast.saved':'Saved','warp.toast.presetDeleted':'Preset deleted','warp.presets.title':'Endpoint presets','warp.presets.add':'Add Preset','warp.presets.edit':'Edit Preset','warp.presets.count':'{n} endpoints','warp.presets.inuse':'In use','warp.amnezia.title':'Amnezia defaults','warp.amnezia.desc':'Applied to Amnezia subscriptions unless an account overrides them. Zeros mean the parameter is omitted.','warp.amnezia.save':'Save Amnezia Defaults','warp.amnezia.i1':'I1 (init packet)','warp.view.accounts':'Accounts','warp.view.settings':'Settings','fragment.enable':'Enable fragmentation','fragment.preset.label':'Preset','fragment.preset.off':'Off','fragment.preset.low':'Low','fragment.preset.medium':'Medium','fragment.preset.high':'High','fragment.preset.severe':'Severe','fragment.preset.custom':'Custom','fragment.length':'Length min–max (bytes)','fragment.delay':'Delay min–max (ms)','fragment.split':'Max split min–max','fragment.packets':'Packets pattern','chain.enable':'Enable chain proxy','chain.uri.label':'Upstream URI','chain.uri.hint':'socks5://user:pass@host:port or http://host:port','advanced.doh.label':'DoH upstream','advanced.doh.private':'Your private DoH endpoint','advanced.tg.title':'Telegram bot','advanced.tg.enabled':'Enable bot','advanced.tg.token':'Bot token','advanced.tg.chat_id':'Chat ID','advanced.tg.setup':'Set webhook','advanced.tg.remove':'Remove webhook','advanced.tg.hint':'Create a bot with @BotFather, paste its token here, save, then press Set webhook. Only messages from your chat ID are served — they can query status and flip the kill switch.','tg.setup_ok':'Webhook set','tg.setup_fail':'Webhook setup failed','tg.remove_ok':'Webhook removed','tg.remove_fail':'Webhook removal failed','advanced.remoteDns.label':'Remote DNS','advanced.localDns.label':'Local DNS fallback','advanced.udp53.label':'Enable UDP 53 relay','advanced.udp53.hint':'Answers client DNS queries over UDP by relaying through DoH.','advanced.behavior.title':'Subscriptions & behavior','advanced.subInterval.label':'Sub update interval (hours)','advanced.maxNodes.label':'Max nodes per format','advanced.urlTest.label':'URL test interval (seconds)','advanced.camouflage.label':'Camouflage page','advanced.camouflage.none':'None (plain 404)','advanced.camouflage.static':'Static landing page','advanced.camouflage.proxy':'Reverse proxy URL','advanced.camouflage.url':'Camouflage URL','advanced.speedtest.label':'Intercept speed tests','routing.title':'Routing rules','routing.bypassLan.label':'Bypass LAN','routing.bypassLan.hint':'Direct local/private ranges instead of the proxy (Clash and sing-box).','routing.blockQuic.label':'Block QUIC (UDP 443)','routing.blockQuic.hint':'Forces clients onto TCP/TLS where proxying is more reliable.','routing.customBypass.label':'Custom bypass domains','routing.customBlock.label':'Custom block domains','tabs.settings.users':'Users','users.title':'Users','users.desc':'Share scoped subscription links with per-user protocol filters, limits and expiry.','users.add':'Add User','users.edit':'Edit User','users.name':'Name','users.protocols':'Protocols','users.all':'All','users.limit':'Daily request limit','users.limit_none':'Empty means no daily limit','users.expiry':'Expires','users.expiry_none':'Empty means never expires','users.delete':'Delete user','users.confirm_delete_title':'Delete this user?','users.confirm_delete_body':'Their subscription links stop working immediately.','users.confirm_regen_title':'Regenerate token?','users.confirm_regen_body':'Current subscription URLs for this user stop working.','users.toast.created':'User created','users.toast.saved':'Saved','users.toast.deleted':'User deleted','users.toast.regen':'New token ready','users.status.active':'Active','users.status.expired':'Expired','users.status.limited':'Limit reached','users.status.disabled':'Disabled','users.empty':'No users yet','users.col.name':'Name','users.col.token':'Subscription URL','users.col.status':'Status','users.col.enabled':'Enabled','users.col.actions':'Actions','qr.title':'Scan to import','qr.hint':'Open your proxy client and scan, or copy the link.','confirm.logout_title':'Log out?','confirm.logout_body':'Your session cookie is cleared on this device.','confirm.reset_title':'Reset to defaults?','confirm.reset_body':'All sections revert to factory values immediately. This cannot be undone.','confirm.killswitch_title':'Pause all traffic?','confirm.killswitch_body':'All clients lose connectivity immediately. The panel stays reachable so you can undo this.','confirm.yes':'Yes, continue','toast.settingsSaved':'Settings saved','toast.saveFailed':'Save failed','toast.pathRegenerated':'New secure path ready','toast.killOn':'Traffic paused','toast.killOff':'Traffic resumed','toast.langChanged':'Language updated','toast.networkError':'Network error — check your connection.','toast.tooLong':'URL too long for a QR code.','err.required':'Required field','err.url':'Enter a valid https:// URL','err.domain':'Invalid domain name','err.ip_or_host':'Not a valid IP or hostname','err.ipv6_prefix':'Invalid IPv6 prefix','err.port':'Port must be 1–65535','err.uuid':'Invalid UUID','err.number':'Enter a valid number','err.minmax':'Min must be ≤ max','err.duplicate':'Duplicate entry: {value}','err.invalid_line':'Invalid line: {line}','common.help':'Help','home.subs.quota':'Subscriptions tunnel through this Worker and count toward its 100k/day request budget.','warp.chips.direct':'direct · no Worker traffic','protocols.ech.short':'Encrypts the TLS ClientHello.','protocols.ech.help':'Encrypts the TLS ClientHello for supported clients. Emitted as ech= on TLS nodes.','ports.cdn.addresses.short':'One address per line.','ports.cdn.addresses.help':'One address per line; used as connect address when CDN fronting is on.','ports.cleanAddrs.short':'One entry per line: IP or hostname, optionally with a pinned port.','ports.cleanAddrs.help':'One entry per line: IP or hostname, optionally with a pinned port (ip:port or [ipv6]:port). Pinned entries emit only that port; bare entries use the TLS/plain ports below. Invalid lines are dropped on save.','proxyip.list.short':'One entry per line; host:port allowed.','proxyip.list.help':'One entry per line; host:port allowed. Used when the direct connection fails.','proxyip.nat64.short':'One IPv6 prefix per line.','proxyip.nat64.help':'One IPv6 prefix per line (e.g. 2a02:898:146:64::).','advanced.doh.short':'DoH resolver behind the private endpoint below.','advanced.doh.help':'DNS-over-HTTPS resolver used behind your private endpoint below.','advanced.speedtest.short':'Answers speedtest providers synthetically.','advanced.speedtest.help':'Answer speedtest providers with synthetic throughput instead of proxying them.','routing.customBypass.short':'One domain per line; matched suffixes go DIRECT.','routing.customBypass.help':'One domain per line; matched suffixes go DIRECT (Clash and sing-box).','routing.customBlock.short':'One domain per line; matched suffixes are rejected.','routing.customBlock.help':'One domain per line; matched suffixes are rejected (Clash and sing-box).','fragment.preset.short':'Applies fixed length/delay values.','fragment.preset.help':'Low/Medium/High/Severe apply fixed length, delay and split values tuned to censorship severity. Custom unlocks the fields below for manual tuning.','general.securePath.short':'Secret prefix for panel and subscription URLs.','general.securePath.help':'Secret prefix for this panel and all subscription URLs. Changing it invalidates every URL.'},
 
-fa:{'app.name':'Q Proxy','app.tagline':'پنل پراکسی کلادفلر','nav.home':'خانه','nav.settings':'تنظیمات','nav.checker':'بررسی آی‌پی','nav.logout':'خروج','lang.fa':'فارسی','login.title':'ورود به Q Proxy','login.password':'گذرواژه','common.apply':'اعمال تغییرات','common.applying':'در حال اعمال…','common.saved':'ذخیره شد','common.discard':'نادیده گرفتن','common.cancel':'انصراف','common.close':'بستن','common.confirm':'تأیید','common.copy':'کپی','common.copied':'کپی شد','common.generate':'تولید','common.generated':'تولید شد؛ برای ذخیره «اعمال تغییرات» را بزنید.','common.reveal':'نمایش','common.hide':'پنهان','common.add':'افزودن','common.remove':'حذف','common.resetDefaults':'بازگشت به پیش‌فرض‌ها','common.unsaved':'تغییرات ذخیره‌نشده','common.error':'خطایی رخ داد','common.loading':'در حال بارگذاری…','common.optional':'اختیاری','common.on':'روشن','common.off':'خاموش','common.enabled':'فعال','common.disabled':'غیرفعال','common.yes':'بله','common.no':'خیر','common.retry':'تلاش دوباره','common.openChecker':'باز کردن بررسی آی‌پی','common.fixErrors':'{count} خطا را برطرف کنید','home.subs.title':'اشتراک‌ها','home.subs.desc':'این نشانی‌ها را در کلاینت خود وارد کنید.','home.subs.mode.normal':'عادی','home.subs.mode.fragment':'فرگمنت','home.stats.title':'آی‌پی من و مسیر خروجی','home.stats.refresh':'بازخوانی','home.stats.via_cf':'از طریق مقصدهای کلادفلر','home.stats.via_other':'از طریق مقصدهای دیگر','home.stats.ip':'IP','home.stats.country':'کشور','home.stats.city':'شهر','home.stats.isp':'سرویس‌دهنده','home.stats.asn':'ASN','home.stats.colo':'دیتاسنتر کلادفلر','home.stats.updated':'همین حالا دریافت شد · با درخواست به‌روز می‌شود','home.stats.failed':'دریافت اطلاعات آی‌پی ممکن نشد.','home.stats.link':'مشاهدهٔ خلاصه','home.kill.title':'کیل سوییچ','home.kill.paused':'ترافیک متوقف است','home.kill.active':'ترافیک فعال است','home.kill.desc_paused':'کلاینت‌ها پاسخ ۵۰۳ می‌گیرند؛ این پنل در دسترس می‌ماند.','home.kill.desc_active':'ترافیک پراکسی به‌طور عادی سرویس می‌شود.','home.status.title':'وضعیت ورکر','home.status.version':'نسخه','home.status.colo':'دیتاسنتر','home.status.today':'درخواست‌های امروز','home.status.total':'مجموع درخواست‌ها','tabs.settings.general':'عمومی','tabs.settings.protocols':'پروتکل‌ها','tabs.settings.ports':'پورت‌ها و دامنه‌ها','tabs.settings.proxyip':'آی‌پی پراکسی','tabs.settings.fragment':'فرگمنت','tabs.settings.chain':'زنجیرهٔ پراکسی','tabs.settings.advanced':'پیشرفته','general.securePath.label':'مسیر امن','general.securePath.hint':'پیشوند محرمانهٔ این پنل و همهٔ نشانی‌های اشتراک. تغییر آن همهٔ نشانی‌ها را باطل می‌کند.','general.killSwitch.label':'کیل سوییچ','general.killSwitch.hint':'توقف فوری همهٔ ترافیک پراکسی (کلاینت‌ها ۵۰۳ می‌گیرند).','general.language.label':'زبان پنل','general.profileTitle.label':'عنوان پروفایل','general.profileTitle.hint':'نامی که در کلاینت‌های پراکسی نمایش داده می‌شود.','general.debugLogging.label':'ثبت خطایابی','general.debugLogging.hint':'نوشتن تشخیص‌های مفصل در لاگ ورکر.','general.danger.title':'بخش خطرناک','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.enable':'فعال‌سازی {proto}','protocols.disabled_hint':'غیرفعال است؛ برای این پروتکل کانفیگی ساخته نمی‌شود.','protocols.uuid':'UUID','protocols.password':'گذرواژه','protocols.cipher':'روش رمزنگاری','protocols.common.title':'گزینه‌های مشترک','protocols.path.label':'مسیر وب‌سوکت','protocols.path.hint':'پیشوند نشانی تونل این پروتکل.','protocols.earlyData.label':'دادهٔ زودهنگام (0-RTT)','protocols.earlyData.hint':'به کلاینت اجازه می‌دهد اولین داده را در پارامتر مسیر دست‌دهی بفرستد.','protocols.earlyData.max':'بیشنهٔ دادهٔ زودهنگام (بایت)','protocols.fingerprint.label':'اثر انگشت TLS','protocols.sniCase.label':'تصادفی‌سازی حروف SNI','protocols.sniCase.hint':'حالت حروف نام میزبان SNI را تصادفی می‌کند.','protocols.alpn.label':'پروتکل‌های ALPN','protocols.alpn.hint':'هر خط یک پروتکل، مثل http/1.1 یا h2.','ports.domains.label':'دامنه‌های سفارشی','ports.domains.hint':'دامنه‌هایی که با رکورد ابری به این ورکر متصل‌اند؛ همهٔ پورت‌های فعال روی آن‌ها سرویس می‌شود.','ports.hostnameOverride.label':'بازنویسی نام میزبان','ports.hostnameOverride.hint':'این نام میزبان به‌جای میزبان درخواست در کانفیگ‌ها گذاشته می‌شود.','ports.matrix.legend_tls':'پورت‌های TLS','ports.matrix.legend_plain':'پورت‌های بدون رمز','ports.matrix.hint':'پورت‌های بدون رمز فقط برای نشانی workers.dev بدون دامنهٔ سفارشی اعمال می‌شوند.','ports.policy.label':'سیاست پورت‌های بدون رمز','ports.policy.always':'همیشه','ports.policy.workersdev':'فقط workers.dev','ports.policy.never':'هرگز','ports.cleanAddrs.label':'آدرس‌های تمیز','ports.cleanAddrs.hint':'هر خط یک مورد: IP یا نام میزبان، با پورت اختیاری (ip:port یا [ipv6]:port). موارد دارای پورت فقط همان پورت را می‌سازند؛ موارد بدون پورت از پورت‌های TLS/بدون رمز زیر پیروی می‌کنند. خط‌های نامعتبر هنگام ذخیره حذف می‌شوند.','ports.remoteSubs.label':'اشتراک‌های خارجی برای ادغام','ports.remoteSubs.hint':'هر خط یک نشانی https؛ هنگام ساخت اشتراک دریافت و به فهرست خام اضافه می‌شود.','ports.cdn.title':'پوشش CDN','ports.cdn.enabled.label':'عبور از CDN','ports.cdn.addresses.label':'نشانی‌های CDN','ports.cdn.addresses.hint':'هر خط یک نشانی؛ وقتی عبور از CDN روشن است به‌عنوان نشانی اتصال استفاده می‌شود.','ports.cdn.host.label':'میزبان CDN','ports.cdn.sni.label':'SNI کلادفلر','proxyip.mode.label':'حالت','proxyip.mode.list':'فهرست ثابت','proxyip.mode.nat64':'پیشوندهای NAT64','proxyip.list.label':'فهرست آی‌پی پراکسی','proxyip.list.hint':'هر خط یک مورد؛ host:port مجاز است. زمانی که اتصال مستقیم شکست بخورد استفاده می‌شود.','proxyip.nat64.label':'پیشوندهای NAT64','proxyip.nat64.hint':'هر خط یک پیشوند IPv6 (مثلاً 2a02:898:146:64::).','checker.title':'بررسی آی‌پی پراکسی','checker.desc':'دسترس‌پذیری و تأخیر هر مقصد را از مرورگر شما مقابل نقطهٔ trace کلادفلر می‌سنجد.','checker.targets.label':'مقصدها','checker.targets.hint':'هر خط یک IP یا host:port — حداکثر ۱۰۰ مورد.','checker.run':'اجرای تست','checker.stop':'توقف','checker.running':'در حال تست…','checker.results':'نتایج','checker.empty':'هنوز نتیجه‌ای نیست.','checker.col.target':'مقصد','checker.col.latency':'میانگین تأخیر','checker.col.rate':'موفقیت','checker.col.status':'وضعیت','checker.status.ok':'سالم','checker.status.partial':'نیمه‌سالم','checker.status.failed':'ناموفق','checker.summary':'{ok} مورد سالم از {total}.','checker.tooMany':'حداکثر ۱۰۰ مقصد.','fragment.enable':'فعال‌سازی فرگمنت','fragment.preset.label':'حالت آماده','fragment.preset.off':'خاموش','fragment.preset.low':'کم','fragment.preset.medium':'متوسط','fragment.preset.high':'زیاد','fragment.preset.severe':'شدید','fragment.preset.custom':'سفارشی','fragment.length':'طول کمینه–بیشنه (بایت)','fragment.delay':'تأخیر کمینه–بیشنه (میلی‌ثانیه)','fragment.split':'بیشینهٔ شکست کمینه–بیشنه','fragment.packets':'الگوی بسته‌ها','chain.enable':'فعال‌سازی زنجیرهٔ پراکسی','chain.uri.label':'نشانی بالادست','chain.uri.hint':'‏socks5://user:pass@host:port یا http://host:port','advanced.doh.label':'بالادست DoH','advanced.doh.hint':'مبدل DoH که پشت نقطهٔ خصوصی زیر استفاده می‌شود.','advanced.doh.private':'نقطهٔ خصوصی DoH شما','advanced.remoteDns.label':'DNS از راه دور','advanced.localDns.label':'DNS محلی جایگزین','advanced.udp53.label':'فعال‌سازی رلهٔ UDP 53','advanced.udp53.hint':'پرس‌وجوهای DNS کلاینت را روی UDP با DoH پاسخ می‌دهد.','advanced.behavior.title':'اشتراک‌ها و رفتار','advanced.subInterval.label':'فاصلهٔ به‌روزرسانی اشتراک (ساعت)','advanced.maxNodes.label':'بیشینهٔ نود در هر قالب','advanced.urlTest.label':'فاصلهٔ تست نشانی (ثانیه)','advanced.camouflage.label':'صفحهٔ استتار','advanced.camouflage.none':'بدون استتار (۴۰۴ ساده)','advanced.camouflage.static':'صفحهٔ فرود ثابت','advanced.camouflage.proxy':'پراکسی معکوس نشانی','advanced.camouflage.url':'نشانی صفحهٔ استتار','advanced.speedtest.label':'رهگیری تست سرعت','advanced.speedtest.hint':'به سرویس‌های تست سرعت پاسخ ساختگی بدهید تا از پراکسی عبور نکنند.','qr.title':'برای افزودن اسکن کنید','qr.hint':'کلاینت خود را باز کنید و اسکن کنید یا لینک را کپی کنید.','confirm.logout_title':'خارج می‌شوید؟','confirm.logout_body':'کوکی نشست این دستگاه پاک می‌شود.','confirm.reset_title':'بازگشت به پیش‌فرض‌ها؟','confirm.reset_body':'همهٔ بخش‌ها بلافاصله به مقادیر کارخانه‌ای برمی‌گردند. قابل بازگشت نیست.','confirm.killswitch_title':'توقف همهٔ ترافیک؟','confirm.killswitch_body':'همهٔ کلاینت‌ها بلافاصله قطع می‌شوند. پنل در دسترس می‌ماند تا بتوانید این را برگردانید.','confirm.yes':'بله، ادامه','toast.settingsSaved':'تنظیمات ذخیره شد','toast.saveFailed':'ذخیره ناموفق بود','toast.pathRegenerated':'مسیر امن جدید آماده شد','toast.killOn':'ترافیک متوقف شد','toast.killOff':'ترافیک از سر گرفته شد','toast.langChanged':'زبان تغییر کرد','toast.networkError':'خطای شبکه — اتصال خود را بررسی کنید.','toast.tooLong':'نشانی برای کد QR بیش از حد طولانی است.','err.required':'این فیلد الزامی است','err.url':'یک نشانی معتبر https:// وارد کنید','err.domain':'نام دامنه نامعتبر است','err.ip_or_host':'IP یا نام میزبان معتبر نیست','err.ipv6_prefix':'پیشوند IPv6 نامعتبر است','err.port':'پورت باید بین ۱ تا ۶۵۵۳۵ باشد','err.uuid':'UUID نامعتبر است','err.number':'عدد معتبر وارد کنید','err.minmax':'کمینه باید از بیشنه کمتر یا مساوی آن باشد','err.duplicate':'مورد تکراری: {value}','err.invalid_line':'خط نامعتبر: {line}'}
+fa:{'app.name':'Q Proxy','app.tagline':'پنل پراکسی کلادفلر','nav.home':'خانه','nav.settings':'تنظیمات','nav.warp':'WARP','nav.checker':'بررسی آی‌پی','nav.logout':'خروج','lang.fa':'فارسی','login.title':'ورود به Q Proxy','login.password':'گذرواژه','common.apply':'اعمال تغییرات','common.applying':'در حال اعمال…','common.saved':'ذخیره شد','common.discard':'نادیده گرفتن','common.cancel':'انصراف','common.close':'بستن','common.confirm':'تأیید','common.copy':'کپی','common.copied':'کپی شد','common.generate':'تولید','common.generated':'تولید شد؛ برای ذخیره «اعمال تغییرات» را بزنید.','common.reveal':'نمایش','common.hide':'پنهان','common.add':'افزودن','common.remove':'حذف','common.resetDefaults':'بازگشت به پیش‌فرض‌ها','common.unsaved':'تغییرات ذخیره‌نشده','common.error':'خطایی رخ داد','common.loading':'در حال بارگذاری…','common.optional':'اختیاری','common.on':'روشن','common.off':'خاموش','common.enabled':'فعال','common.disabled':'غیرفعال','common.yes':'بله','common.no':'خیر','common.retry':'تلاش دوباره','common.openChecker':'باز کردن بررسی آی‌پی','common.fixErrors':'{count} خطا را برطرف کنید','home.subs.title':'اشتراک‌ها','home.subs.desc':'این نشانی‌ها را در کلاینت خود وارد کنید.','home.subs.mode.normal':'عادی','home.subs.mode.fragment':'فرگمنت','home.chips.protocols':'{n} پروتکل فعال','home.chips.formats':'{n} قالب','home.subs.empty_title':'هنوز اشتراکی نیست','home.subs.empty_msg':'برای ساخت نخستین نشانی اشتراک، یک پروتکل را در تنظیمات فعال کنید.','home.subs.empty_cta':'فعال‌سازی پروتکل','home.stats.title':'آی‌پی من و مسیر خروجی','home.stats.refresh':'بازخوانی','home.stats.via_cf':'از طریق مقصدهای کلادفلر','home.stats.via_other':'از طریق مقصدهای دیگر','home.stats.ip':'IP','home.stats.country':'کشور','home.stats.city':'شهر','home.stats.isp':'سرویس‌دهنده','home.stats.asn':'ASN','home.stats.colo':'دیتاسنتر کلادفلر','home.stats.updated':'در صورت نیاز دریافت می‌شود · با بازخوانی','home.stats.idle':'برای دریافت اطلاعات آی‌پی «بازخوانی» را بزنید.','home.stats.failed':'دریافت اطلاعات آی‌پی ممکن نشد.','home.stats.link':'مشاهدهٔ خلاصه','home.kill.title':'کیل سوییچ','home.kill.paused':'ترافیک متوقف است','home.kill.active':'ترافیک فعال است','home.kill.desc_paused':'کلاینت‌ها پاسخ ۵۰۳ می‌گیرند؛ این پنل در دسترس می‌ماند.','home.kill.desc_active':'ترافیک پراکسی به‌طور عادی سرویس می‌شود.','home.status.title':'وضعیت ورکر','home.status.version':'نسخه','home.status.colo':'دیتاسنتر','home.status.today':'درخواست‌های امروز','home.status.total':'مجموع درخواست‌ها','tabs.settings.general':'عمومی','tabs.settings.protocols':'پروتکل‌ها','tabs.settings.ports':'پورت‌ها و دامنه‌ها','tabs.settings.proxyip':'آی‌پی پراکسی','tabs.settings.fragment':'فرگمنت','tabs.settings.chain':'زنجیرهٔ پراکسی','tabs.settings.advanced':'پیشرفته','general.securePath.label':'مسیر امن','general.killSwitch.label':'کیل سوییچ','general.killSwitch.hint':'توقف فوری همهٔ ترافیک پراکسی (کلاینت‌ها ۵۰۳ می‌گیرند).','general.language.label':'زبان پنل','general.profileTitle.label':'عنوان پروفایل','general.profileTitle.hint':'نامی که در کلاینت‌های پراکسی نمایش داده می‌شود.','general.debugLogging.label':'ثبت خطایابی','general.debugLogging.hint':'نوشتن تشخیص‌های مفصل در لاگ ورکر.','general.danger.title':'بخش خطرناک','general.backup.title':'پشتیبان‌گیری و بازیابی','general.backup.export':'برون‌بری تنظیمات','general.backup.import':'درون‌ریزی تنظیمات','general.backup.import_hint':'JSON خروجی تنظیمات را بچسبانید (رمزها و نشانی‌ها هرگز شامل نمی‌شوند).','general.backup.imported':'تنظیمات درون‌ریزی شد','general.backup.badfile':'خروجی معتبر تنظیمات نیست','home.status.checkUpdate':'بررسی به‌روزرسانی','home.status.updateAvailable':'به‌روزرسانی موجود: {v}','home.status.upToDate':'به‌روز است','home.status.updateCheckFailed':'دسترسی به گیت‌هاب ممکن نشد','wizard.title':'به Q Proxy خوش آمدید','wizard.s1_title':'پروتکل‌ها را فعال کنید','wizard.s1_body':'در تنظیمات ← پروتکل‌ها دست‌کم یک پروتکل انتخاب کنید. VLESS روی TLS نقطهٔ شروع معمول است.','wizard.s1_cta':'رفتن به پروتکل‌ها','wizard.s2_title':'اشتراک را وارد کلاینت کنید','wizard.s2_body':'نشانی Base64 زیر را در برنامهٔ پراکسی خود (v2rayNG، Hiddify، Clash…) وارد کنید.','wizard.s3_title':'همه‌چیز آماده است','wizard.s3_body':'هر زمان خواستید از زبانهٔ WARP حساب بسازید. این راهنما دوباره نمایش داده نمی‌شود.','wizard.done':'پایان','wizard.skip':'رد شدن','protocols.ech.label':'ECH (کلاینت‌هلوی رمزنگاری‌شده)','protocols.ech.server':'نام سرور ECH (اختیاری)','protocols.ech.server_hint':'خالی باشد SNI نود استفاده می‌شود.','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.enable':'فعال‌سازی {proto}','protocols.disabled_hint':'غیرفعال است؛ برای این پروتکل کانفیگی ساخته نمی‌شود.','protocols.uuid':'UUID','protocols.password':'گذرواژه','protocols.cipher':'روش رمزنگاری','protocols.common.title':'گزینه‌های مشترک','protocols.path.label':'مسیر وب‌سوکت','protocols.path.hint':'پیشوند نشانی تونل این پروتکل.','protocols.earlyData.label':'دادهٔ زودهنگام (0-RTT)','protocols.earlyData.hint':'به کلاینت اجازه می‌دهد اولین داده را در پارامتر مسیر دست‌دهی بفرستد.','protocols.earlyData.max':'بیشنهٔ دادهٔ زودهنگام (بایت)','protocols.fingerprint.label':'اثر انگشت TLS','protocols.sniCase.label':'تصادفی‌سازی حروف SNI','protocols.sniCase.hint':'حالت حروف نام میزبان SNI را تصادفی می‌کند.','protocols.alpn.label':'پروتکل‌های ALPN','protocols.alpn.hint':'هر خط یک پروتکل، مثل http/1.1 یا h2.','ports.domains.label':'دامنه‌های سفارشی','ports.domains.hint':'دامنه‌هایی که با رکورد ابری به این ورکر متصل‌اند؛ همهٔ پورت‌های فعال روی آن‌ها سرویس می‌شود.','ports.hostnameOverride.label':'بازنویسی نام میزبان','ports.hostnameOverride.hint':'این نام میزبان به‌جای میزبان درخواست در کانفیگ‌ها گذاشته می‌شود.','ports.matrix.legend_tls':'پورت‌های TLS','ports.matrix.legend_plain':'پورت‌های بدون رمز','ports.matrix.hint':'پورت‌های بدون رمز فقط برای نشانی workers.dev بدون دامنهٔ سفارشی اعمال می‌شوند.','ports.policy.label':'سیاست پورت‌های بدون رمز','ports.policy.always':'همیشه','ports.policy.workersdev':'فقط workers.dev','ports.policy.never':'هرگز','ports.cleanAddrs.label':'آدرس‌های تمیز','ports.remoteSubs.label':'اشتراک‌های خارجی برای ادغام','ports.remoteSubs.hint':'هر خط یک نشانی https؛ هنگام ساخت اشتراک دریافت و به فهرست خام اضافه می‌شود.','ports.cdn.title':'پوشش CDN','ports.cdn.enabled.label':'عبور از CDN','ports.cdn.addresses.label':'نشانی‌های CDN','ports.cdn.host.label':'میزبان CDN','ports.cdn.sni.label':'SNI کلادفلر','proxyip.mode.label':'حالت','proxyip.mode.list':'فهرست ثابت','proxyip.mode.nat64':'پیشوندهای NAT64','proxyip.list.label':'فهرست آی‌پی پراکسی','proxyip.nat64.label':'پیشوندهای NAT64','checker.title':'بررسی آی‌پی پراکسی','checker.desc':'دسترس‌پذیری و تأخیر هر مقصد را از مرورگر شما مقابل نقطهٔ trace کلادفلر می‌سنجد.','checker.targets.label':'مقصدها','checker.targets.hint':'هر خط یک IP یا host:port — حداکثر ۱۰۰ مورد.','checker.run':'اجرای تست','checker.stop':'توقف','checker.running':'در حال تست…','checker.results':'نتایج','checker.empty':'هنوز نتیجه‌ای نیست.','checker.col.target':'مقصد','checker.col.latency':'میانگین تأخیر','checker.col.rate':'موفقیت','checker.col.status':'وضعیت','checker.status.ok':'سالم','checker.status.partial':'نیمه‌سالم','checker.status.failed':'ناموفق','checker.summary':'{ok} مورد سالم از {total}.','checker.tooMany':'حداکثر ۱۰۰ مقصد.','warp.chips.accounts':'{n} حساب','warp.chips.presets':'{n} پیش‌فرض','warp.chips.formats':'{n} قالب','warp.generate':'ساخت حساب','warp.import':'درون‌ریزی کانفیگ','warp.settings':'تنظیمات WARP','warp.accounts':'حساب‌ها','warp.back':'بازگشت','warp.empty_title':'هنوز حساب WARP ندارید','warp.empty_msg':'یک دستگاه واقعی WARP کلادفلر بسازید یا یک کانفیگ WireGuard موجود را درون‌ریزی کنید.','warp.detail.token':'توکن اشتراک','warp.detail.regen':'بازتولید','warp.detail.name':'نام حساب','warp.detail.preset':'پیش‌فرض نقاط پایانی','warp.detail.custom_eps':'{n} نقطهٔ پایانی سفارشی','warp.detail.dns':'DNS (اختیاری)','warp.detail.subs':'نشانی‌های اشتراک','warp.detail.subs_desc':'هر نشانی برای یک برنامهٔ کلاینت. نسخه‌های آمنزیا پارامترهای مبهم‌سازی را دارند. این‌ها کانفیگ‌های WireGuard را مستقیم سرو می‌کنند؛ ترافیک تونل هرگز از ورکر عبور نمی‌کند.','warp.detail.amnezia_on':'بازنویسی سفارشی آمنزیا فعال است','warp.detail.amnezia_off':'با پیش‌فرض‌های سراسری آمنزیا','warp.detail.amnezia_reset':'بازگشت به پیش‌فرض سراسری','warp.detail.delete':'حذف حساب','warp.confirm.delete_title':'این حساب حذف شود؟','warp.confirm.delete_body':'حساب و توکن اشتراکش بلافاصله از کار می‌افتد. دستگاه WARP از کلادفلر حذف می‌شود.','warp.confirm.regen_title':'توکن دوباره ساخته شود؟','warp.confirm.regen_body':'نشانی‌های اشتراک قبلی از کار می‌افتند. کلاینت‌ها باید توکن جدید را وارد کنند.','warp.gen.title':'ساخت حساب WARP','warp.gen.desc':'یک دستگاه واقعی WARP کلادفلر از طریق API رسمی می‌سازد. نام اختیاری است.','warp.imp.title':'درون‌ریزی کانفیگ WARP','warp.imp.desc':'یک فایل WireGuard .conf یا نشانی wg:// / wireguard:// بچسبانید.','warp.imp.config':'کانفیگ','warp.toast.generated':'حساب ساخته شد','warp.toast.imported':'حساب درون‌ریزی شد','warp.toast.deleted':'حساب حذف شد','warp.toast.regen':'توکن جدید آماده شد','warp.toast.saved':'ذخیره شد','warp.toast.presetDeleted':'پیش‌فرض حذف شد','warp.presets.title':'پیش‌فرض‌های نقاط پایانی','warp.presets.add':'افزودن پیش‌فرض','warp.presets.edit':'ویرایش پیش‌فرض','warp.presets.count':'{n} نقطهٔ پایانی','warp.presets.inuse':'در حال استفاده','warp.amnezia.title':'پیش‌فرض‌های آمنزیا','warp.amnezia.desc':'روی اشتراک‌های آمنزیا اعمال می‌شود مگر آنکه حسابی بازنویسی خاص داشته باشد. صفر یعنی پارامتر حذف می‌شود.','warp.amnezia.save':'ذخیرهٔ پیش‌فرض‌های آمنزیا','warp.amnezia.i1':'I1 (بستهٔ آغازین)','warp.view.accounts':'حساب‌ها','warp.view.settings':'تنظیمات','fragment.enable':'فعال‌سازی فرگمنت','fragment.preset.label':'حالت آماده','fragment.preset.off':'خاموش','fragment.preset.low':'کم','fragment.preset.medium':'متوسط','fragment.preset.high':'زیاد','fragment.preset.severe':'شدید','fragment.preset.custom':'سفارشی','fragment.length':'طول کمینه–بیشنه (بایت)','fragment.delay':'تأخیر کمینه–بیشنه (میلی‌ثانیه)','fragment.split':'بیشینهٔ شکست کمینه–بیشنه','fragment.packets':'الگوی بسته‌ها','chain.enable':'فعال‌سازی زنجیرهٔ پراکسی','chain.uri.label':'نشانی بالادست','chain.uri.hint':'‏socks5://user:pass@host:port یا http://host:port','advanced.doh.label':'بالادست DoH','advanced.doh.private':'نقطهٔ خصوصی DoH شما','advanced.tg.title':'ربات تلگرام','advanced.tg.enabled':'فعال‌سازی ربات','advanced.tg.token':'توکن ربات','advanced.tg.chat_id':'شناسه گفتگو','advanced.tg.setup':'تنظیم وبهوک','advanced.tg.remove':'حذف وبهوک','advanced.tg.hint':'با @BotFather یک ربات بسازید، توکن آن را اینجا وارد و ذخیره کنید، سپس «تنظیم وبهوک» را بزنید. تنها پیام‌های شناسه گفتگوی شما پاسخ می‌گیرند و می‌توانند کلید قطع را تغییر دهند.','tg.setup_ok':'وبهوک تنظیم شد','tg.setup_fail':'تنظیم وبهوک ناموفق بود','tg.remove_ok':'وبهوک حذف شد','tg.remove_fail':'حذف وبهوک ناموفق بود','advanced.remoteDns.label':'DNS از راه دور','advanced.localDns.label':'DNS محلی جایگزین','advanced.udp53.label':'فعال‌سازی رلهٔ UDP 53','advanced.udp53.hint':'پرس‌وجوهای DNS کلاینت را روی UDP با DoH پاسخ می‌دهد.','advanced.behavior.title':'اشتراک‌ها و رفتار','advanced.subInterval.label':'فاصلهٔ به‌روزرسانی اشتراک (ساعت)','advanced.maxNodes.label':'بیشینهٔ نود در هر قالب','advanced.urlTest.label':'فاصلهٔ تست نشانی (ثانیه)','advanced.camouflage.label':'صفحهٔ استتار','advanced.camouflage.none':'بدون استتار (۴۰۴ ساده)','advanced.camouflage.static':'صفحهٔ فرود ثابت','advanced.camouflage.proxy':'پراکسی معکوس نشانی','advanced.camouflage.url':'نشانی صفحهٔ استتار','advanced.speedtest.label':'رهگیری تست سرعت','routing.title':'قواعد مسیریابی','routing.bypassLan.label':'دورزنی شبکهٔ محلی','routing.bypassLan.hint':'محدوده‌های محلی/خصوصی مستقیم و بدون پراکسی (Clash و sing-box).','routing.blockQuic.label':'مسدودسازی QUIC (UDP 443)','routing.blockQuic.hint':'کلاینت‌ها را به TCP/TLS پایدارتر می‌برد.','routing.customBypass.label':'دامنه‌های دورزنی سفارشی','routing.customBlock.label':'دامنه‌های مسدودسازی سفارشی','tabs.settings.users':'کاربران','users.title':'کاربران','users.desc':'نشانی‌های اشتراک با فیلتر پروتکل، سقف مصرف و تاریخ انقضا برای هر کاربر.','users.add':'افزودن کاربر','users.edit':'ویرایش کاربر','users.name':'نام','users.protocols':'پروتکل‌ها','users.all':'همه','users.limit':'سقف روزانهٔ درخواست','users.limit_none':'خالی یعنی بدون سقف روزانه','users.expiry':'تاریخ انقضا','users.expiry_none':'خالی یعنی بدون انقضا','users.delete':'حذف کاربر','users.confirm_delete_title':'این کاربر حذف شود؟','users.confirm_delete_body':'نشانی‌های اشتراک او بلافاصله از کار می‌افتند.','users.confirm_regen_title':'توکن دوباره ساخته شود؟','users.confirm_regen_body':'نشانی‌های فعلی این کاربر از کار می‌افتند.','users.toast.created':'کاربر ساخته شد','users.toast.saved':'ذخیره شد','users.toast.deleted':'کاربر حذف شد','users.toast.regen':'توکن جدید آماده شد','users.status.active':'فعال','users.status.expired':'منقضی','users.status.limited':'به سقف رسید','users.status.disabled':'غیرفعال','users.empty':'هنوز کاربری نیست','users.col.name':'نام','users.col.token':'نشانی اشتراک','users.col.status':'وضعیت','users.col.enabled':'فعال','users.col.actions':'عملیات','qr.title':'برای افزودن اسکن کنید','qr.hint':'کلاینت خود را باز کنید و اسکن کنید یا لینک را کپی کنید.','confirm.logout_title':'خارج می‌شوید؟','confirm.logout_body':'کوکی نشست این دستگاه پاک می‌شود.','confirm.reset_title':'بازگشت به پیش‌فرض‌ها؟','confirm.reset_body':'همهٔ بخش‌ها بلافاصله به مقادیر کارخانه‌ای برمی‌گردند. قابل بازگشت نیست.','confirm.killswitch_title':'توقف همهٔ ترافیک؟','confirm.killswitch_body':'همهٔ کلاینت‌ها بلافاصله قطع می‌شوند. پنل در دسترس می‌ماند تا بتوانید این را برگردانید.','confirm.yes':'بله، ادامه','toast.settingsSaved':'تنظیمات ذخیره شد','toast.saveFailed':'ذخیره ناموفق بود','toast.pathRegenerated':'مسیر امن جدید آماده شد','toast.killOn':'ترافیک متوقف شد','toast.killOff':'ترافیک از سر گرفته شد','toast.langChanged':'زبان تغییر کرد','toast.networkError':'خطای شبکه — اتصال خود را بررسی کنید.','toast.tooLong':'نشانی برای کد QR بیش از حد طولانی است.','err.required':'این فیلد الزامی است','err.url':'یک نشانی معتبر https:// وارد کنید','err.domain':'نام دامنه نامعتبر است','err.ip_or_host':'IP یا نام میزبان معتبر نیست','err.ipv6_prefix':'پیشوند IPv6 نامعتبر است','err.port':'پورت باید بین ۱ تا ۶۵۵۳۵ باشد','err.uuid':'UUID نامعتبر است','err.number':'عدد معتبر وارد کنید','err.minmax':'کمینه باید از بیشنه کمتر یا مساوی آن باشد','err.duplicate':'مورد تکراری: {value}','err.invalid_line':'خط نامعتبر: {line}','common.help':'راهنما','home.subs.quota':'این اشتراک‌ها از طریق همین ورکر تونل می‌شوند و از سهمیهٔ ۱۰۰ هزار درخواست روزانهٔ آن مصرف می‌کنند.','warp.chips.direct':'مستقیم · بدون ترافیک ورکر','protocols.ech.short':'کلاینت‌هلوی TLS را رمز می‌کند.','protocols.ech.help':'کلاینت‌هلوی TLS را برای کلاینت‌های پشتیبان رمز می‌کند؛ به‌صورت ech= روی نودهای TLS صادر می‌شود.','ports.cdn.addresses.short':'هر خط یک نشانی.','ports.cdn.addresses.help':'هر خط یک نشانی؛ وقتی عبور از CDN روشن است به‌عنوان نشانی اتصال استفاده می‌شود.','ports.cleanAddrs.short':'هر خط یک مورد: IP یا نام میزبان، با پورت اختیاری.','ports.cleanAddrs.help':'هر خط یک مورد: IP یا نام میزبان، با پورت اختیاری (ip:port یا [ipv6]:port). موارد دارای پورت فقط همان پورت را می‌سازند؛ موارد بدون پورت از پورت‌های TLS/بدون رمز زیر پیروی می‌کنند. خط‌های نامعتبر هنگام ذخیره حذف می‌شوند.','proxyip.list.short':'هر خط یک مورد؛ host:port مجاز است.','proxyip.list.help':'هر خط یک مورد؛ host:port مجاز است. زمانی که اتصال مستقیم شکست بخورد استفاده می‌شود.','proxyip.nat64.short':'هر خط یک پیشوند IPv6.','proxyip.nat64.help':'هر خط یک پیشوند IPv6 (مثلاً 2a02:898:146:64::).','advanced.doh.short':'مبدل DoH پشت نقطهٔ خصوصی زیر.','advanced.doh.help':'مبدل DoH که پشت نقطهٔ خصوصی زیر استفاده می‌شود.','advanced.speedtest.short':'به سرویس‌های تست سرعت پاسخ ساختگی می‌دهد.','advanced.speedtest.help':'به سرویس‌های تست سرعت پاسخ ساختگی بدهید تا از پراکسی عبور نکنند.','routing.customBypass.short':'هر خط یک دامنه؛ پسوندهای منطبق مستقیم می‌روند.','routing.customBypass.help':'هر خط یک دامنه؛ پسوندهای منطبق مستقیم می‌روند (Clash و sing-box).','routing.customBlock.short':'هر خط یک دامنه؛ پسوندهای منطبق رد می‌شوند.','routing.customBlock.help':'هر خط یک دامنه؛ پسوندهای منطبق رد می‌شوند (Clash و sing-box).','fragment.preset.short':'مقادیر ثابت طول/تأخیر را اعمال می‌کند.','fragment.preset.help':'کم/متوسط/زیاد/شدید مقادیر ثابت طول، تأخیر و شکستن متناسب با شدت سانسور را اعمال می‌کنند. «سفارشی» فیلدهای زیر را برای تنظیم دستی آزاد می‌کند.','general.securePath.short':'پیشوند محرمانهٔ پنل و نشانی‌های اشتراک.','general.securePath.help':'پیشوند محرمانهٔ این پنل و همهٔ نشانی‌های اشتراک. تغییر آن همهٔ نشانی‌ها را باطل می‌کند.'}
 };
 const getLangCookie=()=>{const m=document.cookie.match(/(?:^|;\s*)qp_lang=(en|fa)/);return m&&m[1]||'fa'};
 let LANG=getLangCookie();
@@ -205,12 +342,36 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const BASE=location.pathname.replace(/panel\/?$/,'');
 const TOAST_MS=3500,TOAST_ERR_MS=6000,PROBE_TIMEOUT=5000,PROBE_TRIES=3,MAX_TARGETS=100;
 function setLangCookie(l){document.cookie='qp_lang='+l+'; Path=/; Max-Age=31536000; SameSite=Lax'}
-function toast(msg,kind){const box=$('toasts');const el=document.createElement('div');el.className='toast'+(kind==='err'?' toast--err':kind==='ok'?' toast--ok':'');if(kind==='err')el.setAttribute('role','alert');el.textContent=msg;box.appendChild(el);while(box.children.length>3)box.firstChild.remove();setTimeout(()=>el.remove(),kind==='err'?TOAST_ERR_MS:TOAST_MS)}
-async function api(p,o={}){let r;try{const h=o.body!==undefined?{'Content-Type':'application/json','X-Q-Panel':'1'}:(o.mutate?{'X-Q-Panel':'1'}:{});r=await fetch(BASE+p,{credentials:'same-origin',method:o.method||'GET',headers:Object.assign(h,o.headers||{}),body:o.body!==undefined?JSON.stringify(o.body):undefined,signal:o.signal})}catch(e){if(e&&e.name==='AbortError')throw e;throw{status:0,code:'',message:''}}
+function toast(msg,kind){const box=$('toasts');const el=document.createElement('div');el.className='toast'+(kind==='err'?' toast--err':'');if(kind==='err')el.setAttribute('role','alert');
+el.innerHTML='<svg class="ticon" aria-hidden="true"><use href="#'+(kind==='err'?'i-x':'i-check')+'"/></svg><span class="toast__msg"></span><button type="button" class="toast__close" aria-label="Close"><svg aria-hidden="true"><use href="#i-x"/></svg></button><i class="toast-bar"></i>';
+el.querySelector('.toast__msg').textContent=msg;
+box.appendChild(el);while(box.children.length>3)box.firstChild.remove();
+const total=kind==='err'?TOAST_ERR_MS:TOAST_MS;const bar=el.querySelector('.toast-bar');
+if(total>0){bar.style.animationDuration=total+'ms'}
+let removed=false,timer=null,start=Date.now(),left=total;
+function removeToast(){if(removed)return;removed=true;clearTimeout(timer);el.classList.add('toast--out');setTimeout(()=>el.remove(),220)}
+timer=setTimeout(removeToast,total);
+el.addEventListener('mouseenter',()=>{clearTimeout(timer);left-=Date.now()-start;if(bar)bar.style.animationPlayState='paused'});
+el.addEventListener('mouseleave',()=>{start=Date.now();timer=setTimeout(removeToast,Math.max(600,left));if(bar)bar.style.animationPlayState='running'});
+el.querySelector('.toast__close').addEventListener('click',removeToast)}
+const API_TTL=30000;const apiInflight=new Map();
+async function api(p,o={}){
+const isGet=(!o.method||o.method==='GET')&&!o.fresh;
+if(isGet){const inf=apiInflight.get(p);if(inf)return inf;
+try{const c=JSON.parse(sessionStorage.getItem('qpc:'+p)||'null');if(c&&Date.now()-c.t<API_TTL)return c.d}catch(e){}}
+const prom=(async()=>{
+let r;const h=o.body!==undefined?{'Content-Type':'application/json','X-Q-Panel':'1'}:(o.mutate?{'X-Q-Panel':'1'}:{});
+if((!o.method||o.method==='GET')){const et=sessionStorage.getItem('qpe:'+p);if(et)h['If-None-Match']=et}
+try{r=await fetch(BASE+p,{credentials:'same-origin',method:o.method||'GET',headers:Object.assign(h,o.headers||{}),body:o.body!==undefined?JSON.stringify(o.body):undefined,signal:o.signal})}catch(e){if(e&&e.name==='AbortError')throw e;throw{status:0,code:'',message:''}}
 if(r.status===401){location.replace(BASE+'login');throw{status:401,code:'',message:''}}
+if(r.status===304){try{const c=JSON.parse(sessionStorage.getItem('qpc:'+p)||'null');if(c){c.t=Date.now();sessionStorage.setItem('qpc:'+p,JSON.stringify(c));return c.d}}catch(e){}
+return api(p,Object.assign({},o,{fresh:true}))}
 let j=null;try{j=await r.json()}catch(e){}
 if(!r.ok||!j||j.ok!==true)throw{status:r.status,code:j&&j.error?j.error.code:'',message:j&&j.error?j.error.message:'',fields:j&&j.fields||null,retryAfter:Number(r.headers.get('Retry-After'))||0};
-return j.data}
+if(!o.method||o.method==='GET'){const et=r.headers.get('ETag');if(et)sessionStorage.setItem('qpe:'+p,et);try{sessionStorage.setItem('qpc:'+p,JSON.stringify({t:Date.now(),d:j.data}))}catch(e){}}
+return j.data})();
+if(isGet){apiInflight.set(p,prom);const fin=(d)=>{apiInflight.delete(p);return d};prom.then(fin,fin)}
+return prom}
 function copyText(s){if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(s).catch(()=>fallbackCopy(s));return Promise.resolve(fallbackCopy(s))}
 function fallbackCopy(s){const ta=document.createElement('textarea');ta.value=s;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}ta.remove()}
 
@@ -323,7 +484,7 @@ const SS_METHODS=['aes-128-gcm','aes-256-gcm'];
 const FPS=['chrome','firefox','safari','ios','android','edge','360','qq','random','randomized'];
 const PACKETS=['tlshello','1-1','1-2','1-3','1-5'];
 const PRESETS={low:[100,200,1,1],medium:[50,100,1,5],high:[10,20,10,20],severe:[1,5,1,5]};
-const S={set:{},status:null,subs:[],snap:{},dirty:new Set(),subMode:'normal'};
+const S={set:{},status:null,subs:[],snap:{},dirty:new Set(),subMode:'normal',users:[],warp:{accounts:[],presets:[],amnezia:null,loaded:false}};
 let UID=0;
 function getPath(o,p){return p.split('.').reduce((a,k)=>a==null?undefined:a[k],o)}
 function setPath(o,p,v){const ks=p.split('.');let c=o;for(let i=0;i<ks.length-1;i++){if(typeof c[ks[i]]!=='object'||c[ks[i]]===null)c[ks[i]]={};c=c[ks[i]]}c[ks[ks.length-1]]=v}
@@ -331,9 +492,11 @@ function leaves(o,pre,out){for(const k in o){const p=pre?pre+'.'+k:k;const v=o[k
 function buildShell(){
 $('tab-home').textContent=t('nav.home');
 $('tab-settings').textContent=t('nav.settings');
+$('tab-warp').textContent=t('nav.warp');
 $('tab-checker').textContent=t('nav.checker');
 $('home-h1').textContent=t('nav.home');
 $('settings-h1').textContent=t('nav.settings');
+$('warp-h1').textContent=t('nav.warp');
 $('checker-h1').textContent=t('nav.checker');
 $('logout-btn').setAttribute('aria-label',t('nav.logout'));
 $('logout-btn').title=t('nav.logout');
@@ -343,6 +506,27 @@ $('apply-btn').textContent=t('common.apply');
 $('qr-title').textContent=t('qr.title');
 $('qr-hint').textContent=t('qr.hint');
 $('qr-close').textContent=t('common.close');
+$('wg-title').textContent=t('warp.gen.title');
+$('wg-desc').textContent=t('warp.gen.desc');
+$('wg-name-label').textContent=t('warp.detail.name');
+$('wg-cancel').textContent=t('common.cancel');
+$('wg-go').textContent=t('warp.generate');
+$('wi-title').textContent=t('warp.imp.title');
+$('wi-desc').textContent=t('warp.imp.desc');
+$('wi-name-label').textContent=t('warp.detail.name');
+$('wi-config-label').textContent=t('warp.imp.config');
+$('wi-cancel').textContent=t('common.cancel');
+$('wi-go').textContent=t('warp.import');
+$('wp-name-label').textContent=t('warp.detail.name');
+$('wp-cancel').textContent=t('common.cancel');
+$('mu-name-label').textContent=t('users.name');
+$('mu-protocols-label').textContent=t('users.protocols');
+$('mu-proto-all-label').textContent=t('users.all');
+$('mu-limit-label').textContent=t('users.limit');
+$('mu-limit-hint').textContent=t('users.limit_none');
+$('mu-expiry-label').textContent=t('users.expiry');
+$('mu-expiry-hint').textContent=t('users.expiry_none');
+$('mu-cancel').textContent=t('common.cancel');
 document.title='Q Proxy';
 const seg=$('langseg');seg.innerHTML='';
 [['en','lang.en'],['fa','lang.fa']].forEach(([code,label])=>{const b=document.createElement('button');b.type='button';b.textContent=t(label);b.setAttribute('aria-checked',String(LANG===code));b.setAttribute('role','radio');b.addEventListener('click',()=>{if(code!==LANG){setLangCookie(code);location.reload()}});seg.appendChild(b)})}
@@ -350,6 +534,10 @@ function parseRoute(){
 const h=location.hash.replace(/^#\/?/,'');
 const seg=h.split('/');
 if(seg[0]==='settings')return{view:'settings',sec:SECTIONS.some(s=>s.key===seg[1])?seg[1]:'general'};
+if(seg[0]==='warp'){
+if(seg[1]==='settings')return{view:'warp',warpView:'settings'};
+if(seg[1])return{view:'warp',warpView:'detail',id:seg[1]};
+return{view:'warp',warpView:'list'}}
 if(seg[0]==='checker')return{view:'checker'};
 return{view:'home'}}
 function navigate(){
@@ -357,13 +545,15 @@ const r=parseRoute();
 const h=location.hash;
 if(r.view==='home'&&h!==''&&h!=='#'&&h!=='#/home')history.replaceState(null,'','#/home');
 if(r.view==='settings'&&SECTIONS.some(s=>s.key===r.sec))history.replaceState(null,'','#/settings/'+r.sec);
-['home','settings','checker'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
+['home','settings','warp','checker'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
 document.querySelectorAll('#nav .tab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.view===r.view)));
 if(r.view==='settings')showSection(r.sec);
+if(r.view==='warp')renderWarpRoute(r);
 window.scrollTo(0,0)}
 function showSection(sec){
 SECTIONS.forEach(s=>{const p=$('sp-'+s.key);if(p)p.hidden=s.key!==sec});
-document.querySelectorAll('#subtabs .subtab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.sec===sec)))}
+document.querySelectorAll('#subtabs .subtab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.sec===sec)));
+if(sec==='users')loadUsers()}
 function buildSubtabs(){
 const bar=$('subtabs');bar.innerHTML='';
 SECTIONS.forEach(s=>{const a=document.createElement('button');a.type='button';a.className='subtab';a.role='tab';a.id='st-'+s.key;a.dataset.sec=s.key;a.textContent=t('tabs.settings.'+s.key);a.setAttribute('aria-selected','false');a.setAttribute('aria-controls','sp-'+s.key);a.addEventListener('click',()=>{location.hash='#/settings/'+s.key});bar.appendChild(a)})}
@@ -375,13 +565,17 @@ return '<div class="copy-field"><code id="'+idAttr+'" dir="ltr">'+esc(value)+'</
 function renderHome(){
 const body=$('home-body');
 body.innerHTML='';
+const protoCount=['vlessEnabled','vmessEnabled','trojanEnabled','ssEnabled'].filter(k=>S.set&&S.set[k]).length;
+const chips=document.createElement('div');chips.className='chips-row';
+chips.innerHTML='<span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('home.chips.protocols',{n:protoCount}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('home.chips.formats',{n:(S.subs||[]).filter(u=>u.format!=='base64'||u.label!=='Panel info').length}))+'</span>';
+body.appendChild(chips);
 const subs=document.createElement('section');subs.className='card';
-let sh='<div class="card__head"><div><div class="card__title">'+esc(t('home.subs.title'))+'</div><div class="field__hint">'+esc(t('home.subs.desc'))+'</div></div><div class="seg" role="radiogroup" aria-label="'+esc(t('home.subs.mode.normal'))+'/'+esc(t('home.subs.mode.fragment'))+'">';
+let sh='<div class="card__head"><div><div class="card__title">'+esc(t('home.subs.title'))+'</div><div class="field__hint">'+esc(t('home.subs.desc'))+'</div><div class="field__hint">'+esc(t('home.subs.quota'))+'</div></div><div class="seg" role="radiogroup" aria-label="'+esc(t('home.subs.mode.normal'))+'/'+esc(t('home.subs.mode.fragment'))+'">';
 [['normal','home.subs.mode.normal'],['fragment','home.subs.mode.fragment']].forEach(([m,k])=>{sh+='<button type="button" aria-checked="'+String(S.subMode===m)+'" data-mode="'+m+'">'+esc(t(k))+'</button>'});
 sh+='</div></div>';
 const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
 urls.forEach((entry,i)=>{sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(entry.label||entry.format)+'</span>'+copyFieldHtml(subUrlWithMode(entry.url),'sub-u'+i)+'</div>'});
-if(!urls.length)sh+='<p class="field__hint">'+esc(t('checker.empty'))+'</p>';
+if(!urls.length)sh+='<div class="empty-card"><div class="empty-icon"><svg aria-hidden="true"><use href="#i-qr"/></svg></div><div class="empty-title">'+esc(t('home.subs.empty_title'))+'</div><p class="empty-msg">'+esc(t('home.subs.empty_msg'))+'</p><div class="empty-actions"><a class="btn btn--primary btn--sm" href="#/settings/protocols">'+esc(t('home.subs.empty_cta'))+'</a></div></div>';
 subs.innerHTML=sh;
 body.appendChild(subs);
 const right=document.createElement('div');
@@ -389,31 +583,38 @@ const kill=document.createElement('section');kill.className='card';
 kill.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.kill.title'))+'</div><span class="chip-status ok" id="kill-chip"></span></div><p class="field__hint" id="kill-desc"></p><div class="row" style="border:0"><label class="switch"><input type="checkbox" role="switch" data-kill'+(S.status&&S.status.killSwitch?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t('general.killSwitch.label'))+'</span></label></div>';
 right.appendChild(kill);
 const ip=document.createElement('section');ip.className='card';
-ip.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.stats.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="refresh-ip"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="ip-body"><span class="field__hint">'+esc(t('common.loading'))+'</span></div><p class="field__hint">'+esc(t('home.stats.updated'))+' · <a href="'+esc(BASE)+'my-ip" target="_blank" rel="noopener">'+esc(t('home.stats.link'))+'</a></p>';
+ip.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.stats.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="refresh-ip"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="ip-body"><span class="field__hint">'+esc(t('home.stats.idle'))+'</span></div><p class="field__hint"><a href="'+esc(BASE)+'my-ip" target="_blank" rel="noopener">'+esc(t('home.stats.link'))+'</a></p>';
 right.appendChild(ip);
 if(S.status){
 const st=document.createElement('section');st.className='card';
 const u=S.status.usage||{requestsToday:0,requestsTotal:0};
-st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(String(u.requestsToday!=null?u.requestsToday:'—'))+'</span><span class="mono">'+esc(String(u.requestsTotal!=null?u.requestsTotal:'—'))+'</span></div>';
+st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="check-update">'+esc(t('home.status.checkUpdate'))+'</button></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(String(u.requestsToday!=null?u.requestsToday:'—'))+'</span><span class="mono">'+esc(String(u.requestsTotal!=null?u.requestsTotal:'—'))+'</span></div>';
 right.appendChild(st)}
 body.appendChild(right);
-syncKillUI();
-loadMyIp()}
+syncKillUI()}
 function syncKillUI(){
 const on=!!(S.status&&S.status.killSwitch);
 document.querySelectorAll('[data-kill]').forEach(b=>{b.checked=on});
 const chip=$('kill-chip'),desc=$('kill-desc');
 if(chip){chip.textContent=t(on?'home.kill.paused':'home.kill.active');chip.className='chip-status '+(on?'bad':'ok')}
 if(desc)desc.textContent=t(on?'home.kill.desc_paused':'home.kill.desc_active')}
+let killTimer=null,killAbort=null;
 async function setKillSwitch(on){
 if(on&&!(await confirmDialog('confirm.killswitch_title','confirm.killswitch_body',true))){syncKillUI();return}
+if(S.status)S.status.killSwitch=on;
+syncKillUI();
+if(killTimer)clearTimeout(killTimer);
+if(killAbort)killAbort.abort();
+killAbort=new AbortController();
+killTimer=setTimeout(async()=>{
 document.querySelectorAll('[data-kill]').forEach(b=>b.closest('.switch').classList.add('pending'));
-try{const d=await api('api/killswitch',{method:'POST',body:{enabled:on}});
+try{const d=await api('api/killswitch',{method:'POST',body:{enabled:on},signal:killAbort.signal});
 if(S.status&&d&&typeof d.killSwitch==='boolean')S.status.killSwitch=d.killSwitch;
-else if(S.status)S.status.killSwitch=on;
 syncKillUI();toast(t(on?'toast.killOn':'toast.killOff'),'ok')}
-catch(e){syncKillUI();toastErr(e)}
-finally{document.querySelectorAll('[data-kill]').forEach(b=>b.closest('.switch').classList.remove('pending'))}}
+catch(e){if(e&&e.name==='AbortError')return;
+if(S.status)S.status.killSwitch=!on;
+syncKillUI();toastErr(e)}
+finally{document.querySelectorAll('[data-kill]').forEach(b=>b.closest('.switch').classList.remove('pending'))}},300)}
 function toastErr(e){toast(!e||e.status===0?t('toast.networkError'):e.message||t('common.error'),'err')}
 async function loadMyIp(){
 const box=$('ip-body');
@@ -431,17 +632,146 @@ box.innerHTML='<table class="tbl"><tbody>'
 +'</tbody></table>'}
 catch(e){box.innerHTML='<p class="field__error" style="display:block">'+esc(t('home.stats.failed'))+'</p>'}}
 
+const WARP_F=[['wireguard-conf','WireGuard .conf (ZIP)','grad-1'],['wireguard-conf-amnezia','WireGuard .conf Amnezia (ZIP)','grad-4'],['throne','Throne wg://','grad-5'],['throne-amnezia','Throne wg:// Amnezia','grad-4'],['wireguard-uri','wireguard://','grad-2'],['v2rayn','V2RayN (base64)','grad-3'],['singbox','sing-box','grad-6'],['singbox-amnezia','sing-box Amnezia','grad-4'],['singbox-legacy','sing-box legacy','grad-2'],['singbox-legacy-amnezia','sing-box legacy Amnezia','grad-3'],['xray','Xray','grad-1'],['clash','Clash / mihomo','grad-5'],['clash-amnezia','Clash / mihomo Amnezia','grad-4'],['surge','Surge','grad-6'],['surfboard','Surfboard','grad-2'],['loon','Loon','grad-3'],['egern','Egern','grad-6']];
+function warpSubUrl(token,format){return location.origin+BASE+'sub/wg/'+token+'/'+format}
+async function loadWarp(){const[acc,pre,amz]=await Promise.all([api('api/warp/account'),api('api/warp/presets'),api('api/warp/settings/amnezia')]);S.warp.accounts=acc.accounts;S.warp.presets=pre.presets;S.warp.amnezia=amz.amnezia;S.warp.loaded=true}
+async function renderWarpRoute(r){
+const body=$('warp-body');
+if(!S.warp.loaded&&!body.querySelector('.skel-card'))body.innerHTML='<div class="skel-card"><div class="skel-row"><div class="skeleton skel-avatar"></div><div class="skel-col"><div class="skeleton skel-a"></div><div class="skeleton skel-b"></div></div></div><div class="skeleton skel-pill"></div></div>';
+try{await loadWarp()}catch(e){body.innerHTML='<p class="field__error" style="display:block">'+esc(t('common.error'))+'</p>';return}
+body.innerHTML='';
+if(r.warpView==='detail')renderWarpDetail(r.id);
+else if(r.warpView==='settings')renderWarpSettings();
+else renderWarpList()}
+function renderWarpList(){
+const body=$('warp-body');
+const W=S.warp;
+const head=document.createElement('div');head.className='warp-head';
+head.innerHTML='<div class="chips-row" style="margin-block-end:0"><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('warp.chips.accounts',{n:W.accounts.length}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('warp.chips.presets',{n:W.presets.length}))+'</span><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('warp.chips.formats',{n:WARP_F.length}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('warp.chips.direct'))+'</span></div><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-open-settings">'+esc(t('warp.settings'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button><button type="button" class="btn btn--primary btn--sm" data-action="warp-generate-open">'+esc(t('warp.generate'))+'</button></div>';
+body.appendChild(head);
+if(!W.accounts.length){
+body.insertAdjacentHTML('beforeend','<div class="empty-card"><div class="empty-icon"><svg aria-hidden="true"><use href="#i-download"/></svg></div><div class="empty-title">'+esc(t('warp.empty_title'))+'</div><p class="empty-msg">'+esc(t('warp.empty_msg'))+'</p><div class="empty-actions"><button type="button" class="btn btn--primary btn--sm" data-action="warp-generate-open">'+esc(t('warp.generate'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button></div></div>');
+return}
+const grid=document.createElement('div');grid.className='warp-grid';
+W.accounts.forEach((a,i)=>{
+const card=document.createElement('a');card.className='acct-card';card.href='#/warp/'+a.id;
+const eps=a.endpoint_list&&a.endpoint_list.type==='custom'?t('warp.detail.custom_eps',{n:a.endpoint_list.custom_endpoints.length}):(S.warp.presets.find(p=>p.id===(a.endpoint_list&&a.endpoint_list.preset_id))||{name:a.endpoint_list&&a.endpoint_list.preset_id||''}).name;
+card.innerHTML='<span class="avatar-tile grad-'+((i%6)+1)+'">'+esc((a.name[0]||'W').toUpperCase())+'</span><span class="acct-info"><span class="acct-name">'+esc(a.name)+'</span><span class="acct-date">'+esc((a.created_at||'').slice(0,10))+' · '+esc(eps)+'</span></span>'+(a.amnezia_overrides?'<span class="amz-tag">AMZ</span>':'');
+grid.appendChild(card)});
+body.appendChild(grid)}
+function renderWarpDetail(id){
+const body=$('warp-body');body.innerHTML='';
+const a=S.warp.accounts.find(x=>x.id===id);
+if(!a){location.hash='#/warp';return}
+const head=document.createElement('div');head.className='detail-title';
+head.innerHTML='<a class="back-btn" href="#/warp" aria-label="'+esc(t('warp.back'))+'"><svg aria-hidden="true"><use href="#i-back"/></svg></a><h2 class="view-title">'+esc(a.name)+'</h2>'+(a.amnezia_overrides?'<span class="amz-tag">AMZ</span>':'');
+body.appendChild(head);
+const tokenCard=document.createElement('section');tokenCard.className='token-panel';
+tokenCard.innerHTML='<div class="card__head" style="margin-block-end:6px"><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('warp.detail.token'))+'</span><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-regen" data-id="'+esc(a.id)+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('warp.detail.regen'))+'</button></div></div><code class="mono" dir="ltr" style="word-break:break-all;font-size:var(--fs-sm);color:var(--cyan-pale)">'+esc(a.token)+'</code>';
+body.appendChild(tokenCard);
+const cfg=document.createElement('section');cfg.className='card';
+const presetSel='<select class="select" id="warp-preset">'+S.warp.presets.map(p=>'<option value="'+esc(p.id)+'"'+(a.endpoint_list.type==='preset'&&a.endpoint_list.preset_id===p.id?' selected':'')+'>'+esc(p.name)+' ('+p.endpoints.length+')</option>').join('')+(a.endpoint_list.type==='custom'?'<option selected>'+esc(t('warp.detail.custom_eps',{n:a.endpoint_list.custom_endpoints.length}))+'</option>':'')+'</select>';
+cfg.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('warp.accounts'))+'</div></div>'
++'<div class="field"><label class="field__label" for="warp-name">'+esc(t('warp.detail.name'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-name" maxlength="100" value="'+esc(a.name)+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="name">'+esc(t('common.apply'))+'</button></div></div>'
++'<div class="field"><label class="field__label" for="warp-preset">'+esc(t('warp.detail.preset'))+'</label>'+presetSel+'</div>'
++'<div class="field"><label class="field__label" for="warp-dns">'+esc(t('warp.detail.dns'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-dns" dir="ltr" value="'+esc(a.dns||'')+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="dns">'+esc(t('common.apply'))+'</button></div></div>';
+body.appendChild(cfg);
+const subs=document.createElement('section');subs.className='card';
+let sh='<div class="card__head"><div><div class="card__title">'+esc(t('warp.detail.subs'))+'</div><div class="field__hint">'+esc(t('warp.detail.subs_desc'))+'</div></div></div>';
+WARP_F.forEach(([format,label,grad],i)=>{
+sh+='<div class="fmt-row"><span class="fmt-icon '+grad+'"><svg aria-hidden="true"><use href="#i-download"/></svg></span><span class="fmt-label">'+esc(label)+'</span>'+copyFieldHtml(warpSubUrl(a.token,format),'warp-u'+i)+'</div>'});
+subs.innerHTML=sh;
+body.appendChild(subs);
+const amz=document.createElement('section');amz.className='card';
+amz.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('warp.amnezia.title'))+'</div>'+(a.amnezia_overrides?'<button type="button" class="btn btn--ghost btn--sm" data-action="warp-amnezia-reset" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.amnezia_reset'))+'</button>':'')+'</div><p class="field__hint">'+esc(a.amnezia_overrides?t('warp.detail.amnezia_on'):t('warp.detail.amnezia_off'))+'</p>';
+body.appendChild(amz);
+const danger=document.createElement('section');danger.className='card card--danger';
+danger.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('warp.detail.delete'))+'</div></div><button type="button" class="btn btn--ghost-danger btn--sm" data-action="warp-delete" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.delete'))+'</button>';
+body.appendChild(danger)}
+function renderWarpSettings(){
+const body=$('warp-body');body.innerHTML='';
+const nav=document.createElement('div');nav.className='warp-head';
+nav.innerHTML='<div class="seg" role="group"><button type="button" data-action="warp-open-list">'+esc(t('warp.view.accounts'))+'</button><button type="button" aria-checked="true">'+esc(t('warp.view.settings'))+'</button></div>';
+body.appendChild(nav);
+const pc=document.createElement('section');pc.className='card';
+let ph='<div class="card__head"><div class="card__title">'+esc(t('warp.presets.title'))+'</div><button type="button" class="btn btn--primary btn--sm" data-action="warp-preset-add">'+esc(t('warp.presets.add'))+'</button></div>';
+S.warp.presets.forEach(p=>{
+const preview=p.endpoints.slice(0,3).map(e=>e.ip+':'+e.port).join(', ')+(p.endpoints.length>3?' +'+(p.endpoints.length-3):'');
+ph+='<div class="row"><div style="min-width:0"><div class="acct-name">'+esc(p.name)+'</div><div class="acct-date" dir="ltr">'+esc(preview)+'</div></div><div class="btn-row"><span class="stat-chip">'+esc(t('warp.presets.count',{n:p.endpoints.length}))+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="warp-preset-edit" data-id="'+esc(p.id)+'" aria-label="Edit"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="warp-preset-del" data-id="'+esc(p.id)+'" aria-label="Delete"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>'});
+pc.innerHTML=ph;
+body.appendChild(pc);
+const ac=document.createElement('section');ac.className='card';
+const AMZ=[['Jc','Jc (0-128)'],['Jmin','Jmin (0-1280)'],['Jmax','Jmax (0-1280)'],['S1','S1 (0-255)'],['S2','S2 (0-255)'],['S3','S3 (0-255)'],['S4','S4 (0-255)'],['H1','H1'],['H2','H2'],['H3','H3'],['H4','H4']];
+let ah='<div class="card__head"><div class="card__title">'+esc(t('warp.amnezia.title'))+'</div></div><p class="field__hint" style="margin-block-end:12px">'+esc(t('warp.amnezia.desc'))+'</p><div class="amz-grid">';
+AMZ.forEach(([key,lbl])=>{const v=S.warp.amnezia&&S.warp.amnezia[key]!==undefined&&S.warp.amnezia[key]!==null?S.warp.amnezia[key]:'';ah+='<div class="field"><label class="field__label" for="amz-'+key+'">'+esc(lbl)+'</label><input class="input" type="text" id="amz-'+key+'" dir="ltr" value="'+esc(String(v))+'"></div>'});
+ah+='<div class="field" style="grid-column:1/-1"><label class="field__label" for="amz-I1">'+esc(t('warp.amnezia.i1'))+'</label><input class="input" type="text" id="amz-I1" dir="ltr" value="'+esc(String(S.warp.amnezia&&S.warp.amnezia.I1||''))+'"></div></div>';
+ah+='<button type="button" class="btn btn--primary" data-action="warp-amnezia-save">'+esc(t('warp.amnezia.save'))+'</button>';
+ac.innerHTML=ah;
+body.appendChild(ac)}
+function openWarpModal(id,presetId){
+const m=$(id);
+if(id==='m-warp-preset'){
+if(presetId)m.dataset.presetId=presetId;else delete m.dataset.presetId;
+const p=S.warp.presets.find(x=>x.id===presetId);
+$('wp-name').value=p?p.name:'';
+$('wp-endpoints').value=p?p.endpoints.map(e=>e.ip+':'+e.port).join('\n'):'';
+$('wp-error').style.display='';$('wp-error').textContent='';
+$('wp-title').textContent=t(p?'warp.presets.edit':'warp.presets.add');
+$('wp-go').textContent=t(p?'common.saved':'warp.presets.add').replace(/…/,'')}
+else if(id==='m-warp-generate'){$('wg-name').value=''}
+else if(id==='m-warp-import'){$('wi-name').value='';$('wi-config').value='';$('wi-error').style.display='';$('wi-error').textContent=''}
+openModal(id)}
+function userSubUrl(token){return location.origin+BASE+'sub/u/'+token}
+function isUserExpired(u){return u.expiresAt!=null&&u.expiresAt<Date.now()}
+function userChip(u){
+const expired=isUserExpired(u);
+const key=!u.enabled?'users.status.disabled':expired?'users.status.expired':(u.dailyReqLimit!=null&&(u.todayHits||0)>=u.dailyReqLimit)?'users.status.limited':'users.status.active';
+return '<span class="chip-status '+(!u.enabled||expired?'bad':'ok')+'">'+esc(t(key))+'</span>'}
+function usersCardHtml(){
+return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('users.desc'))+'</div></div><button type="button" class="btn btn--primary btn--sm" data-action="users-add">'+esc(t('users.add'))+'</button></div><table class="tbl"><thead><tr><th>'+esc(t('users.col.name'))+'</th><th>'+esc(t('users.col.token'))+'</th><th>'+esc(t('users.col.status'))+'</th><th>'+esc(t('users.col.enabled'))+'</th><th></th></tr></thead><tbody id="users-rows"><tr><td colspan="5"><span class="field__hint">'+esc(t('common.loading'))+'</span></td></tr></tbody></table></section>'}
+function userRowHtml(u){
+const acts='<div class="btn-row"><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-edit" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.edit'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-regen" data-id="'+esc(u.id)+'" aria-label="'+esc(t('warp.detail.regen'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="users-del" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>';
+const sw='<label class="switch"><input type="checkbox" role="switch" data-user-toggle="'+esc(u.id)+'"'+(u.enabled?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span></label>';
+return '<tr><td data-l="'+esc(t('users.col.name'))+'" style="max-width:10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(u.name)+'</td>'
++'<td data-l="'+esc(t('users.col.token'))+'" dir="ltr">'+copyFieldHtml(userSubUrl(u.token),'usr-'+esc(u.id))+'</td>'
++'<td data-l="'+esc(t('users.col.status'))+'">'+userChip(u)+'</td>'
++'<td data-l="'+esc(t('users.col.enabled'))+'">'+sw+'</td>'
++'<td style="text-align:end">'+acts+'</td></tr>'}
+async function loadUsers(){
+try{const d=await api('api/users',{fresh:true});S.users=d.users||[]}catch(e){S.users=[]}
+renderUserRows()}
+function renderUserRows(){
+const tb=$('users-rows');if(!tb)return;
+tb.innerHTML=S.users.length?S.users.map(userRowHtml).join(''):'<tr><td colspan="5"><span class="field__hint">'+esc(t('users.empty'))+'</span></td></tr>'}
+function toLocalInputValue(ms){
+const d=new Date(ms);const p=n=>String(n).padStart(2,'0');
+return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())}
+function openUserModal(id){
+const m=$('m-user');
+if(id)m.dataset.userId=id;else delete m.dataset.userId;
+const u=id?S.users.find(x=>x.id===id):null;
+$('mu-title').textContent=t(u?'users.edit':'users.add');
+$('mu-go').textContent=t(u?'common.saved':'users.add').replace(/…/g,'');
+$('mu-name').value=u?u.name:'';
+const picked=u&&u.protocols!=='all'?u.protocols:['all'];
+document.querySelectorAll('#mu-protocols input[type=checkbox]').forEach(i=>{i.checked=picked.includes(i.value)});
+$('mu-limit').value=u&&u.dailyReqLimit!=null?String(u.dailyReqLimit):'';
+$('mu-expiry').value=u&&u.expiresAt!=null?toLocalInputValue(u.expiresAt):'';
+$('mu-error').style.display='';$('mu-error').textContent='';
+openModal('m-user')}
 const FL=(path,type,label,hint,extra)=>Object.assign({path,type,label,hint:hint||null},extra||{});
+
 const SECTIONS=[
 {key:'general',cards:[
 {title:null,fields:[
-FL('securePath','secret','general.securePath.label','general.securePath.hint',{gen:'hex12',copy:true}),
-FL('profileTitle','str','general.profileTitle.label','general.profileTitle.hint'),
+FL('securePath','secret','general.securePath.label','general.securePath.short',{gen:'hex12',copy:true,maxLen:64,help:'general.securePath.help'}),
+FL('profileTitle','str','general.profileTitle.label','general.profileTitle.hint',{maxLen:64}),
 FL('debugLogging','bool','general.debugLogging.label','general.debugLogging.hint')]},
 {title:'home.kill.title',fields:[
 FL('killSwitch','instantbool','general.killSwitch.label','general.killSwitch.hint'),
 FL('language','lang','general.language.label',null)]},
-{title:'general.danger.title',danger:true,fields:[]}]},
+{title:'general.danger.title',danger:true,fields:[]},
+{title:'general.backup.title',backup:true,fields:[]}]},
 {key:'protocols',cards:[
 {title:'protocols.vless.title',protoCard:'vlessEnabled',fields:[
 FL('vlessEnabled','bool',null,null,{protoLabelKey:'protocols.vless.title'}),
@@ -462,32 +792,34 @@ FL('ssMethod','select','protocols.cipher',null,{opts:SS_METHODS}),
 FL('ssPath','str','protocols.path.label','protocols.path.hint',{mono:true})]},
 {title:'protocols.common.title',fields:[
 FL('earlyDataEnabled','bool','protocols.earlyData.label','protocols.earlyData.hint'),
-FL('earlyDataMaxBytes','num','protocols.earlyData.max',null),
+FL('earlyDataMaxBytes','num','protocols.earlyData.max',null,{min:0,max:8192}),
 FL('fingerprint','select','protocols.fingerprint.label',null,{opts:FPS}),
 FL('randomizeSniCase','bool','protocols.sniCase.label','protocols.sniCase.hint'),
+FL('echEnabled','bool','protocols.ech.label','protocols.ech.short',{help:'protocols.ech.help'}),
+FL('echServerName','str','protocols.ech.server','protocols.ech.server_hint',{maxLen:253,vtype:'domain'}),
 FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
 {key:'ports',cards:[
 {title:'ports.domains.label',fields:[
 FL('customDomains','list','ports.domains.label','ports.domains.hint',{validate:'domain'}),
-FL('hostnameOverride','str','ports.hostnameOverride.label','ports.hostnameOverride.hint',{mono:true})]},
+FL('hostnameOverride','str','ports.hostnameOverride.label','ports.hostnameOverride.hint',{mono:true,vtype:'domain'})]},
 {title:null,fields:[
 FL('tlsPorts','ports','ports.matrix.legend_tls','ports.matrix.hint',{family:'tls'}),
 FL('plainPorts','ports','ports.matrix.legend_plain',null,{family:'plain'}),
 FL('plainPortPolicy','chips','ports.policy.label',null,{opts:[['always','ports.policy.always'],['workers-dev','ports.policy.workersdev'],['never','ports.policy.never']]})]},
 {title:'ports.cdn.title',fields:[
 FL('cdn.enabled','bool','ports.cdn.enabled.label',null),
-FL('cdn.addresses','list','ports.cdn.addresses.label','ports.cdn.addresses.hint',{validate:'ip_or_host'}),
-FL('cdn.host','str','ports.cdn.host.label',null,{mono:true}),
-FL('cdn.sni','str','ports.cdn.sni.label',null,{mono:true})]},
+FL('cdn.addresses','list','ports.cdn.addresses.label','ports.cdn.addresses.short',{validate:'ip_or_host',help:'ports.cdn.addresses.help'}),
+FL('cdn.host','str','ports.cdn.host.label',null,{mono:true,vtype:'domain'}),
+FL('cdn.sni','str','ports.cdn.sni.label',null,{mono:true,vtype:'domain'})]},
 {title:'ports.cleanAddrs.label',fields:[
-FL('cleanIps','list','ports.cleanAddrs.label','ports.cleanAddrs.hint',{validate:'ip_or_host'})]},
+FL('cleanIps','list','ports.cleanAddrs.label','ports.cleanAddrs.short',{validate:'ip_or_host',help:'ports.cleanAddrs.help'})]},
 {title:'ports.remoteSubs.label',fields:[
 FL('remoteSubUrls','list','ports.remoteSubs.label','ports.remoteSubs.hint',{validate:'url'})]}]},
 {key:'proxyip',cards:[
 {title:null,fields:[
 FL('proxyIpMode','chips','proxyip.mode.label',null,{opts:[['proxyip','proxyip.mode.list'],['nat64','proxyip.mode.nat64']]}),
-FL('proxyIps','list','proxyip.list.label','proxyip.list.hint',{validate:'ip_or_host',showIf:v=>getPath(v,'proxyIpMode')!=='nat64'}),
-FL('nat64Prefixes','list','proxyip.nat64.label','proxyip.nat64.hint',{validate:'ipv6_prefix',showIf:v=>getPath(v,'proxyIpMode')==='nat64'})]}]},
+FL('proxyIps','list','proxyip.list.label','proxyip.list.short',{validate:'ip_or_host',help:'proxyip.list.help',showIf:v=>getPath(v,'proxyIpMode')!=='nat64'}),
+FL('nat64Prefixes','list','proxyip.nat64.label','proxyip.nat64.short',{validate:'ipv6_prefix',help:'proxyip.nat64.help',showIf:v=>getPath(v,'proxyIpMode')==='nat64'})]}]},
 {key:'fragment',cards:[
 {title:null,fields:[
 FL('fragment.mode','fpreset','fragment.enable',null),
@@ -501,22 +833,36 @@ FL('chainProxy.enabled','bool','chain.enable',null),
 FL('chainProxy.uri','str','chain.uri.label','chain.uri.hint',{mono:true})]}]},
 {key:'advanced',cards:[
 {title:'advanced.doh.label',fields:[
-FL('dohUpstream','str','advanced.doh.label','advanced.doh.hint',{mono:true}),
+FL('dohUpstream','str','advanced.doh.label','advanced.doh.short',{mono:true,help:'advanced.doh.help'}),
 FL('remoteDns','str','advanced.remoteDns.label',null,{mono:true}),
 FL('localDns','str','advanced.localDns.label',null,{mono:true}),
 FL('enableUdp53','bool','advanced.udp53.label','advanced.udp53.hint'),
 FL('__privateDoh','copyonly','advanced.doh.private',null)]},
+{title:'advanced.tg.title',tgActions:true,fields:[
+FL('telegram.enabled','bool','advanced.tg.enabled','advanced.tg.hint'),
+FL('telegram.botToken','secret','advanced.tg.token',null,{copy:true}),
+FL('telegram.chatId','str','advanced.tg.chat_id',null,{mono:true})]},
 {title:'advanced.behavior.title',fields:[
-FL('urlTestIntervalSec','num','advanced.urlTest.label',null),
-FL('subUpdateIntervalHours','num','advanced.subInterval.label',null),
-FL('maxNodesPerFormat','num','advanced.maxNodes.label',null)]},
+FL('urlTestIntervalSec','num','advanced.urlTest.label',null,{min:60,max:86400}),
+FL('subUpdateIntervalHours','num','advanced.subInterval.label',null,{min:1,max:168}),
+FL('maxNodesPerFormat','num','advanced.maxNodes.label',null,{min:1,max:2000})]},
 {title:'advanced.camouflage.label',fields:[
 FL('camouflage.mode','select','advanced.camouflage.label',null,{opts:[['off','advanced.camouflage.none'],['static','advanced.camouflage.static'],['proxy','advanced.camouflage.proxy']]}),
 FL('camouflage.url','str','advanced.camouflage.url',null,{mono:true}),
-FL('speedtestIntercept','bool','advanced.speedtest.label','advanced.speedtest.hint')]}]}
+FL('speedtestIntercept','bool','advanced.speedtest.label','advanced.speedtest.short',{help:'advanced.speedtest.help'}),
+FL('routingRules.bypassLan','bool','routing.bypassLan.label','routing.bypassLan.hint'),
+FL('routingRules.blockQuic','bool','routing.blockQuic.label','routing.blockQuic.hint'),
+FL('routingRules.customBypass','list','routing.customBypass.label','routing.customBypass.short',{help:'routing.customBypass.help'}),
+ FL('routingRules.customBlock','list','routing.customBlock.label','routing.customBlock.short',{help:'routing.customBlock.help'})]}]},
+ {key:'users',cards:[{title:'users.title',users:true,fields:[]}]}
 ];
-function fieldWrap(id,label,hint){
-return '<div class="field" id="fw-'+id+'">'+(label?'<label class="field__label" for="'+id+'">'+esc(t(label))+'</label>':'')+'{B}'+(hint?'<p class="field__hint">'+esc(t(hint))+'</p>':'')+'<p class="field__error"></p></div>'}
+function helpTrigger(key){
+return '<span class="help-wrap"><button type="button" class="help-trigger" aria-label="'+esc(t('common.help'))+'"><svg aria-hidden="true"><use href="#i-info"/></svg></button><span class="help-pop" role="tooltip">'+esc(t(key))+'</span></span>'}
+function fieldWrap(id,label,hint,helpKey,countMax){
+let lbl='';
+if(label){
+lbl='<div class="field__label-row"><label class="field__label" for="'+id+'">'+esc(t(label))+'</label>'+(helpKey?helpTrigger(helpKey):'')+(countMax?'<span class="char-count" data-count-for="'+id+'" data-max="'+countMax+'" aria-hidden="true"></span>':'')+'</div>'}
+return '<div class="field" id="fw-'+id+'">'+lbl+'{B}'+(hint?'<p class="field__hint">'+esc(t(hint))+'</p>':'')+'<p class="field__error"></p></div>'}
 
 function lines(v){return Array.isArray(v)?v.map(x=>String(x)).filter(x=>x.trim().length>0):[]}
 function bindHtml(f){
@@ -525,22 +871,22 @@ const id='f'+(++UID);
 switch(f.type){
 case 'str':{
 const val=String(getPath(S.set,paths[0])??'');
-return fieldWrap(id,f.label,f.hint).replace('{B}','<input type="text" class="input'+(f.mono?' input--mono':'')+'" id="'+id+'" data-bind="'+paths[0]+'" autocomplete="off" spellcheck="false" dir="'+(f.mono?'ltr':'auto')+'" value="'+esc(val)+'">')}
+return fieldWrap(id,f.label,f.hint,f.help,f.maxLen||0).replace('{B}','<input type="text" class="input'+(f.mono?' input--mono':'')+'" id="'+id+'" data-bind="'+paths[0]+'" autocomplete="off" spellcheck="false" dir="'+(f.mono?'ltr':'auto')+'" value="'+esc(val)+'">')}
 case 'num':{
 const val=getPath(S.set,paths[0]);
-return fieldWrap(id,f.label,f.hint).replace('{B}','<input type="number" step="1" class="input" id="'+id+'" data-bind="'+paths[0]+'" value="'+esc(val==null?'':String(val))+'">')}
+return fieldWrap(id,f.label,f.hint,f.help).replace('{B}','<input type="number" step="1" class="input" id="'+id+'" data-bind="'+paths[0]+'" value="'+esc(val==null?'':String(val))+'">')}
 case 'secret':{
 const val=String(getPath(S.set,paths[0])??'');
 let h='<div class="secret-field"><input type="password" class="input input--mono" style="flex:1;min-width:0" id="'+id+'" data-bind="'+paths[0]+'" autocomplete="off" spellcheck="false" dir="ltr" aria-label="'+esc(t(f.label))+'" value="'+esc(val)+'">';
 h+='<button type="button" class="btn btn--icon btn--ghost" data-action="reveal" data-target="'+id+'" aria-label="'+esc(t('common.reveal'))+'" aria-pressed="false"><svg aria-hidden="true"><use href="#i-eye"/></svg></button>';
 if(f.copy)h+='<button type="button" class="btn btn--icon btn--ghost" data-action="copy" data-copy-id="'+id+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button>';
 if(f.gen)h+='<button type="button" class="btn btn--icon btn--ghost" data-action="generate" data-gen="'+f.gen+'" data-target="'+id+'" aria-label="'+esc(t('common.generate'))+'"><svg aria-hidden="true"><use href="#i-dice"/></svg></button>';
-return fieldWrap(id,f.label,f.hint).replace('{B}',h+'</div>')}
+return fieldWrap(id,f.label,f.hint,f.help,f.maxLen||0).replace('{B}',h+'</div>')}
 case 'bool':{
 const on=!!getPath(S.set,paths[0]);
 const label=f.protoLabelKey?esc(t(f.protoLabelKey)):esc(t(f.label));
 const hintTxt=f.protoLabelKey?'<p class="field__hint">'+esc(t('protocols.disabled_hint'))+'</p>':(f.hint?'<p class="field__hint">'+esc(t(f.hint))+'</p>':'');
-return '<div class="field" id="fw-'+id+'"><div class="row"><label class="switch"><input type="checkbox" role="switch" id="'+id+'" data-bind="'+paths[0]+'"'+(on?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+label+'</span></label></div>'+hintTxt+'<p class="field__error"></p></div>'}
+return '<div class="field" id="fw-'+id+'"><div class="row"><label class="switch"><input type="checkbox" role="switch" id="'+id+'" data-bind="'+paths[0]+'"'+(on?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+label+'</span></label>'+(f.help?helpTrigger(f.help):'')+'</div>'+hintTxt+'<p class="field__error"></p></div>'}
 case 'instantbool':{
 const on=!!(S.status&&S.status.killSwitch);
 return '<div class="field" id="fw-'+id+'"><div class="row"><label class="switch"><input type="checkbox" role="switch" id="'+id+'" data-kill'+(on?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t(f.label))+'</span></label><span class="chip-status ok" data-kill-chip></span></div>'+(f.hint?'<p class="field__hint">'+esc(t(f.hint))+'</p>':'')+'</div>'}
@@ -549,7 +895,7 @@ return '<div class="field" id="fw-'+id+'"><label class="field__label" for="'+id+
 case 'select':{
 const cur=String(getPath(S.set,paths[0])??'');
 let h='<select class="select" id="'+id+'" data-bind="'+paths[0]+'">'+f.opts.map(o=>{const v=Array.isArray(o)?o[0]:o;const k=Array.isArray(o)?o[1]:null;return '<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(k?t(k):v)+'</option>'}).join('')+'</select>';
-return fieldWrap(id,f.label,f.hint).replace('{B}',h)}
+return fieldWrap(id,f.label,f.hint,f.help).replace('{B}',h)}
 case 'chips':{
 const cur=String(getPath(S.set,paths[0])??'');
 let h='<div role="radiogroup" class="chip-row" data-bind="'+paths[0]+'" data-type="chips" aria-label="'+esc(t(f.label))+'">'+f.opts.map(([v,k])=>'<button type="button" role="radio" class="chip" data-chip="'+esc(v)+'" aria-checked="'+String(cur===v)+'">'+esc(t(k))+'</button>').join('')+'</div>';
@@ -562,29 +908,33 @@ return fieldWrap(id,f.label,null).replace('{B}',h)}
 case 'list':{
 const arr=lines(getPath(S.set,paths[0]));
 let h='<div class="line-editor"><textarea rows="5" class="input textarea textarea--mono" id="'+id+'" data-bind="'+paths[0]+'" data-validate="'+(f.validate||'')+'" dir="ltr" spellcheck="false" autocomplete="off">'+esc(arr.join('\n'))+'</textarea><div class="meta"><span class="cnt"></span><span class="bad"></span></div></div>';
-let out=fieldWrap(id,f.label,f.hint).replace('{B}',h);
+let out=fieldWrap(id,f.label,f.hint,f.help).replace('{B}',h);
 if(f.showIf)out=out.replace('<div class="field"','<div class="field" data-fpath="'+paths[0]+'"');
 return out}
 case 'range':{
 const mn=getPath(S.set,paths[0]),mx=getPath(S.set,paths[1]);
 let h='<div class="btn-row"><input type="number" step="1" class="input" style="max-width:120px" id="'+id+'a" data-bind="'+paths[0]+'" value="'+esc(mn==null?'':String(mn))+'" aria-label="'+esc(t(f.label))+' min"><span aria-hidden="true">–</span><input type="number" step="1" class="input" style="max-width:120px" id="'+id+'b" data-bind="'+paths[1]+'" value="'+esc(mx==null?'':String(mx))+'" aria-label="'+esc(t(f.label))+' max"></div>';
-return fieldWrap(id,f.label,f.hint).replace('{B}',h)}
+return fieldWrap(id,f.label,f.hint,f.help).replace('{B}',h)}
 case 'fpreset':{
 const cur=String(getPath(S.set,'fragment.mode')||'off');
 let h='<div role="radiogroup" class="chip-row" data-bind="fragment.mode" data-type="chips" data-fpreset aria-label="'+esc(t('fragment.preset.label'))+'">';
 [['off','fragment.preset.off'],['low','fragment.preset.low'],['medium','fragment.preset.medium'],['high','fragment.preset.high'],['severe','fragment.preset.severe'],['custom','fragment.preset.custom']].forEach(([v,k])=>{h+='<button type="button" role="radio" class="chip" data-chip="'+v+'" data-preset="'+v+'" aria-checked="'+String(cur===v)+'">'+esc(t(k))+'</button>'});
 h+='</div>';
-return fieldWrap(id,'fragment.preset.label',null).replace('{B}',h)}
+return fieldWrap(id,'fragment.preset.label','fragment.preset.short','fragment.preset.help').replace('{B}',h)}
 case 'copyonly':{
 return fieldWrap(id,f.label,null).replace('{B}','<div class="copy-field"><code dir="ltr">'+esc(BASE+'doh')+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-value="'+esc(BASE+'doh')+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>')}
 default:return ''}
 }
 function cardHtml(card){
+if(card.users)return usersCardHtml();
 if(card.danger&&!card.fields.length){
 return '<section class="card"><div class="card__head"><div class="card__title hint-danger">'+esc(t(card.title))+'</div></div><button type="button" class="btn btn--ghost-danger" data-action="reset-defaults">'+esc(t('common.resetDefaults'))+'</button></section>'}
+if(card.backup&&!card.fields.length){
+return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t(card.title))+'</div></div><div class="btn-row"><a class="btn btn--ghost btn--sm" href="'+esc(BASE)+'api/settings/export" download>'+esc(t('general.backup.export'))+'</a><button type="button" class="btn btn--ghost btn--sm" data-action="settings-import">'+esc(t('general.backup.import'))+'</button></div><input type="file" id="settings-import-file" accept=".json,application/json" hidden><p class="field__hint" id="settings-import-hint">'+esc(t('general.backup.import_hint'))+'</p></section>'}
 const dim=card.protoCard&&getPath(S.set,card.protoCard)===false;
 let h='<section class="card'+(dim?' card--dim':'')+'"'+(card.protoCard?' data-proto-card="'+card.protoCard+'"':'')+'><div class="card__head"><div class="card__title">'+esc(t(card.title))+'</div></div>';
 card.fields.forEach(f=>{h+=bindHtml(f)});
+if(card.tgActions)h+='<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="tg-setup">'+esc(t('advanced.tg.setup'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="tg-remove">'+esc(t('advanced.tg.remove'))+'</button></div>';
 return h+'</section>'}
 function renderSettings(){
 buildSubtabs();
@@ -612,7 +962,8 @@ applyProtoDim();
 updatePortMasters();
 updateInstantKillChip();
 refreshShowIf();
-validateAllLineEditors()}
+validateAllLineEditors();
+document.querySelectorAll('#settings-panels .char-count').forEach(cc=>{const inp=$(cc.dataset.countFor);if(inp)updateCharCount(inp)})}
 function applyProtoDim(){
 document.querySelectorAll('[data-proto-card]').forEach(card=>{
 const key=card.dataset.protoCard;
@@ -662,7 +1013,8 @@ return}
 if(el.tagName==='TEXTAREA'){el.value=lines(v).join('\n');return}
 if(el.type==='checkbox'){el.checked=!!v;return}
 if(el.tagName==='SELECT'){el.value=String(v);return}
-el.value=v==null?'':Array.isArray(v)?lines(v).join('\n'):String(v)}
+el.value=v==null?'':Array.isArray(v)?lines(v).join('\n'):String(v);
+if(el.tagName==='INPUT')updateCharCount(el)}
 function collectSection(sec){
 const panel=$('sp-'+sec);
 const out={};
@@ -778,6 +1130,44 @@ if(cnt)cnt.textContent=allLines.length+(ta.id.indexOf('checker-targets')===0?' /
 if(badEl)badEl.textContent=[...bad.slice(0,2).map(l=>t('err.invalid_line',{line:l})),...(dups.length?[t('err.duplicate',{value:dups[0]})]:[])].join(' · ');
 ta.setAttribute('aria-invalid',bad.length?'true':'false')}}
 function validateAllLineEditors(){validateLineEditors(document)}
+const RE_UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SCALAR_RULES={};
+SECTIONS.forEach(s=>s.cards.forEach(c=>c.fields.forEach(f=>{
+const ps=Array.isArray(f.path)?f.path:[f.path];
+ps.forEach(p=>{
+if(f.type==='num'&&typeof f.min==='number')SCALAR_RULES[p]={kind:'num',min:f.min,max:f.max};
+else if(f.type==='secret'&&f.gen==='uuid')SCALAR_RULES[p]={kind:'uuid'};
+else if(f.vtype==='domain')SCALAR_RULES[p]={kind:'domain'}})})));
+SCALAR_RULES.securePath={kind:'required'};
+function scalarError(el){
+const rule=SCALAR_RULES[el.dataset.bind];
+if(!rule)return null;
+const raw=String(el.value==null?'':el.value).trim();
+if(rule.kind==='uuid')return raw===''||RE_UUID.test(raw)?null:'err.uuid';
+if(rule.kind==='domain')return raw===''||RE_HOST.test(raw)?null:'err.domain';
+if(rule.kind==='num'){
+if(raw==='')return 'err.number';
+const n=Number(raw);
+return Number.isInteger(n)&&n>=rule.min&&n<=rule.max?null:'err.number'}
+if(rule.kind==='required')return raw.length>0?null:'err.required';
+return null}
+function blurValidateEl(el){
+const msg=scalarError(el);
+if(!msg){
+const fw=fieldWrapOf(el);
+if(fw&&fw.classList.contains('field--error')){fw.classList.remove('field--error');el.removeAttribute('aria-invalid')}
+return}
+showFieldError(el.dataset.bind,t(msg))}
+function updateCharCount(inp){
+const fw=fieldWrapOf(inp);
+if(!fw)return;
+const cc=fw.querySelector('.char-count');
+if(!cc)return;
+const max=Number(cc.dataset.max)||0;
+if(!max)return;
+const n=inp.value.length;
+cc.textContent=n+'/'+max;
+cc.classList.toggle('warn',n>=max*0.9)}
 function randomPass(){
 const cs='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const a=new Uint8Array(24);crypto.getRandomValues(a);
@@ -918,6 +1308,7 @@ generate(el){
 const inp=$(el.dataset.target);
 if(!inp)return;
 inp.value=genFor(el.dataset.gen);
+updateCharCount(inp);
 inp.dispatchEvent(new Event('change',{bubbles:true}));
 toast(t('common.generated'),'ok')},
 qr(el){openQr(el.dataset.qr)},
@@ -931,13 +1322,109 @@ apply(){
 (async()=>{for(const sec of[...S.dirty])await applySection(sec)})()},
 discard(){
 [...S.dirty].forEach(sec=>discardSection(sec))},
-'reset-defaults'(){
-confirmDialog('confirm.reset_title','confirm.reset_body',true).then(async yes=>{
+ 'settings-import'(){
+ const fileInput=$('settings-import-file');
+ fileInput.onchange=async()=>{
+ const file=fileInput.files&&fileInput.files[0];
+ if(!file)return;
+ try{
+ const parsed=JSON.parse(await file.text());
+ if(parsed&&parsed.kind==='q-proxy-settings'&&parsed.settings){
+ await api('api/settings/import',{method:'POST',body:{settings:parsed.settings}});
+ toast(t('general.backup.imported'),'ok');location.reload()}
+ else toast(t('general.backup.badfile'),'err')}
+ catch(err){if(err&&err.fields)toast(Object.values(err.fields)[0],'err');else toastErr(err)}
+ finally{fileInput.value=''}};
+ fileInput.click()},
+ 'check-update'(el){
+ (async()=>{
+ el.disabled=true;
+ try{
+ const d=await api('api/version/check',{fresh:true});
+ if(d.latest===null)toast(t('home.status.updateCheckFailed'),'err');
+ else if(d.updateAvailable)toast(t('home.status.updateAvailable',{v:d.latest.replace(/^v/,'')}),'ok');
+ else toast(t('home.status.upToDate'),'ok')}
+ catch(err){toastErr(err)}
+ finally{el.disabled=false}})()},
+ 'reset-defaults'(){
+ confirmDialog('confirm.reset_title','confirm.reset_body',true).then(async yes=>{
 if(!yes)return;
 try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}catch(err){toastErr(err)}})},
-'refresh-ip'(){loadMyIp()},
-'run-test'(){runTest()},
-'stop-test'(){stopTest()}};
+ 'refresh-ip'(){loadMyIp()},
+ 'run-test'(){runTest()},
+ 'stop-test'(){stopTest()},
+ accent(el){
+ const a=el.dataset.accent||'cyan';
+ if(a==='cyan')delete document.documentElement.dataset.accent;
+ else document.documentElement.dataset.accent=a;
+ try{localStorage.setItem('qp_accent',a)}catch(err){}
+ document.querySelectorAll('.swatch').forEach(b=>b.setAttribute('aria-pressed',String(b===el)))},
+ 'warp-generate-open'(){openWarpModal('m-warp-generate')},
+ 'warp-import-open'(){openWarpModal('m-warp-import')},
+ 'warp-preset-add'(){openWarpModal('m-warp-preset')},
+ 'warp-preset-edit'(el){openWarpModal('m-warp-preset',el.dataset.id)},
+ 'warp-open-settings'(){location.hash='#/warp/settings'},
+ 'warp-open-list'(){location.hash='#/warp'},
+ 'close-warp-modal'(el){closeModal(el.dataset.modal)},
+ 'warp-regen'(el){
+ confirmDialog('warp.confirm.regen_title','warp.confirm.regen_body',true).then(async yes=>{
+ if(!yes)return;
+ try{await api('api/warp/account/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});
+ toast(t('warp.toast.regen'),'ok');S.warp.loaded=false;renderWarpRoute({warpView:'detail',id:el.dataset.id})}catch(err){toastErr(err)}})},
+ 'warp-delete'(el){
+ confirmDialog('warp.confirm.delete_title','warp.confirm.delete_body',true).then(async yes=>{
+ if(!yes)return;
+ try{await api('api/warp/account/'+el.dataset.id,{method:'DELETE'});
+ toast(t('warp.toast.deleted'),'ok');S.warp.loaded=false;location.hash='#/warp'}catch(err){toastErr(err)}})},
+ 'warp-amnezia-reset'(el){
+ (async()=>{
+ try{await api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:null}});
+ toast(t('warp.toast.saved'),'ok');S.warp.loaded=false;renderWarpRoute({warpView:'detail',id:el.dataset.id})}catch(err){toastErr(err)}})()},
+ 'warp-save'(el){
+ (async()=>{
+ const id=el.dataset.id;const field=el.dataset.field;
+ const patch={};
+ if(field==='name')patch.name=$('warp-name').value.trim();
+ if(field==='dns')patch.dns=$('warp-dns').value.trim();
+ if(field==='preset')patch.endpoint_list={type:'preset',preset_id:$('warp-preset').value};
+ try{await api('api/warp/account/'+id,{method:'PUT',body:patch});
+ toast(t('warp.toast.saved'),'ok');S.warp.loaded=false;renderWarpRoute({warpView:'detail',id})}catch(err){toastErr(err)}})()},
+ 'warp-amnezia-save'(){
+ (async()=>{
+ const body={};
+ ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const v=$('amz-'+k).value.trim();if(v.length>0)body[k]=v});
+ const i1=$('amz-I1').value.trim();if(i1.length>0)body.I1=i1;
+ try{const d=await api('api/warp/settings/amnezia',{method:'PUT',body:{amnezia:body}});
+ S.warp.amnezia=d.amnezia;toast(t('warp.toast.saved'),'ok')}catch(err){toastErr(err)}})()},
+ 'warp-preset-del'(el){
+ (async()=>{
+ try{await api('api/warp/presets/'+el.dataset.id,{method:'DELETE'});
+ toast(t('warp.toast.presetDeleted'),'ok');S.warp.loaded=false;renderWarpRoute({warpView:'settings'})}catch(err){toastErr(err)}})()},
+ 'close-user-modal'(el){closeModal(el.dataset.modal)},
+ 'users-add'(){openUserModal()},
+ 'users-edit'(el){openUserModal(el.dataset.id)},
+ 'users-del'(el){
+ confirmDialog('users.confirm_delete_title','users.confirm_delete_body',true).then(async yes=>{
+ if(!yes)return;
+ try{await api('api/users/'+el.dataset.id,{method:'DELETE'});toast(t('users.toast.deleted'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
+ 'users-regen'(el){
+ confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
+ if(!yes)return;
+ try{await api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});toast(t('users.toast.regen'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
+ 'tg-setup'(el){
+ (async()=>{el.disabled=true;
+ try{const d=await api('api/telegram/setup',{method:'POST',body:{}});
+ if(d.ok)toast(t('tg.setup_ok'),'ok');
+ else toast(t('tg.setup_fail')+(d.description?' · '+d.description:''),'err')}
+ catch(err){toastErr(err)}
+ finally{el.disabled=false}})()},
+ 'tg-remove'(el){
+ (async()=>{el.disabled=true;
+ try{const d=await api('api/telegram/remove',{method:'POST',body:{}});
+ if(d.ok)toast(t('tg.remove_ok'),'ok');
+ else toast(t('tg.remove_fail')+(d.description?' · '+d.description:''),'err')}
+ catch(err){toastErr(err)}
+ finally{el.disabled=false}})()}};
 function onDocClick(e){
 const el=e.target.closest('[data-action]');
 if(el){
@@ -984,6 +1471,18 @@ if(el.tagName==='SELECT')el.disabled=preset==='off'})}}
 refreshShowIf();
 validateAllLineEditors()}
 function onChange(e){
+if(e.target.closest('[data-user-toggle]')){
+const sw=e.target.closest('.switch');sw.classList.add('pending');
+(async()=>{try{await api('api/users/'+e.target.dataset.userToggle,{method:'PUT',body:{enabled:e.target.checked}});toast(t('users.toast.saved'),'ok');await loadUsers()}catch(err){e.target.checked=!e.target.checked;toastErr(err)}finally{sw.classList.remove('pending')}})();
+return}
+if(e.target.closest('[data-user-proto-all]')){
+if(e.target.checked)document.querySelectorAll('#mu-protocols input[data-user-proto]').forEach(i=>{i.checked=false});
+return}
+if(e.target.closest('[data-user-proto]')&&e.target.checked){
+const allBox=document.querySelector('#mu-protocols input[data-user-proto-all]');
+if(allBox)allBox.checked=false;
+return}
+if(e.target.id==='warp-preset'){const id=(location.hash.match(/^#\/warp\/([0-9a-f-]+)/)||[])[1];if(id){(async()=>{try{await api('api/warp/account/'+id,{method:'PUT',body:{endpoint_list:{type:'preset',preset_id:e.target.value}}});toast(t('warp.toast.saved'),'ok');S.warp.loaded=false;renderWarpRoute({warpView:'detail',id})}catch(err){toastErr(err)}})()}return}
 if(e.target.closest('[data-kill]')){setKillSwitch(e.target.checked);return}
 if(e.target.closest('[data-lang-sel]')){setLangCookie(e.target.value);location.reload();return}
 if(e.target.closest('[data-port-master]')){
@@ -1002,26 +1501,74 @@ function onInput(e){
 const bind=e.target.closest('[data-bind]');
 if(!bind)return;
 if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250)}
+else if(bind.tagName==='INPUT'){
+const msg=scalarError(bind);
+const fw=fieldWrapOf(bind);
+if(!msg&&fw&&fw.classList.contains('field--error')){fw.classList.remove('field--error');bind.removeAttribute('aria-invalid')}
+updateCharCount(bind)}
 markDirty()}
 function wireEvents(){
 document.addEventListener('click',onDocClick);
 document.addEventListener('change',onChange);
 document.addEventListener('input',onInput);
+document.addEventListener('focusout',e=>{
+const el=e.target;
+if(el&&el.dataset&&el.dataset.bind&&el.tagName==='INPUT')blurValidateEl(el)});
 $('m-confirm').addEventListener('click',e=>{if(e.target===$('m-confirm'))settleConfirm(false)});
 $('m-qr').addEventListener('click',e=>{if(e.target===$('m-qr'))closeModal('m-qr')});
 $('cf-cancel').addEventListener('click',()=>settleConfirm(false));
 $('cf-ok').addEventListener('click',()=>settleConfirm(true));
 $('m-qr').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-qr'),e)});
 $('m-confirm').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-confirm'),e)});
+['m-warp-generate','m-warp-import','m-warp-preset','m-user'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($(id),e)}));
 document.addEventListener('keydown',e=>{
 if(e.key==='Escape'){
 if(!$('m-confirm').hidden)settleConfirm(false);
-else if(!$('m-qr').hidden)closeModal('m-qr')}});
+else if(!$('m-qr').hidden)closeModal('m-qr');
+else if(!$('m-warp-generate').hidden)closeModal('m-warp-generate');
+else if(!$('m-warp-import').hidden)closeModal('m-warp-import');
+else if(!$('m-warp-preset').hidden)closeModal('m-warp-preset');
+else if(!$('m-user').hidden)closeModal('m-user')}});
 window.addEventListener('hashchange',navigate);
 window.addEventListener('beforeunload',e=>{
 if(S.dirty.size){e.preventDefault();e.returnValue=''}});
 wireTabKeys($('nav'),'.tab');
-wireTabKeys($('subtabs'),'.subtab')}
+wireTabKeys($('subtabs'),'.subtab');
+$('wg-go').addEventListener('click',async()=>{
+const btn=$('wg-go');btn.disabled=true;
+try{const d=await api('api/warp/account/generate',{method:'POST',body:{name:$('wg-name').value.trim()}});
+closeModal('m-warp-generate');toast(t('warp.toast.generated'),'ok');S.warp.loaded=false;location.hash='#/warp/'+d.account.id}
+catch(err){toastErr(err)}
+finally{btn.disabled=false}});
+$('wi-go').addEventListener('click',async()=>{
+const btn=$('wi-go');btn.disabled=true;
+try{const d=await api('api/warp/account/import',{method:'POST',body:{name:$('wi-name').value.trim(),config:$('wi-config').value}});
+closeModal('m-warp-import');toast(t('warp.toast.imported'),'ok');S.warp.loaded=false;location.hash='#/warp/'+d.account.id}
+catch(err){if(err&&err.fields&&err.fields.config){$('wi-error').textContent=err.fields.config;$('wi-error').style.display='block'}else toastErr(err)}
+finally{btn.disabled=false}});
+$('wp-go').addEventListener('click',async()=>{
+const btn=$('wp-go');btn.disabled=true;
+const m=$('m-warp-preset');const editId=m.dataset.presetId||'';
+const endpoints=$('wp-endpoints').value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
+try{
+if(editId)await api('api/warp/presets/'+editId,{method:'PUT',body:{name:$('wp-name').value.trim(),endpoints}});
+else await api('api/warp/presets',{method:'POST',body:{name:$('wp-name').value.trim(),endpoints}});
+closeModal('m-warp-preset');toast(t('warp.toast.saved'),'ok');S.warp.loaded=false;renderWarpRoute({warpView:'settings'})}
+catch(err){if(err&&err.fields){$('wp-error').textContent=Object.values(err.fields)[0]||t('common.error');$('wp-error').style.display='block'}else toastErr(err)}
+finally{btn.disabled=false}});
+$('mu-go').addEventListener('click',async()=>{
+const btn=$('mu-go');btn.disabled=true;
+const m=$('m-user');const editId=m.dataset.userId||'';
+const picked=[...document.querySelectorAll('#mu-protocols input[type=checkbox]:checked')].map(i=>i.value);
+const body={name:$('mu-name').value.trim(),protocols:picked.includes('all')?'all':picked};
+const limit=$('mu-limit').value.trim();body.dailyReqLimit=limit===''?null:Number(limit);
+const exp=$('mu-expiry').value;body.expiresAt=exp===''?null:new Date(exp).getTime();
+try{
+if(editId)await api('api/users/'+editId,{method:'PUT',body});
+else await api('api/users',{method:'POST',body});
+closeModal('m-user');toast(t(editId?'users.toast.saved':'users.toast.created'),'ok');await loadUsers()}
+catch(err){if(err&&err.fields){$('mu-error').textContent=Object.values(err.fields)[0]||t('common.error');$('mu-error').style.display='block'}else toastErr(err)}
+finally{btn.disabled=false}})}
 function wireTabKeys(bar,sel){
 bar.addEventListener('keydown',e=>{
 const tabs=[...bar.querySelectorAll(sel)];
@@ -1039,14 +1586,16 @@ openModal('m-qr')}
 function currentSection(){
 const r=parseRoute();
 return r.view==='settings'?r.sec:'general'}
+function renderBootSkeleton(){const body=$('home-body');if(!body)return;body.innerHTML='<div class="skel-card"><div class="skel-row"><div class="skeleton skel-avatar"></div><div class="skel-col"><div class="skeleton skel-a"></div><div class="skeleton skel-b"></div><div class="skeleton skel-c"></div></div></div><div class="skeleton skel-pill"></div></div><div class="skel-card"><div class="skeleton skel-a"></div><div class="skeleton skel-b"></div><div class="skeleton skel-c"></div><div class="skeleton skel-a"></div></div>'}
 async function boot(){
 buildShell();
 wireEvents();
+renderBootSkeleton();
 try{
-const results=await Promise.all([api('api/settings'),api('api/status').catch(()=>null),api('api/suburls').catch(()=>null)]);
-S.set=results[0]||{};
-S.status=results[1];
-S.subs=(results[2]&&results[2].urls)||[]}
+const d=await api('api/bootstrap');
+S.set=d.settings||{};
+S.status=d.status||null;
+S.subs=(d.subUrls&&d.subUrls.urls)||[]}
 catch(e){
 if(e&&e.status===401)return;
 S.set={};
@@ -1055,7 +1604,23 @@ return}
 renderSettings();
 renderChecker();
 renderHome();
-navigate()}
+navigate();
+maybeWizard()}
+function maybeWizard(){
+try{if(localStorage.getItem('qp_wizard_done'))return}catch(e){}
+const protoCount=['vlessEnabled','vmessEnabled','trojanEnabled','ssEnabled'].filter(k=>S.set&&S.set[k]).length;
+let step=protoCount>0?1:0;
+const body=$('wiz-body');
+function render(){
+const firstSub=(S.subs||[]).find(u=>u.format==='base64'&&u.label!=='Panel info');
+if(step===0){$('wiz-title').textContent=t('wizard.title');body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s1_body'))+'</p><a class="btn btn--primary btn--sm" href="#/settings/protocols" onclick="document.getElementById(\'wiz-skip\').click()">'+esc(t('wizard.s1_cta'))+'</a>';$('wiz-next').style.display='none'}
+else if(step===1){$('wiz-title').textContent=t('wizard.s2_title');body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s2_body'))+'</p>'+(firstSub?copyFieldHtml(subUrlWithMode(firstSub.url),'wiz-sub'):'<p class="field__error" style="display:block">'+esc(t('home.subs.empty_msg'))+'</p>');$('wiz-next').style.display='';$('wiz-next').textContent=t('common.confirm')}
+else{$('wiz-title').textContent=t('wizard.s3_title');body.innerHTML='<p class="field__hint">'+esc(t('wizard.s3_body'))+'</p>';$('wiz-next').textContent=t('wizard.done')}}
+$('wiz-skip').textContent=t('wizard.skip');
+$('wiz-skip').onclick=()=>{closeModal('m-wizard');try{localStorage.setItem('qp_wizard_done','1')}catch(e){}};
+$('wiz-next').onclick=()=>{if(step<2){step++;render()}else{$('wiz-skip').onclick()}};
+openModal('m-wizard');
+render()}
 boot();
 })();
 </script>

@@ -6,3 +6,7 @@ dist/
 .playwright-mcp/
 wrangler.local.toml
 *.png
+
+.opencode/
+*.png
+!docs/screenshots/*.png

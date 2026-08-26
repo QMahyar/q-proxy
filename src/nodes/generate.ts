@@ -177,6 +177,7 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
               earlyData,
               fingerprint: family.security === "tls" ? s.fingerprint : null,
               alpn: family.security === "tls" ? [...s.alpn] : [],
+              ech: family.security === "tls" && s.echEnabled ? (s.echServerName.length > 0 ? s.echServerName : sni) : null,
               variant,
               tags,
             };

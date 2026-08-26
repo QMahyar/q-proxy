@@ -36,7 +36,7 @@ export function subscriptionHeaders(
     "Subscription-Userinfo": `upload=0; download=${usage.requestsTotal * BYTES_PER_REQUEST}`,
     "Profile-Update-Interval": String(Math.max(1, Math.floor(meta.updateIntervalHours))),
     "Content-Disposition": `attachment; filename*=UTF-8''${filenameFor(format, title)}`,
-    "Cache-Control": "no-store",
+    "Cache-Control": "public, max-age=60",
   };
   if (meta.webPageUrl.length > 0) h["profile-web-page-url"] = meta.webPageUrl;
   return h;

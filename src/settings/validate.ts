@@ -1,4 +1,5 @@
 import type {
+  RoutingRules,
   CamouflageMode,
   Fingerprint,
   FragmentMode,
@@ -41,6 +42,8 @@ const FINGERPRINTS: readonly Fingerprint[] = [
 
 const HOSTNAME_RE =
   /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+const TG_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{35}$/;
+const TG_CHAT_ID_RE = /^(?:@[A-Za-z0-9_]{4,64}|-?\d{1,20})?$/;
 const PATH_TOKEN_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const SECURE_PATH_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const HOST_TOKEN_RE = /^[A-Za-z0-9._:-]{1,253}$/;
@@ -374,6 +377,14 @@ export function validateSettings(input: unknown): ValidationResult {
   if (fingerprint !== undefined) out.fingerprint = fingerprint;
   const randomizeSniCase = boolField(patch, "randomizeSniCase", fields);
   if (randomizeSniCase !== undefined) out.randomizeSniCase = randomizeSniCase;
+  const echEnabled = boolField(patch, "echEnabled", fields);
+  if (echEnabled !== undefined) out.echEnabled = echEnabled;
+  const echServerName = strField(patch, "echServerName", fields, { maxLen: 253 });
+  if (echServerName !== undefined) {
+    const trimmed = echServerName.trim();
+    if (trimmed.length > 0 && !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(trimmed)) fail(fields, "echServerName", "must be a domain name");
+    else out.echServerName = trimmed;
+  }
   const alpnV = patch["alpn"];
   if (alpnV !== undefined) {
     if (!Array.isArray(alpnV)) fail(fields, "alpn", "must be an array of strings");
@@ -475,8 +486,49 @@ export function validateSettings(input: unknown): ValidationResult {
     if (mode !== undefined) out.camouflage.mode = mode;
     const url = strField(sub, "url", f, { maxLen: 2048 });
     if (url !== undefined) out.camouflage.url = url;
-    if (out.camouflage.mode === "proxy" && !isHttpUrl(out.camouflage.url)) {
+  const routing = patch["routingRules"];
+  if (routing !== undefined) {
+    if (routing === null || typeof routing !== "object" || Array.isArray(routing)) fail(fields, "routingRules", "must be an object");
+    else {
+      const r = routing as Record<string, unknown>;
+      const rrOut: RoutingRules = { ...out.routingRules };
+      for (const k of ["bypassLan", "blockAds", "blockMalware", "blockQuic"] as const) {
+        const b = boolField(r as Record<string, unknown>, k, fields);
+        if (b !== undefined) (rrOut as unknown as Record<string, unknown>)[k] = b;
+      }
+      const bypassV = r["customBypass"];
+      if (bypassV !== undefined) {
+        if (!Array.isArray(bypassV)) fail(fields, "routingRules.customBypass", "must be an array");
+        else rrOut.customBypass = sanitizeStrArray(bypassV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
+      }
+      const blockV = r["customBlock"];
+      if (blockV !== undefined) {
+        if (!Array.isArray(blockV)) fail(fields, "routingRules.customBlock", "must be an array");
+        else rrOut.customBlock = sanitizeStrArray(blockV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
+      }
+      out.routingRules = rrOut;
+    }
+  }
+      if (out.camouflage.mode === "proxy" && !isHttpUrl(out.camouflage.url)) {
       fail(f, "url", "must be a valid http(s) URL when camouflage mode is proxy");
+    }
+  });
+
+  validateNested(patch, "telegram", fields, (sub, f) => {
+    const enabled = boolField(sub, "enabled", f);
+    if (enabled !== undefined) out.telegram.enabled = enabled;
+    const token = strField(sub, "botToken", f, { maxLen: 64 });
+    if (token !== undefined) {
+      const trimmed = token.trim();
+      if (out.telegram.enabled && trimmed.length > 0 && !TG_TOKEN_RE.test(trimmed)) {
+        fail(f, "botToken", "must look like 123456789:AAExample_Token35chars_1234567890");
+      } else out.telegram.botToken = trimmed;
+    }
+    const chatId = strField(sub, "chatId", f, { maxLen: 64 });
+    if (chatId !== undefined) {
+      const trimmed = chatId.trim();
+      if (!TG_CHAT_ID_RE.test(trimmed)) fail(f, "chatId", "must be a numeric chat id or @channelname");
+      else out.telegram.chatId = trimmed;
     }
   });
 

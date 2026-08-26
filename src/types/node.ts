@@ -21,6 +21,7 @@ export interface NodeBase {
   earlyData: number;
   fingerprint: Fingerprint | null;
   alpn: string[];
+  ech: string | null;
   variant: NodeVariant;
   tags: NodeTag[];
 }

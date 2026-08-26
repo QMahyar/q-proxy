@@ -6,12 +6,20 @@ import { emitLoonConf } from "./loon-conf";
 import { emitSingBoxJson } from "./singbox-json";
 import { emitSurgeConf } from "./surge-conf";
 
+export interface EmitRules {
+  bypassLan: boolean;
+  bypassDomains: string[];
+  blockDomains: string[];
+  blockQuic: boolean;
+}
+
 export interface EmitOptions {
   remoteDns: string;
   urlTestIntervalSec: number;
   isFragment: boolean;
   subscriptionUrl?: string;
   updateIntervalHours?: number;
+  rules?: EmitRules;
 }
 
 export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;

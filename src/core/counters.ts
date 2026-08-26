@@ -24,6 +24,16 @@ const buffer: CounterBuffer = {
 
 let flushing = false;
 
+const USAGE_MEMO_MS = 15_000;
+
+interface StoredUsage {
+  day: string;
+  requestsToday: number;
+  requestsTotal: number;
+}
+
+let usageMemo: { value: StoredUsage; expiresAt: number } | null = null;
+
 export function bindCounterContext(ctx: ExecutionContext): void {
   buffer.ctx = ctx;
 }
@@ -32,8 +42,11 @@ function waitUntil(promise: Promise<void>): void {
   if (buffer.ctx) buffer.ctx.waitUntil(promise);
 }
 
-async function readStored(env: Env): Promise<{ day: string; requestsToday: number; requestsTotal: number }> {
+async function readStored(env: Env): Promise<StoredUsage> {
+  const now = Date.now();
+  if (usageMemo !== null && usageMemo.expiresAt > now) return usageMemo.value;
   const raw = await env.QPROXY_KV.get(KV_KEY, "json");
+  let value: StoredUsage;
   if (
     raw !== null &&
     typeof raw === "object" &&
@@ -42,10 +55,13 @@ async function readStored(env: Env): Promise<{ day: string; requestsToday: numbe
   ) {
     const r = raw as { day: string; requestsToday?: number; requestsTotal: number };
     const stored = r.requestsToday ?? 0;
-    if (r.day !== dayKeyUtc()) return { day: dayKeyUtc(), requestsToday: 0, requestsTotal: r.requestsTotal };
-    return { day: r.day, requestsToday: stored, requestsTotal: r.requestsTotal };
+    if (r.day !== dayKeyUtc()) value = { day: dayKeyUtc(), requestsToday: 0, requestsTotal: r.requestsTotal };
+    else value = { day: r.day, requestsToday: stored, requestsTotal: r.requestsTotal };
+  } else {
+    value = { day: dayKeyUtc(), requestsToday: 0, requestsTotal: 0 };
   }
-  return { day: dayKeyUtc(), requestsToday: 0, requestsTotal: 0 };
+  usageMemo = { value, expiresAt: now + USAGE_MEMO_MS };
+  return value;
 }
 
 export async function recordConnection(env: Env): Promise<void> {
@@ -73,6 +89,10 @@ export async function recordConnection(env: Env): Promise<void> {
       KV_KEY,
       JSON.stringify({ day: writeDay, requestsToday, requestsTotal, updatedAt: Date.now() }),
     );
+    usageMemo = {
+      value: { day: writeDay, requestsToday, requestsTotal },
+      expiresAt: Date.now() + USAGE_MEMO_MS,
+    };
     waitUntil(put.then(() => undefined));
     await put.catch(() => {});
   } finally {

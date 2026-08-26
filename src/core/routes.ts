@@ -24,17 +24,28 @@ export type ApiRouteName =
   | "auth-login"
   | "auth-logout"
   | "auth-setup"
+  | "bootstrap"
   | "settings-get"
   | "settings-save"
   | "settings-reset"
+  | "settings-export"
+  | "settings-import"
+  | "version-check"
   | "status"
   | "killswitch"
-  | "suburls";
+  | "suburls"
+  | "warp"
+  | "users"
+  | "telegram-webhook"
+  | "telegram-setup"
+  | "telegram-remove";
 
 export type SecureRoute =
   | { kind: "root" }
   | { kind: "page"; page: "panel" | "login" }
   | { kind: "sub" }
+  | { kind: "warp-sub" }
+  | { kind: "user-sub" }
   | { kind: "doh" }
   | { kind: "myip" }
   | { kind: "api"; api: ApiRouteName };
@@ -51,11 +62,26 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
     case "login":
       return rest.length === 1 ? { kind: "page", page: "login" } : null;
     case "sub":
-      return rest.length === 1 ? { kind: "sub" } : null;
+      if (rest.length === 1) return { kind: "sub" };
+      if (rest.length === 4 && rest[1] === "wg" && /^[0-9a-f-]{36}$/i.test(rest[2]!)) {
+        return { kind: "warp-sub" };
+      }
+      if ((rest.length === 3 || rest.length === 4) && rest[1] === "u" && /^[0-9a-f-]{36}$/i.test(rest[2]!)) {
+        return { kind: "user-sub" };
+      }
+      return null;
     case "doh":
       return rest.length === 1 ? { kind: "doh" } : null;
     case "my-ip":
       return rest.length === 1 ? { kind: "myip" } : null;
+    case "telegram": {
+      if (rest.length === 2 && rest[1] === "setup") return { kind: "api", api: "telegram-setup" };
+      if (rest.length === 2 && rest[1] === "remove") return { kind: "api", api: "telegram-remove" };
+      if (rest.length === 3 && rest[1] === "webhook" && /^[0-9a-f]{16}$/.test(rest[2]!)) {
+        return { kind: "api", api: "telegram-webhook" };
+      }
+      return null;
+    }
     case "api": {
       if (rest.length < 2) return null;
       const sub = rest[1]!;
@@ -63,12 +89,18 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
       if (sub === "logout" && rest.length === 2) return { kind: "api", api: "auth-logout" };
       if (sub === "setup" && rest.length === 2) return { kind: "api", api: "auth-setup" };
       if (sub === "status" && rest.length === 2) return { kind: "api", api: "status" };
+      if (sub === "bootstrap" && rest.length === 2) return { kind: "api", api: "bootstrap" };
       if (sub === "killswitch" && rest.length === 2) return { kind: "api", api: "killswitch" };
       if (sub === "suburls" && rest.length === 2) return { kind: "api", api: "suburls" };
+      if (sub === "warp" && rest.length >= 2) return { kind: "api", api: "warp" };
+      if (sub === "users" && rest.length >= 2) return { kind: "api", api: "users" };
+      if (sub === "version" && rest.length === 3 && rest[2] === "check") return { kind: "api", api: "version-check" };
       if (sub === "settings") {
         if (rest.length === 2) return { kind: "api", api: "settings-get" };
         if (rest.length === 3 && rest[2] === "save") return { kind: "api", api: "settings-save" };
         if (rest.length === 3 && rest[2] === "reset") return { kind: "api", api: "settings-reset" };
+        if (rest.length === 3 && rest[2] === "export") return { kind: "api", api: "settings-export" };
+        if (rest.length === 3 && rest[2] === "import") return { kind: "api", api: "settings-import" };
         return null;
       }
       return null;

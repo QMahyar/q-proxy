@@ -19,7 +19,7 @@ describe("subscriptionHeaders", () => {
       "Subscription-Userinfo": "upload=0; download=5242880",
       "Profile-Update-Interval": "12",
       "Content-Disposition": "attachment; filename*=UTF-8''Q%20Proxy.yaml",
-      "Cache-Control": "no-store",
+      "Cache-Control": "public, max-age=60",
       "profile-web-page-url": "https://w.test/sp/panel",
     });
   });

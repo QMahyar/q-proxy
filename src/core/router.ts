@@ -13,15 +13,25 @@ import { handleDoh } from "../handlers/doh";
 import { handleSubscribe } from "../handlers/subscribe";
 import { handleMyIp } from "../handlers/myip";
 import { handleRobots } from "../handlers/robots";
+
 import { serveLoginPage, servePanelPage } from "../handlers/panel-page";
 import { handleCamouflage } from "../handlers/camouflage";
+import { handleWarpSub } from "../handlers/warp-sub";
+import { handleUserSub } from "../handlers/users-sub";
 import { handleLogin, handleLogout, handleSetup } from "../handlers/api/auth";
 import {
   handleGetSettings,
   handleResetSettings,
   handleSaveSettings,
+  handleExportSettings,
+  handleImportSettings,
 } from "../handlers/api/settings";
 import { handleKillSwitch, handleStatus, handleSubUrls } from "../handlers/api/status";
+import { handleBootstrap } from "../handlers/api/bootstrap";
+import { handleWarpApi } from "../handlers/api/warp";
+import { handleUsersApi } from "../handlers/api/users";
+import { handleTelegramRemove, handleTelegramSetup, handleTelegramWebhook } from "../handlers/api/telegram";
+import { handleVersionCheck } from "../handlers/api/version";
 
 function methodNotAllowed(): never {
   throw new AppError("method not allowed", 405, "METHOD");
@@ -80,12 +90,24 @@ async function dispatchApi(
       if (req.method === "GET") return requireAuth(handleGetSettings)(req, env, s);
       expectMethods(req, ["PUT"]);
       return guardedSaveSettings(req, env, s);
+    case "bootstrap":
+      expectMethods(req, ["GET"]);
+      return requireAuth(handleBootstrap)(req, env, s);
     case "settings-save":
       expectMethods(req, ["PUT"]);
       return guardedSaveSettings(req, env, s);
     case "settings-reset":
       expectMethods(req, ["POST"]);
       return guardedResetSettings(req, env, s);
+    case "settings-export":
+      expectMethods(req, ["GET"]);
+      return requireAuth(handleExportSettings)(req, env, s);
+    case "settings-import":
+      expectMethods(req, ["POST"]);
+      return authedCsrf(handleImportSettings)(req, env, s);
+    case "version-check":
+      expectMethods(req, ["GET"]);
+      return requireAuth(handleVersionCheck)(req, env, s);
     case "status":
       expectMethods(req, ["GET"]);
       return guardedStatus(req, env, s);
@@ -95,6 +117,19 @@ async function dispatchApi(
     case "suburls":
       expectMethods(req, ["GET"]);
       return guardedSubUrls(req, env, s);
+    case "warp":
+      return requireAuth(handleWarpApi)(req, env, s);
+    case "users":
+      return requireAuth(handleUsersApi)(req, env, s);
+    case "telegram-webhook":
+      expectMethods(req, ["POST"]);
+      return handleTelegramWebhook(req, env, s);
+    case "telegram-setup":
+      expectMethods(req, ["POST"]);
+      return authedCsrf(handleTelegramSetup)(req, env, s);
+    case "telegram-remove":
+      expectMethods(req, ["POST"]);
+      return authedCsrf(handleTelegramRemove)(req, env, s);
   }
 }
 
@@ -117,6 +152,13 @@ async function dispatchSecureRoute(
       expectMethods(req, ["GET"]);
       void recordConnection(env).catch(() => {});
       return handleSubscribe(req, env, s);
+    case "warp-sub":
+      expectMethods(req, ["GET", "HEAD"]);
+      return handleWarpSub(req, env, s);
+    case "user-sub":
+      expectMethods(req, ["GET", "HEAD"]);
+      void recordConnection(env).catch(() => {});
+      return handleUserSub(req, env, s);
     case "myip":
       expectMethods(req, ["GET"]);
       return guardedMyIp(req, env, s);
@@ -143,14 +185,15 @@ function resolveAuthAlias(url: URL, s: Settings): SecureRoute | null {
 }
 
 export async function routeRequest(req: Request, env: Env): Promise<Response> {
-  const s = await loadSettings(env);
-  setDebugEnabled(s.debugLogging);
+  if (req.method === "OPTIONS") methodNotAllowed();
   const url = new URL(req.url);
 
-  if (req.method === "OPTIONS") methodNotAllowed();
+  if (url.pathname === "/robots.txt" && req.method === "GET") return handleRobots();
+
+  const s = await loadSettings(env);
+  setDebugEnabled(s.debugLogging);
 
   if (url.pathname === "/robots.txt") {
-    if (req.method === "GET") return handleRobots(req, env, s);
     return handleCamouflage(req, env, s);
   }
 

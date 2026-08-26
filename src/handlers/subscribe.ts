@@ -14,7 +14,7 @@ import { encodeUtf8Base64 } from "../utils/base64";
 
 const FORMATS: readonly SubFormat[] = ["base64", "clash", "singbox", "surge", "loon"];
 
-const CONTENT_TYPES: Record<SubFormat, string> = {
+export const SUB_CONTENT_TYPES: Record<SubFormat, string> = {
   base64: "text/plain; charset=utf-8",
   clash: "text/yaml; charset=utf-8",
   singbox: "application/json; charset=utf-8",
@@ -94,6 +94,15 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
     return htmlResponse(infoPageHtml(subUrls, s.profileTitle));
   }
 
+  const cacheKeyUrl = new URL(req.url);
+  cacheKeyUrl.searchParams.set("_k", `${format}:${isFragmentMode ? "f" : "n"}`);
+  const cacheKey = new Request(cacheKeyUrl.toString(), { method: "GET" });
+  const edgeCache: Cache | null = typeof caches === "undefined" ? null : caches.default;
+  if (edgeCache !== null) {
+    const cached = await edgeCache.match(cacheKey);
+    if (cached !== undefined) return cached;
+  }
+
   const ctx = { settings: s, hostname: resolveHostname(s, url), request: req };
   const allNodes = generateNodes(ctx);
   let nodes = isFragmentMode ? allNodes.filter((n) => n.variant === "fragment") : allNodes;
@@ -104,13 +113,19 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
     isFragment: isFragmentMode,
     subscriptionUrl: `${origin}${url.pathname}?target=${format}`,
     updateIntervalHours: s.subUpdateIntervalHours,
+    rules: {
+      bypassLan: s.routingRules.bypassLan,
+      bypassDomains: [...s.routingRules.customBypass],
+      blockDomains: [...s.routingRules.customBlock],
+      blockQuic: s.routingRules.blockQuic,
+    },
   };
 
   let body: string;
   if (format === "base64") {
     const [ownLines, remoteLines] = await Promise.all([
       Promise.resolve(buildShareUris(nodes)),
-      fetchRemoteSubLines(s.remoteSubUrls),
+      fetchRemoteSubLines(s.remoteSubUrls, s.subUpdateIntervalHours * 3600),
     ]);
     body = encodeUtf8Base64([...ownLines, ...remoteLines].join("\n"));
   } else {
@@ -122,6 +137,8 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
     updateIntervalHours: s.subUpdateIntervalHours,
     webPageUrl: panelUrl,
   });
-  headers["Content-Type"] = CONTENT_TYPES[format];
-  return new Response(body, { status: 200, headers });
+  headers["Content-Type"] = SUB_CONTENT_TYPES[format];
+  const res = new Response(body, { status: 200, headers });
+  if (edgeCache !== null) void edgeCache.put(cacheKey, res.clone()).catch(() => {});
+  return res;
 };

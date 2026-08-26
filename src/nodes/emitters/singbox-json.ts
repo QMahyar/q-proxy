@@ -8,6 +8,7 @@ interface SingBoxTls {
   server_name: string;
   alpn?: string[];
   utls?: { enabled: boolean; fingerprint: string };
+  ech?: { enabled: boolean };
 }
 
 interface SingBoxTransport {
@@ -18,10 +19,11 @@ interface SingBoxTransport {
   early_data_header_name?: string;
 }
 
-function tlsObject(serverName: string, fingerprint: string | null, alpn: string[]): SingBoxTls {
+function tlsObject(serverName: string, fingerprint: string | null, alpn: string[], ech: string | null): SingBoxTls {
   const t: SingBoxTls = { enabled: true, server_name: serverName };
   if (alpn.length > 0) t.alpn = [...alpn];
   if (fingerprint !== null) t.utls = { enabled: true, fingerprint };
+  if (ech !== null && ech.length > 0) t.ech = { enabled: true };
   return t;
 }
 
@@ -48,7 +50,7 @@ function outboundOf(node: ProxyNode): Record<string, unknown> {
   if (node.kind === "vless") {
     base.uuid = node.uuid;
     base.packet_encoding = "xudp";
-    if (node.security === "tls") base.tls = tlsObject(node.sni ?? node.host, node.fingerprint, node.alpn);
+    if (node.security === "tls") base.tls = tlsObject(node.sni ?? node.host, node.fingerprint, node.alpn, node.ech);
     base.transport = transportObject(node);
     return base;
   }
@@ -57,13 +59,13 @@ function outboundOf(node: ProxyNode): Record<string, unknown> {
     base.security = node.cipher;
     base.alter_id = node.alterId;
     base.packet_encoding = "xudp";
-    if (node.security === "tls") base.tls = tlsObject(node.sni ?? node.host, node.fingerprint, node.alpn);
+    if (node.security === "tls") base.tls = tlsObject(node.sni ?? node.host, node.fingerprint, node.alpn, node.ech);
     base.transport = transportObject(node);
     return base;
   }
   if (node.kind === "trojan") {
     base.password = node.password;
-    if (node.security === "tls") base.tls = tlsObject(node.sni ?? node.host, node.fingerprint, node.alpn);
+    if (node.security === "tls") base.tls = tlsObject(node.sni ?? node.host, node.fingerprint, node.alpn, node.ech);
     base.transport = transportObject(node);
     return base;
   }
@@ -133,7 +135,14 @@ export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions):
     route: {
       rules: [
         { protocol: "dns", action: "hijack-dns" },
+        ...(opts.rules && opts.rules.blockDomains.length > 0
+          ? [{ domain_suffix: [...opts.rules.blockDomains], action: "reject" }]
+          : []),
+        ...(opts.rules && opts.rules.blockQuic ? [{ network: "udp", port: 443, action: "reject" }] : []),
         { ip_is_private: true, outbound: "DIRECT" },
+        ...(opts.rules && opts.rules.bypassDomains.length > 0
+          ? [{ domain_suffix: [...opts.rules.bypassDomains], outbound: "DIRECT" }]
+          : []),
       ],
       final: hasNodes ? "PROXY" : "DIRECT",
       auto_detect_interface: true,

@@ -19,6 +19,7 @@ function vless(): ProxyNode {
     earlyData: 2048,
     fingerprint: null,
     alpn: [],
+    ech: null,
     variant: "normal",
     tags: [],
     uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",

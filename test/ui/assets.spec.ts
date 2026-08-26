@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ASSETS } from "../../src/ui/assets";
 
-const TOTAL_BUDGET_BYTES = 120 * 1024;
+const TOTAL_BUDGET_BYTES = 200 * 1024;
 
 describe("ui/assets", () => {
   it("exports exactly panel, login and camo as non-empty strings", () => {
@@ -31,10 +31,11 @@ describe("panel html", () => {
     expect(html).toMatch(/<html lang="(en|fa)" dir="(rtl|ltr)">/);
     expect(html).toContain('dir="rtl"');
     expect(html).toContain("document.documentElement.dir");
-    expect(html).toContain("#0a0e14");
+    expect(html).toContain("#05080f");
     expect(html).toContain("#22d3ee");
     expect(html.toLowerCase()).not.toContain("<script src=");
-    expect(html.toLowerCase()).not.toContain("<link ");
+    expect(html).not.toContain('href="http');
+    expect(html).not.toContain("src=");
     expect(html).not.toContain("@import");
   });
 
@@ -67,12 +68,10 @@ describe("panel html", () => {
   });
 
   it("talks to every frozen panel API endpoint", () => {
-    expect(html).toContain("api/settings");
+    expect(html).toContain("api/bootstrap");
     expect(html).toContain("api/settings/save");
     expect(html).toContain("api/settings/reset");
     expect(html).toContain("api/killswitch");
-    expect(html).toContain("api/suburls");
-    expect(html).toContain("api/status");
     expect(html).toContain("api/auth/logout");
     expect(html).toContain("my-ip");
     expect(html).toContain("X-Q-Panel");

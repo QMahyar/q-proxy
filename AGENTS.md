@@ -4,7 +4,7 @@ Context for AI agents working in this repo. Read this before any change. Frozen 
 
 ## What This Is
 
-Single-user Cloudflare Worker that terminates VLESS, VMess, Trojan and Shadowsocks over WebSocket and serves UA-negotiated subscriptions. Zero runtime npm dependencies. One KV namespace. Single-file build `dist/q-proxy.js` for dashboard paste or `wrangler deploy`. Bilingual EN/FA panel embedded as HTML strings.
+Self-hosted Cloudflare Worker under one admin: terminates VLESS, VMess, Trojan and Shadowsocks over WebSocket and serves UA-negotiated subscriptions, plus scoped per-user subscription links (`src/users/`), WARP/WireGuard config serving (`src/warp/`) and an optional Telegram bot. Zero runtime npm dependencies. One KV namespace. Single-file build `dist/q-proxy.js` for dashboard paste or `wrangler deploy`. Bilingual EN/FA panel embedded as HTML strings.
 
 ## Tech Stack
 
@@ -23,7 +23,7 @@ npm test             # vitest run (both projects)
 npx vitest run --project unit     # pure logic, no workerd
 npx vitest run --project workers  # full fetch through src/worker.ts
 npm run dev          # wrangler dev → http://127.0.0.1:8787 (local miniflare KV; use `--remote` for prod KV)
-npm run build        # → dist/q-proxy.js (~228 KB)
+npm run build        # → dist/q-proxy.js (~380 KB)
 npm run deploy       # build + wrangler deploy (prefers wrangler.local.toml)
 node scripts/version.mjs        # print version (from git tag)
 node scripts/release.mjs <version> [--dry]  # tag + changelog check + build
@@ -58,8 +58,10 @@ src/nodes/generate.ts    ProxyNode[] builder — port↔security pairing invaria
 src/nodes/emitters/*     base64-list, clash-yaml, singbox-json, surge-conf, loon-conf (+registry)
 src/subscription/        negotiate (?target= > UA > base64), headers, merge (remote subs)
 src/auth/                password (PBKDF2 100k + legacy 15k), session (HMAC q_session), guard (CSRF X-Q-Panel)
-src/settings/            store (15s isolate cache + loadSettingsFresh), seed, migrate, validate (52 fields)
-src/handlers/            tunnel, subscribe, doh, myip(requireAuth), robots, camouflage, api/*
+src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, validate (53 fields)
+src/handlers/            tunnel, subscribe, doh, myip(requireAuth), robots, camouflage, api/* (incl. bootstrap, warp)
+src/warp/                WARP core: config parsers, api client, store (accounts/presets/amnezia)
+src/crypto/x25519.ts     hand-rolled X25519 (RFC 7748), zero-dep keypairs
 src/ui/assets.ts         panel.html, login.html, camo.html as strings
 ```
 
@@ -101,11 +103,11 @@ Adding an emitter:
 
 Protocol changes: validate against Xray-core fixtures first (`docs/research/04-protocol-formats.md`), keep parsers throwing never.
 
-## Known Gaps (v1.0.2)
+## Known Gaps (v1.0.5)
 
 - Change-password endpoint absent — logout is client-side cookie clear only; sessions revoke only via secret rotation (not exposed)
 - Early-data oversize drops silently instead of closing 1009
 - Login throttle is per-isolate memory (best-effort)
 - Counters are estimates (`download = requestsTotal × 1 MiB`)
 - `settings.language` is saved but the UI reads only the `qp_lang` cookie
-- Stale-cache read-modify-write: `handleKillSwitch`/`handleSaveSettings` merge from the 15s cached settings — concurrent edits in another isolate can be reverted within the TTL window
+- Stale-cache read-modify-write: `handleKillSwitch`/`handleSaveSettings` merge from the 60s cached settings — concurrent edits in another isolate can be reverted within the TTL window

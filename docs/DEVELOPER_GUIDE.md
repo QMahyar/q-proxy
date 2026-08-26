@@ -80,7 +80,7 @@ flowchart TD
     B -- no --> C{identifyTunnel?<br/>src/core/routes.ts:11}
     C -- "/{vl|vm|tr|ss}/ + suffix [A-Za-z0-9]{8,32}" --> D{WS Upgrade?}
     D -- no --> CAM[handlers/camouflage.ts<br/>fake 1101 HTML 500]
-    D -- yes --> K{killSwitch?<br/>src/core/router.ts:159}
+    D -- yes --> K{killSwitch?<br/>src/core/router.ts:202}
     K -- on --> S503[503 Service Unavailable]
     K -- off --> T[handlers/tunnel.ts<br/>tunnel/websocket.ts<br/>early-data b64url decode ≤2048]
     T --> P[protocols/createXInbound<br/>push → ready / reject→1008]
@@ -99,7 +99,7 @@ flowchart TD
     GEN --> EMI[emitters/registry.ts<br/>EMITTERS format]
 ```
 
-Route table precedence is top-down, first match wins — 21 rows defined in `ARCHITECTURE.md §3`, implemented in `src/core/router.ts:145` (`routeRequest`), with tunnel dispatch via `identifyTunnel` and secure dispatch via `resolveSecureRoute` + `resolveAuthAlias` (`router.ts:128`).
+Route table precedence is top-down, first match wins — 28 entries defined in `ARCHITECTURE.md §3`, implemented in `src/core/router.ts:187` (`routeRequest`), with tunnel dispatch via `identifyTunnel` and secure dispatch via `resolveSecureRoute` + `resolveAuthAlias` (`router.ts:170`).
 
 Auth: `q_session` HMAC cookie (`src/auth/session.ts`) + `X-Q-Panel: 1` CSRF on mutating APIs (`src/auth/guard.ts:assertCsrf`). Non-panel failures return camouflage, never 404.
 
@@ -199,7 +199,7 @@ Keep the emitter pure — no KV, no `fetch`, no `cloudflare:*` imports (so it st
 - **Error handling:** throw `AppError` subclasses (`src/core/errors.ts:34`) — `worker.ts` single boundary renders JSON envelope for `/api/*` else sanitized HTML (`expose` + `debugLogging` gate). Tunnel plane: `reject → ws.close(1008)`; infra → `1011`.
 - **Early data:** `src/tunnel/websocket.ts` extracts `Sec-WebSocket-Protocol` b64url (≤ `earlyDataMaxBytes`), ignores it for SS; handshake buffer capped 16 KiB / 10 s.
 - **Logging:** `src/core/log.ts` debug-gated, request-id structured; never logs deny-list material (passwords, hashes, UUIDs, session secrets, securePath free-text).
-- **Camouflage:** `src/handlers/camouflage.ts` — identical 500 fake-1101 body for wrong path / unknown route / internal error; `GET /robots.txt` always `Disallow: /` (`src/handlers/robots.ts`, `src/core/router.ts:152`).
+- **Camouflage:** `src/handlers/camouflage.ts` — identical 500 fake-1101 body for wrong path / unknown route / internal error; `GET /robots.txt` always `Disallow: /` (`src/handlers/robots.ts`, `src/core/router.ts:191`).
 
 ## 8. References
 
@@ -260,7 +260,7 @@ scripts/build-single-file.mjs:10 bundles src/worker.ts with esbuild (bundle:true
 | B | Protocols | crypto/*, protocols/* | Four createXInbound per §2.7, RFC vectors |
 | C | Tunnel | tunnel/*, handlers/tunnel, doh | End-to-end datapath, early-data, failover, chain |
 | D | Subs | nodes/*, emitters/*, subscription/*, handlers/subscribe | generateNodes invariants, 5 emitters, negotiate/headers/merge |
-| E | Glue | worker.ts, core/router.ts, settings/*, auth/*, handlers/api/*, myip, robots, camouflage | Live router 21 rows, KV store, auth, APIs |
+| E | Glue | worker.ts, core/router.ts, settings/*, auth/*, handlers/api/*, myip, robots, camouflage | Live router 28 entries, KV store, auth, APIs |
 | F | UI | ui/assets.ts, *.html | Self-contained SPA, QR, EN/FA |
 
 Cross-imports only via frozen symbols. Adding a file outside ownership requires arch revision.
@@ -347,6 +347,6 @@ package.json:2 version -> __APP_VERSION__ (scripts/build-single-file.mjs:18 defi
 
 ## 21. Where to Read Next
 
-- Start with src/core/router.ts:145 + src/core/routes.ts:11 + src/tunnel/egress.ts:41 — the three load-bearing modules.
+- Start with src/core/router.ts:187 + src/core/routes.ts:11 + src/tunnel/egress.ts:41 — the three load-bearing modules.
 - Then src/protocols/common.ts for inbound contract and src/nodes/emitters/registry.ts for subscription surface.
 - Finally docs/SPEC.md §6 open questions (license, securePath sharing tradeoff, remote-sub depth, userinfo estimate, plain-port policy).

@@ -15,6 +15,7 @@ function tlsParams(node: VlessNode | TrojanNode): string[] {
   if (node.sni !== null && node.sni.length > 0) p.push(`sni=${enc(node.sni)}`);
   if (node.fingerprint !== null) p.push(`fp=${enc(node.fingerprint)}`);
   if (node.alpn.length > 0) p.push(`alpn=${enc(node.alpn.join(","))}`);
+  if (node.ech !== null && node.ech.length > 0) p.push(`ech=${enc(node.ech)}`);
   return p;
 }
 

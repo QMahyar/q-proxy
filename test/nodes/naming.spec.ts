@@ -45,6 +45,7 @@ function vless(): VlessNode {
     earlyData: 0,
     fingerprint: "chrome",
     alpn: [],
+    ech: null,
     variant: "normal",
     tags: [],
     uuid: "u",

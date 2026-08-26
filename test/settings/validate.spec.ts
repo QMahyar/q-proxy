@@ -242,3 +242,70 @@ describe("cleanIps with pinned ports", () => {
     if (result.ok) expect(result.value.cleanIps.length).toBe(64);
   });
 });
+
+describe("telegram settings block", () => {
+  const VALID_TOKEN = `123456789:${"A".repeat(35)}`;
+
+  it("defaults to a disabled empty bot", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.telegram).toEqual({ enabled: false, botToken: "", chatId: "" });
+  });
+
+  it("accepts a full valid telegram patch", () => {
+    const result = validateSettings({
+      telegram: { enabled: true, botToken: VALID_TOKEN, chatId: "@my_channel" },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.value.telegram).toEqual({ enabled: true, botToken: VALID_TOKEN, chatId: "@my_channel" });
+  });
+
+  it("rejects a malformed token shape when enabled", () => {
+    for (const token of ["not-a-token", "123456:" + "x".repeat(34), "abc:" + "x".repeat(35), "123456789:" + "x".repeat(36)]) {
+      const result = validateSettings({ telegram: { enabled: true, botToken: token } });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.fields["telegram.botToken"]).toBeTruthy();
+    }
+  });
+
+  it("allows an unshaped token while disabled and accepts clearing it", () => {
+    const result = validateSettings({ telegram: { enabled: false, botToken: "garbage" } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.telegram.botToken).toBe("garbage");
+    const cleared = validateSettings({ telegram: { enabled: false, botToken: "", chatId: "" } });
+    expect(cleared.ok).toBe(true);
+  });
+
+  it("rejects chat ids that are not numeric or @names", () => {
+    for (const chatId of ["not valid", "@a", "12ab!"]) {
+      const result = validateSettings({ telegram: { chatId } });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.fields["telegram.chatId"]).toBeTruthy();
+    }
+  });
+
+  it("caps chat id length at 64 characters", () => {
+    const result = validateSettings({ telegram: { chatId: "@" + "a".repeat(70) } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.fields["telegram.chatId"]).toBeTruthy();
+  });
+
+  it("keeps token shape enforcement after a partial enable patch", () => {
+    const result = validateSettings({ telegram: { botToken: VALID_TOKEN, chatId: "-100999", enabled: true } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.telegram.chatId).toBe("-100999");
+      expect(result.value.telegram.enabled).toBe(true);
+    }
+    const badEnable = validateSettings({ telegram: { botToken: "garbage", chatId: "-100999", enabled: true } });
+    expect(badEnable.ok).toBe(false);
+    if (!badEnable.ok) expect(badEnable.fields["telegram.botToken"]).toBeTruthy();
+  });
+
+  it("rejects non-object telegram blocks", () => {
+    const result = validateSettings({ telegram: [1] });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.fields.telegram).toBe("must be an object");
+  });
+});

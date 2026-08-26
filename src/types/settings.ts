@@ -41,6 +41,12 @@ export interface CamouflageSettings {
   url: string;
 }
 
+export interface TelegramSettings {
+  enabled: boolean;
+  botToken: string;
+  chatId: string;
+}
+
 export interface Settings {
   version: number;
   securePath: string;
@@ -73,6 +79,8 @@ export interface Settings {
   fingerprint: Fingerprint;
   randomizeSniCase: boolean;
   alpn: string[];
+  echEnabled: boolean;
+  echServerName: string;
   cdn: { enabled: boolean; addresses: string[]; host: string; sni: string };
   fragment: FragmentSettings;
   proxyIpMode: "proxyip" | "nat64";
@@ -91,6 +99,8 @@ export interface Settings {
   killSwitch: boolean;
   speedtestIntercept: boolean;
   camouflage: CamouflageSettings;
+  routingRules: RoutingRules;
+  telegram: TelegramSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -125,6 +135,8 @@ export const DEFAULT_SETTINGS: Settings = {
   fingerprint: "chrome",
   randomizeSniCase: true,
   alpn: ["http/1.1"],
+  echEnabled: false,
+  echServerName: "",
   cdn: { enabled: false, addresses: [], host: "", sni: "" },
   fragment: {
     mode: "off",
@@ -152,8 +164,21 @@ export const DEFAULT_SETTINGS: Settings = {
   killSwitch: false,
   speedtestIntercept: true,
   camouflage: { mode: "static", url: "" },
+  routingRules: { bypassLan: false, blockAds: false, blockMalware: false, blockQuic: false, customBypass: [], customBlock: [] },
+  telegram: { enabled: false, botToken: "", chatId: "" },
 };
 
 export const SENSITIVE_SETTING_PATHS = ["passwordHash", "passwordSalt", "sessionSecret"] as const;
 
-export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number]>;
+export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number]> & {
+  telegram: Omit<TelegramSettings, "botToken">;
+};
+
+export interface RoutingRules {
+  bypassLan: boolean;
+  blockAds: boolean;
+  blockMalware: boolean;
+  blockQuic: boolean;
+  customBypass: string[];
+  customBlock: string[];
+}

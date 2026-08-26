@@ -66,8 +66,8 @@ On first load with empty `qproxy:settings`, every panel route renders the setup 
 |------|--------|--------|
 | 1 | `/{securePath}/panel` redirects to `/{securePath}/login` | Shown automatically when `passwordHash === null` (`src/types/settings.ts:43`) |
 | 2 | Set Password | Enter ≥8 chars with letter+digit; stored as PBKDF2-SHA256 (`src/auth/password.ts`). Race-guarded: only accepted while unset |
-| 3 | Secure Path noted | Generated `randomHex(12)` (`src/settings/seed.ts`). Gating: panel, APIs, subscriptions, DoH, and all `/{vl|vm|tr|ss}/` tunnels live under it (`src/core/router.ts:164`) |
-| 4 | Login | Sets `q_session` cookie (`HttpOnly; Secure; SameSite=Lax`, 7-day, `src/core/router.ts:124` flow) + CSRF header `X-Q-Panel: 1` for mutating calls |
+| 3 | Secure Path noted | Generated `randomHex(12)` (`src/settings/seed.ts`). Gating: panel, APIs, subscriptions, DoH, and all `/{vl|vm|tr|ss}/` tunnels live under it (`src/core/routes.ts:53`) |
+| 4 | Login | Sets `q_session` cookie (`HttpOnly; Secure; SameSite=Lax`, 7-day, `src/handlers/api/auth.ts` flow) + CSRF header `X-Q-Panel: 1` for mutating calls |
 
 Screenshot: *Setup form (EN/FA toggle) → Login → Panel Home*
 
@@ -102,17 +102,17 @@ Screenshot: *Settings form with grouped tabs + validation toast + dirty-guard*
 
 ### 4.3 IP Checker (`GET /{sp}/my-ip`)
 
-Authenticated page (`src/handlers/myip.ts`, `src/core/router.ts:122`). JSON when `Accept: application/json`. Shows CF vs non-CF egress IPs, colo flag via static map (no `ip-api.com`), no third-party geo.
+Authenticated page (`src/handlers/myip.ts`, `src/core/router.ts:164`). JSON when `Accept: application/json`. Shows CF vs non-CF egress IPs, colo flag via static map (no `ip-api.com`), no third-party geo.
 
 ### 4.4 Kill Switch
 
-`POST /{sp}/api/killswitch {enabled}` (`src/handlers/api/status.ts`). When `killSwitch: true`, every WS upgrade returns `503` before upgrade (`src/core/router.ts:159`); panel/sub/DoH stay live. Operational containment — flip without redeploy.
+`POST /{sp}/api/killswitch {enabled}` (`src/handlers/api/status.ts`). When `killSwitch: true`, every WS upgrade returns `503` before upgrade (`src/core/router.ts:202`); panel/sub/DoH stay live. Operational containment — flip without redeploy.
 
 ## 5. Subscriptions
 
 ### 5.1 Matrix
 
-Base path: `GET /{sp}/sub` (`src/handlers/subscribe.ts`, `src/core/router.ts:118`). Content negotiation in `src/subscription/negotiate.ts:6` and `src/core/ua.ts:19`:
+Base path: `GET /{sp}/sub` (`src/handlers/subscribe.ts`, `src/core/router.ts:154`). Content negotiation in `src/subscription/negotiate.ts:6` and `src/core/ua.ts:19`:
 
 | `?target=` | UA sniff token | Format | Content-Type | Body |
 |------------|----------------|--------|--------------|------|
@@ -215,7 +215,7 @@ Fragment forces TLS ports and excludes CDN hosts (src/types/node.ts). Use ?fragm
 - Rotate securePath after sharing configs — rotation invalidates every client URI by design (src/handlers/api/auth.ts, docs/SPEC.md F-36 warning).
 - Store trojanPassword / ssPassword / UUIDs only in KV — never commit wrangler.toml with secrets. Mask in any diagnostic output.
 - Enable camouflage.mode: static (default) so probes get fake 1101 HTML 500, not 404 fingerprints (src/handlers/camouflage.ts, docs/SPEC.md F-37). /robots.txt always Disallow.
-- killSwitch is instant containment — no redeploy needed (src/core/router.ts:159). Panel stays live.
+- killSwitch is instant containment — no redeploy needed (src/core/router.ts:202). Panel stays live.
 - Password stored PBKDF2-SHA256 >=100k iterations + 16-byte salt; setup race-guarded (docs/SPEC.md F-32/F-33).
 
 ## 10. Updating
@@ -226,7 +226,7 @@ Screenshot: *Status card showing version bump + KV migration log*
 
 ## 11. DoH Private Endpoint
 
-GET /{sp}/doh (also /{sp}/dns-query alias in spec, canonical /{sp}/doh in router) — blind DoH reverse proxy to dohUpstream (src/handlers/doh.ts, src/core/router.ts:114). GET ?dns= and POST both forwarded verbatim, cookies stripped, correct content-type returned. Size-capped at 10 MiB. Lives under securePath — knowledge of path is capability. Test: curl https://<worker>/<sp>/doh?dns=<b64url(dns packet)> -H "accept: application/dns-message".
+GET /{sp}/doh (also /{sp}/dns-query alias in spec, canonical /{sp}/doh in router) — blind DoH reverse proxy to dohUpstream (src/handlers/doh.ts, src/core/router.ts:150). GET ?dns= and POST both forwarded verbatim, cookies stripped, correct content-type returned. Size-capped at 10 MiB. Lives under securePath — knowledge of path is capability. Test: curl https://<worker>/<sp>/doh?dns=<b64url(dns packet)> -H "accept: application/dns-message".
 
 ## 12. Speedtest Interception
 
@@ -290,7 +290,7 @@ GET /{sp}/my-ip (src/handlers/myip.ts) performs two server-side fetches: CF-fron
 
 | Toggle | Field | Scope | Panel stays live? |
 |--------|-------|-------|-------------------|
-| Kill Switch | killSwitch (src/types/settings.ts:88) | WS upgrades only -> 503 (src/core/router.ts:159) | Yes |
+| Kill Switch | killSwitch (src/types/settings.ts:88) | WS upgrades only -> 503 (src/core/router.ts:202) | Yes |
 | Camouflage | camouflage.mode off/static/proxy | Unmatched routes + wrong securePath | Yes (mode controls fallback) |
 | Debug Logging | debugLogging | Structured log verbosity (src/core/log.ts) | Yes — enable for wrangler tail |
 

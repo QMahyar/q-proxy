@@ -35,12 +35,14 @@ function proxyEntry(node: ProxyNode): YamlObject {
     p.uuid = node.uuid;
     p.tls = isTls;
     if (isTls) p.servername = node.sni ?? node.host;
+    if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = { enable: true };
   } else if (node.kind === "vmess") {
     p.uuid = node.uuid;
     p.alterId = node.alterId;
     p.cipher = node.cipher;
     p.tls = isTls;
     if (isTls) p.servername = node.sni ?? node.host;
+    if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = { enable: true };
   } else if (node.kind === "trojan") {
     p.password = node.password;
     if (isTls) p.sni = node.sni ?? node.host;
@@ -86,7 +88,21 @@ export function emitClashYaml(nodes: readonly ProxyNode[], opts: EmitOptions): s
     "log-level": "info",
     proxies,
     "proxy-groups": groups,
-    rules: [names.length > 0 ? "MATCH,PROXY" : "MATCH,DIRECT"],
+    rules: buildRules(opts, names.length > 0),
   };
   return writeYaml(doc);
+}
+
+function buildRules(opts: EmitOptions, hasNodes: boolean): string[] {
+  const r = opts.rules;
+  if (!r) return [hasNodes ? "MATCH,PROXY" : "MATCH,DIRECT"];
+  const out: string[] = [];
+  if (r.blockDomains.length > 0) out.push(...r.blockDomains.map((d) => `DOMAIN-SUFFIX,${d},REJECT`));
+  if (r.blockQuic) out.push("AND,((NETWORK,udp),(DST-PORT,443)),REJECT");
+  if (r.bypassLan) {
+    out.push("IP-CIDR,127.0.0.0/8,DIRECT,no-resolve", "IP-CIDR,10.0.0.0/8,DIRECT,no-resolve", "IP-CIDR,172.16.0.0/12,DIRECT,no-resolve", "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve", "IP-CIDR,::1/128,DIRECT,no-resolve");
+  }
+  if (r.bypassDomains.length > 0) out.push(...r.bypassDomains.map((d) => `DOMAIN-SUFFIX,${d},DIRECT`));
+  out.push(hasNodes ? "MATCH,PROXY" : "MATCH,DIRECT");
+  return out;
 }

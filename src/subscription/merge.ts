@@ -58,8 +58,25 @@ async function fetchOne(url: string, budget: { left: number }): Promise<string[]
   }
 }
 
-export async function fetchRemoteSubLines(urls: readonly string[]): Promise<string[]> {
+interface RemoteMemo {
+  key: string;
+  lines: string[];
+  expiresAt: number;
+}
+
+let remoteMemo: RemoteMemo | null = null;
+
+export function clearRemoteSubCache(): void {
+  remoteMemo = null;
+}
+
+export async function fetchRemoteSubLines(urls: readonly string[], ttlSeconds = 0): Promise<string[]> {
   if (urls.length === 0) return [];
+  const key = urls.join("\n");
+  const now = Date.now();
+  if (ttlSeconds > 0 && remoteMemo !== null && remoteMemo.key === key && remoteMemo.expiresAt > now) {
+    return remoteMemo.lines;
+  }
   const budget = { left: MAX_TOTAL_BYTES };
   const settled = await Promise.all(urls.map((u) => fetchOne(u, budget)));
   const seen = new Set<string>();
@@ -71,5 +88,6 @@ export async function fetchRemoteSubLines(urls: readonly string[]): Promise<stri
       out.push(line);
     }
   }
+  if (ttlSeconds > 0) remoteMemo = { key, lines: out, expiresAt: now + ttlSeconds * 1000 };
   return out;
 }

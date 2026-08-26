@@ -22,6 +22,7 @@ function vless(): VlessNode {
     earlyData: 2048,
     fingerprint: "chrome",
     alpn: ["http/1.1"],
+    ech: null,
     variant: "normal",
     tags: [],
     uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
@@ -41,6 +42,7 @@ function trojan(): TrojanNode {
     earlyData: 2048,
     fingerprint: "chrome",
     alpn: [],
+    ech: null,
     variant: "normal",
     tags: [],
     password: "secretpass123",
@@ -60,6 +62,7 @@ function ss(): SSNode {
     earlyData: 0,
     fingerprint: null,
     alpn: [],
+    ech: null,
     variant: "normal",
     tags: [],
     method: "aes-128-gcm",
@@ -147,6 +150,7 @@ describe("emitClashYaml golden", () => {
       earlyData: 0,
       fingerprint: "firefox",
       alpn: [],
+      ech: null,
       variant: "normal",
       tags: [],
       uuid: "1386f85e-657b-4d6e-9d56-78badb75e1fd",
@@ -183,5 +187,37 @@ describe("emitClashYaml golden", () => {
     const frag: VlessNode = { ...vless(), name: "F", variant: "fragment", tags: ["fragment"] };
     expect(emitClashYaml([frag], OPTS)).not.toContain("- F\n");
     expect(emitClashYaml([frag], { ...OPTS, isFragment: true })).toContain("- name: F");
+  });
+});
+
+describe("emitClashYaml routing rules", () => {
+  it("emits reject/bypass/LAN/QUIC rules before MATCH when rules provided", () => {
+    const nodes = [vless()];
+    const out = emitClashYaml(nodes, {
+      remoteDns: "https://1.1.1.1/dns-query",
+      urlTestIntervalSec: 300,
+      isFragment: false,
+      rules: {
+        bypassLan: true,
+        bypassDomains: ["example.ir"],
+        blockDomains: ["ads.example.com"],
+        blockQuic: true,
+      },
+    });
+    expect(out).toContain("DOMAIN-SUFFIX,ads.example.com,REJECT");
+    expect(out).toContain("AND,((NETWORK,udp),(DST-PORT,443)),REJECT");
+    expect(out).toContain("IP-CIDR,192.168.0.0/16,DIRECT,no-resolve");
+    expect(out).toContain("DOMAIN-SUFFIX,example.ir,DIRECT");
+    const rulesIdx = out.indexOf("rules:");
+    const matchIdx = out.indexOf("MATCH,PROXY");
+    expect(matchIdx).toBeGreaterThan(rulesIdx);
+    expect(out.indexOf("MATCH,PROXY")).toBeGreaterThan(out.indexOf("DOMAIN-SUFFIX,example.ir,DIRECT"));
+  });
+
+  it("keeps output unchanged when rules are omitted", () => {
+    const nodes = [vless()];
+    const out = emitClashYaml(nodes, { remoteDns: "https://1.1.1.1/dns-query", urlTestIntervalSec: 300, isFragment: false });
+    expect(out).toContain(`rules: ["MATCH,PROXY"]`);
+    expect(out).not.toContain("REJECT");
   });
 });
