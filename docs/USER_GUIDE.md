@@ -1,6 +1,6 @@
-# Q Proxy — User Guide v1.0.0
+# Q Proxy — User Guide
 
-> For architecture and contributing, see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md). For decisions, see [../RATIONALE.md](../RATIONALE.md).
+> For architecture and contributing, see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md). For frozen contracts, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 1. Prerequisites
 
@@ -24,7 +24,9 @@ Pick one path. Both produce the identical bundle from `scripts/build-single-file
 | 1 | `npm run build` → verify `dist/q-proxy.js` exists (`scripts/build-single-file.mjs:15`) |
 | 2 | Cloudflare Dashboard → Workers & Pages → Create Worker → Edit Code → paste entire `dist/q-proxy.js` → Save |
 | 3 | Settings → Bindings → Add KV Namespace → variable `QPROXY_KV` → create + bind `qproxy` namespace |
-| 4 | Deploy. Open `https://<worker>.workers.dev/` → expect camouflage 500 page until first-run wizard completes |
+| 4 | Deploy. Visit any worker URL once — this seeds settings into KV |
+| 5 | Read your secret path from KV key `qproxy:settings`, field `data.securePath` (dashboard binding viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV`) |
+| 6 | Open `https://<worker>.workers.dev/<securePath>/panel` → first-run wizard |
 
 Screenshot: *Dashboard → Edit Code with pasted bundle + KV binding panel*
 
@@ -48,7 +50,7 @@ $env:CLOUDFLARE_API_KEY   = "cfk_<your-global-api-key>"
 $env:CLOUDFLARE_EMAIL     = "you@example.com"
 $env:CLOUDFLARE_ACCOUNT_ID = "<your-account-id>"
 npx wrangler whoami          # must show the chosen account
-npx wrangler kv namespace create qproxy
+npx wrangler kv namespace create QPROXY_KV
 # copy id → paste into wrangler.toml
 npm run deploy               # = build + wrangler deploy (package.json:11)
 # or: npm run dev            # local miniflare at http://127.0.0.1:8787
@@ -125,7 +127,7 @@ Base path: `GET /{sp}/sub` (`src/handlers/subscribe.ts`, `src/core/router.ts:154
 
 Priority: `?target=` param > UA tokens > `base64` fallback; browsers get the info page. Non-browser UAs get `Content-Disposition: attachment` + `Subscription-Userinfo` / `Profile-Title` headers (`src/subscription/headers.ts`).
 
-Fragment variant: `?fragment=1` emits Xray JSON chained through `fragment` outbound (presets low→severe map in `src/nodes/fragments.ts`). Shadowrocket/Happ UAs on mixed subs get `fragment=` URI param automatically.
+Fragment variant: `?mode=fragment` filters nodes to the fragment family (Xray JSON chains through a `fragment` outbound; presets in `src/nodes/fragments.ts`). Shadowrocket/Happ UAs on mixed subs get `fragment=` URI params automatically.
 
 ### 5.2 Per-Client Import
 
@@ -140,16 +142,42 @@ Fragment variant: `?fragment=1` emits Xray JSON chained through `fragment` outbo
 
 Screenshot placeholders: *QR modal + "Copy URL" toast + per-format tabs on info page*
 
+### 5.3 Per-User Links (User Center)
+
+Admin panel → Users tab. Create a user (name, protocol filter, optional daily request limit and expiry date) and copy its subscription URL `/{sp}/sub/u/{token}`.
+
+| Behavior | Response |
+|----------|----------|
+| User disabled or expired | HTTP 410 |
+| Daily request quota exhausted | HTTP 429 with `Retry-After` |
+| Protocol filter set | Only those protocols appear in the emitted sub |
+
+Each user link supports the same `?target=` formats as the main subscription. Up to 50 users; usage counters reset daily. Worker-subscription traffic from user links consumes the same Workers request quota as your own links.
+
+### 5.4 WARP Subscriptions
+
+Panel → WARP section: register a real Cloudflare WARP device (or import a config), optionally save endpoint presets or Amnezia parameters, then copy a config URL `/{sp}/sub/wg/{token}/{format}`. All 17 format slugs live in `src/warp/formats/registry.ts`; the two zip variants are `wireguard-conf` and `wireguard-conf-amnezia`.
+
+These configs connect straight to Cloudflare's WARP network — their tunnel traffic never passes through your Worker and does not consume the Workers request budget.
+
+### 5.5 Telegram Bot
+
+1. Create a bot with @BotFather, copy the token.
+2. Panel → Settings → Advanced → Telegram: enable, paste token, set your chat ID.
+3. Click Set webhook. The webhook URL embeds an HMAC-derived secret; commands `/status`, `/sub`, `/kill on|off`, `/usage` get EN/FA replies per `settings.language`.
+
+Removing the webhook deletes it from BotFather. The bot token is write-only: it is stripped from settings responses and exports.
+
 ## 6. Troubleshooting
 
 | # | Symptom | Cause | Fix |
 |---|---------|-------|-----|
-| 1 | **Bad password / 401 on panel** — login fails, no hint which field | PBKDF2 constant-time check (`src/auth/password.ts`); login throttle 5 fails/15 min → 403 (`docs/SPEC.md:35`) | Wait 15 min or clear KV `rl:*`; verify password has letter+digit; check cookie `__Host-qpsid` / `q_session` not blocked; `X-Q-Panel: 1` header present on PUTs |
+| 1 | **Bad password / 401 on panel** — login fails, no hint which field | PBKDF2 constant-time check (`src/auth/password.ts`); login throttle 5 fails/15 min → 403 | Wait 15 min or clear KV `rl:*`; verify password has letter+digit; check cookie `q_session` not blocked; `X-Q-Panel: 1` header present on PUTs |
 | 2 | **Early data rejected / WS 1008** | `Sec-WebSocket-Protocol` payload >8 KB or not base64url, or SS path with early data (early data disabled for SS, `src/types/node.ts` invariant) | Cap at `earlyDataMaxBytes: 2048` (`src/types/settings.ts:195`), ensure `ed=2048` in URI (`?ed=2048`), use dedicated `/ss/<suffix>` path (`src/core/routes.ts:11`) |
 | 3 | **Fragment sub empty / plain ports in fragment** | `fragment.mode: "off"` disables fragment family; fragment forces TLS only, excludes CDN hosts (`src/types/node.ts:358`) | Set `fragment.mode` to `low`/`medium`/`high`/`severe`; check `tlsPorts` includes 443; disable `cdn.enabled` for fragment |
-| 4 | **Camouflage shows 500 on valid path** | Wrong `securePath` segment (case-sensitive), unmatched route, or internal error all return identical fake 1101 HTML (`src/handlers/camouflage.ts`, `docs/SPEC.md:37`) | Copy exact `/{securePath}/panel` URL from KV `qproxy:settings`; check `GET /robots.txt` returns `Disallow: /`; never guess — rotate path via Settings if leaked |
+| 4 | **Camouflage shows 500 on valid path** | Wrong `securePath` segment (case-sensitive), unmatched route, or internal error all return identical fake 1101 HTML (`src/handlers/camouflage.ts`) | Copy exact `/{securePath}/panel` URL from KV `qproxy:settings`; check `GET /robots.txt` returns `Disallow: /`; never guess — rotate path via Settings if leaked |
 | 5 | **DNS / UDP53 fails, only TCP works** | `enableUdp53: false` or upstream `dohUpstream` unreachable; non-53 UDP always rejected (`src/protocols/vless.ts` cmd 2 guard) | Enable `enableUdp53: true`, set `dohUpstream` to `https://cloudflare-dns.com/dns-query`, test `GET /{sp}/doh?dns=...`; expected: only port-53 UDP relayed via `DnsPacketRelay` (`src/types/tunnel.ts:525`) |
-| 6 | **Subscription counters always 0 / `total` missing** | `qproxy:counters` not yet flushed (isolate buffer, 60 s / 32 conns), or `total`/`expire` unset by design (`docs/SPEC.md:24`) | Generate traffic then wait 60 s; `download = requestsTotal × 1 MiB` is an estimate — set `total`/`expire` in Settings if you want explicit quota display |
+| 6 | **Subscription counters always 0 / `total` missing** | `qproxy:counters` not yet flushed (isolate buffer, 60 s / 32 conns), or `total`/`expire` unset by design | Generate traffic then wait 60 s; `download = requestsTotal × 1 MiB` is an estimate — set `total`/`expire` in Settings if you want explicit quota display |
 
 Still stuck? Enable `debugLogging: true` (`src/types/settings.ts:48` → `src/core/log.ts`) and check `wrangler tail`, or open an issue with the sanitized `GET /{sp}/api/status` output.
 
@@ -165,7 +193,7 @@ Still stuck? Enable `debugLogging: true` (`src/types/settings.ts:48` → `src/co
 
 Address composition guarantee: subscriptions contain **only** your worker hostname plus entries from these user-owned lists — no built-in or hard-coded IPs/domains are ever added.
 
-Set in Panel -> Settings -> Routing. DNS for custom domains must be proxied (orange cloud) in CF dashboard — no auto DNS changes (docs/SPEC.md F-16).
+Set in Panel -> Settings -> Routing. DNS for custom domains must be proxied (orange cloud) in CF dashboard — no auto DNS changes.
 
 Screenshot: *Routing tab with custom domain + clean IP list + validation icons*
 
@@ -173,7 +201,7 @@ Screenshot: *Routing tab with custom domain + clean IP list + validation icons*
 
 chainProxy { enabled: true, uri: "socks5://user:pass@1.2.3.4:1080" } (src/types/settings.ts:78) or http:// / https:// .
 
-- All tunneled TCP routes through the chain when enabled — no silent fallback on failure (docs/SPEC.md F-11, src/tunnel/egress.ts:46).
+- All tunneled TCP routes through the chain when enabled — no silent fallback on failure (src/tunnel/egress.ts).
 - SOCKS5 per RFC 1928 with optional auth (src/tunnel/chain/socks5.ts); HTTP CONNECT via src/tunnel/chain/http-connect.ts; HTTPS uses native TLS socket (secureTransport:on).
 - Chain failure closes the session. Disable to restore direct-first flow.
 
@@ -201,22 +229,22 @@ Fragment presets (src/nodes/fragments.ts) map panel modes to length/delay/maxSpl
 | severe | 1-5 | 1-5 | — | |
 | custom | lengthMin/Max | delayMin/Max | maxSplitMin/Max | User fields src/types/settings.ts:152 |
 
-Fragment forces TLS ports and excludes CDN hosts (src/types/node.ts). Use ?fragment=1 on sub or enable in panel.
+Fragment forces TLS ports and excludes CDN hosts (src/types/node.ts). Use ?mode=fragment on sub or enable in panel.
 
 ## 8. Port Matrix and TLS Notes
 
 - TLS ports tlsPorts: [443,2053,2083,2087,2096,8443] -> security=tls; plain plainPorts: [80,8080,8880,2052,2082,2086,2095] -> security=none (src/types/settings.ts:119). Mismatch never emitted — property test over generator.
-- plainPortPolicy: workers-dev (default) = plain nodes only when hostname is *.workers.dev; always / never override (docs/SPEC.md F-15). Enable always if using custom domain with HTTP allowed.
-- Emitted nodes: sni = randomized-uppercase hostname per remark seed, alpn=http/1.1, fingerprint selectable (chrome default, 10 values + random/randomized), allowInsecure=false always (docs/SPEC.md F-29).
+- plainPortPolicy: workers-dev (default) = plain nodes only when hostname is *.workers.dev; always / never override. Enable always if using custom domain with HTTP allowed.
+- Emitted nodes: sni = randomized-uppercase hostname per remark seed, alpn=http/1.1, fingerprint selectable (chrome default, 10 values + random/randomized), allowInsecure=false always.
 - Remarks encode protocol + port + address class + flags (F= fragment, D= custom domain, chain indicator) — unique and stable per src/nodes/naming.ts.
 
 ## 9. Security Checklist
 
-- Rotate securePath after sharing configs — rotation invalidates every client URI by design (src/handlers/api/auth.ts, docs/SPEC.md F-36 warning).
+- Rotate securePath after sharing configs — rotation invalidates every client URI by design (src/handlers/api/auth.ts).
 - Store trojanPassword / ssPassword / UUIDs only in KV — never commit wrangler.toml with secrets. Mask in any diagnostic output.
-- Enable camouflage.mode: static (default) so probes get fake 1101 HTML 500, not 404 fingerprints (src/handlers/camouflage.ts, docs/SPEC.md F-37). /robots.txt always Disallow.
-- killSwitch is instant containment — no redeploy needed (src/core/router.ts:202). Panel stays live.
-- Password stored PBKDF2-SHA256 >=100k iterations + 16-byte salt; setup race-guarded (docs/SPEC.md F-32/F-33).
+- Enable camouflage.mode: static (default) so probes get fake 1101 HTML 500, not 404 fingerprints (src/handlers/camouflage.ts). /robots.txt always Disallow.
+- killSwitch is instant containment — no redeploy needed (src/core/router.ts). Panel stays live.
+- Password stored PBKDF2-SHA256 >=100k iterations + 16-byte salt; setup race-guarded.
 
 ## 10. Updating
 
@@ -226,7 +254,7 @@ Screenshot: *Status card showing version bump + KV migration log*
 
 ## 11. DoH Private Endpoint
 
-GET /{sp}/doh (also /{sp}/dns-query alias in spec, canonical /{sp}/doh in router) — blind DoH reverse proxy to dohUpstream (src/handlers/doh.ts, src/core/router.ts:150). GET ?dns= and POST both forwarded verbatim, cookies stripped, correct content-type returned. Size-capped at 10 MiB. Lives under securePath — knowledge of path is capability. Test: curl https://<worker>/<sp>/doh?dns=<b64url(dns packet)> -H "accept: application/dns-message".
+GET /{sp}/doh — blind DoH reverse proxy to dohUpstream (src/handlers/doh.ts). GET ?dns= and POST both forwarded verbatim, cookies stripped, correct content-type returned. Size-capped at 10 MiB. Lives under securePath — knowledge of path is capability. Test: curl https://<worker>/<sp>/doh?dns=<b64url(dns packet)> -H "accept: application/dns-message".
 
 ## 12. Speedtest Interception
 
@@ -234,11 +262,11 @@ speedtestIntercept: true (default) (src/types/settings.ts:149, src/tunnel/speedt
 
 ## 13. Language and i18n
 
-Panel and info page bilingual EN/FA via embedded dictionary (docs/SPEC.md F-38). FA renders dir=rtl with mirrored layout. Language switch persists per session; src/types/settings.ts:47 language: en | fa, default fa. Zero hardcoded English strings in templates (lint-checked).
+Panel and info page bilingual EN/FA via embedded dictionary. FA renders dir=rtl with mirrored layout. Language switch persists per session; src/types/settings.ts language: en | fa, default fa. Zero hardcoded English strings in templates (lint-checked).
 
 ## 14. QR Codes
 
-Client-side embedded JS generator compiled into panel asset (docs/SPEC.md F-39). Panel shows QR per sub/config link. No /qrcode GET endpoint exists server-side. Scan with any camera app or client QR import. Verify QR payload matches copied URL.
+Client-side embedded JS generator compiled into panel asset. Panel shows QR per sub/config link. No /qrcode GET endpoint exists server-side. Scan with any camera app or client QR import. Verify QR payload matches copied URL.
 
 Screenshot: *Panel QR modal with per-format tabs (base64/clash/singbox/surge/loon) + language toggle EN/FA*
 
@@ -284,7 +312,7 @@ Full field list: src/types/settings.ts:41 Settings interface (26 top-level keys 
 
 ## 18. IP Checker Details
 
-GET /{sp}/my-ip (src/handlers/myip.ts) performs two server-side fetches: CF-fronted echo + non-CF echo (both configurable, no ip-api). Renders two-column exit-IP table plus colo code with country flag from embedded static colo->flag map. Third-party geo APIs never called (docs/SPEC.md F-40). When Accept: application/json, returns {ip, colo, country, city, asn, cfEgressIp}.
+GET /{sp}/my-ip (src/handlers/myip.ts) performs two server-side fetches: CF-fronted echo + non-CF echo (both configurable, no ip-api). Renders two-column exit-IP table plus colo code with country flag from embedded static colo->flag map. Third-party geo APIs never called. When Accept: application/json, returns {ip, colo, country, city, asn, cfEgressIp}.
 
 ## 19. Kill Switch vs Camouflage vs Debug
 

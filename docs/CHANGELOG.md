@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0 - 2026-08-26
+
+### Added
+- **WARP integration**: Cloudflare WARP device generation (x25519, RFC 7748) and `.conf`/`wg://` import; 17 subscription formats including Amnezia variants; endpoint presets (default/Iran/China/custom); per-account Amnezia overrides; public token'd routes `/{sp}/sub/wg/{token}/{format}` with edge caching and purge-on-change.
+- **User center**: scoped per-user subscription links at `/{sp}/sub/u/{token}` with protocol filters, daily request quotas, and expiry; admin CRUD under `/{sp}/api/users`.
+- **Telegram bot**: HMAC-gated webhook (`/{sp}/telegram/webhook/{secret}`), /status /sub /kill /usage commands, EN/FA replies, in-panel webhook setup/removal. `telegram.botToken` is write-only.
+- **Settings import/export**: JSON export with all secrets and the secure path stripped; validated import that preserves identity and URLs.
+- **ECH**: `echEnabled` + `echServerName`; emitted as `ech=` on VLESS/Trojan TLS URIs, sing-box `tls.ech`, and Clash `ech-opts`.
+- **Routing rules**: LAN bypass, QUIC block, and custom bypass/block domain lists injected into Clash and sing-box outputs.
+- **Panel self-update check** against GitHub releases; first-run wizard (EN/FA).
+
+### Changed
+- **Efficiency**: panel boot coalesced to one `GET /api/bootstrap` call with ETag/304 revalidation; sessionStorage client cache with in-flight dedup; settings isolate cache 60 s + KV `cacheTtl` + write-through saves with no-op skip; subscription responses edge-cached 60 s; remote subscriptions memoized per update interval; `robots.txt` and OPTIONS answered without loading settings.
+- **Visual identity**: design system ported from the warp-generator project: dark glass tokens, four accent themes, ambient dot-grid/noise/blobs, gradient CTAs, pill navigation, toast progress bars, skeleton loaders, empty states, stat chips, sheet modals.
+- **UX details**: help popovers on policy fields, on-blur scalar validation, live character counters, and explicit Worker-quota vs WARP-direct labeling on subscriptions.
+
+### Fixed
+- Kill switch double-click spam (debounced), stale panel HTML after deploys (cache headers), no-op settings writes burning KV quota.
+
 ## 1.0.5 — 2026-08-24
 
 ### Added

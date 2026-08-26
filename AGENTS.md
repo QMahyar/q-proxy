@@ -1,6 +1,6 @@
 # AGENTS.md — Q Proxy
 
-Context for AI agents working in this repo. Read this before any change. Frozen contracts live in `docs/ARCHITECTURE.md` — do not rename exported types without an architecture revision.
+Context for AI agents working in this repo. Read this first, then [CONTEXT.md](CONTEXT.md) for the subsystem map and conventions cheat-sheet. Frozen contracts live in `docs/ARCHITECTURE.md` — do not rename exported types without an architecture revision.
 
 ## What This Is
 
@@ -42,7 +42,7 @@ Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY
 - Result convention for settings validation: `{ok:true,value:Settings}|{ok:false,fields}`
 - Tests mirror `src/` paths under `test/`; workers tests only under `test/workers/`
 - Settings writes always go through `validateSettings` then `saveSettings`
-- Sensitive fields (`passwordHash`, `passwordSalt`, `sessionSecret`) never appear in API responses, logs, or HTML
+- Sensitive fields (`passwordHash`, `passwordSalt`, `sessionSecret`, write-only `telegram.botToken`) never appear in API responses, logs, or HTML
 
 ## Architecture Map
 
@@ -57,10 +57,14 @@ src/tunnel/relay.ts      WS↔TCP pump, zero-byte retry hook, header written onc
 src/nodes/generate.ts    ProxyNode[] builder — port↔security pairing invariant, fragment⇒TLS∧¬CDN, SS earlyData=0
 src/nodes/emitters/*     base64-list, clash-yaml, singbox-json, surge-conf, loon-conf (+registry)
 src/subscription/        negotiate (?target= > UA > base64), headers, merge (remote subs)
+src/users/store.ts       per-user directory (≤50): token subs, protocol filter, daily quota, expiry
 src/auth/                password (PBKDF2 100k + legacy 15k), session (HMAC q_session), guard (CSRF X-Q-Panel)
-src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, validate (53 fields)
-src/handlers/            tunnel, subscribe, doh, myip(requireAuth), robots, camouflage, api/* (incl. bootstrap, warp)
-src/warp/                WARP core: config parsers, api client, store (accounts/presets/amnezia)
+src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, validate (72 leaf fields)
+src/handlers/            tunnel, subscribe, warp-sub, users-sub, doh, myip(requireAuth), robots, camouflage,
+                         api/* (auth, settings+bootstrap/export/import/reset, status+suburls, killswitch,
+                         warp, users, telegram setup/remove/webhook, version/check)
+src/warp/                WARP core: config parsers, api client, store (accounts/presets/amnezia),
+                         formats/registry (17 output formats), expand/cache/zip
 src/crypto/x25519.ts     hand-rolled X25519 (RFC 7748), zero-dep keypairs
 src/ui/assets.ts         panel.html, login.html, camo.html as strings
 ```
@@ -103,7 +107,7 @@ Adding an emitter:
 
 Protocol changes: validate against Xray-core fixtures first (`docs/research/04-protocol-formats.md`), keep parsers throwing never.
 
-## Known Gaps (v1.0.5)
+## Known Gaps
 
 - Change-password endpoint absent — logout is client-side cookie clear only; sessions revoke only via secret rotation (not exposed)
 - Early-data oversize drops silently instead of closing 1009
