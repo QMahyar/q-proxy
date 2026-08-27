@@ -207,23 +207,26 @@ update)
     [[ -z "$KV_ID" ]] && die "No Q Proxy KV found. Deploy first."
   fi
   echo "Downloading $SCRIPT_NAME..."
-  WORKER_DATA=$(curl -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" 2>/dev/null) || \
-    WORKER_DATA=$(curl -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME")
-  [[ -z "$WORKER_DATA" || ${#WORKER_DATA} -lt 10000 ]] && die "Download failed"
-  echo "Downloaded ${#WORKER_DATA} bytes"
-  if [[ "$DRY" -eq 1 ]]; then echo "[dry] Would upload with KV $KV_ID"; exit 0; fi
+  TMPFILE=$(mktemp /tmp/q-proxy-XXXXXX.js)
+  curl -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o "$TMPFILE" 2>/dev/null || \
+    curl -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o "$TMPFILE"
+  SIZE=$(wc -c < "$TMPFILE")
+  [[ "$SIZE" -lt 10000 ]] && die "Download failed ($SIZE bytes)"
+  echo "Downloaded $SIZE bytes"
+  if [[ "$DRY" -eq 1 ]]; then echo "[dry] Would upload with KV $KV_ID"; rm -f "$TMPFILE"; exit 0; fi
   METADATA="{\"main_module\":\"$SCRIPT_NAME\",\"compatibility_date\":\"2026-08-01\",\"bindings\":[{\"type\":\"kv_namespace\",\"name\":\"$BINDING\",\"namespace_id\":\"$KV_ID\"}]}"
   if [[ "$TOKEN" == cfk_* ]]; then
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
       -F "metadata=${METADATA};type=application/json" \
-      -F "${SCRIPT_NAME}=${WORKER_DATA};type=application/javascript+module")
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
   else
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "Authorization: Bearer $TOKEN" \
       -F "metadata=${METADATA};type=application/json" \
-      -F "${SCRIPT_NAME}=${WORKER_DATA};type=application/javascript+module")
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
   fi
+  rm -f "$TMPFILE"
   ok "$UPLOAD" || die "Upload failed: $UPLOAD"
   echo "Worker updated"
   ;;
@@ -251,12 +254,14 @@ deploy)
 
   # download
   echo "Downloading $SCRIPT_NAME..."
-  WORKER_DATA=$(curl -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" 2>/dev/null) || \
-    WORKER_DATA=$(curl -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME")
-  [[ -z "$WORKER_DATA" || ${#WORKER_DATA} -lt 10000 ]] && die "Download failed"
-  echo "Downloaded ${#WORKER_DATA} bytes"
+  TMPFILE=$(mktemp /tmp/q-proxy-XXXXXX.js)
+  curl -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o "$TMPFILE" 2>/dev/null || \
+    curl -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o "$TMPFILE"
+  SIZE=$(wc -c < "$TMPFILE")
+  [[ "$SIZE" -lt 10000 ]] && die "Download failed ($SIZE bytes)"
+  echo "Downloaded $SIZE bytes"
 
-  if [[ "$DRY" -eq 1 ]]; then echo "[dry] Would upload with KV $KV_ID"; exit 0; fi
+  if [[ "$DRY" -eq 1 ]]; then echo "[dry] Would upload with KV $KV_ID"; rm -f "$TMPFILE"; exit 0; fi
 
   # upload
   echo "Uploading worker..."
@@ -265,13 +270,14 @@ deploy)
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
       -F "metadata=${METADATA};type=application/json" \
-      -F "${SCRIPT_NAME}=${WORKER_DATA};type=application/javascript+module")
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
   else
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "Authorization: Bearer $TOKEN" \
       -F "metadata=${METADATA};type=application/json" \
-      -F "${SCRIPT_NAME}=${WORKER_DATA};type=application/javascript+module")
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
   fi
+  rm -f "$TMPFILE"
   ok "$UPLOAD" || die "Upload failed: $UPLOAD"
   echo "Worker uploaded"
 

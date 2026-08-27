@@ -1,18 +1,20 @@
-<# Q Proxy — deploy via Cloudflare API (PowerShell only, no wrangler/node/git)
+<# Q Proxy — deploy via Cloudflare API (PowerShell, no wrangler/node/git)
 Usage:
-  .\deploy.ps1                          # full deploy (interactive)
-  .\deploy.ps1 -Token T -Password P     # full deploy (non-interactive)
-  .\deploy.ps1 -Action update           # update worker script only
-  .\deploy.ps1 -Action list-kv          # list KV namespaces
-  .\deploy.ps1 -Action remove-kv        # remove KV namespace
-  .\deploy.ps1 -Action status           # show worker + KV status
-  .\deploy.ps1 -Action seed             # re-seed the worker
-  .\deploy.ps1 -Action set-password     # set/change password
+  .\deploy.ps1                                    # full deploy (interactive)
+  .\deploy.ps1 -Token T -Password P               # full deploy (non-interactive)
+  .\deploy.ps1 -Action update                     # update worker script only
+  .\deploy.ps1 -Action list-kv                    # list KV namespaces
+  .\deploy.ps1 -Action remove-kv                  # remove KV namespace
+  .\deploy.ps1 -Action status                     # show worker + KV status
+  .\deploy.ps1 -Action seed                       # re-seed the worker
+  .\deploy.ps1 -Action set-password               # set/change password
+  .\deploy.ps1 -Title "my-project"                # custom KV title (multi-project)
 #>
 param(
   [string]$Token,
   [string]$Email,
   [string]$Password,
+  [string]$Title = "q-proxy-QPROXY_KV",
   [ValidateSet("deploy","update","list-kv","remove-kv","status","seed","set-password")]
   [string]$Action = "deploy",
   [string]$KVId,
@@ -22,7 +24,6 @@ param(
 $ErrorActionPreference = "Stop"
 $REPO = "QMahyar/q-proxy"
 $WORKER = "q-proxy"
-$KV_TITLE = "q-proxy-QPROXY_KV"
 $BINDING = "QPROXY_KV"
 $SCRIPT_NAME = "q-proxy.js"
 $BASE = "https://api.cloudflare.com/client/v4"
@@ -30,39 +31,32 @@ $TOKEN_URL = 'https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 function cf($Method, $Path, $Body) {
-  $h = $headers.Clone(); $h.Remove("Content-Type")
   $uri = "$BASE$Path"
-  $jsonBody = if ($Body) { $Body | ConvertTo-Json -Compress } else { $null }
   try {
-    if ($jsonBody) {
-      $resp = Invoke-RestMethod -Uri $uri -Headers $h -Method $Method -Body $jsonBody -ContentType "application/json"
+    $params = @{ Uri = $uri; Method = $Method }
+    if ($Token -like "cfk_*") {
+      $params.Headers = @{ "X-Auth-Key" = $Token; "X-Auth-Email" = $Email }
     } else {
-      $resp = Invoke-RestMethod -Uri $uri -Headers $h -Method $Method
+      $params.Headers = @{ "Authorization" = "Bearer $Token" }
     }
+    if ($Body) {
+      $params.Body = ($Body | ConvertTo-Json -Compress)
+      $params.ContentType = "application/json"
+    }
+    $resp = Invoke-RestMethod @params
   } catch {
-    $errResp = $_.ErrorDetails.Message
-    if ($errResp) {
-      $p = $errResp | ConvertFrom-Json
+    $errBody = $_.ErrorDetails.Message
+    if ($errBody) {
+      $p = $errBody | ConvertFrom-Json
       $code = if ($p.errors.Count -gt 0) { $p.errors[0].code } else { "?" }
-      $msg  = if ($p.errors.Count -gt 0) { $p.errors[0].message } else { $errResp }
+      $msg  = if ($p.errors.Count -gt 0) { $p.errors[0].message } else { $errBody }
       return @{ ok=$false; code=$code; msg=$msg; raw=$p }
     }
     return @{ ok=$false; code="?"; msg=$_.Exception.Message; raw=$null }
   }
   if (-not $resp.success) {
     $code = if ($resp.errors.Count -gt 0) { $resp.errors[0].code } else { "?" }
-    $msg  = if ($resp.errors.Count -gt 0) { $resp.errors[0].message } else { "unknown error" }
-    return @{ ok=$false; code=$code; msg=$msg; raw=$resp }
-  }
-  return @{ ok=$true; result=$resp.result; raw=$resp }
-}
-
-function cfJson($Method, $Path, $RawJson) {
-  $h = $headers.Clone(); $h.Remove("Content-Type")
-  $resp = Invoke-RestMethod -Uri "$BASE$Path" -Headers $h -Method $Method -Body $RawJson -ContentType "application/json"
-  if (-not $resp.success) {
-    $code = if ($resp.errors.Count -gt 0) { $resp.errors[0].code } else { "?" }
-    $msg  = if ($resp.errors.Count -gt 0) { $resp.errors[0].message } else { "unknown error" }
+    $msg  = if ($resp.errors.Count -gt 0) { $resp.errors[0].message } else { "unknown" }
     return @{ ok=$false; code=$code; msg=$msg; raw=$resp }
   }
   return @{ ok=$true; result=$resp.result; raw=$resp }
@@ -77,49 +71,53 @@ if (-not $Token) {
   Write-Host ""
   $Token = Read-Host "Paste API Token or Global Key (cfk_...)"
 }
-
-$headers = @{ "Authorization" = "Bearer $Token"; "Content-Type" = "application/json" }
-$isGlobal = $Token.StartsWith("cfk_")
-if ($isGlobal) {
-  if (-not $Email) { $Email = Read-Host "Cloudflare email" }
-  $headers = @{ "X-Auth-Key" = $Token; "X-Auth-Email" = $Email; "Content-Type" = "application/json" }
+if ($Token -like "cfk_*" -and -not $Email) {
+  $Email = Read-Host "Cloudflare email"
 }
 
 $accts = cf GET "/accounts?per_page=5"
 if (-not $accts.ok -or -not $accts.result -or $accts.result.Count -eq 0) {
-  Write-Host "Failed to get account ID: $($accts.msg)" -ForegroundColor Red; exit 1
+  Write-Host "Auth failed: $($accts.msg)" -ForegroundColor Red; exit 1
 }
 $accountId = $accts.result[0].id
 Write-Host "Account: $accountId" -ForegroundColor Gray
 
 # ── KV helpers ───────────────────────────────────────────────────────────────
-function Get-QProxyKV {
+function Find-KV {
   $r = cf GET "/accounts/$accountId/storage/kv/namespaces"
-  if ($r.ok) { return ($r.result | Where-Object { $_.title -eq $KV_TITLE }) }
+  if ($r.ok) { return ($r.result | Where-Object { $_.title -eq $Title }) }
   return $null
 }
 
 function Ensure-KV {
-  $existing = Get-QProxyKV
+  $existing = Find-KV
   if ($existing) {
-    Write-Host "Reusing existing KV: $($existing.id) ($KV_TITLE)" -ForegroundColor Yellow
+    Write-Host "Reusing existing KV: $($existing.id) ($Title)" -ForegroundColor Yellow
     return $existing.id
   }
-  Write-Host "Creating KV namespace..." -ForegroundColor Gray
-  $r = cf POST "/accounts/$accountId/storage/kv/namespaces" @{ title=$KV_TITLE }
+  Write-Host "Creating KV namespace ($Title)..." -ForegroundColor Gray
+  $r = cf POST "/accounts/$accountId/storage/kv/namespaces" @{ title=$Title }
   if ($r.ok) {
     Write-Host "Created KV: $($r.result.id)" -ForegroundColor Green
     return $r.result.id
   }
   if ($r.code -eq 10014) {
-    $existing = Get-QProxyKV
+    $existing = Find-KV
     if ($existing) { Write-Host "Reusing existing KV: $($existing.id)" -ForegroundColor Yellow; return $existing.id }
   }
   Write-Host "KV creation failed: $($r.msg)" -ForegroundColor Red; exit 1
 }
 
-# ── download worker ──────────────────────────────────────────────────────────
-function Get-WorkerData {
+function Get-SecurePath($KvId) {
+  $r = cf GET "/accounts/$accountId/storage/kv/namespaces/$KvId/values/qproxy:settings"
+  if (-not $r.ok) { return $null }
+  $json = $r.result | ConvertTo-Json -Compress
+  if ($json -match '"securePath":"([a-f0-9]{12})"') { return $Matches[1] }
+  return $null
+}
+
+# ── download ─────────────────────────────────────────────────────────────────
+function Download-Worker {
   Write-Host "Downloading $SCRIPT_NAME from Releases..." -ForegroundColor Gray
   try {
     $data = (Invoke-WebRequest -Uri "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -UseBasicParsing).Content
@@ -131,44 +129,50 @@ function Get-WorkerData {
   return $data
 }
 
-# ── upload worker ────────────────────────────────────────────────────────────
+# ── upload via curl.exe (avoids PowerShell multipart corruption) ─────────────
 function Upload-Worker($WorkerData, $KvId) {
   Write-Host "Uploading worker..." -ForegroundColor Gray
-  $metadata = @{main_module=$SCRIPT_NAME; compatibility_date="2026-08-01"; bindings=@(@{type="kv_namespace"; name=$BINDING; namespace_id=$KvId})} | ConvertTo-Json -Compress
 
-  $mp = [System.Net.Http.MultipartFormDataContent]::new()
-  $mp.Add([System.Net.Http.StringContent]::new($metadata, [System.Text.Encoding]::UTF8, "application/json"), "metadata")
-  $bytes = [System.Text.Encoding]::UTF8.GetBytes($WorkerData)
-  $sc = [System.Net.Http.ByteArrayContent]::new($bytes)
-  $sc.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::new("application/javascript+module")
-  $mp.Add($sc, $SCRIPT_NAME, $SCRIPT_NAME)
+  $metadata = @{
+    main_module        = $SCRIPT_NAME
+    compatibility_date = "2026-08-01"
+    bindings           = @(@{ type="kv_namespace"; name=$BINDING; namespace_id=$KvId })
+  } | ConvertTo-Json -Compress
 
-  $h = $headers.Clone(); $h.Remove("Content-Type")
-  $hc = [System.Net.Http.HttpClient]::new()
-  foreach ($kv in $h.GetEnumerator()) { $hc.DefaultRequestHeaders.TryAddWithoutValidation($kv.Key, $kv.Value) | Out-Null }
-  $req = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Put, "$BASE/accounts/$accountId/workers/scripts/$WORKER")
-  $req.Content = $mp
-  $resp = $hc.SendAsync($req).Result
-  $body = $resp.Content.ReadAsStringAsync().Result | ConvertFrom-Json
-  if (-not $body.success) { Write-Host "Upload failed: $($body.errors[0].message)" -ForegroundColor Red; exit 1 }
-  Write-Host "Worker uploaded" -ForegroundColor Green
+  # Write script to temp file (curl.exe reads it as binary — no encoding issues)
+  $tmpFile = Join-Path $env:TEMP "q-proxy-$([guid]::NewGuid().ToString('N').Substring(0,8)).js"
+  [System.IO.File]::WriteAllText($tmpFile, $WorkerData, [System.Text.Encoding]::UTF8)
+
+  try {
+    $authHeader = if ($Token -like "cfk_*") {
+      @("-H", "X-Auth-Key: $Token", "-H", "X-Auth-Email: $Email")
+    } else {
+      @("-H", "Authorization: Bearer $Token")
+    }
+
+    $result = & curl.exe -s -X PUT `
+      "$BASE/accounts/$accountId/workers/scripts/$WORKER" `
+      @authHeader `
+      -F "metadata=$metadata;type=application/json" `
+      -F "$SCRIPT_NAME=@$tmpFile;type=application/javascript+module"
+
+    $resp = $result | ConvertFrom-Json
+    if (-not $resp.success) {
+      Write-Host "Upload failed: $($resp.errors[0].message)" -ForegroundColor Red
+      exit 1
+    }
+    Write-Host "Worker uploaded" -ForegroundColor Green
+  } finally {
+    if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }
+  }
 }
 
-# ── subdomain + URL ──────────────────────────────────────────────────────────
+# ── subdomain ────────────────────────────────────────────────────────────────
 function Get-WorkerUrl {
   cf PUT "/accounts/$accountId/workers/subdomain" @{ enabled=$true } | Out-Null
   $r = cf GET "/accounts/$accountId/workers/subdomain"
   $sub = $r.result.subdomain
   return "https://$WORKER.$sub.workers.dev"
-}
-
-# ── read securePath ──────────────────────────────────────────────────────────
-function Get-SecurePath($KvId) {
-  $r = cf GET "/accounts/$accountId/storage/kv/namespaces/$KvId/values/qproxy:settings"
-  if (-not $r.ok) { return $null }
-  $json = $r.result | ConvertTo-Json -Compress
-  if ($json -match '"securePath":"([a-f0-9]{12})"') { return $Matches[1] }
-  return $null
 }
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -185,17 +189,17 @@ switch ($Action) {
     Write-Host ("{0,-40} {1}" -f "ID", "Title")
     Write-Host ("{0,-40} {1}" -f "----", "-----")
     foreach ($ns in $r.result) {
-      $mark = if ($ns.title -eq $KV_TITLE) { " *" } else { "" }
+      $mark = if ($ns.title -eq $Title) { " *" } else { "" }
       Write-Host ("{0,-40} {1}{2}" -f $ns.id, $ns.title, $mark)
     }
     Write-Host ""
-    Write-Host "* = Q Proxy namespace" -ForegroundColor Gray
+    Write-Host "* = current project namespace" -ForegroundColor Gray
     exit 0
   }
 
   "remove-kv" {
-    $existing = Get-QProxyKV
-    if (-not $existing) { Write-Host "No Q Proxy KV found" -ForegroundColor Yellow; exit 0 }
+    $existing = Find-KV
+    if (-not $existing) { Write-Host "No KV found with title: $Title" -ForegroundColor Yellow; exit 0 }
     Write-Host "KV: $($existing.id) ($($existing.title))" -ForegroundColor Yellow
     $confirm = Read-Host "Delete this KV namespace? (yes/no)"
     if ($confirm -ne "yes") { Write-Host "Cancelled" -ForegroundColor Gray; exit 0 }
@@ -205,7 +209,6 @@ switch ($Action) {
   }
 
   "status" {
-    # worker
     $wr = cf GET "/accounts/$accountId/workers/scripts/$WORKER"
     if ($wr.ok) {
       Write-Host ""
@@ -215,14 +218,12 @@ switch ($Action) {
     } else {
       Write-Host "Worker: not deployed" -ForegroundColor Yellow
     }
-    # subdomain
     $sr = cf GET "/accounts/$accountId/workers/subdomain"
     if ($sr.ok -and $sr.result.subdomain) {
       $url = "https://$WORKER.$($sr.result.subdomain).workers.dev"
       Write-Host "  URL: $url"
     }
-    # KV
-    $kv = Get-QProxyKV
+    $kv = Find-KV
     if ($kv) {
       Write-Host ""
       Write-Host "KV: $($kv.id) ($($kv.title))" -ForegroundColor Cyan
@@ -248,7 +249,7 @@ switch ($Action) {
 
   "set-password" {
     if (-not $Password) { $Password = Read-Host "New panel password" }
-    $kv = Get-QProxyKV
+    $kv = Find-KV
     if (-not $kv) { Write-Host "No Q Proxy KV found. Deploy first." -ForegroundColor Red; exit 1 }
     $sr = cf GET "/accounts/$accountId/workers/subdomain"
     $url = "https://$WORKER.$($sr.result.subdomain).workers.dev"
@@ -263,10 +264,10 @@ switch ($Action) {
 
   "update" {
     if (-not $KVId) {
-      $kv = Get-QProxyKV
+      $kv = Find-KV
       if ($kv) { $KVId = $kv.id } else { Write-Host "No Q Proxy KV found. Deploy first." -ForegroundColor Red; exit 1 }
     }
-    $data = Get-WorkerData
+    $data = Download-Worker
     if ($Dry) { Write-Host "[dry] Would upload $($data.Length) bytes with KV $KVId" -ForegroundColor Yellow; exit 0 }
     Upload-Worker $data $KVId
     Write-Host "Update complete" -ForegroundColor Green
@@ -276,7 +277,7 @@ switch ($Action) {
   "deploy" {
     if (-not $Password) { $Password = Read-Host "First panel password [empty to set later]" }
     $kvId = Ensure-KV
-    $data = Get-WorkerData
+    $data = Download-Worker
     if ($Dry) { Write-Host "[dry] Would upload worker with KV $kvId" -ForegroundColor Yellow; exit 0 }
     Upload-Worker $data $kvId
     $workerUrl = Get-WorkerUrl
@@ -300,7 +301,7 @@ switch ($Action) {
       Write-Host "Subscription: $workerUrl/$sp/sub" -ForegroundColor Cyan
     } else {
       Write-Host "Could not read securePath." -ForegroundColor Yellow
-      Write-Host "Check KV → $KV_TITLE → qproxy:settings → data.securePath"
+      Write-Host "Check KV → $Title → qproxy:settings → data.securePath"
       Write-Host "Panel: $workerUrl/<securePath>/panel"
     }
     exit 0
