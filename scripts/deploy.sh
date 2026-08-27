@@ -244,12 +244,12 @@ update)
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
       -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
+      -F "${SCRIPT_NAME}=@${TMPFILE};filename=${SCRIPT_NAME};type=application/javascript+module")
   else
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "Authorization: Bearer $TOKEN" \
       -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
+      -F "${SCRIPT_NAME}=@${TMPFILE};filename=${SCRIPT_NAME};type=application/javascript+module")
   fi
   rm -f "$TMPFILE" "$TMPMETA"
   ok "$UPLOAD" || die "Upload failed: $UPLOAD"
@@ -297,12 +297,12 @@ deploy)
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
       -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
+      -F "${SCRIPT_NAME}=@${TMPFILE};filename=${SCRIPT_NAME};type=application/javascript+module")
   else
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "Authorization: Bearer $TOKEN" \
       -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
+      -F "${SCRIPT_NAME}=@${TMPFILE};filename=${SCRIPT_NAME};type=application/javascript+module")
   fi
   rm -f "$TMPFILE" "$TMPMETA"
   ok "$UPLOAD" || die "Upload failed: $UPLOAD"

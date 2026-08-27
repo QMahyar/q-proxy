@@ -160,7 +160,7 @@ function Upload-Worker($WorkerFilePath, $KvId) {
     $result = & curl.exe -s -X PUT "$BASE/accounts/$accountId/workers/scripts/$WORKER" `
       @authArg `
       -F "metadata=@$tmpMeta;type=application/json" `
-      -F "$SCRIPT_NAME=@$WorkerFilePath;type=application/javascript+module"
+      -F "$SCRIPT_NAME=@$WorkerFilePath;filename=$SCRIPT_NAME;type=application/javascript+module"
 
     if ($LASTEXITCODE -ne 0 -or -not $result) {
       Write-Host "Upload failed: curl exited with code $LASTEXITCODE" -ForegroundColor Red
