@@ -120,12 +120,14 @@ function Get-SecurePath($KvId) {
 function Download-Worker {
   Write-Host "Downloading $SCRIPT_NAME from Releases..." -ForegroundColor Gray
   $tmpFile = Join-Path $env:TEMP "q-proxy-$([guid]::NewGuid().ToString('N').Substring(0,8)).js"
-  try {
-    curl.exe -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o $tmpFile 2>$null
-  } catch {
-    curl.exe -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o $tmpFile
+  curl.exe -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o $tmpFile 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tmpFile)) {
+    Write-Host "Release not found, trying main branch..." -ForegroundColor Gray
+    curl.exe -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o $tmpFile 2>$null
   }
-  if (-not (Test-Path $tmpFile)) { Write-Host "Download failed" -ForegroundColor Red; exit 1 }
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tmpFile)) {
+    Write-Host "Download failed" -ForegroundColor Red; exit 1
+  }
   $size = (Get-Item $tmpFile).Length
   if ($size -lt 10000) { Write-Host "Download failed ($size bytes)" -ForegroundColor Red; Remove-Item $tmpFile -Force; exit 1 }
   Write-Host "Downloaded $size bytes" -ForegroundColor Green
@@ -158,8 +160,13 @@ function Upload-Worker($WorkerFilePath, $KvId) {
     $result = & curl.exe -s -X PUT "$BASE/accounts/$accountId/workers/scripts/$WORKER" `
       @authArg `
       -F "metadata=@$tmpMeta;type=application/json" `
-      -F "$SCRIPT_NAME=@$WorkerFilePath;type=application/javascript"
+      -F "$SCRIPT_NAME=@$WorkerFilePath;type=application/javascript+module"
 
+    if ($LASTEXITCODE -ne 0 -or -not $result) {
+      Write-Host "Upload failed: curl exited with code $LASTEXITCODE" -ForegroundColor Red
+      if ($result) { Write-Host $result -ForegroundColor Red }
+      exit 1
+    }
     $resp = $result | ConvertFrom-Json
     if (-not $resp.success) {
       Write-Host "Upload failed: $($resp.errors[0].message)" -ForegroundColor Red
@@ -245,6 +252,7 @@ switch ($Action) {
 
   "seed" {
     $sr = cf GET "/accounts/$accountId/workers/subdomain"
+    if (-not $sr.ok -or -not $sr.result.subdomain) { Write-Host "Could not get subdomain" -ForegroundColor Red; exit 1 }
     $url = "https://$WORKER.$($sr.result.subdomain).workers.dev"
     Write-Host "Seeding $url/ ..." -ForegroundColor Gray
     try { Invoke-WebRequest -Uri "$url/" -UseBasicParsing | Out-Null } catch {}
@@ -257,6 +265,7 @@ switch ($Action) {
     $kv = Find-KV
     if (-not $kv) { Write-Host "No Q Proxy KV found. Deploy first." -ForegroundColor Red; exit 1 }
     $sr = cf GET "/accounts/$accountId/workers/subdomain"
+    if (-not $sr.ok -or -not $sr.result.subdomain) { Write-Host "Could not get subdomain" -ForegroundColor Red; exit 1 }
     $url = "https://$WORKER.$($sr.result.subdomain).workers.dev"
     $sp = Get-SecurePath $kv.id
     if (-not $sp) { Write-Host "Could not read securePath. Seed first." -ForegroundColor Red; exit 1 }

@@ -28,16 +28,17 @@ while [[ $# -gt 0 ]]; do
     --password) PASSWORD="$2"; shift 2;;
     --action) ACTION="$2"; shift 2;;
     --kv-id) KV_ID_TARGET="$2"; shift 2;;
-    *) shift;;
+    --title) KV_TITLE="$2"; shift 2;;
+    *) die "Unknown option: $1";;
   esac
 done
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 auth_header() {
   if [[ "$TOKEN" == cfk_* ]]; then
-    echo "-H X-Auth-Key:$TOKEN -H X-Auth-Email:$EMAIL"
+    echo "-H \"X-Auth-Key: $TOKEN\" -H \"X-Auth-Email: $EMAIL\""
   else
-    echo "-H Authorization:Bearer$TOKEN"
+    echo "-H \"Authorization: Bearer $TOKEN\""
   fi
 }
 
@@ -48,7 +49,11 @@ cf() {
   local resp; resp=$(curl -s -w '\n%{http_code}' -X "$method" "$BASE$path" \
     -H "Content-Type: application/json" $hdr "$@")
   local body status; body=$(echo "$resp" | sed '$d'); status=$(echo "$resp" | tail -1)
-  echo "$body"
+  case "$status" in
+    2[0-9][0-9]) echo "$body" ;;
+    000) echo '{"success":false,"errors":[{"code":0,"message":"network error"}]}' ;;
+    *) echo "$body" ;;
+  esac
 }
 
 cf_post() {
@@ -74,6 +79,17 @@ cf_put() {
     curl -s -X PUT "$BASE$path" \
       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       ${data:+-d "$data"}
+  fi
+}
+
+cf_delete() {
+  local path="$1"
+  if [[ "$TOKEN" == cfk_* ]]; then
+    curl -s -X DELETE "$BASE$path" \
+      -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL"
+  else
+    curl -s -X DELETE "$BASE$path" \
+      -H "Authorization: Bearer $TOKEN"
   fi
 }
 
@@ -135,14 +151,17 @@ list-kv)
   echo "KV Namespaces:"
   printf "%-40s %s\n" "ID" "Title"
   printf "%-40s %s\n" "----" "-----"
-  cf_get "/accounts/$ACCOUNT_ID/storage/kv/namespaces" | grep -o '"id":"[^"]*","title":"[^"]*"' | while IFS= read -r line; do
-    id=$(echo "$line" | grep -o '"id":"[^"]*"' | sed 's/"id":"//;s/"//')
-    title=$(echo "$line" | grep -o '"title":"[^"]*"' | sed 's/"title":"//;s/"//')
+  KV_RAW=$(cf_get "/accounts/$ACCOUNT_ID/storage/kv/namespaces")
+  # Split JSON objects on },{ boundaries and extract id+title from each
+  echo "$KV_RAW" | tr '}' '\n' | while IFS= read -r obj; do
+    id=$(echo "$obj" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
+    title=$(echo "$obj" | grep -o '"title":"[^"]*"' | head -1 | sed 's/"title":"//;s/"//')
+    [[ -z "$id" || -z "$title" ]] && continue
     mark=""; [[ "$title" == "$KV_TITLE" ]] && mark=" *"
     printf "%-40s %s%s\n" "$id" "$title" "$mark"
   done
   echo ""
-  echo "* = Q Proxy namespace"
+  echo "* = current project namespace"
   ;;
 
 remove-kv)
@@ -151,7 +170,7 @@ remove-kv)
   echo "KV: $KV_ID ($KV_TITLE)"
   read -rp "Delete this KV namespace? (yes/no): " confirm
   [[ "$confirm" != "yes" ]] && die "Cancelled"
-  cf_post "/accounts/$ACCOUNT_ID/storage/kv/namespaces/$KV_ID" '{}' > /dev/null
+  cf_delete "/accounts/$ACCOUNT_ID/storage/kv/namespaces/$KV_ID" > /dev/null
   echo "KV deleted"
   ;;
 
@@ -191,12 +210,16 @@ set-password)
   KV_ID=$(get_kv_id)
   [[ -z "$KV_ID" ]] && die "No Q Proxy KV found. Deploy first."
   SUB=$(get_subdomain)
+  [[ -z "$SUB" ]] && die "Could not get subdomain"
   URL="https://$WORKER.$SUB.workers.dev"
   SP=$(get_secure_path "$KV_ID")
   [[ -z "$SP" ]] && die "Could not read securePath. Seed first."
+  TMPBODY=$(mktemp /tmp/q-body-XXXXXX.json)
+  printf '{"newPassword":"%s"}' "$PASSWORD" > "$TMPBODY"
   SETUP=$(curl -s -X POST "$URL/$SP/api/auth/setup" \
     -H "Content-Type: application/json" \
-    -d "{\"newPassword\":\"$PASSWORD\"}")
+    -d @"$TMPBODY")
+  rm -f "$TMPBODY"
   ok "$SETUP" && echo "Password set" || echo "Failed"
   ;;
 
@@ -221,12 +244,12 @@ update)
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
       -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript")
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
   else
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "Authorization: Bearer $TOKEN" \
       -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript")
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
   fi
   rm -f "$TMPFILE" "$TMPMETA"
   ok "$UPLOAD" || die "Upload failed: $UPLOAD"
@@ -274,12 +297,12 @@ deploy)
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
       -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript")
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
   else
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "Authorization: Bearer $TOKEN" \
       -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript")
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
   fi
   rm -f "$TMPFILE" "$TMPMETA"
   ok "$UPLOAD" || die "Upload failed: $UPLOAD"
@@ -298,9 +321,12 @@ deploy)
   # securePath
   SP=$(get_secure_path "$KV_ID")
   if [[ -n "$SP" && -n "$PASSWORD" ]]; then
+    TMPBODY=$(mktemp /tmp/q-body-XXXXXX.json)
+    printf '{"newPassword":"%s"}' "$PASSWORD" > "$TMPBODY"
     SETUP=$(curl -s -X POST "$WORKER_URL/$SP/api/auth/setup" \
       -H "Content-Type: application/json" \
-      -d "{\"newPassword\":\"$PASSWORD\"}")
+      -d @"$TMPBODY")
+    rm -f "$TMPBODY"
     ok "$SETUP" && echo "Password set" || echo "Password setup failed (set manually)"
   fi
 
