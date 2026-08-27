@@ -18,19 +18,17 @@ Two ways. No `wrangler`, no `git` needed.
 
 ### Way 2 — Automatic (one command, 1 min)
 
-**Bash / macOS / Linux / WSL:**
+**Bash (macOS/Linux/WSL) — no node, no git, just curl:**
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/master/scripts/deploy-direct.mjs)
-# or from a clone:
+bash <(curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/master/scripts/deploy.sh)
+```
+
+The script prints a pre-filled token link, waits for paste, creates KV, uploads Worker, seeds, sets password, prints `Panel: https://.../<sp>/panel`.
+
+**Node (if you have it):**
+```bash
 node scripts/deploy-direct.mjs
 ```
-
-**Node (18+):**
-```bash
-node scripts/deploy-direct.mjs --token <token> --password <pass>
-```
-
-The script gives a pre-filled token link, waits for paste, creates KV, uploads Worker, seeds, sets password, prints `Panel: https://.../<sp>/panel`. Works with API Token and Global Key (`cfk_...`).
 
 ## Commands
 
