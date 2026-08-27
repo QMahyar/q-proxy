@@ -23,12 +23,12 @@ Two ways. No `wrangler`, no `git` needed.
 bash <(curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/master/scripts/deploy.sh)
 ```
 
-The script prints a pre-filled token link, waits for paste, creates KV, uploads Worker, seeds, sets password, prints `Panel: https://.../<sp>/panel`.
-
-**Node (if you have it):**
-```bash
-node scripts/deploy-direct.mjs
+**PowerShell (Windows) — no node, no git:**
+```powershell
+irm https://raw.githubusercontent.com/QMahyar/q-proxy/master/scripts/deploy.ps1 | iex
 ```
+
+The script prints a pre-filled token link, waits for paste, creates KV, uploads Worker, seeds, sets password, prints `Panel: https://.../<sp>/panel`.
 
 ## Commands
 

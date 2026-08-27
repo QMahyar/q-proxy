@@ -12,13 +12,19 @@ Two ways. No `wrangler`, no `git`.
 
 Update: re-download from Releases → paste → Save and deploy. KV migrates automatically.
 
-## Way 2 — Automatic (one command, curl only)
+## Way 2 — Automatic (one command)
 
+**Bash (macOS/Linux/WSL):**
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/master/scripts/deploy.sh)
 ```
 
-No node, no git, no wrangler. Just bash + curl (ships with macOS/Linux/WSL).
+**PowerShell (Windows):**
+```powershell
+irm https://raw.githubusercontent.com/QMahyar/q-proxy/master/scripts/deploy.ps1 | iex
+```
+
+No node, no git, no wrangler. Just shell + curl/web requests (built-in).
 
 The script:
 1. Opens a pre-filled [token link](https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%5D&name=Q%20Proxy&accountId=*&zoneId=all) — create token, paste back
@@ -27,8 +33,6 @@ The script:
 4. Prints `Panel: https://.../<sp>/panel`
 
 Flags: `--token <token>` `--password <pass>` `--dry`
-
-**Node alternative:** `node scripts/deploy-direct.mjs` (same flow, requires Node 18+)
 
 ## Troubleshooting
 
