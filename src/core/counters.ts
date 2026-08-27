@@ -38,6 +38,14 @@ export function bindCounterContext(ctx: ExecutionContext): void {
   buffer.ctx = ctx;
 }
 
+export function afterResponse(p: Promise<unknown>): void {
+  const tracked = p.then(
+    () => undefined,
+    () => undefined,
+  );
+  if (buffer.ctx) waitUntil(tracked);
+}
+
 function waitUntil(promise: Promise<void>): void {
   if (buffer.ctx) buffer.ctx.waitUntil(promise);
 }

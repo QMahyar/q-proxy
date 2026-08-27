@@ -23,13 +23,15 @@ npm test             # vitest run (both projects)
 npx vitest run --project unit     # pure logic, no workerd
 npx vitest run --project workers  # full fetch through src/worker.ts
 npm run dev          # wrangler dev → http://127.0.0.1:8787 (local miniflare KV; use `--remote` for prod KV)
-npm run build        # → dist/q-proxy.js (~380 KB)
+npm run build        # → dist/q-proxy.js (~400 KB)
 npm run deploy       # build + wrangler deploy (prefers wrangler.local.toml)
 node scripts/version.mjs        # print version (from git tag)
 node scripts/release.mjs <version> [--dry]  # tag + changelog check + build
 ```
 
-If a local `wrangler dev` wedges (workerd accepts connections but never responds): kill the stray workerd process on the port, then relaunch on another port (`npx wrangler dev --port 8788`). **Gotcha:** `wrangler dev` serves `dist/q-proxy.js` (per `wrangler.toml main=`) — source edits are invisible until `npm run build`. If a change "doesn't take effect", rebuild before debugging the code.
+CI: `.github/workflows/ci.yml` runs `npm ci` + `npm run typecheck` + `npm test` on every push/PR (node 22).
+
+If a local `wrangler dev` wedges (workerd accepts connections but never responds): kill the stray workerd process on the port, then relaunch on another port (`npx wrangler dev --port 8788`). **Gotcha:** `wrangler dev` serves `dist/q-proxy.js` (per `wrangler.toml main=`) — `npm run dev` rebuilds first, but a bare `npx wrangler dev` shows only what was last built; if a change "doesn't take effect", rebuild before debugging the code.
 
 Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY` (Global Key, cfk_-style) + `$env:CLOUDFLARE_EMAIL` + `$env:CLOUDFLARE_ACCOUNT_ID`. Using `CLOUDFLARE_API_TOKEN` with a Global Key fails `[code: 9109]`. Private deploy targets live in `wrangler.local.toml` (gitignored, same shape as `wrangler.toml`) — `npm run deploy` picks it up when present via `scripts/deploy.mjs`.
 
@@ -58,7 +60,7 @@ src/nodes/generate.ts    ProxyNode[] builder — port↔security pairing invaria
 src/nodes/emitters/*     base64-list, clash-yaml, singbox-json, surge-conf, loon-conf (+registry)
 src/subscription/        negotiate (?target= > UA > base64), headers, merge (remote subs)
 src/users/store.ts       per-user directory (≤50): token subs, protocol filter, daily quota, expiry
-src/auth/                password (PBKDF2 100k + legacy 15k), session (HMAC q_session), guard (CSRF X-Q-Panel)
+src/auth/                password tiers (PBKDF2 100k current, 15k legacy auto-upgraded on login), session (HMAC q_session {exp,iat} + revocation floor qproxy:min-iat), guard (CSRF X-Q-Panel)
 src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, validate (72 leaf fields)
 src/handlers/            tunnel, subscribe, warp-sub, users-sub, doh, myip(requireAuth), robots, camouflage,
                          api/* (auth, settings+bootstrap/export/import/reset, status+suburls, killswitch,
@@ -75,7 +77,7 @@ src/ui/assets.ts         panel.html, login.html, camo.html as strings
 2. Fragment nodes are TLS-only and exclude CDN addresses; SS nodes have earlyData=0
 3. SS AEAD nonce is little-endian increment (SIP004) — test helper in `test/protocols/shadowsocks.spec.ts:38` must stay LE too
 4. First packet is consumed once: `initialPayload ?? rest` in `src/handlers/tunnel.ts` — never concatenate both
-5. Trojan UDP datagrams are framed ATYP+addr+port+len+payload — codec strips/re-applies
+5. Trojan UDP datagrams are framed ATYP+addr+port+len+CRLF+payload (downlink echoes the request source address) — codec strips/re-applies
 6. Kill-switch gate runs before WebSocket upgrade (`src/core/router.ts`)
 7. `mergeInto` skips `__proto__`/`constructor`/`prototype` keys and uses `Object.hasOwn`
 8. Setup endpoint re-reads KV via `loadSettingsFresh` before write (TOCTOU)
@@ -109,9 +111,15 @@ Protocol changes: validate against Xray-core fixtures first (`docs/research/04-p
 
 ## Known Gaps
 
-- Change-password endpoint absent — logout is client-side cookie clear only; sessions revoke only via secret rotation (not exposed)
+- Post-handshake WS backpressure is platform-limited — the Workers WS API exposes no send-buffer signal; relay relies on uplink coalescing + hard caps
+- Trojan UDP merges pipelined datagrams into one DoH query (uplink decode concatenates frames before relaying)
+- sing-box emitter uses the legacy dns schema (forward-compat note — migration rejected for now, documented in DEVELOPER_GUIDE)
+- users-sub intentionally never merges remoteSubUrls (per-user scoping: protocol filters must hold)
+- Server-side validation messages are English-only even in the FA UI
+- cleanIps entries pinning ports outside the CF port families emit unreachable nodes (security inferred from `CF_TLS_PORTS` membership only) — documented behavior
 - Early-data oversize drops silently instead of closing 1009
 - Login throttle is per-isolate memory (best-effort)
 - Counters are estimates (`download = requestsTotal × 1 MiB`)
+- SS salt-replay registry bounded to 2048 entries/isolate; VMess replay registry bounded to 1024 (`src/utils/bounded.ts`)
 - `settings.language` is saved but the UI reads only the `qp_lang` cookie
 - Stale-cache read-modify-write: `handleKillSwitch`/`handleSaveSettings` merge from the 60s cached settings — concurrent edits in another isolate can be reverted within the TTL window

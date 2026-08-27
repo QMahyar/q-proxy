@@ -7,7 +7,6 @@ const COALESCE_INTERVAL_MS = 30;
 const DOWNLINK_BATCH_BYTES = 32768;
 const UPLINK_HARD_CAP_BYTES = 8 * 1024 * 1024;
 const HALF_OPEN_GRACE_MS = 5000;
-const WS_CLOSED = 3;
 
 export interface RelayOptions {
   responseHeader?: Uint8Array | null;
@@ -51,6 +50,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   let writeBusy = false;
 
   const decodeQueue: Uint8Array[] = [];
+  let decodeQueued = 0;
   let decoding = false;
 
   const pendingDown: Uint8Array[] = [];
@@ -141,6 +141,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
     try {
       while (decodeQueue.length > 0 && !finished && !halfOpen) {
         const chunk = decodeQueue.shift()!;
+        decodeQueued -= chunk.length;
         const decode = opts.uplinkDecode;
         if (decode === undefined || decode === null) continue;
         const out = await decode(chunk);
@@ -157,6 +158,11 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   const feedClient = (chunk: Uint8Array): void => {
     if (finished || halfOpen) return;
     if (opts.uplinkDecode !== undefined && opts.uplinkDecode !== null) {
+      decodeQueued += chunk.length;
+      if (decodeQueued > UPLINK_HARD_CAP_BYTES) {
+        fail("decode backlog overflow", new Error(`decode queued ${decodeQueued} bytes`));
+        return;
+      }
       decodeQueue.push(chunk);
       void processDecodes();
       return;

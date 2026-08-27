@@ -21,10 +21,9 @@ const SCHEME_PORTS: Record<string, number> = {
   socks5: 1080,
   socks: 1080,
   http: 80,
-  https: 443,
 };
 
-const SCHEME_RE = /^(socks5|socks|https|http):\/\//i;
+const SCHEME_RE = /^(socks5|socks|http):\/\//i;
 const HOSTNAME_RE = /^[a-z0-9.-]+$/;
 
 function safeDecode(value: string): string {

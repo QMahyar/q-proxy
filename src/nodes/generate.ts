@@ -100,6 +100,107 @@ function buildPath(
   return path;
 }
 
+interface KindBuildInput {
+  settings: Settings;
+  hostname: string;
+  addresses: AddressEntry[];
+  tlsPorts: number[];
+  plainPorts: number[];
+  allowPlain: boolean;
+  fragOn: boolean;
+  fragQ: string;
+  country: string | null;
+}
+
+function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
+  const s = input.settings;
+  const prefix =
+    proto.kind === "vless"
+      ? s.vlessPath
+      : proto.kind === "vmess"
+        ? s.vmessPath
+        : proto.kind === "trojan"
+          ? s.trojanPath
+          : s.ssPath;
+  const list: ProxyNode[] = [];
+  for (const entry of input.addresses) {
+    const familySets: Array<{ ports: number[]; security: "tls" | "none" }> =
+      entry.pinnedPort !== undefined
+        ? [
+            {
+              ports: [entry.pinnedPort],
+              security: (CF_TLS_PORTS as readonly number[]).includes(entry.pinnedPort) ? "tls" : "none",
+            },
+          ]
+        : [
+            { ports: input.tlsPorts, security: "tls" },
+            ...(input.allowPlain ? [{ ports: input.plainPorts, security: "none" as const }] : []),
+          ];
+    for (const family of familySets) {
+      for (const port of family.ports) {
+        const variants: Array<"normal" | "fragment"> = ["normal"];
+        if (input.fragOn && family.security === "tls" && !entry.tags.includes("cdn")) {
+          variants.push("fragment");
+        }
+        for (const variant of variants) {
+          const earlyData =
+            proto.kind === "ss" ? 0 : s.earlyDataEnabled ? Math.max(0, s.earlyDataMaxBytes) : 0;
+          const path = buildPath(prefix, proto.cred, s.securePath, earlyData, variant === "fragment" ? input.fragQ : "");
+          const tags: NodeTag[] = [...entry.tags];
+          if (input.hostname.endsWith(".workers.dev")) tags.push("workers-dev");
+          if (family.security === "none") tags.push("no-tls");
+          if (variant === "fragment") tags.push("fragment");
+          const sni =
+            family.security === "tls"
+              ? s.randomizeSniCase
+                ? scrambleSni(entry.sni, `${entry.address}:${port}:${variant}`)
+                : entry.sni
+              : null;
+          const base = {
+            name: "",
+            address: entry.address,
+            port,
+            security: family.security,
+            sni,
+            host: entry.host,
+            path,
+            earlyData,
+            fingerprint: family.security === "tls" ? s.fingerprint : null,
+            alpn: family.security === "tls" ? [...s.alpn] : [],
+            ech: family.security === "tls" && s.echEnabled ? (s.echServerName.length > 0 ? s.echServerName : sni) : null,
+            variant,
+            tags,
+          };
+          let node: ProxyNode;
+          if (proto.kind === "vless") {
+            node = { ...base, kind: "vless", uuid: proto.cred } satisfies VlessNode;
+          } else if (proto.kind === "vmess") {
+            node = {
+              ...base,
+              kind: "vmess",
+              uuid: proto.cred,
+              cipher: "auto",
+              alterId: 0,
+            } satisfies VMessNode;
+          } else if (proto.kind === "trojan") {
+            node = { ...base, kind: "trojan", password: proto.cred } satisfies TrojanNode;
+          } else {
+            node = {
+              ...base,
+              kind: "ss",
+              method: s.ssMethod,
+              password: proto.cred,
+            } satisfies SSNode;
+          }
+          node.name = renderName(node, input.country);
+          list.push(node);
+        }
+      }
+    }
+  }
+  return list;
+}
+
 export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
   const s = ctx.settings;
   const limit = Math.max(0, Math.floor(s.maxNodesPerFormat));
@@ -122,94 +223,34 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
     { kind: "ss", enabled: s.ssEnabled, cred: s.ssPassword },
   ];
 
-  const out: ProxyNode[] = [];
+  const input: KindBuildInput = {
+    settings: s,
+    hostname: ctx.hostname,
+    addresses,
+    tlsPorts,
+    plainPorts,
+    allowPlain,
+    fragOn,
+    fragQ,
+    country,
+  };
+  const perKind: ProxyNode[][] = [];
   for (const proto of protos) {
     if (!proto.enabled || proto.cred.length === 0) continue;
-    const prefix =
-      proto.kind === "vless"
-        ? s.vlessPath
-        : proto.kind === "vmess"
-          ? s.vmessPath
-          : proto.kind === "trojan"
-            ? s.trojanPath
-            : s.ssPath;
-    for (const entry of addresses) {
-      const familySets: Array<{ ports: number[]; security: "tls" | "none" }> =
-        entry.pinnedPort !== undefined
-          ? [
-              {
-                ports: [entry.pinnedPort],
-                security: (CF_TLS_PORTS as readonly number[]).includes(entry.pinnedPort) ? "tls" : "none",
-              },
-            ]
-          : [
-              { ports: tlsPorts, security: "tls" },
-              ...(allowPlain ? [{ ports: plainPorts, security: "none" as const }] : []),
-            ];
-      for (const family of familySets) {
-        for (const port of family.ports) {
-          const variants: Array<"normal" | "fragment"> = ["normal"];
-          if (fragOn && family.security === "tls" && !entry.tags.includes("cdn")) {
-            variants.push("fragment");
-          }
-          for (const variant of variants) {
-            const earlyData =
-              proto.kind === "ss" ? 0 : s.earlyDataEnabled ? Math.max(0, s.earlyDataMaxBytes) : 0;
-            const path = buildPath(prefix, proto.cred, s.securePath, earlyData, variant === "fragment" ? fragQ : "");
-            const tags: NodeTag[] = [...entry.tags];
-            if (ctx.hostname.endsWith(".workers.dev")) tags.push("workers-dev");
-            if (family.security === "none") tags.push("no-tls");
-            if (variant === "fragment") tags.push("fragment");
-            const sni =
-              family.security === "tls"
-                ? s.randomizeSniCase
-                  ? scrambleSni(entry.sni, `${entry.address}:${port}:${variant}`)
-                  : entry.sni
-                : null;
-            const base = {
-              name: "",
-              address: entry.address,
-              port,
-              security: family.security,
-              sni,
-              host: entry.host,
-              path,
-              earlyData,
-              fingerprint: family.security === "tls" ? s.fingerprint : null,
-              alpn: family.security === "tls" ? [...s.alpn] : [],
-              ech: family.security === "tls" && s.echEnabled ? (s.echServerName.length > 0 ? s.echServerName : sni) : null,
-              variant,
-              tags,
-            };
-            let node: ProxyNode;
-            if (proto.kind === "vless") {
-              node = { ...base, kind: "vless", uuid: proto.cred } satisfies VlessNode;
-            } else if (proto.kind === "vmess") {
-              node = {
-                ...base,
-                kind: "vmess",
-                uuid: proto.cred,
-                cipher: "auto",
-                alterId: 0,
-              } satisfies VMessNode;
-            } else if (proto.kind === "trojan") {
-              node = { ...base, kind: "trojan", password: proto.cred } satisfies TrojanNode;
-            } else {
-              node = {
-                ...base,
-                kind: "ss",
-                method: s.ssMethod,
-                password: proto.cred,
-              } satisfies SSNode;
-            }
-            node.name = renderName(node, country);
-            out.push(node);
-          }
-        }
-      }
-      if (out.length >= limit) break;
-    }
-    if (out.length >= limit) break;
+    perKind.push(buildKindNodes(proto, input));
   }
-  return out.slice(0, limit);
+
+  const out: ProxyNode[] = [];
+  const cursors = new Array<number>(perKind.length).fill(0);
+  while (out.length < limit) {
+    let progressed = false;
+    for (let i = 0; i < perKind.length && out.length < limit; i++) {
+      const list = perKind[i]!;
+      if (cursors[i]! >= list.length) continue;
+      out.push(list[cursors[i]!++]!);
+      progressed = true;
+    }
+    if (!progressed) break;
+  }
+  return out;
 }

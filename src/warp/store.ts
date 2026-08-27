@@ -61,7 +61,16 @@ export const DEFAULT_PRESETS: WarpPreset[] = [
   },
 ];
 
-type KvLike = { get(key: string, type: "json"): Promise<unknown>; put(key: string, value: string): Promise<void>; delete(key: string): Promise<void>; list?(options: { prefix: string }): Promise<{ keys: Array<{ name: string }> }> };
+type KvListOptions = { prefix: string; cursor?: string; limit?: number };
+
+type KvListResult = { keys: Array<{ name: string }>; list_complete?: boolean; cursor?: string };
+
+type KvLike = {
+  get(key: string, type: "json"): Promise<unknown>;
+  put(key: string, value: string): Promise<void>;
+  delete(key: string): Promise<void>;
+  list?(options: KvListOptions): Promise<KvListResult>;
+};
 
 export async function ensureWarpDefaults(env: { QPROXY_KV: KvLike }): Promise<void> {
   const presets = await env.QPROXY_KV.get(WARP_PRESETS_KEY, "json");
@@ -118,10 +127,16 @@ export async function getAccountByToken(env: { QPROXY_KV: KvLike }, token: strin
 export async function listAccounts(env: { QPROXY_KV: KvLike }): Promise<WarpAccount[]> {
   if (!env.QPROXY_KV.list) return [];
   const out: WarpAccount[] = [];
-  const res = await env.QPROXY_KV.list({ prefix: WARP_ACCOUNT_PREFIX });
-  for (const key of res.keys) {
-    const raw = (await env.QPROXY_KV.get(key.name, "json")) as unknown;
-    if (isAccount(raw)) out.push(raw);
+  let cursor: string | undefined;
+  for (;;) {
+    const res: KvListResult = await env.QPROXY_KV.list({ prefix: WARP_ACCOUNT_PREFIX, cursor });
+    for (const key of res.keys) {
+      const raw = (await env.QPROXY_KV.get(key.name, "json")) as unknown;
+      if (isAccount(raw)) out.push(raw);
+    }
+    if (res.list_complete !== false) break;
+    cursor = res.cursor;
+    if (cursor === undefined || cursor.length === 0) break;
   }
   out.sort((a, b) => a.created_at.localeCompare(b.created_at));
   return out;
@@ -134,9 +149,10 @@ export async function deleteAccount(env: { QPROXY_KV: KvLike }, account: WarpAcc
 
 export async function regenerateToken(env: { QPROXY_KV: KvLike }, account: WarpAccount): Promise<string> {
   const next = newSubToken();
-  await env.QPROXY_KV.delete(WARP_TOKEN_PREFIX + account.token);
+  const oldToken = account.token;
   account.token = next;
   await storeAccount(env, account);
+  await env.QPROXY_KV.delete(WARP_TOKEN_PREFIX + oldToken);
   return next;
 }
 
@@ -181,7 +197,7 @@ export function resolveAmnezia(global: AmneziaParams, overrides: AmneziaParams |
 function stripEmpty(params: AmneziaParams): AmneziaParams {
   const out: AmneziaParams = {};
   for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === null || v === "" || v === 0) continue;
+    if (v === undefined || v === null || v === "") continue;
     out[k as keyof AmneziaParams] = v;
   }
   return out;
@@ -199,7 +215,7 @@ export function validateAmnezia(params: AmneziaParams): { ok: true; value: Amnez
   int("Jmin", 1280);
   int("Jmax", 1280);
   for (const key of ["S1", "S2", "S3", "S4"] as const) int(key, 255);
-  const hRanges: Array<[number, number]> = [];
+  const hRanges: Array<[string, number, number]> = [];
   for (const key of ["H1", "H2", "H3", "H4"] as const) {
     const v = params[key];
     if (v === undefined || v === null || v === "") continue;
@@ -213,14 +229,14 @@ export function validateAmnezia(params: AmneziaParams): { ok: true; value: Amnez
         fields[key] = "must be ≤ 2147483647";
         continue;
       }
-      hRanges.push([lo!, hi!]);
+      hRanges.push([key, lo!, hi!]);
     } else {
       const n = Number(v);
       if (!Number.isInteger(n) || n < 0 || n > 2147483647) {
         fields[key] = "must be an integer 0-2147483647 or lo-hi range";
         continue;
       }
-      hRanges.push([n, n]);
+      hRanges.push([key, n, n]);
     }
   }
   if (params.Jmin !== undefined && params.Jmax !== undefined && params.Jmin !== "" && params.Jmax !== "") {
@@ -228,10 +244,10 @@ export function validateAmnezia(params: AmneziaParams): { ok: true; value: Amnez
   }
   for (let i = 0; i < hRanges.length; i++) {
     for (let j = i + 1; j < hRanges.length; j++) {
-      const [aLo, aHi] = hRanges[i]!;
-      const [bLo, bHi] = hRanges[j]!;
+      const [, aLo, aHi] = hRanges[i]!;
+      const [, bLo, bHi] = hRanges[j]!;
       if (aLo <= bHi && bLo <= aHi) {
-        fields.H1 = "H ranges must not overlap";
+        fields[hRanges[i]![0]] = "H ranges must not overlap";
         break;
       }
     }

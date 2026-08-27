@@ -8,6 +8,7 @@ export const DNS_TYPE_AAAA = 28;
 const CACHE_TTL_MS = 300_000;
 const CACHE_MAX_ENTRIES = 256;
 const MAX_DNS_PACKET_BYTES = 4096;
+const DOH_TIMEOUT_MS = 5000;
 
 interface CacheEntry {
   value: string[];
@@ -170,6 +171,7 @@ async function dohPost(dohUrl: string, query: Uint8Array): Promise<Uint8Array | 
         Accept: "application/dns-message",
       },
       body: query as unknown as BodyInit,
+      signal: AbortSignal.timeout(DOH_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
@@ -198,7 +200,7 @@ export function createResolver(dohUrl: string): DohResolver {
     const resp = await dohPost(dohUrl, query);
     if (resp === null) return [];
     const values = parseDnsAnswers(resp, qtype);
-    cachePut(key, values);
+    if (values.length > 0) cachePut(key, values);
     return values;
   };
   return {

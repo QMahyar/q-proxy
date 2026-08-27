@@ -1,6 +1,7 @@
 import { evpBytesToKey, hkdfSha1 } from "../crypto/kdf";
+import { pruneBoundedRegistry } from "../utils/bounded";
 import { randomBytes } from "../utils/random";
-import { concatBytes, readU16BE, writeU16BE } from "../utils/bytes";
+import { concatBytes, bytesToHex, readU16BE, writeU16BE } from "../utils/bytes";
 import {
   appendChunk,
   ByteAccumulator,
@@ -22,6 +23,15 @@ const TAG_LEN = 16;
 const LEN_FRAME_LEN = 2 + TAG_LEN;
 const COPY_SLICE = 16384;
 
+const SALT_REUSE_TTL_SECONDS = 600;
+const SALT_REGISTRY_LIMIT = 2048;
+
+const seenSalts = new Map<string, number>();
+
+export function clearSaltRegistry(): void {
+  seenSalts.clear();
+}
+
 export function createSSInbound(
   method: "aes-128-gcm" | "aes-256-gcm",
   password: string,
@@ -32,6 +42,8 @@ export function createSSInbound(
 
   let acc = new ByteAccumulator();
   let subkey: Uint8Array | null = null;
+  let pendingSaltKey: string | null = null;
+  let pendingSaltNowSec = 0;
   let handshakeDone = false;
   let handshakeOk = false;
   let initialPayload: Uint8Array | null = null;
@@ -50,6 +62,14 @@ export function createSSInbound(
           return { state: "need-more" };
         }
         const salt = buf.slice(0, keyLen);
+        const nowSec = Math.floor(Date.now() / 1000);
+        const saltKey = `${bytesToHex(masterKey)}:${bytesToHex(salt)}`;
+        const expiry = seenSalts.get(saltKey);
+        if (expiry !== undefined && expiry > nowSec) {
+          return complete({ state: "reject", reason: "salt reuse detected" });
+        }
+        pendingSaltKey = saltKey;
+        pendingSaltNowSec = nowSec;
         subkey = await hkdfSha1(masterKey, salt, subkeyInfo, keyLen);
       }
       const stream = buf.subarray(keyLen);
@@ -88,6 +108,8 @@ export function createSSInbound(
       const target = parseAddress(payloadFrame[0]!, payloadFrame, 1);
       if (!target.ok) return complete({ state: "reject", reason: target.reason });
 
+      pruneBoundedRegistry(seenSalts, SALT_REGISTRY_LIMIT, pendingSaltNowSec);
+      seenSalts.set(pendingSaltKey!, pendingSaltNowSec + SALT_REUSE_TTL_SECONDS);
       initialPayload = payloadFrame.subarray(target.value.nextOffset);
       pendingBody = [];
       for (let off = LEN_FRAME_LEN + payloadFrameLen; off < stream.length; off += COPY_SLICE) {
@@ -149,7 +171,7 @@ function createSsBodyCodec(
           return null;
         }
         const chunkLen = readU16BE(lenFrame, 0);
-        if (chunkLen === 0 || chunkLen > MAX_CHUNK_LEN) {
+        if (chunkLen > MAX_CHUNK_LEN) {
           upAlive = false;
           return null;
         }
@@ -163,6 +185,7 @@ function createSsBodyCodec(
         }
         dropChunks(pending, frameLen);
         upState.counter += 2;
+        if (chunkLen === 0) continue;
         parts.push(payload);
       }
       return concatBytes(...parts);

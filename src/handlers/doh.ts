@@ -3,7 +3,7 @@ import { BadRequestError, UpstreamError } from "../core/errors";
 import { log } from "../core/log";
 import { jsonError } from "../core/respond";
 
-const MAX_DOH_BODY_BYTES = 10 * 1024 * 1024;
+const MAX_DOH_BODY_BYTES = 64 * 1024;
 const PASSTHROUGH_HEADERS = ["content-type", "cache-control"] as const;
 
 export const handleDoh: RouteHandler = async (req, _env, s) => {
@@ -11,27 +11,29 @@ export const handleDoh: RouteHandler = async (req, _env, s) => {
     return jsonError(405, "METHOD_NOT_ALLOWED", "doh endpoint supports GET and POST only");
   }
   const upstream = new URL(s.dohUpstream);
-  const incoming = new URL(req.url);
-  for (const [key, value] of incoming.searchParams) {
-    upstream.searchParams.set(key, value);
-  }
   const headers: Record<string, string> = {
     Accept: req.headers.get("accept") ?? "application/dns-message",
   };
   let init: RequestInit;
   if (req.method === "POST") {
-    const declared = Number(req.headers.get("content-length") ?? "0");
-    if (Number.isFinite(declared) && declared > MAX_DOH_BODY_BYTES) {
-      throw new BadRequestError("dns query body exceeds the 10 MiB cap");
+    const clRaw = req.headers.get("content-length");
+    const declared = clRaw === null ? Number.NaN : Number(clRaw.trim());
+    if (!Number.isInteger(declared) || declared < 0) {
+      throw new BadRequestError("content-length required");
+    }
+    if (declared > MAX_DOH_BODY_BYTES) {
+      throw new BadRequestError("dns query body exceeds the 64 KiB cap");
     }
     const body = await req.arrayBuffer();
     if (body.byteLength === 0) throw new BadRequestError("empty dns query body");
     if (body.byteLength > MAX_DOH_BODY_BYTES) {
-      throw new BadRequestError("dns query body exceeds the 10 MiB cap");
+      throw new BadRequestError("dns query body exceeds the 64 KiB cap");
     }
     headers["Content-Type"] = req.headers.get("content-type") ?? "application/dns-message";
     init = { method: "POST", headers, body, signal: AbortSignal.timeout(5000) };
   } else {
+    const dns = new URL(req.url).searchParams.get("dns");
+    if (dns !== null) upstream.searchParams.set("dns", dns);
     init = { method: "GET", headers, signal: AbortSignal.timeout(5000) };
   }
   let resp: Response;

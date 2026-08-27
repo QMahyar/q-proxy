@@ -41,4 +41,20 @@ describe("pickSubFormat negotiation priority", () => {
     expect(pickSubFormat(req("https://w/sp/sub"))).toBe("base64");
     expect(pickSubFormat(req("https://w/sp/sub", ""))).toBe("base64");
   });
+
+  it("path segment target beats UA sniffing but not query target", () => {
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/clash", "Loon/3"), "clash")).toBe("clash");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/base64", "Loon/3"), "base64")).toBe("base64");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/singbox", "Loon/3"), "surge")).toBe("surge");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/clash?target=surge", "Loon/3"), "clash")).toBe("surge");
+  });
+
+  it("ignores an invalid path target and falls through", () => {
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/hysteria", "clash-verge/1"), "hysteria")).toBe("clash");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/hysteria"), "hysteria")).toBe("base64");
+  });
+
+  it("view=html still wins over the path target", () => {
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/clash?view=html"), "clash")).toBeNull();
+  });
 });

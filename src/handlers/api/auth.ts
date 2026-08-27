@@ -1,8 +1,14 @@
+import type { Env } from "../../types/env";
 import type { RouteHandler } from "../../types/context";
-import { BadRequestError, UnauthorizedError, ValidationError } from "../../core/errors";
-import { jsonError, jsonOk } from "../../core/respond";
+import { UnauthorizedError, ValidationError } from "../../core/errors";
+import { jsonError, jsonOk, readJsonObject } from "../../core/respond";
+import { log } from "../../core/log";
 import { hashPassword, verifyPassword } from "../../auth/password";
-import { clearedSessionCookie, issuedSessionCookie } from "../../auth/session";
+import {
+  bumpSessionFloor,
+  clearedSessionCookie,
+  issuedSessionCookie,
+} from "../../auth/session";
 import {
   assertLoginAllowed,
   clearLoginFailures,
@@ -11,32 +17,34 @@ import {
 } from "../../auth/guard";
 import { loadSettingsFresh, saveSettings } from "../../settings/store";
 
-export async function readJsonObject(req: Request): Promise<Record<string, unknown>> {
-  let parsed: unknown;
+async function upgradeLegacyHash(env: Env, password: string): Promise<void> {
   try {
-    parsed = await req.json();
-  } catch {
-    throw new BadRequestError("invalid json body");
+    const fresh = await loadSettingsFresh(env);
+    if (fresh.passwordHash === null || fresh.passwordSalt === null) return;
+    const verified = await verifyPassword(password, fresh.passwordHash, fresh.passwordSalt);
+    if (verified.tier !== "legacy") return;
+    const { hash, salt } = await hashPassword(password);
+    await saveSettings(env, { ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+  } catch (err) {
+    log.debug("auth", "legacy hash upgrade failed", String(err));
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new BadRequestError("body must be a json object");
-  }
-  return parsed as Record<string, unknown>;
 }
 
-export const handleLogin: RouteHandler = async (req, _env, s) => {
+export const handleLogin: RouteHandler = async (req, env, s) => {
   assertLoginAllowed(clientIp(req));
   const body = await readJsonObject(req);
   if (s.passwordHash === null || s.passwordSalt === null) {
     return jsonError(409, "SETUP_REQUIRED", "admin password is not configured yet");
   }
   const password = typeof body.password === "string" ? body.password : "";
-  const ok = password.length > 0 && (await verifyPassword(password, s.passwordHash, s.passwordSalt));
-  if (!ok) {
+  const verified =
+    password.length > 0 ? await verifyPassword(password, s.passwordHash, s.passwordSalt) : null;
+  if (verified === null || !verified.ok) {
     recordLoginFailure(clientIp(req));
     throw new UnauthorizedError("invalid password");
   }
   clearLoginFailures(clientIp(req));
+  if (verified.tier === "legacy") await upgradeLegacyHash(env, password);
   return jsonOk({ hasPassword: true }, { "Set-Cookie": await issuedSessionCookie(s.sessionSecret) });
 };
 
@@ -62,5 +70,29 @@ export const handleSetup: RouteHandler = async (req, env, s) => {
   return jsonOk(
     { hasPassword: true },
     { "Set-Cookie": await issuedSessionCookie(fresh.sessionSecret) },
+  );
+};
+
+export const handlePasswordChange: RouteHandler = async (req, env, s) => {
+  const body = await readJsonObject(req);
+  if (s.passwordHash === null || s.passwordSalt === null) {
+    throw new UnauthorizedError("invalid password");
+  }
+  const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
+  const currentOk =
+    currentPassword.length > 0 &&
+    (await verifyPassword(currentPassword, s.passwordHash, s.passwordSalt)).ok;
+  if (!currentOk) throw new UnauthorizedError("invalid password");
+  const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+  if (newPassword.length < 8) {
+    throw new ValidationError({ newPassword: "must be at least 8 characters" });
+  }
+  const fresh = await loadSettingsFresh(env);
+  const { hash, salt } = await hashPassword(newPassword);
+  await saveSettings(env, { ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+  await bumpSessionFloor(env);
+  return jsonOk(
+    { changed: true },
+    { "Set-Cookie": await issuedSessionCookie(s.sessionSecret) },
   );
 };

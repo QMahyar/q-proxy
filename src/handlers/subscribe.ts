@@ -1,26 +1,20 @@
 import type { RouteHandler } from "../types/context";
 import type { SubFormat } from "../core/ua";
 import { NotFoundError } from "../core/errors";
-import { readUsage } from "../core/counters";
+import { afterResponse, readUsage } from "../core/counters";
 import { htmlResponse } from "../core/respond";
 import { resolveHostname, resolveSecureRoute } from "../core/routes";
-import { EMITTERS } from "../nodes/emitters/registry";
 import { generateNodes } from "../nodes/generate";
-import { buildShareUris } from "../nodes/share-uri";
 import { subscriptionHeaders } from "../subscription/headers";
-import { fetchRemoteSubLines } from "../subscription/merge";
-import { pickSubFormat } from "../subscription/negotiate";
-import { encodeUtf8Base64 } from "../utils/base64";
-
-const FORMATS: readonly SubFormat[] = ["base64", "clash", "singbox", "surge", "loon"];
-
-export const SUB_CONTENT_TYPES: Record<SubFormat, string> = {
-  base64: "text/plain; charset=utf-8",
-  clash: "text/yaml; charset=utf-8",
-  singbox: "application/json; charset=utf-8",
-  surge: "text/plain; charset=utf-8",
-  loon: "text/plain; charset=utf-8",
-};
+import {
+  makeEdgeCacheKey,
+  matchEdgeCache,
+  renderSubscriptionBody,
+  selectVariantNodes,
+  SUB_CONTENT_TYPES,
+} from "../subscription/render";
+import { pickSubFormat, SUB_FORMATS } from "../subscription/negotiate";
+import { escapeHtml } from "../utils/html";
 
 const FORMAT_LABELS: Record<SubFormat, string> = {
   base64: "Base64 / v2rayNG",
@@ -29,14 +23,6 @@ const FORMAT_LABELS: Record<SubFormat, string> = {
   surge: "Surge",
   loon: "Loon",
 };
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 export function infoPageHtml(subUrls: Array<{ format: SubFormat; url: string }>, title: string): string {
   const rows = subUrls
@@ -81,64 +67,39 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
   const route = resolveSecureRoute(url, s);
   if (route === null || route.kind !== "sub") throw new NotFoundError();
 
-  const origin = url.origin;
-  const panelUrl = `${origin}/${s.securePath}/panel`;
   const format = pickSubFormat(req);
   const isFragmentMode = url.searchParams.get("mode") === "fragment";
 
   if (format === null) {
-    const subUrls = FORMATS.map((f) => ({
+    const origin = url.origin;
+    const subUrls = SUB_FORMATS.map((f) => ({
       format: f,
       url: `${origin}${url.pathname}?target=${f}`,
     }));
     return htmlResponse(infoPageHtml(subUrls, s.profileTitle));
   }
 
-  const cacheKeyUrl = new URL(req.url);
-  cacheKeyUrl.searchParams.set("_k", `${format}:${isFragmentMode ? "f" : "n"}`);
-  const cacheKey = new Request(cacheKeyUrl.toString(), { method: "GET" });
-  const edgeCache: Cache | null = typeof caches === "undefined" ? null : caches.default;
-  if (edgeCache !== null) {
-    const cached = await edgeCache.match(cacheKey);
-    if (cached !== undefined) return cached;
-  }
+  const cacheKey = makeEdgeCacheKey(req, format, isFragmentMode);
+  const cached = await matchEdgeCache(cacheKey);
+  if (cached !== undefined) return cached;
 
   const ctx = { settings: s, hostname: resolveHostname(s, url), request: req };
-  const allNodes = generateNodes(ctx);
-  let nodes = isFragmentMode ? allNodes.filter((n) => n.variant === "fragment") : allNodes;
-  if (isFragmentMode && nodes.length === 0) nodes = allNodes;
-  const opts = {
-    remoteDns: s.remoteDns,
-    urlTestIntervalSec: s.urlTestIntervalSec,
-    isFragment: isFragmentMode,
-    subscriptionUrl: `${origin}${url.pathname}?target=${format}`,
-    updateIntervalHours: s.subUpdateIntervalHours,
-    rules: {
-      bypassLan: s.routingRules.bypassLan,
-      bypassDomains: [...s.routingRules.customBypass],
-      blockDomains: [...s.routingRules.customBlock],
-      blockQuic: s.routingRules.blockQuic,
-    },
-  };
-
-  let body: string;
-  if (format === "base64") {
-    const [ownLines, remoteLines] = await Promise.all([
-      Promise.resolve(buildShareUris(nodes)),
-      fetchRemoteSubLines(s.remoteSubUrls, s.subUpdateIntervalHours * 3600),
-    ]);
-    body = encodeUtf8Base64([...ownLines, ...remoteLines].join("\n"));
-  } else {
-    body = EMITTERS[format](nodes, opts);
-  }
+  const nodes = selectVariantNodes(generateNodes(ctx), isFragmentMode ? "fragment" : "normal");
+  const body = await renderSubscriptionBody({
+    settings: s,
+    nodes,
+    format,
+    isFragmentMode,
+    subscriptionUrl: `${url.origin}${url.pathname}?target=${format}`,
+  });
 
   const usage = await readUsage(env);
   const headers = subscriptionHeaders(format, s.profileTitle, nodes, usage, {
     updateIntervalHours: s.subUpdateIntervalHours,
-    webPageUrl: panelUrl,
+    webPageUrl: `${url.origin}/${s.securePath}/panel`,
   });
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
   const res = new Response(body, { status: 200, headers });
-  if (edgeCache !== null) void edgeCache.put(cacheKey, res.clone()).catch(() => {});
+  if (typeof caches !== "undefined") afterResponse(caches.default.put(cacheKey, res.clone()));
   return res;
 };

@@ -2,12 +2,11 @@ import type { RouteHandler } from "../../types/context";
 import type { PublicSettings, Settings } from "../../types/settings";
 import { DEFAULT_SETTINGS, SENSITIVE_SETTING_PATHS, SETTINGS_VERSION } from "../../types/settings";
 import { ValidationError } from "../../core/errors";
-import { jsonOk } from "../../core/respond";
+import { jsonOk, readJsonObject } from "../../core/respond";
 import { assertCsrf } from "../../auth/guard";
 import { deepMergeDefaults } from "../../settings/migrate";
 import { validateSettings } from "../../settings/validate";
 import { saveSettings, settingsEtag } from "../../settings/store";
-import { readJsonObject } from "./auth";
 
 export function publicSettingsView(s: Settings): PublicSettings & { hasPassword: boolean } {
   const view = structuredClone(s) as unknown as Record<string, unknown>;

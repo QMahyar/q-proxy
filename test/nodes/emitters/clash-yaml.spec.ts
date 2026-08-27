@@ -115,7 +115,7 @@ describe("emitClashYaml golden", () => {
       "    type: ss",
       "    server: example.com",
       "    port: 443",
-      "    udp: true",
+      "    udp: false",
       "    cipher: aes-128-gcm",
       "    password: sspass12345",
       "    plugin: v2ray-plugin",
@@ -187,6 +187,29 @@ describe("emitClashYaml golden", () => {
     const frag: VlessNode = { ...vless(), name: "F", variant: "fragment", tags: ["fragment"] };
     expect(emitClashYaml([frag], OPTS)).not.toContain("- F\n");
     expect(emitClashYaml([frag], { ...OPTS, isFragment: true })).toContain("- name: F");
+  });
+
+  it("excludes plain-security trojan nodes because mihomo trojan is always-TLS", () => {
+    const plainTrojan: TrojanNode = {
+      ...trojan(),
+      name: "TROJAN example.com 80 Plain Workers-Dev",
+      port: 80,
+      security: "none",
+      sni: null,
+      fingerprint: null,
+    };
+    const out = emitClashYaml([vless(), plainTrojan], OPTS);
+    expect(out).toContain("type: vless");
+    expect(out).not.toContain("type: trojan");
+    expect(out).toContain('proxies: ["VLESS example.com 443"]');
+    expect(out).toContain('rules: ["MATCH,PROXY"]');
+  });
+
+  it("adds ech-opts to the trojan branch and keeps udp false on ss plugin entries", () => {
+    const echTrojan: TrojanNode = { ...trojan(), name: "TROJAN ECH", ech: "crypto.example.com" };
+    const out = emitClashYaml([echTrojan, ss()], OPTS);
+    expect(out).toContain("    password: secretpass123\n    sni: example.com\n    ech-opts:\n      enable: true");
+    expect(out).toContain("    type: ss\n    server: example.com\n    port: 443\n    udp: false");
   });
 });
 

@@ -1,9 +1,8 @@
 import type { RouteHandler } from "../../types/context";
 import type { PublicUser, UserAccount } from "../../users/store";
 import { NotFoundError, ValidationError } from "../../core/errors";
-import { jsonOk } from "../../core/respond";
+import { jsonOk, readJsonObject } from "../../core/respond";
 import { assertCsrf } from "../../auth/guard";
-import { readJsonObject } from "./auth";
 import {
   MAX_USERS,
   getUserHits,

@@ -119,7 +119,7 @@ Base path: `GET /{sp}/sub` (`src/handlers/subscribe.ts`, `src/core/router.ts:154
 | `?target=` | UA sniff token | Format | Content-Type | Body |
 |------------|----------------|--------|--------------|------|
 | `base64` | `v2rayng`/`shadowrocket`/`happ`/`streisand`… | Base64 | `text/plain` | Std padded base64 of `\n`-joined `vless://`/`vmess://`/`trojan://`/`ss://` |
-| `clash` | `clash`/`meta`/`mihomo`/`stash`/`verge` | Clash YAML | `text/yaml` | Real YAML via `yaml-writer` (not JSON), `servername` vs `sni`, ws-opts `max-early-data: 2048` |
+| `clash` | `clash`/`mihomo`/`stash` | Clash YAML | `text/yaml` | Real YAML via `yaml-writer` (not JSON), `servername` vs `sni`, ws-opts `max-early-data: 2048` |
 | `singbox` | `sing-box`/`singbox`/`sfa`/`hiddify`/`nekobox`/`karing` | sing-box JSON | `application/json` | Full profile: tun+mixed inbounds, DNS detour, `urltest` best-ping |
 | `surge` | `surge` | Surge INI | `text/plain` | `[Proxy]` + select/url-test groups; SS omitted (no v2ray-plugin) |
 | `loon` | `loon` | Loon | `text/plain` | `[Proxy]` lines; SS omitted |
@@ -214,7 +214,9 @@ Failover keeps top 8 candidates, shuffled deterministically by target host via h
 
 ### 7.4 Remote Subscriptions
 
-remoteSubUrls[] — fetched at sub-request time with 5 s timeout, 1 MB cap, 5-min isolate cache (src/subscription/merge.ts). Known schemes (vless/vmess/trojan/ss) converted natively into YAML/JSON/Surge/Loon; unknown schemes pass into base64 mixed only. Unreachable sources degrade silently — own nodes still served. Deduped before emit.
+remoteSubUrls[] must point to share-link lists — raw `vless://`/`vmess://`/`trojan://`/`ss://`/`hysteria://`/`hysteria2://` lines or base64 of such a list; any other line format is dropped (src/subscription/merge.ts). Fetch rules: 5 s timeout per URL, redirects followed, 1 MiB total cap shared across all URLs, exact-line dedupe. Unreachable or malformed sources degrade silently — own nodes still served. Results are cached per-isolate for `subUpdateIntervalHours` (default 12 h).
+
+Merging happens ONLY in the base64 subscription (`?target=base64`, including UA-negotiated base64): remote lines are appended after your generated share URIs and the combined list is base64-encoded (src/handlers/subscribe.ts). They are never parsed or converted — Clash YAML, sing-box JSON, Surge and Loon outputs are generated from your own nodes exclusively. Per-user links (`/sub/u/{token}`) likewise never include remote lines.
 
 ### 7.5 Fragment Settings
 
@@ -254,7 +256,7 @@ Screenshot: *Status card showing version bump + KV migration log*
 
 ## 11. DoH Private Endpoint
 
-GET /{sp}/doh — blind DoH reverse proxy to dohUpstream (src/handlers/doh.ts). GET ?dns= and POST both forwarded verbatim, cookies stripped, correct content-type returned. Size-capped at 10 MiB. Lives under securePath — knowledge of path is capability. Test: curl https://<worker>/<sp>/doh?dns=<b64url(dns packet)> -H "accept: application/dns-message".
+GET /{sp}/doh — blind DoH reverse proxy to dohUpstream (src/handlers/doh.ts). GET ?dns= and POST both forwarded verbatim, cookies stripped, correct content-type returned. POST bodies size-capped at 64 KiB. Lives under securePath — knowledge of path is capability. Test: curl https://<worker>/<sp>/doh?dns=<b64url(dns packet)> -H "accept: application/dns-message".
 
 ## 12. Speedtest Interception
 

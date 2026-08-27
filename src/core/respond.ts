@@ -1,4 +1,4 @@
-import { AppError, ValidationError } from "./errors";
+import { AppError, BadRequestError, ValidationError } from "./errors";
 
 const GENERIC_MESSAGE = "internal error";
 
@@ -45,9 +45,31 @@ export function errorToResponse(err: unknown, debug: boolean): Response {
 }
 
 export function htmlResponse(html: string, status = 200, headers?: Record<string, string>): Response {
-  const h = new Headers(headers);
+  const h = new Headers();
   h.set("Content-Type", "text/html; charset=utf-8");
+  h.set("X-Content-Type-Options", "nosniff");
+  h.set("X-Frame-Options", "DENY");
+  h.set("Referrer-Policy", "no-referrer");
+  h.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  h.set(
+    "Content-Security-Policy",
+    "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'",
+  );
+  for (const [key, value] of Object.entries(headers ?? {})) h.set(key, value);
   return new Response(html, { status, headers: h });
+}
+
+export async function readJsonObject(req: Request): Promise<Record<string, unknown>> {
+  let parsed: unknown;
+  try {
+    parsed = await req.json();
+  } catch {
+    throw new BadRequestError("invalid json body");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new BadRequestError("body must be a json object");
+  }
+  return parsed as Record<string, unknown>;
 }
 
 export function redirect(location: string, status: 302 | 308 = 302): Response {

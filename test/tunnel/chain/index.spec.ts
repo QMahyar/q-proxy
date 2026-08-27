@@ -18,7 +18,11 @@ describe("parseChainUri", () => {
     const socks = parseChainUri("socks://plain.example");
     expect(socks).toMatchObject({ kind: "socks5", host: "plain.example", port: 1080 });
     expect(parseChainUri("http://proxy.example")).toMatchObject({ kind: "http", port: 80 });
-    expect(parseChainUri("https://proxy.example")).toMatchObject({ kind: "http", port: 443 });
+  });
+
+  it("rejects https:// URIs instead of dialing plaintext CONNECT", () => {
+    expect(parseChainUri("https://proxy.example")).toBeNull();
+    expect(parseChainUri("HTTPS://proxy.example:443")).toBeNull();
   });
 
   it("defaults missing passwords but keeps usernames", () => {

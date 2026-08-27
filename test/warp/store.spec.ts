@@ -101,6 +101,25 @@ describe("warp store", () => {
     expect((await getAccountByToken(kv.asEnv(), next))?.id).toBe(a.id);
   });
 
+  it("keeps the old token index until the new state commits when the index write fails", async () => {
+    const a = mkAccount();
+    await storeAccount(kv.asEnv(), a);
+    const old = a.token;
+    const failing = {
+      QPROXY_KV: {
+        get: kv.get.bind(kv),
+        put: async (key: string, value: string) => {
+          if (key.startsWith("qproxy:warp:token:")) throw new Error("kv put failed");
+          await kv.put(key, value);
+        },
+        delete: kv.delete.bind(kv),
+        list: kv.list.bind(kv),
+      },
+    };
+    await expect(regenerateToken(failing as never, a)).rejects.toThrow("kv put failed");
+    expect(kv.map.has(`qproxy:warp:token:${old}`)).toBe(true);
+  });
+
   it("validates amnezia ranges and overlap", () => {
     expect(validateAmnezia({ Jc: 4, Jmin: 40, Jmax: 70 }).ok).toBe(true);
     expect(validateAmnezia({ Jc: 999 }).ok).toBe(false);
@@ -112,12 +131,40 @@ describe("warp store", () => {
     expect(validateAmnezia({ I1: "junk" }).ok).toBe(false);
   });
 
-  it("resolves global then per-account overrides, dropping zeros", () => {
+  it("labels the first key of an overlapping H pair", () => {
+    const h1h2 = validateAmnezia({ H1: "100-200", H2: "150-300" });
+    expect(h1h2.ok).toBe(false);
+    if (!h1h2.ok) {
+      expect(h1h2.fields.H1).toBe("H ranges must not overlap");
+      expect(h1h2.fields.H2).toBeUndefined();
+    }
+    const h2h3 = validateAmnezia({ H2: "150-300", H3: "250-400" });
+    expect(h2h3.ok).toBe(false);
+    if (!h2h3.ok) {
+      expect(h2h3.fields.H2).toBe("H ranges must not overlap");
+      expect(h2h3.fields.H1).toBeUndefined();
+      expect(h2h3.fields.H3).toBeUndefined();
+    }
+    const h3h4 = validateAmnezia({ H3: "250-400", H4: "350-500" });
+    expect(h3h4.ok).toBe(false);
+    if (!h3h4.ok) {
+      expect(h3h4.fields.H3).toBe("H ranges must not overlap");
+      expect(h3h4.fields.H1).toBeUndefined();
+      expect(h3h4.fields.H4).toBeUndefined();
+    }
+  });
+
+  it("resolves global then per-account overrides, keeping explicit zeros", () => {
     const resolved = resolveAmnezia({ Jc: 10, Jmin: 60, Jmax: 900, H1: 0 }, { Jc: 20 });
     expect(resolved.Jc).toBe(20);
     expect(resolved.Jmin).toBe(60);
-    expect(resolved.H1).toBeUndefined();
+    expect(resolved.H1).toBe(0);
     expect(resolveAmnezia({}, null).Jmin).toBe(DEFAULT_PRESETS.length > 0 ? 50 : 0);
+  });
+
+  it("honors an explicit Jmin=0 override", () => {
+    const resolved = resolveAmnezia({ Jmin: 60 }, { Jmin: 0 });
+    expect(resolved.Jmin).toBe(0);
   });
 
   it("persists global settings", async () => {

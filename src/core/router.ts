@@ -1,12 +1,13 @@
 import type { Env } from "../types/env";
 import type { Settings } from "../types/settings";
-import { AppError } from "./errors";
+import { AppError, UnauthorizedError } from "./errors";
 import { redirect } from "./respond";
 import { setDebugEnabled } from "./log";
 import { recordConnection } from "./counters";
 import { identifyTunnel, resolveSecureRoute, splitPath, type ApiRouteName, type SecureRoute } from "./routes";
 import { loadSettings } from "../settings/store";
-import { requireAuth, assertCsrf } from "../auth/guard";
+import { assertCsrf, getSession, requireAuth } from "../auth/guard";
+import { getSessionFloor, verifySession } from "../auth/session";
 import type { RouteHandler } from "../types/context";
 import { handleTunnel } from "../handlers/tunnel";
 import { handleDoh } from "../handlers/doh";
@@ -18,7 +19,7 @@ import { serveLoginPage, servePanelPage } from "../handlers/panel-page";
 import { handleCamouflage } from "../handlers/camouflage";
 import { handleWarpSub } from "../handlers/warp-sub";
 import { handleUserSub } from "../handlers/users-sub";
-import { handleLogin, handleLogout, handleSetup } from "../handlers/api/auth";
+import { handleLogin, handleLogout, handlePasswordChange, handleSetup } from "../handlers/api/auth";
 import {
   handleGetSettings,
   handleResetSettings,
@@ -56,18 +57,41 @@ function killSwitchResponse(): Response {
 }
 
 function authedCsrf(handler: RouteHandler): RouteHandler {
-  return requireAuth(async (req, env, s) => {
+  return authed(async (req, env, s) => {
     assertCsrf(req);
     return handler(req, env, s);
   });
 }
 
+function csrfOnly(handler: RouteHandler): RouteHandler {
+  return async (req, env, s) => {
+    assertCsrf(req);
+    return handler(req, env, s);
+  };
+}
+
+function withSessionFloor(handler: RouteHandler): RouteHandler {
+  return async (req, env, s) => {
+    const raw = getSession(req);
+    if (raw === null) return handler(req, env, s);
+    const floor = await getSessionFloor(env);
+    if (floor > 0 && (await verifySession(raw, s.sessionSecret, floor)) === null) {
+      throw new UnauthorizedError();
+    }
+    return handler(req, env, s);
+  };
+}
+
+function authed(handler: RouteHandler): RouteHandler {
+  return requireAuth(withSessionFloor(handler));
+}
+
 const guardedSaveSettings = authedCsrf(handleSaveSettings);
 const guardedResetSettings = authedCsrf(handleResetSettings);
-const guardedStatus = requireAuth(handleStatus);
+const guardedStatus = authed(handleStatus);
 const guardedKillSwitch = authedCsrf(handleKillSwitch);
-const guardedSubUrls = requireAuth(handleSubUrls);
-const guardedMyIp = requireAuth(handleMyIp);
+const guardedSubUrls = authed(handleSubUrls);
+const guardedMyIp = authed(handleMyIp);
 
 async function dispatchApi(
   api: ApiRouteName,
@@ -82,17 +106,20 @@ async function dispatchApi(
       return handleLogin(req, env, s);
     case "auth-logout":
       expectMethods(req, ["POST"]);
-      return handleLogout(req, env, s);
+      return csrfOnly(handleLogout)(req, env, s);
     case "auth-setup":
       expectMethods(req, ["POST"]);
       return handleSetup(req, env, s);
+    case "auth-password":
+      expectMethods(req, ["POST"]);
+      return authedCsrf(handlePasswordChange)(req, env, s);
     case "settings-get":
-      if (req.method === "GET") return requireAuth(handleGetSettings)(req, env, s);
+      if (req.method === "GET") return authed(handleGetSettings)(req, env, s);
       expectMethods(req, ["PUT"]);
       return guardedSaveSettings(req, env, s);
     case "bootstrap":
       expectMethods(req, ["GET"]);
-      return requireAuth(handleBootstrap)(req, env, s);
+      return authed(handleBootstrap)(req, env, s);
     case "settings-save":
       expectMethods(req, ["PUT"]);
       return guardedSaveSettings(req, env, s);
@@ -101,13 +128,13 @@ async function dispatchApi(
       return guardedResetSettings(req, env, s);
     case "settings-export":
       expectMethods(req, ["GET"]);
-      return requireAuth(handleExportSettings)(req, env, s);
+      return authed(handleExportSettings)(req, env, s);
     case "settings-import":
       expectMethods(req, ["POST"]);
       return authedCsrf(handleImportSettings)(req, env, s);
     case "version-check":
       expectMethods(req, ["GET"]);
-      return requireAuth(handleVersionCheck)(req, env, s);
+      return authed(handleVersionCheck)(req, env, s);
     case "status":
       expectMethods(req, ["GET"]);
       return guardedStatus(req, env, s);
@@ -118,9 +145,9 @@ async function dispatchApi(
       expectMethods(req, ["GET"]);
       return guardedSubUrls(req, env, s);
     case "warp":
-      return requireAuth(handleWarpApi)(req, env, s);
+      return authed(handleWarpApi)(req, env, s);
     case "users":
-      return requireAuth(handleUsersApi)(req, env, s);
+      return authed(handleUsersApi)(req, env, s);
     case "telegram-webhook":
       expectMethods(req, ["POST"]);
       return handleTelegramWebhook(req, env, s);
@@ -179,6 +206,8 @@ function resolveAuthAlias(url: URL, s: Settings): SecureRoute | null {
       return { kind: "api", api: "auth-logout" };
     case "setup":
       return { kind: "api", api: "auth-setup" };
+    case "password":
+      return { kind: "api", api: "auth-password" };
     default:
       return null;
   }

@@ -29,6 +29,16 @@ export type DialImpl = (
 type ChainCandidate = EgressCandidate & { chain?: ChainDescriptor };
 
 const MAX_PROXYIP_CANDIDATES = 8;
+export const DIAL_TIMEOUT_MS = 10_000;
+
+export interface EgressOpenerOptions {
+  dialTimeoutMs?: number;
+}
+
+function isBlockedResolvedIp(ip: string): boolean {
+  const bare = ip.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  return isLocalOrPrivateTarget(bare) || isCloudflareIp(bare);
+}
 
 function isBlockedDirectHost(host: string): boolean {
   const bare = host.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
@@ -72,7 +82,7 @@ export async function makeFailoverStrategy(
     }
   } else {
     const ipv4 = await resolveIpv4(target.host, settings.remoteDns);
-    if (ipv4 !== null) {
+    if (ipv4 !== null && !isBlockedResolvedIp(ipv4)) {
       for (const prefix of settings.nat64Prefixes) {
         const synthesized = synthesizeNat64Address(prefix, ipv4);
         if (synthesized !== null) {
@@ -86,7 +96,15 @@ export async function makeFailoverStrategy(
       }
     }
   }
-  return { target, candidates, hasNext: (i) => i + 1 < candidates.length };
+  const seen = new Set<string>();
+  const deduped = candidates.filter((c) => {
+    if (c.via === "direct") return true;
+    const key = `${c.host}:${c.port}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { target, candidates: deduped, hasNext: (i) => i + 1 < deduped.length };
 }
 
 async function defaultDialImpl(
@@ -104,15 +122,25 @@ async function defaultDialImpl(
     const writer = socket.writable.getWriter();
     try {
       await writer.write(firstPacket);
-    } finally {
-      writer.releaseLock();
+    } catch (err) {
+      try {
+        writer.releaseLock();
+      } catch {}
+      await socket.close().catch(() => {});
+      throw err instanceof Error ? err : new Error(String(err));
     }
+    writer.releaseLock();
   }
   return socket;
 }
 
-export function createEgressOpener(strategy: FailoverStrategy, dialImpl?: DialImpl): EgressOpener {
+export function createEgressOpener(
+  strategy: FailoverStrategy,
+  dialImpl?: DialImpl,
+  opts?: EgressOpenerOptions,
+): EgressOpener {
   const dial = dialImpl ?? defaultDialImpl;
+  const timeoutMs = opts?.dialTimeoutMs ?? DIAL_TIMEOUT_MS;
   let lastSuccessIndex = -1;
   const attempt = async (
     index: number,
@@ -121,9 +149,23 @@ export function createEgressOpener(strategy: FailoverStrategy, dialImpl?: DialIm
   ): Promise<OpenedEgress> => {
     const candidate = strategy.candidates[index];
     if (candidate === undefined) throw new Error(`no egress candidate at index ${index}`);
-    const socket = await dial(candidate, target, firstPacket);
-    lastSuccessIndex = index;
-    return { socket, via: candidate.via, candidateIndex: index, strategy };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const pending = dial(candidate, target, firstPacket);
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`dial timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+    try {
+      const socket = await Promise.race([pending, timeout]);
+      lastSuccessIndex = index;
+      return { socket, via: candidate.via, candidateIndex: index, strategy };
+    } catch (err) {
+      void pending
+        .then((s) => s.close().catch(() => {}))
+        .catch(() => {});
+      throw err instanceof Error ? err : new Error(String(err));
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   };
   return {
     open: async (target, firstPacket) => {

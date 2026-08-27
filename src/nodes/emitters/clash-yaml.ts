@@ -45,8 +45,12 @@ function proxyEntry(node: ProxyNode): YamlObject {
     if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = { enable: true };
   } else if (node.kind === "trojan") {
     p.password = node.password;
-    if (isTls) p.sni = node.sni ?? node.host;
+    if (isTls) {
+      p.sni = node.sni ?? node.host;
+      if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = { enable: true };
+    }
   } else {
+    p.udp = false;
     p.cipher = node.method;
     p.password = node.password;
     p.plugin = "v2ray-plugin";
@@ -63,7 +67,9 @@ function proxyEntry(node: ProxyNode): YamlObject {
 }
 
 export function emitClashYaml(nodes: readonly ProxyNode[], opts: EmitOptions): string {
-  const visible = nodes.filter((n) => opts.isFragment || n.variant !== "fragment");
+  const visible = nodes.filter(
+    (n) => (opts.isFragment || n.variant !== "fragment") && !(n.kind === "trojan" && n.security === "none"),
+  );
   const proxies = visible.map(proxyEntry);
   const names = proxies.map((p) => String(p.name));
   const groups: YamlObject[] =

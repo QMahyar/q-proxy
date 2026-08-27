@@ -102,3 +102,81 @@ describe("resolveHostname", () => {
     expect(resolveHostname(makeTestSettings(), url)).toBe("worker.example.com");
   });
 });
+
+const UUID = "12345678-1234-4234-8234-123456789abc";
+const HEX16 = "0123456789abcdef";
+
+function routeAt(path: string): ReturnType<typeof resolveSecureRoute> {
+  return resolveSecureRoute(new URL(`https://x.com/mysecret1${path}`), s);
+}
+
+describe("resolveSecureRoute full matrix", () => {
+  it.each([
+    ["/panel", { kind: "page", page: "panel" }],
+    ["/login", { kind: "page", page: "login" }],
+    ["/sub", { kind: "sub" }],
+    [`/sub/wg/${UUID}/throne`, { kind: "warp-sub" }],
+    [`/sub/u/${UUID}`, { kind: "user-sub" }],
+    [`/sub/u/${UUID}/clash`, { kind: "user-sub" }],
+    ["/doh", { kind: "doh" }],
+    ["/my-ip", { kind: "myip" }],
+    ["/telegram/setup", { kind: "api", api: "telegram-setup" }],
+    ["/telegram/remove", { kind: "api", api: "telegram-remove" }],
+    [`/telegram/webhook/${HEX16}`, { kind: "api", api: "telegram-webhook" }],
+    ["/api/status", { kind: "api", api: "status" }],
+    ["/api/bootstrap", { kind: "api", api: "bootstrap" }],
+    ["/api/killswitch", { kind: "api", api: "killswitch" }],
+    ["/api/suburls", { kind: "api", api: "suburls" }],
+    ["/api/warp", { kind: "api", api: "warp" }],
+    ["/api/warp/account", { kind: "api", api: "warp" }],
+    ["/api/warp/account/x/regenerate-token", { kind: "api", api: "warp" }],
+    ["/api/users", { kind: "api", api: "users" }],
+    [`/api/users/${UUID}`, { kind: "api", api: "users" }],
+    [`/api/users/${UUID}/regenerate-token`, { kind: "api", api: "users" }],
+    ["/api/version/check", { kind: "api", api: "version-check" }],
+    ["/api/settings", { kind: "api", api: "settings-get" }],
+    ["/api/settings/save", { kind: "api", api: "settings-save" }],
+    ["/api/settings/reset", { kind: "api", api: "settings-reset" }],
+    ["/api/settings/export", { kind: "api", api: "settings-export" }],
+    ["/api/settings/import", { kind: "api", api: "settings-import" }],
+  ])("maps %s to %j", (path, expected) => {
+    expect(routeAt(path)).toEqual(expected);
+  });
+
+  it.each([
+    "/panel/extra",
+    "/login/extra",
+    "/sub/extra",
+    "/doh/extra",
+    "/my-ip/extra",
+    `/sub/wg/not-a-uuid/throne`,
+    `/sub/wg/${UUID}`,
+    `/sub/u/not-a-uuid`,
+    `/sub/u/${UUID}/clash/extra`,
+    `/sub/u/${UUID}/a/b/c`,
+    "/sub/wg",
+    "/telegram",
+    "/telegram/other",
+    "/telegram/webhook",
+    "/telegram/webhook/tooshort",
+    `/telegram/webhook/${HEX16}/extra`,
+    "/telegram/setup/extra",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/setup",
+    "/api/auth/password",
+    "/api/auth/login/extra",
+    "/api/auth/unknown",
+    "/api/status/extra",
+    "/api/bootstrap/extra",
+    "/api/killswitch/extra",
+    "/api/suburls/extra",
+    "/api/version",
+    "/api/version/check/extra",
+    "/api/settings/save/extra",
+    "/api/settings/unknown",
+    "/api/nope",
+  ])("rejects %s by segment count or shape", (path) => {
+    expect(routeAt(path)).toBeNull();
+  });
+});

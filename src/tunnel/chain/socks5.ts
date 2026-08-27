@@ -178,10 +178,10 @@ export async function connectOverSocks5(
 ): Promise<DuplexIO & { close(): Promise<void> | void }> {
   if (target.port < 1 || target.port > 65535) throw new Error("invalid target port");
   const writer = io.writable.getWriter();
+  const reader = new BufferedByteReader(io.readable);
   try {
     const methods = creds.username !== null ? [0x00, 0x02] : [0x00];
     await writer.write(concatBytes(new Uint8Array([0x05, methods.length]), new Uint8Array(methods)));
-    const reader = new BufferedByteReader(io.readable);
     let greet: Uint8Array | null;
     try {
       greet = await reader.readExact(2);
@@ -244,6 +244,9 @@ export async function connectOverSocks5(
       close: () => io.close(),
     };
   } catch (err) {
+    try {
+      reader.release();
+    } catch {}
     try {
       writer.releaseLock();
     } catch {}

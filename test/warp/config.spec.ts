@@ -77,6 +77,26 @@ describe("parseWireGuardConf", () => {
     expect(parseWireGuardConf(conf({}, { Reserved: "1,2" })).ok).toBe(false);
     expect(parseWireGuardConf("short").ok).toBe(false);
   });
+
+  it("rejects PresharedKey and PersistentKeepalive", () => {
+    const psk = parseWarpConfig(conf({}, { PresharedKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" }));
+    expect(psk.ok).toBe(false);
+    if (!psk.ok) expect(psk.reason).toContain("PresharedKey");
+    const keepalive = parseWarpConfig(conf({}, { PersistentKeepalive: "25" }));
+    expect(keepalive.ok).toBe(false);
+    if (!keepalive.ok) expect(keepalive.reason).toContain("PersistentKeepalive");
+  });
+
+  it("rejects multiple [Peer] sections", () => {
+    const multi =
+      conf() +
+      "\n[Peer]\nPublicKey = " +
+      PUB +
+      "\nAllowedIPs = 0.0.0.0/0\nEndpoint = engage.cloudflareclient.com:2408";
+    const r = parseWarpConfig(multi);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("multiple [Peer] sections");
+  });
 });
 
 describe("parseWgUri", () => {

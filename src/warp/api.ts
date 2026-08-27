@@ -1,5 +1,6 @@
 import type { WarpConfig } from "../types/warp";
 import { generateKeypair } from "../crypto/x25519";
+import { decodeReservedTriplet } from "./config";
 
 const WARP_BASE = "https://api.cloudflareclient.com/v0a4005";
 const WARP_UA = "okhttp/3.12.1";
@@ -48,17 +49,8 @@ function firstString(...values: Array<unknown>): string | null {
 }
 
 function decodeReserved(clientId: unknown): [number, number, number] | null {
-  if (typeof clientId !== "string" || clientId.length === 0) return null;
-  let b64 = clientId;
-  while (b64.length % 4 !== 0) b64 += "=";
-  try {
-    const bin = atob(b64);
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    if (bytes.length !== 3) return null;
-    return [bytes[0]!, bytes[1]!, bytes[2]!];
-  } catch {
-    return null;
-  }
+  if (typeof clientId !== "string") return null;
+  return decodeReservedTriplet(clientId);
 }
 
 function extractConfig(body: unknown): Omit<WarpRegistration, "warpToken"> | null {

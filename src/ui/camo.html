@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
+<meta name="description" content="Notes on bread, books and long walks.">
+<link rel="icon" href="data:image/svg+xml,<svg viewBox='0 0 16 16'><rect x='3' y='1' width='10' height='14' rx='1.5' fill='%23e4e0d8'/><path d='M5 1v14' stroke='%236f6f6f' stroke-width='1'/><path d='M7.2 4h3.8M7.2 6.5h3.8M7.2 9h3.8' stroke='%236f6f6f' stroke-width='.8'/></svg>">
 <title>Daily Notes</title>
 <style>
 :root{--ink:#2b2b2b;--dim:#6f6f6f;--line:#e4e0d8;--paper:#faf8f4}
@@ -22,7 +24,7 @@ a{color:inherit}
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
 <header>
 <h1>Daily Notes</h1>
 <p>Small observations, recipes and long walks</p>
@@ -45,9 +47,10 @@ a{color:inherit}
 <p>Nine kilometers around the water before the heat arrived. Herons at the north inlet, one very confident duck on the path, and a bakery detour that added another two kilometers but was entirely worth it.</p>
 </article>
 <footer>
-<span>&copy; 2026 Daily Notes</span>
+<span>&copy; <span id="y">2026</span> Daily Notes</span>
 <span>Written slowly, published rarely.</span>
 </footer>
-</div>
+</main>
+<script>document.getElementById('y').textContent=new Date().getFullYear()</script>
 </body>
 </html>

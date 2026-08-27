@@ -30,7 +30,7 @@ interface AnswerSpec {
   rdata: Uint8Array;
 }
 
-function buildDnsResponse(name: string, qtype: number, answers: AnswerSpec[]): Uint8Array {
+function buildDnsResponse(name: string, answers: AnswerSpec[]): Uint8Array {
   const question = concatBytes(encodeName(name), new Uint8Array([0, 0]), new Uint8Array([0, 1]));
   const header = new Uint8Array(12);
   header[2] = 0x81;
@@ -86,7 +86,7 @@ describe("buildDnsQuery", () => {
 
 describe("parseDnsAnswers", () => {
   it("extracts A records", () => {
-    const msg = buildDnsResponse("example.com", DNS_TYPE_A, [
+    const msg = buildDnsResponse("example.com", [
       { type: DNS_TYPE_A, rdata: new Uint8Array([93, 184, 216, 34]) },
     ]);
     expect(parseDnsAnswers(msg, DNS_TYPE_A)).toEqual(["93.184.216.34"]);
@@ -96,12 +96,12 @@ describe("parseDnsAnswers", () => {
     const rdata = new Uint8Array(16);
     rdata[0] = 0x26;
     rdata[1] = 0x02;
-    const msg = buildDnsResponse("v6.example.com", DNS_TYPE_AAAA, [{ type: DNS_TYPE_AAAA, rdata }]);
+    const msg = buildDnsResponse("v6.example.com", [{ type: DNS_TYPE_AAAA, rdata }]);
     expect(parseDnsAnswers(msg, DNS_TYPE_AAAA)).toEqual(["2602:" + "0:".repeat(6) + "0"]);
   });
 
   it("concatenates TXT character-strings", () => {
-    const msg = buildDnsResponse("list.example.com", DNS_TYPE_TXT, [
+    const msg = buildDnsResponse("list.example.com", [
       { type: DNS_TYPE_TXT, rdata: txtRdata(["10.0.0.1\x0810.0", ".0.2"]) },
     ]);
     expect(parseDnsAnswers(msg, DNS_TYPE_TXT)).toEqual(["10.0.0.1\x0810.0.0.2"]);
@@ -109,7 +109,7 @@ describe("parseDnsAnswers", () => {
 
   it("skips non-matching record types like CNAME", () => {
     const cnameRdata = new Uint8Array([0x03, 0x61, 0x62, 0x63, 0x00]);
-    const msg = buildDnsResponse("alias.example.com", DNS_TYPE_A, [
+    const msg = buildDnsResponse("alias.example.com", [
       { type: 5, rdata: cnameRdata },
       { type: DNS_TYPE_A, rdata: new Uint8Array([1, 1, 1, 1]) },
     ]);
@@ -133,7 +133,7 @@ describe("createResolver", () => {
       "fetch",
       vi.fn(async (url: unknown, init?: RequestInit) => {
         calls.push({ url: String(url), init });
-        return new Response(buildDnsResponse("target.example", DNS_TYPE_A, [
+        return new Response(buildDnsResponse("target.example", [
           { type: DNS_TYPE_A, rdata: new Uint8Array([9, 9, 9, 9]) },
         ]));
       }),
@@ -146,12 +146,13 @@ describe("createResolver", () => {
     expect(calls[0]!.init?.method).toBe("POST");
     const headers = new Headers(calls[0]!.init?.headers);
     expect(headers.get("content-type")).toBe("application/dns-message");
+    expect(calls[0]!.init?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("caches lookups per isolate until cleared", async () => {
     clearResolverCache();
     const fetchMock = vi.fn(async () =>
-      new Response(buildDnsResponse("cached.example", DNS_TYPE_A, [
+      new Response(buildDnsResponse("cached.example", [
         { type: DNS_TYPE_A, rdata: new Uint8Array([4, 4, 4, 4]) },
       ])),
     );
@@ -171,12 +172,24 @@ describe("createResolver", () => {
     const resolver = createResolver("https://dns.example/dns-query");
     expect(await resolver.resolveTXT("gone.example")).toEqual([]);
   });
+
+  it("does not cache empty answers so a transient failure re-fetches", async () => {
+    clearResolverCache();
+    const fetchMock = vi.fn(async () =>
+      new Response(buildDnsResponse("flaky.example", [])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const resolver = createResolver("https://dns.example/dns-query");
+    expect(await resolver.resolveA("flaky.example")).toEqual([]);
+    expect(await resolver.resolveA("flaky.example")).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("createDnsPacketRelay", () => {
   it("forwards the raw DNS packet verbatim via POST and returns the answer bytes", async () => {
     const packet = buildDnsQuery("whois.example", DNS_TYPE_A)!;
-    const answer = buildDnsResponse("whois.example", DNS_TYPE_A, [
+    const answer = buildDnsResponse("whois.example", [
       { type: DNS_TYPE_A, rdata: new Uint8Array([203, 0, 113, 1]) },
     ]);
     let seenBody: Uint8Array | null = null;

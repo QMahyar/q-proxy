@@ -19,7 +19,7 @@ import { createRelay } from "../tunnel/relay";
 import { createDnsPacketRelay } from "../tunnel/resolver";
 import { matchesSpeedtestHost, speedtestResponseBytes } from "../tunnel/speedtest";
 import { acceptTunnelSocket, isUpgradeRequest } from "../tunnel/websocket";
-import { concatBytes, utf8Encode } from "../utils/bytes";
+import { utf8Encode } from "../utils/bytes";
 
 type TunnelKind = "vless" | "vmess" | "trojan" | "ss";
 type TunnelParsed = ParsedRequest<"tcp"> | ParsedRequest<"udp">;
@@ -255,11 +255,15 @@ async function driveSession(
     }
   };
 
+  let msgTail: Promise<void> = Promise.resolve();
+
   const onMessage = (evt: MessageEvent): void => {
-    void handleMessage(evt.data as ArrayBuffer | string).catch((err: unknown) => {
-      log.error("tunnel", "message handler failed", String(err));
-      safeClose(1011);
-    });
+    msgTail = msgTail
+      .then(() => handleMessage(evt.data as ArrayBuffer | string))
+      .catch((err: unknown) => {
+        log.error("tunnel", "message handler failed", String(err));
+        safeClose(1011);
+      });
   };
 
   ws.addEventListener("message", onMessage);
@@ -273,6 +277,13 @@ async function driveSession(
   });
 
   if (earlyData !== null && earlyData.length > 0) {
-    await handleMessage(earlyData);
+    const first = earlyData;
+    msgTail = msgTail
+      .then(() => handleMessage(first))
+      .catch((err: unknown) => {
+        log.error("tunnel", "message handler failed", String(err));
+        safeClose(1011);
+      });
+    await msgTail;
   }
 }

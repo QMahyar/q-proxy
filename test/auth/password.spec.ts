@@ -18,7 +18,7 @@ describe("password hashing", () => {
       const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: PBKDF2_HASH, salt: saltBytes, iterations: LEGACY_PBKDF2_ITERATIONS }, key, 256);
       return bytesToHex(new Uint8Array(bits));
     })();
-    expect(await verifyPassword(password, legacyHash, salt)).toBe(true);
+    expect(await verifyPassword(password, legacyHash, salt)).toEqual({ ok: true, tier: "legacy" });
   });
 
   it("produces hex hash (32 bytes) and salt (16 bytes)", async () => {
@@ -29,9 +29,15 @@ describe("password hashing", () => {
 
   it("verifies the correct password and rejects wrong ones", async () => {
     const { hash, salt } = await hashPassword("correct horse battery staple");
-    expect(await verifyPassword("correct horse battery staple", hash, salt)).toBe(true);
-    expect(await verifyPassword("correct horse battery staplx", hash, salt)).toBe(false);
-    expect(await verifyPassword("", hash, salt)).toBe(false);
+    expect(await verifyPassword("correct horse battery staple", hash, salt)).toEqual({
+      ok: true,
+      tier: "current",
+    });
+    expect(await verifyPassword("correct horse battery staplx", hash, salt)).toEqual({
+      ok: false,
+      tier: "current",
+    });
+    expect(await verifyPassword("", hash, salt)).toEqual({ ok: false, tier: "current" });
   });
 
   it("salts every hash uniquely", async () => {
@@ -39,13 +45,16 @@ describe("password hashing", () => {
     const b = await hashPassword("same-password");
     expect(a.salt).not.toBe(b.salt);
     expect(a.hash).not.toBe(b.hash);
-    expect(await verifyPassword("same-password", a.hash, b.salt)).toBe(false);
+    expect(await verifyPassword("same-password", a.hash, b.salt)).toEqual({
+      ok: false,
+      tier: "current",
+    });
   });
 
   it("fails closed on malformed inputs without throwing", async () => {
     const { hash, salt } = await hashPassword("some-password");
-    expect(await verifyPassword("some-password", "zz", salt)).toBe(false);
-    expect(await verifyPassword("some-password", hash, "xyz!")).toBe(false);
-    expect(await verifyPassword("some-password", "", "")).toBe(false);
+    expect(await verifyPassword("some-password", "zz", salt)).toEqual({ ok: false, tier: "current" });
+    expect(await verifyPassword("some-password", hash, "xyz!")).toEqual({ ok: false, tier: "current" });
+    expect(await verifyPassword("some-password", "", "")).toEqual({ ok: false, tier: "current" });
   });
 });

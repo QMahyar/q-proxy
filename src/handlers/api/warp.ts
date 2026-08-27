@@ -1,11 +1,11 @@
 import type { RouteHandler } from "../../types/context";
-import type { AmneziaParams, WarpAccount, WarpEndpoint, WarpPreset } from "../../types/warp";
-import { ValidationError, NotFoundError } from "../../core/errors";
-import { jsonOk } from "../../core/respond";
+import type { AmneziaParams, WarpAccount, WarpConfig, WarpEndpoint, WarpPreset } from "../../types/warp";
+import { ValidationError, NotFoundError, UpstreamError } from "../../core/errors";
+import { afterResponse } from "../../core/counters";
+import { jsonOk, readJsonObject } from "../../core/respond";
 import { assertCsrf } from "../../auth/guard";
-import { readJsonObject } from "./auth";
 import { parseWarpConfig } from "../../warp/config";
-import { registerWarpDevice, removeWarpDevice } from "../../warp/api";
+import { registerWarpDevice, removeWarpDevice, WarpApiError } from "../../warp/api";
 import { purgeAllWarpSubs, purgeWarpSub } from "../../warp/cache";
 import {
   deleteAccount,
@@ -26,6 +26,16 @@ import {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ENDPOINTS = 200;
+const MAX_PRESETS = 20;
+
+const PLACEHOLDER_CONFIG: WarpConfig = {
+  private_key: "",
+  public_key: "",
+  addresses: { ipv4: "", ipv6: "" },
+  peer_public_key: "",
+  mtu: 1280,
+  reserved: [0, 0, 0],
+};
 
 function requireString(value: unknown, field: string, max = 100): string {
   if (typeof value !== "string") throw new ValidationError({ [field]: "must be a string" });
@@ -142,11 +152,23 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
     }
     if (rest[1] === "generate" && rest.length === 2 && method === "POST") {
       const body = await readJsonObject(req);
-      const reg = await registerWarpDevice();
-      const account = await buildAccount(env, body, reg.config, null);
+      const account = await buildAccount(env, body, PLACEHOLDER_CONFIG, null);
+      let reg: Awaited<ReturnType<typeof registerWarpDevice>>;
+      try {
+        reg = await registerWarpDevice();
+      } catch (err) {
+        if (err instanceof WarpApiError) throw new UpstreamError("warp api unavailable");
+        throw err;
+      }
+      account.config = reg.config;
       account.warp_id = reg.warpId;
       account.warp_token = reg.warpToken;
-      await storeAccount(env, account);
+      try {
+        await storeAccount(env, account);
+      } catch (err) {
+        void removeWarpDevice(reg.warpId, reg.warpToken).catch(() => {});
+        throw err;
+      }
       return jsonOk({ account: sanitizeAccount(account) });
     }
     if (rest[1] === "import" && rest.length === 2 && method === "POST") {
@@ -156,6 +178,10 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
       }
       const parsed = parseWarpConfig(body.config);
       if (!parsed.ok) throw new ValidationError({ config: parsed.reason });
+      if (parsed.amnezia_overrides !== null) {
+        const check = validateAmnezia(parsed.amnezia_overrides);
+        if (!check.ok) throw new ValidationError(check.fields);
+      }
       const account = await buildAccount(env, body, parsed.config, parsed.amnezia_overrides);
       await storeAccount(env, account);
       return jsonOk({ account: sanitizeAccount(account) });
@@ -194,8 +220,9 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
         return jsonOk({ deleted: true });
       }
       if (rest.length === 3 && rest[2] === "regenerate-token" && method === "POST") {
+        const oldToken = account.token;
         const token = await regenerateToken(env, account);
-        void purgeWarpSub(origin, account.token).catch(() => {});
+        afterResponse(purgeWarpSub(origin, oldToken));
         return jsonOk({ token });
       }
     }
@@ -207,13 +234,14 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
     }
     if (rest.length === 1 && method === "POST") {
       const body = await readJsonObject(req);
+      const presets = await listPresets(env);
+      if (presets.length >= MAX_PRESETS) throw new ValidationError({ presets: "too many presets" });
       const preset: WarpPreset = {
         id: newSubToken(),
         name: requireString(body.name, "name"),
         dns: typeof body.dns === "string" && body.dns.trim().length > 0 ? body.dns.trim().slice(0, 253) : null,
         endpoints: parseEndpoints(body.endpoints, "endpoints"),
       };
-      const presets = await listPresets(env);
       presets.push(preset);
       await savePresets(env, presets);
       void purgeAll();

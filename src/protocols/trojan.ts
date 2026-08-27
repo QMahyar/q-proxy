@@ -9,7 +9,7 @@ import {
   type ProtocolInbound,
   type PushOutcome,
 } from "./common";
-import { concatBytes, writeU16BE } from "../utils/bytes";
+import { concatBytes, u16be, utf8Encode, writeU16BE } from "../utils/bytes";
 
 type TrojanRequest = ParsedRequest<"tcp"> | ParsedRequest<"udp">;
 
@@ -17,6 +17,14 @@ const AUTH_HASH_LEN = 56;
 const CMD_CONNECT = 0x01;
 const CMD_UDP_ASSOCIATE = 0x03;
 const DNS_PORT = 53;
+
+interface UdpSource {
+  atype: number;
+  host: string;
+  port: number;
+}
+
+const DEFAULT_UDP_SOURCE: UdpSource = { atype: 1, host: "0.0.0.0", port: DNS_PORT };
 
 export function createTrojanInbound(password: string): ProtocolInbound<TrojanRequest> {
   const expectedHash = sha224Hex(password);
@@ -82,8 +90,13 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
     if (cmd === CMD_UDP_ASSOCIATE && addr.value.port !== DNS_PORT) {
       return { state: "reject", reason: "udp proxy only allowed for port 53" };
     }
+    const crlfOffset = addr.value.nextOffset;
+    if (buf.length < crlfOffset + 2) return { state: "need-more" };
+    if (buf[crlfOffset] !== 0x0d || buf[crlfOffset + 1] !== 0x0a) {
+      return { state: "reject", reason: "invalid header format (missing CR LF)" };
+    }
     udpMode = cmd === CMD_UDP_ASSOCIATE;
-    initialPayload = buf.subarray(addr.value.nextOffset);
+    initialPayload = buf.subarray(crlfOffset + 2);
     return {
       state: "ready",
       parsed: {
@@ -97,6 +110,7 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
   function createTrojanUdpCodec(): BodyCodec {
     let buf: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
     let alive = true;
+    let lastSource: UdpSource | null = null;
     return {
       async decodeUp(chunk: Uint8Array): Promise<Uint8Array | null> {
         if (!alive) return null;
@@ -110,7 +124,6 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
         const parts: Uint8Array[] = [];
         let off = 0;
         while (off < buf.length) {
-          if (buf.length - off < 1) break;
           const atype = buf[off]!;
           const addr = parseAddress(atype, buf, off + 1);
           if (!addr.ok) {
@@ -119,11 +132,16 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
             return null;
           }
           const afterAddr = addr.value.nextOffset;
-          if (buf.length - afterAddr < 2) break;
+          if (buf.length - afterAddr < 4) break;
           const len = (buf[afterAddr]! << 8) | buf[afterAddr + 1]!;
-          const total = afterAddr + 2 + len;
+          if (buf[afterAddr + 2] !== 0x0d || buf[afterAddr + 3] !== 0x0a) {
+            alive = false;
+            return null;
+          }
+          const total = afterAddr + 4 + len;
           if (buf.length < total) break;
-          parts.push(buf.subarray(afterAddr + 2, total));
+          parts.push(buf.subarray(afterAddr + 4, total));
+          lastSource = { atype, host: addr.value.host, port: addr.value.port };
           off = total;
         }
         if (off > 0) buf = buf.subarray(off);
@@ -137,17 +155,36 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
           },
           async encode(chunk: Uint8Array): Promise<Uint8Array> {
             if (chunk.length === 0) return new Uint8Array(0);
-            const addrPart = new Uint8Array([1, 0, 0, 0, 0]);
-            const portPart = new Uint8Array(2);
-            writeU16BE(portPart, 0, DNS_PORT);
-            const lenPart = new Uint8Array(2);
-            writeU16BE(lenPart, 0, chunk.length);
-            return concatBytes(addrPart, portPart, lenPart, chunk);
+            const src = lastSource ?? DEFAULT_UDP_SOURCE;
+            const tail = new Uint8Array(4);
+            writeU16BE(tail, 0, chunk.length);
+            tail[2] = 0x0d;
+            tail[3] = 0x0a;
+            return concatBytes(encodeAddressPart(src.atype, src.host, src.port), tail, chunk);
           },
         };
       },
     };
   }
+}
+
+function encodeAddressPart(atype: number, host: string, port: number): Uint8Array {
+  if (atype === 1) {
+    const o = host.split(".");
+    return concatBytes(
+      new Uint8Array([1, Number(o[0]!), Number(o[1]!), Number(o[2]!), Number(o[3]!)]),
+      u16be(port),
+    );
+  }
+  if (atype === 4) {
+    const g = host.split(":");
+    const head = new Uint8Array(17);
+    head[0] = 4;
+    for (let i = 0; i < 8; i++) writeU16BE(head, 1 + i * 2, Number.parseInt(g[i]!, 16));
+    return concatBytes(head, u16be(port));
+  }
+  const raw = utf8Encode(host);
+  return concatBytes(new Uint8Array([3, raw.length]), raw, u16be(port));
 }
 
 function utf8Lowercase(bytes: Uint8Array): string {

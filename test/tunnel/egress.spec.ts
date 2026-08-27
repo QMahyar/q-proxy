@@ -2,13 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEgressOpener, makeFailoverStrategy } from "../../src/tunnel/egress";
 import { clearResolverCache } from "../../src/tunnel/resolver";
 import type { DialTarget, EgressCandidate, Socket } from "../../src/types/tunnel";
-import type { Settings } from "../../src/types/settings";
 import { equalsBytes } from "../../src/utils/bytes";
 import { makeTestSettings } from "../helpers/settings";
+
+const { connectMock } = vi.hoisted(() => ({ connectMock: vi.fn() }));
+
+vi.mock("cloudflare:sockets", () => ({
+  connect: connectMock,
+}));
 
 afterEach(() => {
   vi.unstubAllGlobals();
   clearResolverCache();
+  connectMock.mockReset();
 });
 
 function fakeSocket(): { socket: Socket; writes: Uint8Array[] } {
@@ -106,6 +112,43 @@ describe("makeFailoverStrategy", () => {
     const bad = makeTestSettings({ chainProxy: { enabled: true, uri: "ftp://nope" } });
     expect((await makeFailoverStrategy(bad, TARGET)).candidates.some((c) => c.via === "chain")).toBe(false);
   });
+
+  it("keeps direct when its host:port collides with the chain candidate", async () => {
+    const s = makeTestSettings({
+      chainProxy: { enabled: true, uri: "socks5://dest.example.com:443" },
+      proxyIpMode: "proxyip",
+      proxyIps: ["93.184.216.34"],
+    });
+    const strategy = await makeFailoverStrategy(s, TARGET);
+    expect(strategy.candidates.map((c) => `${c.via}:${c.host}:${c.port}`)).toEqual([
+      "chain:dest.example.com:443",
+      "direct:dest.example.com:443",
+      "proxyip:93.184.216.34:443",
+    ]);
+  });
+
+  it("still dedupes duplicate non-direct candidates by host:port", async () => {
+    const s = makeTestSettings({
+      chainProxy: { enabled: true, uri: "socks5://93.184.216.34:443" },
+      proxyIpMode: "proxyip",
+      proxyIps: ["93.184.216.34"],
+    });
+    const strategy = await makeFailoverStrategy(s, TARGET);
+    expect(strategy.candidates.map((c) => `${c.via}:${c.host}:${c.port}`)).toEqual([
+      "chain:93.184.216.34:443",
+      "direct:dest.example.com:443",
+    ]);
+  });
+
+  it("drops nat64 candidates whose resolved ipv4 is private or Cloudflare-owned", async () => {
+    const s = makeTestSettings({ proxyIpMode: "nat64" });
+    const privateStrategy = await makeFailoverStrategy(s, { host: "10.1.2.3", port: 443 });
+    expect(privateStrategy.candidates.filter((c) => c.via === "nat64")).toHaveLength(0);
+    const cfStrategy = await makeFailoverStrategy(s, { host: "104.16.132.229", port: 443 });
+    expect(cfStrategy.candidates.filter((c) => c.via === "nat64")).toHaveLength(0);
+    const publicStrategy = await makeFailoverStrategy(s, { host: "1.2.3.4", port: 443 });
+    expect(publicStrategy.candidates.filter((c) => c.via === "nat64")).toHaveLength(s.nat64Prefixes.length);
+  });
 });
 
 describe("createEgressOpener", () => {
@@ -199,5 +242,59 @@ describe("createEgressOpener", () => {
     );
     await opener.open(TARGET, null);
     expect(sock.writes).toHaveLength(0);
+  });
+
+  it("times out a hung dial, walks on, and closes sockets that arrive late", async () => {
+    vi.useFakeTimers();
+    try {
+      const closeCalls: number[] = [];
+      const dialImpl = vi.fn(async (): Promise<Socket> => {
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            const late = fakeSocket();
+            late.socket.close = async () => {
+              closeCalls.push(1);
+            };
+            resolve(late.socket);
+          }, 60);
+        });
+      });
+      const opener = createEgressOpener(
+        strategyOf([
+          { via: "direct", label: "first", host: "a", port: 1 },
+          { via: "proxyip", label: "second", host: "b", port: 2 },
+        ]),
+        dialImpl,
+        { dialTimeoutMs: 20 },
+      );
+      const settled = expect(opener.open(TARGET, null)).rejects.toThrow("all egress candidates failed");
+      await vi.advanceTimersByTimeAsync(120);
+      await settled;
+      expect(dialImpl).toHaveBeenCalledTimes(2);
+      expect(closeCalls).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("closes the socket when writing the first packet fails on the default dial", async () => {
+    let closed = false;
+    const socket: Socket = {
+      readable: new ReadableStream<Uint8Array>({ start: (c) => c.close() }),
+      writable: new WritableStream<Uint8Array>({
+        write: () => {
+          throw new Error("write refused");
+        },
+      }),
+      close: async () => {
+        closed = true;
+      },
+    };
+    connectMock.mockResolvedValue(socket);
+    const opener = createEgressOpener(
+      strategyOf([{ via: "direct", label: "only", host: "203.0.113.9", port: 443 }]),
+    );
+    await expect(opener.open(TARGET, new Uint8Array([1, 2, 3]))).rejects.toThrow("all egress candidates failed");
+    expect(closed).toBe(true);
   });
 });

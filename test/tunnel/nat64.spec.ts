@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveIpv4, synthesizeNat64Address } from "../../src/tunnel/nat64";
 import { clearResolverCache } from "../../src/tunnel/resolver";
-import { concatBytes, writeU16BE } from "../../src/utils/bytes";
+import { writeU16BE } from "../../src/utils/bytes";
 import { isIPv6 } from "../../src/utils/net";
 
 afterEach(() => {
@@ -59,6 +59,13 @@ describe("synthesizeNat64Address", () => {
     expect(synthesizeNat64Address("[2602:fc59:b0:64::/96]", "1.2.3.4")).toBe(
       "2602:fc59:b0:64::102:304",
     );
+  });
+
+  it("rejects prefix lengths other than exactly 96", () => {
+    expect(synthesizeNat64Address("[2602:fc59:b0:64::/64]", "1.2.3.4")).toBeNull();
+    expect(synthesizeNat64Address("[2602:fc59:b0:64::/128]", "1.2.3.4")).toBeNull();
+    expect(synthesizeNat64Address("64:ff9b::/95", "1.2.3.4")).toBeNull();
+    expect(synthesizeNat64Address("[2602:fc59:b0:64::/abc]", "1.2.3.4")).toBeNull();
   });
 
   it("rejects invalid prefixes and addresses", () => {

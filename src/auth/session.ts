@@ -1,3 +1,4 @@
+import type { Env } from "../types/env";
 import { decodeBase64Url, encodeBase64Url } from "../utils/base64";
 import { bytesToHex } from "../utils/bytes";
 import { utf8Encode } from "../utils/bytes";
@@ -6,9 +7,38 @@ import { unixNow } from "../utils/time";
 
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const SESSION_COOKIE_NAME = "q_session";
+const SESSION_FLOOR_KEY = "qproxy:min-iat";
+
+const SESSION_FLOOR_TTL_MS = 5_000;
 
 export interface SessionPayload {
   exp: number;
+  iat?: number;
+}
+
+interface FloorCacheEntry {
+  value: number;
+  expiresAt: number;
+}
+
+let floorCache: FloorCacheEntry | null = null;
+
+export function clearSessionFloorCache(): void {
+  floorCache = null;
+}
+
+export async function getSessionFloor(env: Env): Promise<number> {
+  if (floorCache !== null && floorCache.expiresAt > Date.now()) return floorCache.value;
+  const raw = await env.QPROXY_KV.get(SESSION_FLOOR_KEY);
+  const value = raw !== null && /^[0-9]+$/.test(raw) ? Number(raw) : 0;
+  floorCache = { value, expiresAt: Date.now() + SESSION_FLOOR_TTL_MS };
+  return value;
+}
+
+export async function bumpSessionFloor(env: Env): Promise<void> {
+  const at = unixNow();
+  await env.QPROXY_KV.put(SESSION_FLOOR_KEY, String(at));
+  floorCache = { value: at, expiresAt: Date.now() + SESSION_FLOOR_TTL_MS };
 }
 
 async function hmacHex(payload: string, secret: string): Promise<string> {
@@ -24,7 +54,8 @@ async function hmacHex(payload: string, secret: string): Promise<string> {
 }
 
 export async function issueSession(secret: string): Promise<string> {
-  const payload = encodeBase64Url(JSON.stringify({ exp: unixNow() + SESSION_TTL_SECONDS }));
+  const now = unixNow();
+  const payload = encodeBase64Url(JSON.stringify({ exp: now + SESSION_TTL_SECONDS, iat: now }));
   const sig = await hmacHex(payload, secret);
   return `${payload}.${sig}`;
 }
@@ -41,7 +72,11 @@ export function clearedSessionCookie(): string {
   return sessionCookie("", 0);
 }
 
-export async function verifySession(cookieValue: string, secret: string): Promise<SessionPayload | null> {
+export async function verifySession(
+  cookieValue: string,
+  secret: string,
+  minIat = 0,
+): Promise<SessionPayload | null> {
   const dot = cookieValue.indexOf(".");
   if (dot <= 0 || dot === cookieValue.length - 1) return null;
   const payload = cookieValue.slice(0, dot);
@@ -60,5 +95,9 @@ export async function verifySession(cookieValue: string, secret: string): Promis
   const exp = (parsed as { exp?: unknown }).exp;
   if (typeof exp !== "number" || !Number.isFinite(exp)) return null;
   if (exp <= unixNow()) return null;
-  return { exp };
+  const iatRaw = (parsed as { iat?: unknown }).iat;
+  if (iatRaw !== undefined && (typeof iatRaw !== "number" || !Number.isFinite(iatRaw))) return null;
+  const iat = typeof iatRaw === "number" ? iatRaw : undefined;
+  if ((iat ?? 0) < minIat) return null;
+  return iat === undefined ? { exp } : { exp, iat };
 }

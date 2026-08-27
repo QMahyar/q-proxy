@@ -1,15 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SELF, env } from "cloudflare:test";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
-import { invalidateSettingsCache } from "../../src/settings/store";
 import { telegramWebhookSecret } from "../../src/handlers/api/telegram";
+import { seed, SETTINGS_KEY, testKv } from "../helpers/seed";
 
-const kv = (env as unknown as { QPROXY_KV: KVNamespace }).QPROXY_KV;
+const kv = testKv(env);
 
 const SP = "routepath";
 const BASE = `https://example.com/${SP}`;
 const PASSWORD = "router-test-pass-1";
-const SETTINGS_KEY = "qproxy:settings";
 
 const UPGRADE_HEADERS: Record<string, string> = {
   Upgrade: "websocket",
@@ -17,19 +16,6 @@ const UPGRADE_HEADERS: Record<string, string> = {
   "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
   "Sec-WebSocket-Version": "13",
 };
-
-async function seed(overrides: Record<string, unknown> = {}): Promise<void> {
-  await kv.delete(SETTINGS_KEY);
-  await kv.put(
-    SETTINGS_KEY,
-    JSON.stringify({
-      version: 1,
-      updatedAt: Date.now(),
-      data: { ...structuredClone(DEFAULT_SETTINGS), securePath: SP, ...overrides },
-    }),
-  );
-  invalidateSettingsCache();
-}
 
 async function body(res: Response): Promise<Record<string, any>> {
   return (await res.json()) as Record<string, any>;
@@ -43,9 +29,62 @@ function post(json: unknown, extra: Record<string, string> = {}): RequestInit {
   };
 }
 
+function put(json: unknown, extra: Record<string, string> = {}): RequestInit {
+  return {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...extra },
+    body: JSON.stringify(json),
+  };
+}
+
+async function setupAdmin(): Promise<{ cookie: string; csrfHeaders: Record<string, string> }> {
+  const res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+  expect(res.status).toBe(200);
+  const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+  return { cookie, csrfHeaders: { Cookie: cookie, "X-Q-Panel": "1" } };
+}
+
+async function createUser(
+  csrfHeaders: Record<string, string>,
+  payload: Record<string, unknown>,
+): Promise<Record<string, any>> {
+  const res = await SELF.fetch(`${BASE}/api/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...csrfHeaders },
+    body: JSON.stringify(payload),
+  });
+  expect(res.status).toBe(200);
+  return (await body(res)).data.user as Record<string, any>;
+}
+
+async function waitForEdgeCache(url: string, ms = 4000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if ((await caches.default.match(url)) !== undefined) return;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error(`edge cache never populated for ${url}`);
+}
+
+async function waitForUsage(token: string, ms = 4000): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const key = `qproxy:user-usage:${today}`;
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    const rows = JSON.parse(((await kv.get(key)) as string | null) ?? "[]") as Array<{ token: string }>;
+    if (rows.some((r) => r.token === token)) return;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error(`usage row for ${token} never recorded`);
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("router dispatch", () => {
   it("serves robots.txt with the disallow-all policy", async () => {
-    await seed();
+    await seed(kv, SP);
     const res = await SELF.fetch("https://example.com/robots.txt");
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/plain");
@@ -53,7 +92,7 @@ describe("router dispatch", () => {
   });
 
   it("answers OPTIONS anywhere with 405 METHOD", async () => {
-    await seed();
+    await seed(kv, SP);
     for (const path of ["/robots.txt", "/anything/at/all", `${BASE}/api/status`]) {
       const res = await SELF.fetch(`https://example.com${path}`, { method: "OPTIONS" });
       expect(res.status).toBe(405);
@@ -62,131 +101,147 @@ describe("router dispatch", () => {
   });
 
   it("falls through non-upgrade tunnel hits and unknown paths to camouflage", async () => {
-    await seed();
+    await seed(kv, SP);
     let res = await SELF.fetch("https://example.com/vl/abcd1234efgh");
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/html");
     res = await SELF.fetch("https://example.com/totally/unknown/path");
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/html");
+    expect(res.headers.get("Content-Security-Policy")).toBe(
+      "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'",
+    );
   });
 
-  it("dispatches the full route table with precedence and fallbacks", async () => {
-    await seed();
+  describe("route table precedence", () => {
+    let cookie = "";
+    let csrfHeaders: Record<string, string> = {};
 
-    let     res = await SELF.fetch(BASE, { redirect: "manual" });
-    expect(res.status).toBe(302);
-    expect(res.headers.get("Location")).toBe(`/routepath/panel`);
-
-    res = await SELF.fetch(`${BASE}/panel`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/html");
-    expect(res.headers.get("Cache-Control")).toBe("private, max-age=60");
-
-    res = await SELF.fetch(`${BASE}/login`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/html");
-
-    res = await SELF.fetch(`${BASE}/api/auth/login`);
-    expect(res.status).toBe(405);
-    expect((await body(res)).error.code).toBe("METHOD");
-
-    res = await SELF.fetch(`${BASE}/api/status`, post({}));
-    expect(res.status).toBe(405);
-
-    res = await SELF.fetch(`${BASE}/my-ip`);
-    expect(res.status).toBe(401);
-
-    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
-    expect(res.status).toBe(200);
-    const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
-    const csrf = { Cookie: cookie, "X-Q-Panel": "1" };
-
-    res = await SELF.fetch(`${BASE}/my-ip`, { headers: { Cookie: cookie } });
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/html");
-
-    res = await SELF.fetch(
-      `${BASE}/api/settings`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...csrf },
-        body: JSON.stringify({ camouflage: { mode: "off" } }),
-      },
-    );
-    expect(res.status).toBe(200);
-
-    res = await SELF.fetch("https://example.com/some/random/junk");
-    expect(res.status).toBe(404);
-    expect((await body(res)).error.code).toBe("NOT_FOUND");
-
-    res = await SELF.fetch("https://example.com/vl/abcd1234efgh");
-    expect(res.status).toBe(404);
-    expect((await body(res)).error.code).toBe("NOT_FOUND");
-
-    res = await SELF.fetch(
-      `${BASE}/api/settings`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...csrf },
-        body: JSON.stringify({
-          camouflage: { mode: "proxy", url: "http://127.0.0.1:9/unreachable" },
-        }),
-      },
-    );
-    expect(res.status).toBe(200);
-    res = await SELF.fetch("https://example.com/proxy/fallback/check");
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/html");
-
-    res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: true }, csrf));
-    expect(res.status).toBe(200);
-    res = await SELF.fetch("https://example.com/vm/abcd1234efgh", { headers: UPGRADE_HEADERS });
-    expect(res.status).toBe(503);
-    res = await SELF.fetch("https://example.com/ss/abcd1234efgh");
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/html");
-
-    res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: false }, csrf));
-    expect(res.status).toBe(200);
-
-    res = await SELF.fetch("https://example.com/vl/abcd1234efgh", { headers: UPGRADE_HEADERS });
-    expect(res.status).toBe(101);
-    expect(res.webSocket).not.toBeNull();
-    if (res.webSocket !== null) {
-      res.webSocket.accept();
-      try {
-        res.webSocket.close(1000);
-      } catch {}
-    }
-
-    res = await SELF.fetch(`${BASE}/sub?target=clash`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("yaml");
-
-    res = await SELF.fetch(`${BASE}/sub`);
-    expect(res.status).toBe(200);
-
-    res = await SELF.fetch(`${BASE}/doh?dns=q80BAAABAAAAAAAAA2NvbQdhZXJvcGlhA2NvbQAAAQAB`, {
-      headers: { Accept: "application/dns-message" },
+    beforeEach(async () => {
+      await seed(kv, SP);
+      ({ cookie, csrfHeaders } = await setupAdmin());
     });
-    expect([200, 502]).toContain(res.status);
 
-    res = await SELF.fetch(`${BASE}/api/settings/reset`, post({}, csrf));
-    expect(res.status).toBe(200);
-    expect((await body(res)).data.saved).toBe(true);
-    res = await SELF.fetch(`${BASE}/api/settings`, { headers: { Cookie: cookie } });
-    const restored = (await body(res)).data;
-    expect(restored.camouflage.mode).toBe(DEFAULT_SETTINGS.camouflage.mode);
-    expect(restored.profileTitle).toBe(DEFAULT_SETTINGS.profileTitle);
-    expect(restored.hasPassword).toBe(true);
+    it("redirects root and serves panel/login pages with their policies", async () => {
+      let res = await SELF.fetch(BASE, { redirect: "manual" });
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toBe(`/routepath/panel`);
 
-    res = await SELF.fetch(`${BASE}/api/settings`);
-    expect(res.status).toBe(401);
-  }, 120_000);
+      res = await SELF.fetch(`${BASE}/panel`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("text/html");
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(res.headers.get("Content-Security-Policy")).toBe(
+        "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self' https:; base-uri 'none'; form-action 'self'",
+      );
+
+      res = await SELF.fetch(`${BASE}/login`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("text/html");
+      expect(res.headers.get("Content-Security-Policy")).toBe(
+        "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'",
+      );
+    });
+
+    it("rejects wrong methods and unauthenticated gates before dispatch", async () => {
+      let res = await SELF.fetch(`${BASE}/api/auth/login`);
+      expect(res.status).toBe(405);
+      expect((await body(res)).error.code).toBe("METHOD");
+
+      res = await SELF.fetch(`${BASE}/api/status`, post({}));
+      expect(res.status).toBe(405);
+
+      res = await SELF.fetch(`${BASE}/my-ip`);
+      expect(res.status).toBe(401);
+    });
+
+    it("authorizes my-ip after setup and hides unknown paths behind camo-off 404s", async () => {
+      let res = await SELF.fetch(`${BASE}/my-ip`, { headers: { Cookie: cookie } });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("text/html");
+
+      res = await SELF.fetch(`${BASE}/api/settings`, put({ camouflage: { mode: "off" } }, csrfHeaders));
+      expect(res.status).toBe(200);
+
+      res = await SELF.fetch("https://example.com/some/random/junk");
+      expect(res.status).toBe(404);
+      expect((await body(res)).error.code).toBe("NOT_FOUND");
+
+      res = await SELF.fetch("https://example.com/vl/abcd1234efgh");
+      expect(res.status).toBe(404);
+      expect((await body(res)).error.code).toBe("NOT_FOUND");
+    });
+
+    it("serves the camouflage proxy fallback when the upstream is unreachable", async () => {
+      const res = await SELF.fetch(
+        `${BASE}/api/settings`,
+        put(
+          { camouflage: { mode: "proxy", url: "http://127.0.0.1:9/unreachable" } },
+          csrfHeaders,
+        ),
+      );
+      expect(res.status).toBe(200);
+
+      const fallback = await SELF.fetch("https://example.com/proxy/fallback/check");
+      expect(fallback.status).toBe(200);
+      expect(fallback.headers.get("Content-Type")).toContain("text/html");
+    });
+
+    it("blocks tunnel upgrades under kill switch and restores them after", async () => {
+      let res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: true }, csrfHeaders));
+      expect(res.status).toBe(200);
+
+      res = await SELF.fetch("https://example.com/vm/abcd1234efgh", { headers: UPGRADE_HEADERS });
+      expect(res.status).toBe(503);
+
+      res = await SELF.fetch("https://example.com/ss/abcd1234efgh");
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("text/html");
+
+      res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: false }, csrfHeaders));
+      expect(res.status).toBe(200);
+
+      res = await SELF.fetch("https://example.com/vl/abcd1234efgh", { headers: UPGRADE_HEADERS });
+      expect(res.status).toBe(101);
+      expect(res.webSocket).not.toBeNull();
+      if (res.webSocket !== null) {
+        res.webSocket.accept();
+        try {
+          res.webSocket.close(1000);
+        } catch {}
+      }
+    });
+
+    it("serves subscriptions, doh and the reset roundtrip", async () => {
+      let res = await SELF.fetch(`${BASE}/sub?target=clash`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("yaml");
+
+      res = await SELF.fetch(`${BASE}/sub`);
+      expect(res.status).toBe(200);
+
+      res = await SELF.fetch(`${BASE}/doh?dns=q80BAAABAAAAAAAAA2NvbQdhZXJvcGlhA2NvbQAAAQAB`, {
+        headers: { Accept: "application/dns-message" },
+      });
+      expect([200, 502]).toContain(res.status);
+
+      res = await SELF.fetch(`${BASE}/api/settings/reset`, post({}, csrfHeaders));
+      expect(res.status).toBe(200);
+      expect((await body(res)).data.saved).toBe(true);
+
+      res = await SELF.fetch(`${BASE}/api/settings`, { headers: { Cookie: cookie } });
+      const restored = (await body(res)).data;
+      expect(restored.camouflage.mode).toBe(DEFAULT_SETTINGS.camouflage.mode);
+      expect(restored.profileTitle).toBe(DEFAULT_SETTINGS.profileTitle);
+      expect(restored.hasPassword).toBe(true);
+
+      res = await SELF.fetch(`${BASE}/api/settings`);
+      expect(res.status).toBe(401);
+    }, 120_000);
+  });
 
   it("serves the bootstrap aggregate with ETag revalidation", async () => {
-    await seed();
+    await seed(kv, SP);
 
     let res = await SELF.fetch(`${BASE}/api/bootstrap`);
     expect(res.status).toBe(401);
@@ -217,8 +272,56 @@ describe("router dispatch", () => {
     expect(res.status).toBe(405);
   });
 
+  it("round-trips settings export and import without leaking credentials", async () => {
+    await seed(kv, SP);
+    const { cookie, csrfHeaders } = await setupAdmin();
+
+    let res = await SELF.fetch(`${BASE}/api/settings/export`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/json");
+    const raw = await res.text();
+    for (const secret of ["passwordHash", "passwordSalt", "sessionSecret", "botToken"]) {
+      expect(raw).not.toContain(secret);
+    }
+    const blob = JSON.parse(raw) as { kind: string; version: number; settings: Record<string, unknown> };
+    expect(blob.kind).toBe("q-proxy-settings");
+    expect(blob.settings.securePath).toBeUndefined();
+
+    res = await SELF.fetch(`${BASE}/api/settings`, put({ profileTitle: "Roundtrip Panel" }, csrfHeaders));
+    expect(res.status).toBe(200);
+
+    res = await SELF.fetch(`${BASE}/api/settings/export`, { headers: { Cookie: cookie } });
+    const customized = JSON.parse(await res.text()) as { settings: Record<string, unknown> };
+    expect(customized.settings.profileTitle).toBe("Roundtrip Panel");
+
+    res = await SELF.fetch(`${BASE}/api/settings/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...csrfHeaders },
+      body: JSON.stringify({ settings: customized.settings }),
+    });
+    expect(res.status).toBe(200);
+    const imported = (await body(res)).data;
+    expect(imported.saved).toBe(true);
+    expect(imported.imported.profileTitle).toBe("Roundtrip Panel");
+    expect(imported.imported.hasPassword).toBe(true);
+
+    res = await SELF.fetch(`${BASE}/api/settings`, { headers: { Cookie: cookie } });
+    expect((await body(res)).data.hasPassword).toBe(true);
+
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    expect(res.status).toBe(200);
+
+    res = await SELF.fetch(`${BASE}/api/settings/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...csrfHeaders },
+      body: JSON.stringify({ settings: { ...customized.settings, version: 999 } }),
+    });
+    expect(res.status).toBe(422);
+    expect((await body(res)).error.code).toBe("VALIDATION");
+  });
+
   it("dispatches the warp api with auth, csrf and a full import roundtrip", async () => {
-    await seed();
+    await seed(kv, SP);
 
     let res = await SELF.fetch(`${BASE}/api/warp/account`);
     expect(res.status).toBe(401);
@@ -313,9 +416,41 @@ describe("router dispatch", () => {
     expect(res.status).toBe(404);
   });
 
+  it("registers and removes the telegram webhook against the upstream bot api", async () => {
+    const tg = { enabled: true, botToken: `123456789:${"B".repeat(35)}`, chatId: "555000111" };
+    await seed(kv, SP, { telegram: tg, sessionSecret: "tg-router-secret" });
+    const { csrfHeaders } = await setupAdmin();
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown, init?: RequestInit) => {
+        calls.push({ url: String(url), init: init ?? {} });
+        return new Response(JSON.stringify({ ok: true, description: "" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+
+    const secret = await telegramWebhookSecret("tg-router-secret");
+    let res = await SELF.fetch(`${BASE}/telegram/setup`, post({}, csrfHeaders));
+    expect(res.status).toBe(200);
+    expect((await body(res)).data.ok).toBe(true);
+    expect(calls.length).toBe(1);
+    expect(calls[0]!.url).toBe(`https://api.telegram.org/bot${tg.botToken}/setWebhook`);
+    const sentBody = JSON.parse(calls[0]!.init.body as string) as { url: string };
+    expect(sentBody.url).toBe(`https://example.com/${SP}/telegram/webhook/${secret}`);
+
+    res = await SELF.fetch(`${BASE}/telegram/remove`, post({}, csrfHeaders));
+    expect(res.status).toBe(200);
+    expect((await body(res)).data.ok).toBe(true);
+    expect(calls.length).toBe(2);
+    expect(calls[1]!.url).toBe(`https://api.telegram.org/bot${tg.botToken}/deleteWebhook`);
+  });
+
   it("gates the telegram webhook by hmac secret and serves only the bound chat", async () => {
     const tg = { enabled: true, botToken: `123456789:${"B".repeat(35)}`, chatId: "555000111" };
-    await seed({ telegram: tg, sessionSecret: "tg-router-secret" });
+    await seed(kv, SP, { telegram: tg, sessionSecret: "tg-router-secret" });
     const secret = await telegramWebhookSecret("tg-router-secret");
     const hookPost = (text: string, id: number): RequestInit => ({
       method: "POST",
@@ -344,7 +479,7 @@ describe("router dispatch", () => {
     stored = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { data: { killSwitch: boolean; telegram: typeof tg } };
     expect(stored.data.killSwitch).toBe(false);
 
-    await seed({ telegram: { ...tg, enabled: false }, sessionSecret: "tg-router-secret" });
+    await seed(kv, SP, { telegram: { ...tg, enabled: false }, sessionSecret: "tg-router-secret" });
     res = await SELF.fetch(`${BASE}/telegram/webhook/${secret}`, hookPost("/kill on", 555000111));
     expect(res.status).toBe(200);
     stored = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { data: { killSwitch: boolean; telegram: typeof tg } };
@@ -363,7 +498,7 @@ describe("router dispatch", () => {
   });
 
   it("serves warp subscriptions publicly by token across formats", async () => {
-    await seed();
+    await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
@@ -414,7 +549,7 @@ describe("router dispatch", () => {
   });
 
   it("covers the user center: admin CRUD, token subs, 410/429 and camouflage fallthrough", async () => {
-    await seed();
+    await seed(kv, SP);
 
     let res = await SELF.fetch(`${BASE}/api/users`);
     expect(res.status).toBe(401);
@@ -443,11 +578,7 @@ describe("router dispatch", () => {
     expect(user.enabled).toBe(true);
     expect(user.protocols).toBe("all");
 
-    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", ...csrfHeaders },
-      body: JSON.stringify({ name: "Bob" }),
-    });
+    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, put({ name: "Bob" }, csrfHeaders));
     expect(res.status).toBe(200);
     expect(((await body(res)).data.user as Record<string, unknown>).name).toBe("Bob");
 
@@ -515,11 +646,7 @@ describe("router dispatch", () => {
     expect(res.headers.get("Content-Type")).toContain("text/html");
     expect(await res.text()).toContain("?target=clash");
 
-    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", ...csrfHeaders },
-      body: JSON.stringify({ dailyReqLimit: 2 }),
-    });
+    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, put({ dailyReqLimit: 2 }, csrfHeaders));
     expect(res.status).toBe(200);
     const today = new Date().toISOString().slice(0, 10);
     await kv.put(`qproxy:user-usage:${today}`, JSON.stringify([{ token: user.token, count: 2 }]));
@@ -543,5 +670,51 @@ describe("router dispatch", () => {
     expect(res.status).toBe(200);
     res = await SELF.fetch(`${BASE}/api/users/${user.id}`, { headers: { Cookie: cookie } });
     expect(res.status).toBe(404);
+  });
+
+  it("serves 410 for a freshly disabled user instead of the edge-cached 200", async () => {
+    await seed(kv, SP);
+    const { csrfHeaders } = await setupAdmin();
+    const user = await createUser(csrfHeaders, { name: "Cache Reorder" });
+
+    const subUrl = `${BASE}/sub/u/${user.token}?target=base64`;
+    let res = await SELF.fetch(subUrl);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/plain");
+
+    const cacheKeyUrl = new URL(subUrl);
+    cacheKeyUrl.searchParams.set("_k", `base64:n:${user.token}`);
+    await waitForEdgeCache(cacheKeyUrl.toString());
+
+    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, put({ enabled: false }, csrfHeaders));
+    expect(res.status).toBe(200);
+
+    res = await SELF.fetch(subUrl);
+    expect(res.status).toBe(410);
+  });
+
+  it("serves 429 with Retry-After for exhausted quota instead of the edge-cached 200", async () => {
+    await seed(kv, SP);
+    const { csrfHeaders } = await setupAdmin();
+    const user = await createUser(csrfHeaders, { name: "Quota Reorder" });
+
+    let res = await SELF.fetch(
+      `${BASE}/api/users/${user.id}`,
+      put({ dailyReqLimit: 1 }, csrfHeaders),
+    );
+    expect(res.status).toBe(200);
+
+    const subUrl = `${BASE}/sub/u/${user.token}?target=clash`;
+    res = await SELF.fetch(subUrl);
+    expect(res.status).toBe(200);
+
+    await waitForUsage(user.token);
+    const cacheKeyUrl = new URL(subUrl);
+    cacheKeyUrl.searchParams.set("_k", `clash:n:${user.token}`);
+    await waitForEdgeCache(cacheKeyUrl.toString());
+
+    res = await SELF.fetch(subUrl);
+    expect(res.status).toBe(429);
+    expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
 });

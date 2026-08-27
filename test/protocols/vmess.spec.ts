@@ -1,10 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { createVmessInbound } from "../../src/protocols/vmess";
+import { describe, expect, it, beforeEach } from "vitest";
+import { clearVmessReplayCache, createVmessInbound } from "../../src/protocols/vmess";
 import {
   createAuthId,
   crc32,
   deriveAuthIdEncryptionKey,
-  deriveChacha20BodyKey,
   deriveCmdKey,
   fnv1a32,
   openVmessAeadHeader,
@@ -115,6 +114,8 @@ describe("vmess auth id", () => {
 });
 
 describe("createVmessInbound", () => {
+  beforeEach(() => clearVmessReplayCache());
+
   it("parses a valid AEAD tcp request", async () => {
     const inbound = createVmessInbound(UUID);
     const frame = await sealedRequestFrame(
@@ -183,6 +184,16 @@ describe("createVmessInbound", () => {
     expect(auto.state).toBe("ready");
   });
 
+  it("rejects legacy security=1 instead of relaying under aes-cfb", async () => {
+    const outcome = await createVmessInbound(UUID).push(
+      await sealedRequestFrame(legacyHeader({ security: 1 })),
+    );
+    expect(outcome).toMatchObject({
+      state: "reject",
+      reason: "legacy security requires aes-cfb which is disabled",
+    });
+  });
+
   it("rejects a wrong uuid", async () => {
     const inbound = createVmessInbound("b831381d-6324-4d53-ad4f-8cda48b30811");
     const outcome = await inbound.push(await sealedRequestFrame(legacyHeader({})));
@@ -212,6 +223,40 @@ describe("createVmessInbound", () => {
     );
     const outcome = await createVmessInbound(UUID).push(badFrame);
     expect(outcome).toMatchObject({ state: "reject", reason: expect.stringContaining("checksum") });
+  });
+
+  it("rejects a replayed handshake carrying identical sealed header bytes", async () => {
+    const frame = await sealedRequestFrame(legacyHeader({}));
+    const first = await createVmessInbound(UUID).push(frame);
+    expect(first.state).toBe("ready");
+
+    const second = await createVmessInbound(UUID).push(frame);
+    expect(second).toMatchObject({ state: "reject", reason: "replayed handshake" });
+  });
+
+  it("accepts distinct handshakes with different rand and time", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const a = await createVmessInbound(UUID).push(
+      await sealVmessAeadHeader(CMD_KEY, legacyHeader({}), now),
+    );
+    const b = await createVmessInbound(UUID).push(
+      await sealVmessAeadHeader(CMD_KEY, legacyHeader({}), now - 30),
+    );
+    expect(a.state).toBe("ready");
+    expect(b.state).toBe("ready");
+  });
+
+  it("does not burn the auth id when full header validation fails", async () => {
+    const frame = await sealVmessAeadHeader(
+      CMD_KEY,
+      legacyHeader({ command: 3 }),
+      Math.floor(Date.now() / 1000),
+    );
+    const rejected = await createVmessInbound(UUID).push(frame);
+    expect(rejected.state).toBe("reject");
+    const retried = await createVmessInbound(UUID).push(frame);
+    expect(retried.state).toBe("reject");
+    expect((retried as { reason?: string }).reason).not.toBe("replayed handshake");
   });
 
   it("seals a response header the client can open per spec", async () => {
@@ -465,6 +510,8 @@ async function gcmSealOpen(
 }
 
 describe("vmess body codecs", () => {
+  beforeEach(() => clearVmessReplayCache());
+
   const CASES: Array<[number, number]> = [
     [3, 0x05],
     [3, 0x01],
@@ -571,7 +618,7 @@ describe("vmess body codecs", () => {
   });
 
   it("relays raw bytes in both directions for unframed none/zero security", async () => {
-    const { inbound, p } = await readyInbound(6, 0x00);
+    const { inbound } = await readyInbound(6, 0x00);
     const codec = inbound.bodyCodec()!;
     const raw = utf8Encode("raw-plaintext-body");
     expect(new TextDecoder().decode((await codec.decodeUp(raw))!)).toBe("raw-plaintext-body");
@@ -609,11 +656,17 @@ describe("vmess body codecs", () => {
     expect(new TextDecoder().decode(got!)).toBe("padded-onepadded-two");
   });
 
-  it("returns no body codec for unsupported securities but keeps the handshake", async () => {
-    for (const security of [1, 7]) {
-      const { inbound } = await readyInbound(security, 0x05);
-      expect(inbound.bodyCodec()).toBeNull();
-    }
+  it("returns no body codec for unknown security 7 but keeps the handshake", async () => {
+    const { inbound } = await readyInbound(7, 0x05);
+    expect(inbound.bodyCodec()).toBeNull();
+  });
+
+  it("hands out the body codec exactly once per connection", async () => {
+    const { inbound } = await readyInbound(3, 0x05);
+    const first = inbound.bodyCodec();
+    expect(first).not.toBeNull();
+    expect(inbound.bodyCodec()).toBeNull();
+    expect(inbound.bodyCodec()).toBeNull();
   });
 
   it("downlink encoder splits large payloads at the frame cap with continuous counters (aes+mask)", async () => {

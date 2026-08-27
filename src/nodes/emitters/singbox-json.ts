@@ -73,7 +73,7 @@ function outboundOf(node: ProxyNode): Record<string, unknown> {
   base.password = node.password;
   base.plugin = "v2ray-plugin";
   base.plugin_opts = [
-    "websocket",
+    "mode=websocket",
     ...(node.security === "tls" ? ["tls"] : []),
     `host=${node.host}`,
     `path=${node.path}`,

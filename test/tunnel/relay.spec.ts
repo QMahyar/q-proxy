@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRelay } from "../../src/tunnel/relay";
 import type { RelayOptions, RelayClientSink } from "../../src/tunnel/relay";
-import type { DialTarget, EstablishedEgress, EgressVia, Socket } from "../../src/types/tunnel";
-import { concatBytes, equalsBytes, utf8Decode, utf8Encode } from "../../src/utils/bytes";
+import type { EstablishedEgress, EgressVia, Socket } from "../../src/types/tunnel";
+import { concatBytes, utf8Decode, utf8Encode } from "../../src/utils/bytes";
 
 interface ManualSocket {
   socket: Socket;
@@ -54,8 +54,6 @@ class RecordingSink implements RelayClientSink {
     if (this.closedWith === null) this.closedWith = code;
   }
 }
-
-const TARGET: DialTarget = { host: "dest.example", port: 443 };
 
 function establishedOf(socket: Socket, index: number, via: EgressVia = "direct"): EstablishedEgress {
   return { socket, via, candidateIndex: index };
@@ -299,5 +297,37 @@ describe("failure handling", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(sink.closedWith).toBe(1011);
+  });
+
+  it("closes with 1011 when the pre-decode backlog exceeds the hard cap", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink, {
+      uplinkDecode: () => new Promise<Uint8Array | null>(() => {}),
+    });
+    void relay.run(establishedOf(sock.socket, 0));
+    for (let i = 0; i < 520; i++) relay.feedClient(new Uint8Array(20480));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sink.closedWith).toBe(1011);
+  });
+
+  it("keeps accepting decoded traffic because the pre-decode counter drains", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    let decodes = 0;
+    const relay = createRelay(sink, {
+      uplinkDecode: async () => {
+        decodes++;
+        return null;
+      },
+    });
+    void relay.run(establishedOf(sock.socket, 0));
+    for (let round = 0; round < 3; round++) {
+      for (let i = 0; i < 300; i++) relay.feedClient(new Uint8Array(20480));
+      await vi.advanceTimersByTimeAsync(35);
+    }
+    expect(decodes).toBe(900);
+    expect(sink.closedWith).toBeNull();
   });
 });

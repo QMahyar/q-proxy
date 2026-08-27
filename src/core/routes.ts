@@ -24,6 +24,7 @@ export type ApiRouteName =
   | "auth-login"
   | "auth-logout"
   | "auth-setup"
+  | "auth-password"
   | "bootstrap"
   | "settings-get"
   | "settings-save"

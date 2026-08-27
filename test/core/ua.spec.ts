@@ -7,6 +7,13 @@ describe("classifyUA", () => {
     expect(classifyUA("ClashMetaForAndroid/2.11.5")).toBe("clash");
     expect(classifyUA("mihomo/1.18 linux")).toBe("clash");
     expect(classifyUA("Stash/2.7 (iPhone)")).toBe("clash");
+    expect(classifyUA("ClashVerge/2.0")).toBe("clash");
+  });
+
+  it("does not match bare meta or verge tokens", () => {
+    expect(classifyUA("Meta/1.0")).toBe("base64");
+    expect(classifyUA("Verge/3.2")).toBe("base64");
+    expect(classifyUA("clash-verge/2.0")).toBe("clash");
   });
 
   it("sing-box family", () => {

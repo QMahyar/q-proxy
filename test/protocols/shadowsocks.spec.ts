@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { createSSInbound } from "../../src/protocols/shadowsocks";
+import { describe, expect, it, beforeEach } from "vitest";
+import { clearSaltRegistry, createSSInbound } from "../../src/protocols/shadowsocks";
 import { evpBytesToKey, hkdfSha1 } from "../../src/crypto/kdf";
 import { parseAddress } from "../../src/protocols/common";
 import {
@@ -45,15 +45,21 @@ function incrementingNonce(counter: bigint): Uint8Array {
   return nonce;
 }
 
-async function ssFrame(method: Method, password: string, target: Uint8Array, payload: Uint8Array): Promise<Uint8Array> {
+async function ssFrame(
+  method: Method,
+  password: string,
+  target: Uint8Array,
+  payload: Uint8Array,
+  salt?: Uint8Array,
+): Promise<Uint8Array> {
   const klen = keyLenOf(method);
   const master = evpBytesToKey(password, klen);
-  const salt = deterministicSalt(klen);
-  const subkey = await hkdfSha1(master, salt, utf8Encode("ss-subkey"), klen);
+  const useSalt = salt ?? deterministicSalt(klen);
+  const subkey = await hkdfSha1(master, useSalt, utf8Encode("ss-subkey"), klen);
   const firstPayload = concatBytes(target, payload);
   const lenFrame = await gcmSeal(subkey, incrementingNonce(0n), u16be(firstPayload.length));
   const payloadFrame = await gcmSeal(subkey, incrementingNonce(1n), firstPayload);
-  return concatBytes(salt, lenFrame, payloadFrame);
+  return concatBytes(useSalt, lenFrame, payloadFrame);
 }
 
 function socksTarget(atype: number, addrBytes: Uint8Array, port: number): Uint8Array {
@@ -86,6 +92,8 @@ describe("parseAddress (SOCKS5-style numbering shared by trojan/ss)", () => {
 });
 
 describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("createSSInbound %s", (method) => {
+  beforeEach(() => clearSaltRegistry());
+
   const PASSWORD = "ss-password-test";
 
   it("derives master keys matching EVP_BytesToKey pins", () => {
@@ -147,6 +155,42 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("createSSInbound %s", 
     expect(outcome).toMatchObject({ state: "reject", reason: expect.stringContaining("chunk length") });
   });
 
+  it("rejects a second handshake reusing an identical salt (SIP004)", async () => {
+    const klen = keyLenOf(method);
+    const salt = deterministicSalt(klen);
+    const frame = await ssFrame(
+      method,
+      PASSWORD,
+      socksTarget(3, utf8Encode("reuse.example.com"), 80),
+      new Uint8Array(0),
+      salt,
+    );
+    const first = await createSSInbound(method, PASSWORD).push(frame);
+    expect(first.state).toBe("ready");
+
+    const second = await createSSInbound(method, PASSWORD).push(frame);
+    expect(second).toMatchObject({ state: "reject", reason: "salt reuse detected" });
+  });
+
+  it("accepts distinct salts and clears the registry on demand", async () => {
+    const klen = keyLenOf(method);
+    const frameA = await ssFrame(method, PASSWORD, socksTarget(3, utf8Encode("a.example.com"), 80), new Uint8Array(0));
+    expect((await createSSInbound(method, PASSWORD).push(frameA)).state).toBe("ready");
+
+    const frameB = await ssFrame(
+      method,
+      PASSWORD,
+      socksTarget(3, utf8Encode("b.example.com"), 80),
+      new Uint8Array(0),
+      deterministicSalt(klen, 99),
+    );
+    expect((await createSSInbound(method, PASSWORD).push(frameB)).state).toBe("ready");
+
+    clearSaltRegistry();
+    const frameC = await ssFrame(method, PASSWORD, socksTarget(3, utf8Encode("c.example.com"), 80), new Uint8Array(0));
+    expect((await createSSInbound(method, PASSWORD).push(frameC)).state).toBe("ready");
+  });
+
   it("reassembles salt and frames split across many push() calls", async () => {
     const frame = await ssFrame(
       method,
@@ -177,7 +221,17 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("createSSInbound %s", 
 });
 
 describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (method) => {
+  beforeEach(() => clearSaltRegistry());
+
   const PASSWORD = "ss-password-test";
+
+  let saltSeq = 0;
+  function nextDeterministicSalt(n: number): Uint8Array {
+    const out = deterministicSalt(n);
+    saltSeq = (saltSeq + 1) & 0xff;
+    out[0] = saltSeq === 3 ? 4 : saltSeq;
+    return out;
+  }
 
   function keyLen(): number {
     return keyLenOf(method);
@@ -233,22 +287,28 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
     }
   }
 
-  async function handshakenInbound(): Promise<ReturnType<typeof createSSInbound>> {
+  async function handshakenInbound(): Promise<{
+    inbound: ReturnType<typeof createSSInbound>;
+    salt: Uint8Array;
+  }> {
+    const salt = nextDeterministicSalt(keyLen());
     const inbound = createSSInbound(method, PASSWORD);
-    const outcome = await inbound.push(await ssFrame(method, PASSWORD, socksTarget(3, utf8Encode("body.example.com"), 443), new Uint8Array(0)));
+    const outcome = await inbound.push(
+      await ssFrame(method, PASSWORD, socksTarget(3, utf8Encode("body.example.com"), 443), new Uint8Array(0), salt),
+    );
     expect(outcome.state).toBe("ready");
-    return inbound;
+    return { inbound, salt };
   }
 
   it("decodes uplink body frames continuing the shared nonce counter", async () => {
-    const salt = deterministicSalt(keyLen());
+    const salt = nextDeterministicSalt(keyLen());
     const master = evpBytesToKey(PASSWORD, keyLen());
     const sk = await hkdfSha1(master, salt, utf8Encode("ss-subkey"), keyLen());
     const target = socksTarget(3, utf8Encode("up.example.com"), 80);
     const body1 = utf8Encode("GET / HTTP/1.1\r\nHost: a\r\n\r");
     const body2 = utf8Encode("\nX: tail");
     const wire = concatBytes(
-      await ssFrame(method, PASSWORD, target, new Uint8Array(0)),
+      await ssFrame(method, PASSWORD, target, new Uint8Array(0), salt),
       await framePair(sk, 2, body1),
       await framePair(sk, 4, body2),
     );
@@ -267,26 +327,44 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
     expect(new TextDecoder().decode(rest!)).toBe("third-chunk");
   });
 
-  it("rejects-by-null on oversize, zero-length and corrupted body frames", async () => {
-    const inbound = await handshakenInbound();
+  it("rejects-by-null on oversize and corrupted body frames", async () => {
+    const { inbound, salt } = await handshakenInbound();
     const codec = inbound.bodyCodec()!;
-    const sk = await subkeyFor(deterministicSalt(keyLen()));
+    const sk = await subkeyFor(salt);
 
     const oversize = await gcmSeal(sk, incrementingNonce(2n), u16be(0x4000));
     expect(await codec.decodeUp(concatBytes(oversize, new Uint8Array(40)))).toBeNull();
 
-    const zeroLen = await gcmSeal(sk, incrementingNonce(2n), u16be(0));
-    const inbound2 = (await handshakenInbound()).bodyCodec()!;
-    expect(await inbound2.decodeUp(zeroLen)).toBeNull();
-
     const good = await framePair(sk, 2, utf8Encode("hello"));
     good[good.length - 1]! ^= 0xff;
-    const inbound3 = (await handshakenInbound()).bodyCodec()!;
-    expect(await inbound3.decodeUp(good)).toBeNull();
+    const corrupted = await handshakenInbound();
+    expect(await corrupted.inbound.bodyCodec()!.decodeUp(good)).toBeNull();
+  });
+
+  it("consumes mid-stream zero-length chunks without ending the stream (SIP004)", async () => {
+    const { inbound, salt } = await handshakenInbound();
+    const codec = inbound.bodyCodec()!;
+    const sk = await subkeyFor(salt);
+
+    const zeroPair = await framePair(sk, 2, new Uint8Array(0));
+    const data = utf8Encode("after-zero");
+    const got = await codec.decodeUp(concatBytes(zeroPair, await framePair(sk, 4, data)));
+    expect(new TextDecoder().decode(got!)).toBe("after-zero");
+
+    const loneZeroLenFrame = await gcmSeal(sk, incrementingNonce(6n), u16be(0));
+    expect(await codec.decodeUp(loneZeroLenFrame)).toEqual(new Uint8Array(0));
+
+    const zeroPayloadFrame = await gcmSeal(sk, incrementingNonce(7n), new Uint8Array(0));
+    expect(await codec.decodeUp(zeroPayloadFrame)).toEqual(new Uint8Array(0));
+
+    const resumed = await codec.decodeUp(await framePair(sk, 8, utf8Encode("still-alive")));
+    expect(new TextDecoder().decode(resumed!)).toBe("still-alive");
+
+    expect(await codec.decodeUp(await framePair(sk, 10, utf8Encode("keeps-going")))).toBeTruthy();
   });
 
   it("downlink encoder produces fresh-salt frames decodable by an independent opener", async () => {
-    const inbound = await handshakenInbound();
+    const { inbound } = await handshakenInbound();
     const encoder = inbound.bodyCodec()!.beginDownlink();
     const salt = encoder.header();
     expect(salt).not.toBeNull();
@@ -306,7 +384,7 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
   });
 
   it("downlink encoder keeps its nonce counter continuous across encode calls", async () => {
-    const inbound = await handshakenInbound();
+    const { inbound } = await handshakenInbound();
     const encoder = inbound.bodyCodec()!.beginDownlink();
     const salt = encoder.header()!;
     const sk = await subkeyFor(salt);
@@ -322,7 +400,7 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
   });
 
   it("splits downlink inputs larger than 0x3FFF into capped frames", async () => {
-    const inbound = await handshakenInbound();
+    const { inbound } = await handshakenInbound();
     const encoder = inbound.bodyCodec()!.beginDownlink();
     const big = new Uint8Array(40000);
     for (let i = 0; i < big.length; i++) big[i] = (i * 7) & 0xff;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   generateKeypair,
+  isAllZeroOutput,
   isBase64Key32,
   publicKeyFromPrivate,
   sharedSecret,
@@ -15,10 +16,6 @@ function hexToBytes(hex: string): Uint8Array {
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function b64ToHex(b64: string): string {
-  return bytesToHex(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 }
 
 describe("x25519", () => {
@@ -64,6 +61,21 @@ describe("x25519", () => {
     const a = generateKeypair();
     const b = generateKeypair();
     expect(sharedSecret(a.privateKey, b.publicKey)).toBe(sharedSecret(b.privateKey, a.publicKey));
+  });
+
+  it("detects all-zero outputs", () => {
+    expect(isAllZeroOutput(new Uint8Array(32))).toBe(true);
+    expect(isAllZeroOutput(new Uint8Array(0))).toBe(true);
+    const one = new Uint8Array(32);
+    one[17] = 1;
+    expect(isAllZeroOutput(one)).toBe(false);
+  });
+
+  it("rejects low-order peer points whose secret is all-zero (RFC 7748 §6.1)", () => {
+    const { privateKey } = generateKeypair();
+    const zeroPoint = btoa(String.fromCharCode(...new Array(32).fill(0)));
+    expect(isBase64Key32(zeroPoint)).toBe(true);
+    expect(() => sharedSecret(privateKey, zeroPoint)).toThrow("weak public key");
   });
 
   it("rejects malformed base64 keys", () => {

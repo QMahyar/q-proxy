@@ -177,7 +177,7 @@ describe("emitSingBoxJson golden", () => {
       "method": "aes-128-gcm",
       "password": "sspass12345",
       "plugin": "v2ray-plugin",
-      "plugin_opts": "websocket;tls;host=example.com;path=/ss/abcd1234"
+      "plugin_opts": "mode=websocket;tls;host=example.com;path=/ss/abcd1234"
     },
     {
       "type": "urltest",

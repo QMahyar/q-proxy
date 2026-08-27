@@ -241,6 +241,40 @@ describe("generateNodes caps and toggles", () => {
   });
 });
 
+describe("generateNodes fair cap rotation", () => {
+  it("round-robins across protocol kinds under the cap instead of filling kind-by-kind", () => {
+    const s = settings();
+    s.maxNodesPerFormat = 7;
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.map((n) => n.name)).toEqual([
+      `VLESS ${HOST} 443 Workers-Dev`,
+      `VMESS ${HOST} 443 Workers-Dev`,
+      `TROJAN ${HOST} 443 Workers-Dev`,
+      `SS ${HOST} 443 Workers-Dev`,
+      `VLESS ${HOST} 2053 Workers-Dev`,
+      `VMESS ${HOST} 2053 Workers-Dev`,
+      `TROJAN ${HOST} 2053 Workers-Dev`,
+    ]);
+  });
+
+  it("spreads the cap evenly across remaining kinds when one is disabled", () => {
+    const s = settings();
+    s.ssEnabled = false;
+    s.maxNodesPerFormat = 30;
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.length).toBe(30);
+    const count = (k: ProxyNode["kind"]): number => nodes.filter((n) => n.kind === k).length;
+    expect(count("vless")).toBe(10);
+    expect(count("vmess")).toBe(10);
+    expect(count("trojan")).toBe(10);
+
+    const full = settings();
+    full.ssEnabled = false;
+    full.maxNodesPerFormat = 100;
+    expect(generateNodes(ctx(full)).length).toBe(39);
+  });
+});
+
 describe("generateNodes naming enrichment", () => {
   it("prefixes the country flag from request.cf", () => {
     const nodes = generateNodes(ctx(settings(), undefined, { country: "DE" }));

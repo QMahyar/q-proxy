@@ -41,7 +41,33 @@ describe("handleCamouflage", () => {
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("<h1>upstream page</h1>");
-    expect(vi.mocked(fetch).mock.calls[0]![0]).toBe("https://camo.example/page");
+    expect(String(vi.mocked(fetch).mock.calls[0]![0])).toBe("https://camo.example/page/junk");
+  });
+
+  it("resolves asset-looking paths against the configured origin and base path", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("icon", { status: 200 })),
+    );
+    await handleCamouflage(
+      new Request("https://x/favicon.ico"),
+      {} as never,
+      settingsWith("proxy", "https://camo.example/page"),
+    );
+    expect(String(vi.mocked(fetch).mock.calls[0]![0])).toBe("https://camo.example/page/favicon.ico");
+  });
+
+  it("keeps the query string and root base path when resolving the upstream url", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("post", { status: 200 })),
+    );
+    await handleCamouflage(
+      new Request("https://x/post/2?q=1"),
+      {} as never,
+      settingsWith("proxy", "https://camo.example"),
+    );
+    expect(String(vi.mocked(fetch).mock.calls[0]![0])).toBe("https://camo.example/post/2?q=1");
   });
 
   it("falls back to the static asset when upstream is not ok", async () => {

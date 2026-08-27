@@ -47,4 +47,38 @@ describe("subscriptionHeaders", () => {
     });
     expect(h["Subscription-Userinfo"]).toBe(`upload=0; download=${100 * 1024 * 1024}`);
   });
+
+  it("appends expire=<unix seconds> when meta.expireAt is set", () => {
+    const h = subscriptionHeaders("base64", "T", nodes, usage, {
+      updateIntervalHours: 12,
+      webPageUrl: "",
+      expireAt: 1893456000123,
+    });
+    expect(h["Subscription-Userinfo"]).toBe(`upload=0; download=5242880; expire=${Math.floor(1893456000123 / 1000)}`);
+  });
+
+  it("omits expire when meta.expireAt is null or absent", () => {
+    const explicitNull = subscriptionHeaders("base64", "T", nodes, usage, {
+      updateIntervalHours: 12,
+      webPageUrl: "",
+      expireAt: null,
+    });
+    expect(explicitNull["Subscription-Userinfo"]).toBe("upload=0; download=5242880");
+    const absent = subscriptionHeaders("base64", "T", nodes, usage, {
+      updateIntervalHours: 12,
+      webPageUrl: "",
+    });
+    expect(absent["Subscription-Userinfo"]).toBe("upload=0; download=5242880");
+  });
+
+  it("omits expire when meta.expireAt is zero or negative", () => {
+    for (const expireAt of [0, -1]) {
+      const h = subscriptionHeaders("base64", "T", nodes, usage, {
+        updateIntervalHours: 12,
+        webPageUrl: "",
+        expireAt,
+      });
+      expect(h["Subscription-Userinfo"]).toBe("upload=0; download=5242880");
+    }
+  });
 });

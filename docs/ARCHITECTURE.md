@@ -3,6 +3,9 @@
 > Single source of truth for parallel implementers. Everything marked **FROZEN** (types, signatures, route table, KV keys, API JSON shapes, file ownership) must be copied verbatim and only changes via an explicit architecture revision.
 > **Rev 2026-08-24 amendments (post-audit):** §2.7 `ProtocolInbound` now includes `BodyCodec`/`DownlinkEncoder` + `bodyCodec()` (was frozen without); `killSwitch` gate lives in `core/router.ts:155` not `worker.ts`; `src/nodes/naming.ts` is fixed-format renderer not `{PROTO} {ADDR}` template engine; `/{sp}/api/settings/save` alias + 4-segment `/api/auth/*` alias are reachable (table addition); `/{sp}/my-ip` now requires auth (F-40). §2.5 amended after upstream research: Surge emits vmess+trojan only — VLESS is not a supported Surge proxy type per manual.nssurge.com — and prepends `#!MANAGED-CONFIG`; Loon emits vless+vmess+trojan using official nsloon.app grammar (`transport=` not `transporter=`, `over-tls=`, positional cipher/uuid/password, `udp=true`). **Efficiency pass (same rev):** §3 row 21 `GET /{sp}/api/bootstrap` added (settings+status+subUrls aggregate, ETag/304); `GET settings`/`bootstrap` serve `ETag: W/"<updatedAt>-<version>"` + `If-None-Match`; subscription responses `Cache-Control: public, max-age=60` + edge Cache API (was `no-store`); panel/login HTML `private, max-age=60` (was `no-store`); settings isolate cache 15s→60s + KV `cacheTtl:60` + write-through save with no-op skip; `/robots.txt` served without loading settings; counter usage reads memoized 15s. **WARP core (same rev):** §3 row 22 /{sp}/api/warp/{…} added; new KV keys qproxy:warp:account:{id} / qproxy:warp:token:{token} / qproxy:warp:presets / qproxy:warp:global; hand-rolled x25519 at src/crypto/x25519.ts (RFC 7748 vectors); parsers src/warp/config.ts (.conf + wg:// URI, ParseResult); registration client src/warp/api.ts (retry/backoff, cleanup on failure); store src/warp/store.ts (two-key write + rollback, sanitizeAccount strips private_key/warp_token). **User center (F4):** §3 rows 7c and 22b added; new KV keys `qproxy:users` (single JSON array of ≤50 {id,name,token:uuid,enabled,expiresAt,dailyReqLimit,protocols:'all'|[vless|vmess|trojan|ss],createdAt}) and `qproxy:user-usage:{yyyy-mm-dd}` ([{token,count}] per-day estimate, fire-and-forget RMW); admin API `/{sp}/api/users…` (session+CSRF on non-GET, sub-path dispatch in handlers/api/users.ts mirroring warp); public per-user subscription `/{sp}/sub/u/{token}/{target?}` in handlers/users-sub.ts reusing pickSubFormat/generateNodes/EMITTERS with per-user protocol filter (remote-sub merge intentionally skipped so filters hold), 410 disabled/expired, 429 over daily quota (+Retry-Until-midnight), edge-cached 60s keyed token+format+mode; unknown/bad-uuid tokens fall through to camouflage; tokens are the sub credential shown to admins only, never logged.
 > **Rev 2026-08-25 amendments (F7 Telegram bot):** §3 rows 22c/22d added — public `POST /{sp}/telegram/webhook/{secret}` (secret = first 16 hex chars of HMAC-SHA256(key=sessionSecret, message="tg-webhook"), constant-time compared; disabled bot / secret mismatch / non-bound chat all answer `200 {"ok":true,"data":{}}` silently) and session+CSRF `POST /{sp}/telegram/{setup|remove}` proxying setWebhook/deleteWebhook to api.telegram.org (`{ok,description}`, token-shaped substrings scrubbed from description). Settings schema gained `telegram:{enabled:boolean,botToken:string,chatId:string}`; token shape `^\d+:[A-Za-z0-9_-]{35}$` enforced only while enabled; chatId numeric or `@name`, ≤64 chars. `telegram.botToken` is write-only sensitive state: stripped from `GET api/settings` (publicSettingsView), `api/settings/export`, and never logged; it is NOT added to `SENSITIVE_SETTING_PATHS` (that const drives top-level deletion only — nested key deleted explicitly). Handler `src/handlers/api/telegram.ts` exports `telegramWebhookSecret(sessionSecret)` for tests/reuse; commands `/status /sub /kill on|off /usage`, help otherwise; reply language = `settings.language`; replies sent via fire-and-forget `sendMessage` with 5s timeout. Panel Advanced section gains the Telegram card (enabled toggle, secret token field without generator, chatId, Set/Remove webhook buttons).
+> **Rev 2026-08-26 wave1 amendments (P09 auth core):** §3 row 14b added — session+CSRF `POST /{sp}/api/auth/password` (`{currentPassword,newPassword}`, ≥8-char validation, loadSettingsFresh→saveSettings write, success data `{changed:true}`). Sessions gain an optional `iat` claim; `verifySession(cookie,secret,minIat)` rejects tokens with `iat < minIat` (missing iat ⇒ 0). Revocation floor lives in KV `qproxy:min-iat` with a 60s isolate memo — helpers `getSessionFloor`/`bumpSessionFloor`/`clearSessionFloorCache` exported from src/auth/session.ts; enforcement wired at the router layer via a `withSessionFloor` wrapper composed into every requireAuth path (guard.ts untouched this wave). Change-password bumps the floor before responding and issues a fresh q_session cookie. Legacy-tier (15k PBKDF2) hashes are transparently re-hashed to 100k iterations on successful login (loadSettingsFresh→saveSettings; any failure logs debug and never blocks login). `POST /{sp}/api/auth/logout` now requires the `X-Q-Panel: 1` CSRF header only (no session required); the panel SPA's shared post helper already sends it.
+>
+> **Rev 2026-08-26 docs-sync (P16, wave1 consolidation):** §1 tree completed to match `src/`: crypto/{chacha20,shake128,x25519}.ts, utils/* incl. bounded.ts, warp/* subsystem {api, cache, config, expand, store, zip, formats/{conf,proxies,registry,singbox}}, users/store.ts, handlers/{users-sub,warp-sub}.ts, handlers/api/{bootstrap,telegram,users,version,warp}.ts; `naming.ts` tree comment corrected to fixed-format remark renderer per the 2026-08-24 amendment. §2.2 Settings block refreshed verbatim from src/types/settings.ts: added `CF_TLS_PORTS`/`CF_PLAIN_PORTS`, `echEnabled`/`echServerName`, `RoutingRules {bypassLan,blockAds,blockMalware,blockQuic,customBypass,customBlock}`, `TelegramSettings {enabled,botToken,chatId}`; `SENSITIVE_SETTING_PATHS = [passwordHash,passwordSalt,sessionSecret]`; `PublicSettings = Omit<Settings, …> & { telegram: Omit<TelegramSettings,"botToken"> }`. §2.4 NodeBase gained `ech: string | null`. §2.5 EmitOptions extended with optional `subscriptionUrl`, `updateIntervalHours`, `rules?: EmitRules {bypassLan,bypassDomains,blockDomains,blockQuic}`. §3 rows 15b/16b/17b/20b added (GET settings/export · PUT settings/save alias · POST settings/import · GET version/check) plus row 14c (4-segment `/api/auth/*` alias set incl. password); row 6 DoH cap corrected 10 MiB → 64 KiB (POST body enforced in handler); row 8 my-ip auth fixed to session; row 13 logout noted CSRF-header-only (no session required); rows 10/11 note HTML no-store/CSP headers; session payload documented as `{exp, iat?}` with revocation floor KV `qproxy:min-iat`. §6 error block refreshed verbatim from src/core/errors.ts (AppError 5th ctor param `headers`; ValidationError carries `.fields` into the envelope; RateLimitedError sets Retry-After via headers; UpstreamError used by warp/doh handlers). §7 workers-project examples corrected to files that exist: test/workers/router.spec.ts, test/workers/auth-flow.spec.ts, test/workers/tunnel/smoke.spec.ts.
 >
 > **Rev 2026-08-26 scope note:** The frozen §Scope line below predates the v1.1 feature-completion pass and is superseded as follows: "No WARP" no longer holds (W1–W3 added WARP accounts, presets, Amnezia and 17 WireGuard sub formats — rows 7b/22); "no user/quota system" no longer holds (F4 user center: ≤50 scoped subscribers with protocol filter/daily quota/expiry — rows 7c/22b, KV `qproxy:users`); a Telegram bot is wired (rows 22c/22d); settings export/import, ECH emission and routing-rule injection are in. The product remains **single-admin** (the admin manages users; there is no multi-admin/multi-tenant mode). Frozen §Scope body text left verbatim by design.
 >
@@ -42,7 +45,8 @@ E:\Code\Q Proxy\
     │   ├── settings.ts               # Settings + DEFAULT_SETTINGS + SETTINGS_VERSION [FROZEN §2.2]
     │   ├── node.ts                   # ProxyNode discriminated union [FROZEN §2.4]
     │   ├── context.ts                # RouteHandler, NodeBuilderContext, UsageSnapshot [FROZEN §2.6]
-    │   └── tunnel.ts                 # DialTarget, FailoverStrategy, EgressOpener, DnsPacketRelay [FROZEN §2.8]
+    │   ├── tunnel.ts                 # DialTarget, FailoverStrategy, EgressOpener, DnsPacketRelay [FROZEN §2.8]
+    │   └── warp.ts                   # WarpAccount, WarpPreset, AmneziaSettings [FROZEN via §3 row 22 shapes]
     ├── core\
     │   ├── routes.ts                 # identifyTunnel(), resolveSecureRoute(): pure path matchers
     │   ├── router.ts                 # ordered route-table dispatch (§3)
@@ -64,7 +68,10 @@ E:\Code\Q Proxy\
     │   ├── md5.ts                    # pure-JS MD5 (WebCrypto lacks MD5; VMess KDF + SS EVP_BytesToKey)
     │   ├── sha224.ts                 # pure-JS SHA-224 (WebCrypto lacks SHA-224; trojan auth hash)
     │   ├── aes.ts                    # AES-128 block cipher + CFB mode (VMess legacy header)
-    │   └── kdf.ts                    # EVP_BytesToKey, HKDF-SHA1 ss-subkey, VMess KDF/HMAC chains
+    │   ├── kdf.ts                    # EVP_BytesToKey, HKDF-SHA1 ss-subkey, VMess KDF/HMAC chains
+    │   ├── x25519.ts                 # hand-rolled X25519 (RFC 7748) — WARP registration keypairs, zero-dep
+    │   ├── chacha20.ts               # pure-JS ChaCha20-Poly1305 open/seal (VMess AEAD cipher)
+    │   └── shake128.ts               # pure-JS SHAKE128 XOF (VMess KDF subkey derivation)
     ├── protocols\
     │   ├── common.ts                 # ProtocolInbound/PushOutcome/ParseResult contract [FROZEN §2.7]
     │   ├── vless.ts                  # createVlessInbound(uuid): frame parse + [ver,0] response header
@@ -86,7 +93,7 @@ E:\Code\Q Proxy\
     │       └── http-connect.ts       # HTTP CONNECT client (Basic auth optional)
     ├── nodes\
     │   ├── generate.ts               # generateNodes(ctx): ProxyNode[] cartesian expansion + caps + port/security consistency
-    │   ├── naming.ts                 # remark template engine ({PROTO} {ADDR} {PORT} {VARIANT} {TAG})
+    │   ├── naming.ts                 # fixed-format remark renderer (protocol/port/address-class flags; Rev 2026-08-24)
     │   ├── fragments.ts              # fragment presets low/medium/high/severe/custom + smart-sweep length list
     │   ├── share-uri.ts              # buildShareUri per protocol per R4 §1 grammars [FROZEN §2.5]
     │   └── emitters\
@@ -98,21 +105,49 @@ E:\Code\Q Proxy\
     │       ├── surge-conf.ts         # emitSurgeConf(nodes, opts)
     │       └── loon-conf.ts          # emitLoonConf(nodes, opts)
     ├── subscription\
-    │   ├── negotiate.ts              # pickSubFormat(req): target= param > UA sniff > base64 fallback
+    │   ├── negotiate.ts              # pickSubFormat(req): target= param > UA sniff > base64 fallback; SUB_FORMATS single source
     │   ├── headers.ts                # subscriptionHeaders(...): Profile-Title / Subscription-Userinfo / etc.
     │   └── merge.ts                  # fetchRemoteSubLines(urls): timeout/cap/base64-autodetect/dedupe
+    ├── users\
+    │   └── store.ts                  # per-user directory (≤50): token subs, protocol filter, daily quota, expiry (KV qproxy:users)
+    ├── warp\
+    │   ├── api.ts                    # WARP registration client: retry/backoff, cleanup on failure (x25519 keypairs)
+    │   ├── cache.ts                  # edge-Cache purge helpers for WARP sub URLs (per-token / all tokens)
+    │   ├── config.ts                 # .conf + wg:// URI parser -> ParseResult<WarpConfig>
+    │   ├── expand.ts                 # WarpEmitContext resolution: account + preset + amnezia merge
+    │   ├── store.ts                  # accounts/presets/amnezia store: two-key write + rollback, sanitizeAccount
+    │   ├── zip.ts                    # dependency-free ZIP writer (crc32 + stored entries) for conf bundles
+    │   └── formats\
+    │       ├── registry.ts           # WARP_FORMATS/WARP_EMITTERS + content-type/extension maps (17 formats)
+    │       ├── conf.ts               # wireguard-conf(-amnezia) zip, throne(-amnezia), wg:// URI, v2rayn emitters
+    │       ├── proxies.ts            # clash(-amnezia), surge, surfboard, loon, egern emitters
+    │       └── singbox.ts            # sing-box (+legacy/+amnezia) and xray emitters
+    ├── utils\
+    │   ├── base64.ts                 # tolerant std/urlsafe/padded base64 + b64url encode/decode
+    │   ├── bytes.ts                  # concat/hex/u16be/u32BE/utf8 encode-decode helpers
+    │   ├── net.ts                    # parseHostPort/isIPv4/isIPv6/isCloudflareIp/local-private guards
+    │   ├── random.ts                 # randomHex/randomString/constantTimeEqual
+    │   ├── time.ts                   # unixNow/dayKeyUtc helpers
+    │   └── bounded.ts                # pruneBoundedRegistry — size-capped replay registries (SS salts, VMess auth-ids)
     ├── handlers\
     │   ├── tunnel.ts                 # WS entry /{vl|vm|tr|ss}/<suffix>: gate -> inbound -> opener -> relay
     │   ├── subscribe.ts              # sub endpoint: negotiate -> generate -> merge -> emit -> headers
-    │   ├── doh.ts                    # ANY /{sp}/doh blind reverse proxy to settings.dohUpstream (size-capped)
+    │   ├── users-sub.ts              # GET /{sp}/sub/u/{token}[/{target}]: per-user scoped sub (quota/expiry/filter)
+    │   ├── warp-sub.ts               # GET+HEAD /{sp}/sub/wg/{token}/{format}: WARP config serving (17 formats)
+    │   ├── doh.ts                    # ANY /{sp}/doh blind reverse proxy to settings.dohUpstream (64 KiB POST cap)
     │   ├── myip.ts                   # GET /{sp}/my-ip: JSON (Accept) or HTML; CF vs general egress comparison
     │   ├── robots.ts                 # GET /robots.txt -> "User-agent: * / Disallow: /"
     │   ├── panel-page.ts             # GET /{sp}/panel + /{sp}/login: serve ASSETS html strings
     │   ├── camouflage.ts             # unmatched-path fallback per settings.camouflage.mode
     │   └── api\
-    │       ├── auth.ts               # POST login / logout / setup (first-run password)
-    │       ├── settings.ts           # GET redacted / PUT validated save / POST reset
-    │       └── status.ts             # GET status; POST killswitch; GET suburls
+    │       ├── auth.ts               # POST login / logout / setup (first-run password) / password change
+    │       ├── settings.ts           # GET redacted / PUT validated save / POST reset / export / import
+    │       ├── status.ts             # GET status; POST killswitch; GET suburls
+    │       ├── bootstrap.ts          # GET aggregate {settings,status,subUrls} with ETag/304
+    │       ├── version.ts            # GET version/check against upstream releases
+    │       ├── users.ts              # ANY user-center CRUD + token regeneration (≤50)
+    │       ├── warp.ts               # ANY WARP accounts/presets/amnezia sub-dispatch
+    │       └── telegram.ts           # webhook receiver + setup/remove proxy + telegramWebhookSecret()
     └── ui\
         ├── assets.ts                 # FROZEN ASSETS = { panel, login, camo } string consts [§2.10]
         ├── panel.html                # self-contained SPA (inline CSS+JS): all Settings forms, QR modal, EN/FA RTL
@@ -143,18 +178,29 @@ KV binding name is exactly `QPROXY_KV` in wrangler.toml and all code. No env var
 ```ts
 export const SETTINGS_VERSION = 1;
 
-export type Language = 'en' | 'fa';
-export type SsMethod = 'aes-128-gcm' | 'aes-256-gcm';
+export const CF_TLS_PORTS = [443, 2053, 2083, 2087, 2096, 8443] as const;
+export const CF_PLAIN_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095] as const;
+
+export type Language = "en" | "fa";
+export type SsMethod = "aes-128-gcm" | "aes-256-gcm";
 export type Fingerprint =
-  | 'chrome' | 'firefox' | 'safari' | 'ios' | 'android'
-  | 'edge' | '360' | 'qq' | 'random' | 'randomized';
-export type PlainPortPolicy = 'always' | 'workers-dev' | 'never';
-export type CamouflageMode = 'off' | 'static' | 'proxy';
-export type FragmentMode = 'off' | 'low' | 'medium' | 'high' | 'severe' | 'custom';
+  | "chrome"
+  | "firefox"
+  | "safari"
+  | "ios"
+  | "android"
+  | "edge"
+  | "360"
+  | "qq"
+  | "random"
+  | "randomized";
+export type PlainPortPolicy = "always" | "workers-dev" | "never";
+export type CamouflageMode = "off" | "static" | "proxy";
+export type FragmentMode = "off" | "low" | "medium" | "high" | "severe" | "custom";
 
 export interface FragmentSettings {
   mode: FragmentMode;
-  packets: 'tlshello' | '1-1' | '1-2' | '1-3' | '1-5';
+  packets: "tlshello" | "1-1" | "1-2" | "1-3" | "1-5";
   lengthMin: number;
   lengthMax: number;
   delayMin: number;
@@ -171,6 +217,12 @@ export interface ChainProxySettings {
 export interface CamouflageSettings {
   mode: CamouflageMode;
   url: string;
+}
+
+export interface TelegramSettings {
+  enabled: boolean;
+  botToken: string;
+  chatId: string;
 }
 
 export interface Settings {
@@ -205,9 +257,11 @@ export interface Settings {
   fingerprint: Fingerprint;
   randomizeSniCase: boolean;
   alpn: string[];
+  echEnabled: boolean;
+  echServerName: string;
   cdn: { enabled: boolean; addresses: string[]; host: string; sni: string };
   fragment: FragmentSettings;
-  proxyIpMode: 'proxyip' | 'nat64';
+  proxyIpMode: "proxyip" | "nat64";
   proxyIps: string[];
   nat64Prefixes: string[];
   chainProxy: ChainProxySettings;
@@ -223,44 +277,48 @@ export interface Settings {
   killSwitch: boolean;
   speedtestIntercept: boolean;
   camouflage: CamouflageSettings;
+  routingRules: RoutingRules;
+  telegram: TelegramSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
-  securePath: '',
+  securePath: "",
   passwordHash: null,
   passwordSalt: null,
-  sessionSecret: '',
-  language: 'fa',
+  sessionSecret: "",
+  language: "fa",
   debugLogging: false,
   vlessEnabled: true,
   vmessEnabled: true,
   trojanEnabled: true,
   ssEnabled: true,
-  vlessUuid: '',
-  vmessUuid: '',
-  trojanPassword: '',
-  ssPassword: '',
-  ssMethod: 'aes-128-gcm',
-  vlessPath: 'vl',
-  vmessPath: 'vm',
-  trojanPath: 'tr',
-  ssPath: 'ss',
+  vlessUuid: "",
+  vmessUuid: "",
+  trojanPassword: "",
+  ssPassword: "",
+  ssMethod: "aes-128-gcm",
+  vlessPath: "vl",
+  vmessPath: "vm",
+  trojanPath: "tr",
+  ssPath: "ss",
   earlyDataEnabled: true,
   earlyDataMaxBytes: 2048,
-  hostnameOverride: '',
+  hostnameOverride: "",
   customDomains: [],
   cleanIps: [],
   tlsPorts: [443, 2053, 2083, 2087, 2096, 8443],
   plainPorts: [80, 8080, 8880, 2052, 2082, 2086, 2095],
-  plainPortPolicy: 'workers-dev',
-  fingerprint: 'chrome',
+  plainPortPolicy: "workers-dev",
+  fingerprint: "chrome",
   randomizeSniCase: true,
-  alpn: ['http/1.1'],
-  cdn: { enabled: false, addresses: [], host: '', sni: '' },
+  alpn: ["http/1.1"],
+  echEnabled: false,
+  echServerName: "",
+  cdn: { enabled: false, addresses: [], host: "", sni: "" },
   fragment: {
-    mode: 'off',
-    packets: 'tlshello',
+    mode: "off",
+    packets: "tlshello",
     lengthMin: 100,
     lengthMax: 200,
     delayMin: 1,
@@ -268,27 +326,40 @@ export const DEFAULT_SETTINGS: Settings = {
     maxSplitMin: 2,
     maxSplitMax: 4,
   },
-  proxyIpMode: 'proxyip',
+  proxyIpMode: "proxyip",
   proxyIps: [],
-  nat64Prefixes: ['[2a02:898:146:64::]', '[2602:fc59:b0:64::]', '[2602:fc59:11:64::]'],
-  chainProxy: { enabled: false, uri: '' },
+  nat64Prefixes: ["[2a02:898:146:64::]", "[2602:fc59:b0:64::]", "[2602:fc59:11:64::]"],
+  chainProxy: { enabled: false, uri: "" },
   enableUdp53: true,
-  dohUpstream: 'https://cloudflare-dns.com/dns-query',
-  remoteDns: 'https://8.8.8.8/dns-query',
-  localDns: 'localhost',
+  dohUpstream: "https://cloudflare-dns.com/dns-query",
+  remoteDns: "https://8.8.8.8/dns-query",
+  localDns: "localhost",
   urlTestIntervalSec: 300,
-  profileTitle: 'Q Proxy',
+  profileTitle: "Q Proxy",
   subUpdateIntervalHours: 12,
   maxNodesPerFormat: 500,
   remoteSubUrls: [],
   killSwitch: false,
   speedtestIntercept: true,
-  camouflage: { mode: 'static', url: '' },
+  camouflage: { mode: "static", url: "" },
+  routingRules: { bypassLan: false, blockAds: false, blockMalware: false, blockQuic: false, customBypass: [], customBlock: [] },
+  telegram: { enabled: false, botToken: "", chatId: "" },
 };
 
-export const SENSITIVE_SETTING_PATHS = ['passwordHash', 'passwordSalt'] as const;
+export const SENSITIVE_SETTING_PATHS = ["passwordHash", "passwordSalt", "sessionSecret"] as const;
 
-export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number]>;
+export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number]> & {
+  telegram: Omit<TelegramSettings, "botToken">;
+};
+
+export interface RoutingRules {
+  bypassLan: boolean;
+  blockAds: boolean;
+  blockMalware: boolean;
+  blockQuic: boolean;
+  customBypass: string[];
+  customBlock: string[];
+}
 ```
 
 Field notes (binding this schema to scope):
@@ -297,6 +368,9 @@ Field notes (binding this schema to scope):
 - Port matrices are the CF proxied sets (R4 §3.1). `plainPortPolicy`: plain-port nodes advertised only on workers.dev hostnames by default (`workers-dev`), or always/never.
 - Fragment presets (R1 B.3): low=100–200/1–1, medium=50–100/1–5, high=10–20/10–20, severe=1–5/1–5 — applied by the UI writing into `fragment.*`; `mode:'off'` disables the fragment sub family.
 - SS runs inside WS with v2ray-plugin framing on the client side (R2 A4); `ssMethod` limited to AES-GCM ciphers implementable with WebCrypto.
+- `echEnabled`/`echServerName` gate ECH config emission on TLS nodes (empty `echServerName` ⇒ ECH field emitted as `null`).
+- `routingRules` are injected at emit time into clash/sing-box rule sections (bypass-LAN, block ads/malware/QUIC, custom suffix lists); they never touch node generation.
+- `telegram` is runtime state for the bot (F7); `botToken` is write-only sensitive state — stripped from every public view/export, never logged.
 - `SENSITIVE_SETTING_PATHS` never leaves GET `/api/settings` and is never logged.
 
 ### 2.3 Sub formats → part of `src/core/ua.ts` (owner A)
@@ -307,7 +381,7 @@ export type SubFormat = 'base64' | 'clash' | 'singbox' | 'surge' | 'loon';
 export declare function classifyUA(ua: string): SubFormat | 'browser';
 ```
 
-Negotiation priority (R4 §2.1): `?target=` param wins → UA contains `clash|meta|mihomo` → `sing-box|singbox|sb|hiddify|nekobox|karing|sfa` → `surge` → `loon` → other known client UAs (`v2rayng`, `shadowrocket`, `happ`, …) → `base64`; browser UAs get an HTML info page instead of configs.
+Negotiation priority (R4 §2.1): `?target=` param wins → UA contains `clash|mihomo|stash` → `sing-box|singbox|sb|hiddify|nekobox|karing|sfa` → `surge` → `loon` → other known client UAs (`v2rayng`, `shadowrocket`, `happ`, …) → `base64`; browser UAs get an HTML info page instead of configs.
 
 ### 2.4 ProxyNode union → `src/types/node.ts` (owner A)
 
@@ -331,6 +405,7 @@ export interface NodeBase {
   earlyData: number;
   fingerprint: Fingerprint | null;
   alpn: string[];
+  ech: string | null;
   variant: NodeVariant;
   tags: NodeTag[];
 }
@@ -380,10 +455,20 @@ export function buildSSShareUri(node: import('../types/node').SSNode): string;
 import type { ProxyNode } from '../../types/node';
 import type { SubFormat } from '../../core/ua';
 
+export interface EmitRules {
+  bypassLan: boolean;
+  bypassDomains: string[];
+  blockDomains: string[];
+  blockQuic: boolean;
+}
+
 export interface EmitOptions {
   remoteDns: string;
   urlTestIntervalSec: number;
   isFragment: boolean;
+  subscriptionUrl?: string;
+  updateIntervalHours?: number;
+  rules?: EmitRules;
 }
 
 export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;
@@ -579,23 +664,29 @@ Precedence top-down; first match wins. `{sp}` = `settings.securePath`. Tunnel pr
 | 3 | GET+Upgrade | `/{vmessPath}/<suffix>` | `handlers/tunnel.ts` | protocol cred | |
 | 4 | GET+Upgrade | `/{trojanPath}/<suffix>` | `handlers/tunnel.ts` | protocol cred | |
 | 5 | GET+Upgrade | `/{ssPath}/<suffix>` | `handlers/tunnel.ts` | SS cred | early-data header ignored (SS rule) |
-| 6 | ANY | `/{sp}/doh` | `handlers/doh.ts` | sp is secret | blind DoH reverse proxy, 10 MiB cap |
+| 6 | ANY | `/{sp}/doh` | `handlers/doh.ts` | sp is secret | blind DoH reverse proxy; POST body capped at 64 KiB (enforced in handler) |
 | 7 | GET | /{sp}/sub | handlers/subscribe.ts | sp is secret | ?target= overrides UA sniff |
 | 7b | GET+HEAD | /{sp}/sub/wg/{token}/{format} | handlers/warp-sub.ts | token is the secret | WARP subscription; 17 formats via warp/formats/registry.ts; edge-cached 60s, purged on account/preset/amnezia changes (Rev 2026-08-24: W2) |
 | 7c | GET+HEAD | /{sp}/sub/u/{token}/{target?} | handlers/users-sub.ts | token is the secret | Per-user subscription (F4); UA/?target/path-target negotiation, nodes filtered by user protocols; 410 when disabled/expired, 429 + Retry-After over daily quota; `?view=html` info page; edge-cached 60s keyed token+format+mode; unknown/bad-uuid token → camouflage (#23) |
-| 8 | GET | `/{sp}/my-ip` | `handlers/myip.ts` | sp is secret | Accept: application/json → JSON else HTML |
+| 8 | GET | `/{sp}/my-ip` | `handlers/myip.ts` | session | Accept: application/json → JSON else HTML; no-store |
 | 9 | GET | `/{sp}` (exact) | router inline | none | 302 → `/{sp}/panel` |
-| 10 | GET | `/{sp}/panel` | `handlers/panel-page.ts` | page public | ASSETS.panel; SPA redirects on 401 |
-| 11 | GET | `/{sp}/login` | `handlers/panel-page.ts` | none | ASSETS.login |
+| 10 | GET | `/{sp}/panel` | `handlers/panel-page.ts` | page public | ASSETS.panel; SPA redirects on 401; no-store + panel CSP override (`connect-src 'self' https:`) |
+| 11 | GET | `/{sp}/login` | `handlers/panel-page.ts` | none | ASSETS.login; no-store (base CSP from respond.ts) |
 | 12 | POST | `/{sp}/api/auth/login` | `handlers/api/auth.ts` | none | `{password}` → sets `q_session` cookie |
-| 13 | POST | `/{sp}/api/auth/logout` | `handlers/api/auth.ts` | none | clears cookie |
+| 13 | POST | `/{sp}/api/auth/logout` | `handlers/api/auth.ts` | CSRF header only | clears cookie; requires `X-Q-Panel: 1` but NO session (Rev 2026-08-26 wave1) |
 | 14 | POST | `/{sp}/api/auth/setup` | `handlers/api/auth.ts` | none | ONLY while `passwordHash===null`; `{newPassword}` |
+| 14b | POST | /{sp}/api/auth/password | handlers/api/auth.ts | session+CSRF | change admin password `{currentPassword,newPassword≥8}`; wrong current → 401; TOCTOU-safe loadSettingsFresh→saveSettings write; bumps session revocation floor KV `qproxy:min-iat` (60s isolate memo) before responding so all earlier sessions die; issues a fresh q_session cookie (Rev 2026-08-26 wave1) |
+| 14c | POST | `/{sp}/api/auth/{login\|logout\|setup\|password}` | alias via `core/router.ts:resolveAuthAlias` | as rows 12–14b | 4-segment alias set resolving to the same handlers (Rev 2026-08-24) |
 | 15 | GET | `/{sp}/api/settings` | `handlers/api/settings.ts` | session | PublicSettings view |
+| 15b | GET | `/{sp}/api/settings/export` | `handlers/api/settings.ts` | session | secrets-stripped settings JSON download |
 | 16 | PUT | `/{sp}/api/settings` | `handlers/api/settings.ts` | session+CSRF | deep-merge validate save |
+| 16b | PUT | `/{sp}/api/settings/save` | `handlers/api/settings.ts` | session+CSRF | alias of row 16 (Rev 2026-08-24) |
 | 17 | POST | `/{sp}/api/settings/reset` | `handlers/api/settings.ts` | session+CSRF | defaults, keep identity fields |
+| 17b | POST | `/{sp}/api/settings/import` | `handlers/api/settings.ts` | session+CSRF | restore an exported settings blob; version-checked |
 | 18 | GET | `/{sp}/api/status` | `handlers/api/status.ts` | session | version/colo/killSwitch/usage |
 | 19 | POST | `/{sp}/api/killswitch` | `handlers/api/status.ts` | session+CSRF | `{enabled:boolean}` |
 | 20 | GET | `/{sp}/api/suburls` | `handlers/api/status.ts` | session | sub URLs per format for QR/copy |
+| 20b | GET | `/{sp}/api/version/check` | `handlers/api/version.ts` | session | check deployed version against upstream releases |
 | 21 | GET | `/{sp}/api/bootstrap` | `handlers/api/bootstrap.ts` | session | aggregate: `{settings,status,subUrls}` + ETag/304 (Rev 2026-08-24: panel boot coalescing) |
 | 22 | ANY | `/{sp}/api/warp/{…}` | `handlers/api/warp.ts` | session (+CSRF on non-GET) | WARP accounts/presets/amnezia; sub-path dispatch in handler: `account` GET list · `account/generate` POST · `account/import` POST · `account/{uuid}` GET/PUT/DELETE · `account/{uuid}/regenerate-token` POST · `presets` GET/POST · `presets/{id}` PUT/DELETE · `settings/amnezia` GET/PUT (Rev 2026-08-24: W1) |
 | 22b | ANY | `/{sp}/api/users/{…}` | `handlers/api/users.ts` | session (+CSRF on non-GET) | User center (F4); sub-path dispatch in handler: `` (empty) GET list (`{users}`, each + `todayHits`) · POST create `{name,protocols?,dailyReqLimit?,expiresAt?}` → `{user}` · `{id}` PUT partial (same fields + `enabled`) · `{id}` DELETE → `{deleted:true}` · `{id}/regenerate-token` POST → `{token}`; ≤50 users; unknown id → 404 |
@@ -608,7 +699,7 @@ Rules:
 - Secure path matches as exact case-sensitive segment. Tunnel `<suffix>` must be `[A-Za-z0-9]{8,32}` — enforced (fixes R1 G.5 where suffix was cosmetic).
 - Non-upgrade requests hitting tunnel paths fall through to camouflage (#21).
 - No CORS headers anywhere (same-origin panel). OPTIONS on `/api/*` → 405.
-- Kill switch checked once in `worker.ts`, applies to routes 2–5 only.
+- Kill switch checked once in `core/router.ts` (`routeRequest`, before any WebSocket upgrade), applies to routes 2–5 only.
 - Route matching helpers live in `core/routes.ts`: `identifyTunnel(pathname, s): 'vless'|'vmess'|'trojan'|'ss'|null` and `resolveSecureRoute(url, s): SecureRoute|null`. Handlers re-call these to learn which route they serve (compensates for the fixed `RouteHandler` signature).
 
 ### Frozen API JSON contract (consumed by F, implemented by E)
@@ -627,7 +718,7 @@ Envelope: success `{"ok":true,"data":…}`; failure `{"ok":false,"error":{"code"
 | `GET api/suburls` | `{urls:[{format:SubFormat, label:string, url:string}]}` |
 | `GET my-ip` (JSON mode) | `{ip, colo, country, city, asn, cfEgressIp}` |
 
-Session cookie: `q_session=<b64url(payload)>.<hex-hmac-sha256(payload, sessionSecret)>`, payload `{"exp":epochSeconds}`, 7-day expiry, attrs `HttpOnly; Secure; SameSite=Lax`. Mutating APIs additionally require header `X-Q-Panel: 1` (CSRF). Login rate limit best-effort per-isolate: >5 failures/min → 429.
+Session cookie: `q_session=<b64url(payload)>.<hex-hmac-sha256(payload, sessionSecret)>`, payload `{"exp":epochSeconds,"iat":epochSeconds}` (`iat` present on all newly issued cookies; missing ⇒ treated as 0), 7-day expiry, attrs `HttpOnly; Secure; SameSite=Lax`. Revocation floor KV `qproxy:min-iat` — sessions with `iat < floor` are rejected at the router layer (`withSessionFloor`). Mutating APIs additionally require header `X-Q-Panel: 1` (CSRF). Login rate limit best-effort per-isolate: >5 failures/min → 429.
 
 ## 4. Data flow diagrams
 
@@ -639,8 +730,8 @@ Session cookie: `q_session=<b64url(payload)>.<hex-hmac-sha256(payload, sessionSe
     │ GET /{vl|vm|tr|ss}/<suffix>      │                              │
     │ Upgrade: websocket               │                              │
     │ Sec-WebSocket-Protocol:<b64url(frame)> ← early data (≤ ed=N)   │
-    ├──────────────────────────────────►│─────────────────────────────►│ worker.ts
-    │                                   │                              │  killSwitch? → 503
+    ├──────────────────────────────────►│─────────────────────────────►│ worker.ts → core/router.ts routeRequest
+    │                                   │                              │  tunnel+WS upgrade? killSwitch → 503 (pre-upgrade)
     │                                   │        WebSocketPair         │  handlers/tunnel.ts (C)
     │                                   │◄────── server side ──────────┤  tunnel/websocket.ts:
     │                                   │                              │   binaryType="arraybuffer"; accept()
@@ -748,22 +839,66 @@ export class AppError extends Error {
     readonly status: number,
     readonly code: string,
     readonly expose: boolean = true,
+    readonly headers: Record<string, string> = {},
   ) {
     super(message);
+    this.name = new.target.name;
   }
 }
 
-export class BadRequestError extends AppError {}
-export class UnauthorizedError extends AppError {}
-export class ForbiddenError extends AppError {}
-export class NotFoundError extends AppError {}
-export class RateLimitedError extends AppError {}
+export class BadRequestError extends AppError {
+  constructor(message = "bad request") {
+    super(message, 400, "BAD_REQUEST");
+  }
+}
+
+export class UnauthorizedError extends AppError {
+  constructor(message = "unauthorized") {
+    super(message, 401, "UNAUTHORIZED");
+  }
+}
+
+export class ForbiddenError extends AppError {
+  constructor(message = "forbidden") {
+    super(message, 403, "FORBIDDEN");
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(message = "not found") {
+    super(message, 404, "NOT_FOUND");
+  }
+}
+
+export class ValidationError extends AppError {
+  readonly fields: Record<string, string>;
+  constructor(fields: Record<string, string>, message = "validation failed") {
+    super(message, 422, "VALIDATION");
+    this.fields = fields;
+  }
+}
+
+export class RateLimitedError extends AppError {
+  constructor(retryAfterSeconds?: number, message = "too many attempts") {
+    const headers: Record<string, string> = {};
+    if (retryAfterSeconds !== undefined) headers["Retry-After"] = String(Math.max(1, retryAfterSeconds));
+    super(message, 429, "RATE_LIMITED", true, headers);
+  }
+}
+
 export class UpstreamError extends AppError {
   constructor(message: string) {
-    super(message, 502, 'UPSTREAM', false);
+    super(message, 502, "UPSTREAM", false);
   }
 }
 ```
+
+Usage notes:
+
+- `AppError` takes an optional 5th ctor param `headers` — merged into the response by `respond.ts:errorToResponse` (drives e.g. `Retry-After`).
+- `ValidationError` carries `.fields`, which `errorToResponse` copies into the JSON envelope (`fields` key).
+- `RateLimitedError(retryAfterSeconds?)` sets `Retry-After` through those headers.
+- `UpstreamError` (502, never exposes message) is the convention for upstream fetch failures — used by `handlers/doh.ts` and `handlers/api/warp.ts`.
 
 Conventions (frozen):
 
@@ -808,7 +943,7 @@ export default defineConfig({
 Layout rule (frozen): specs mirror `src/`, one spec file per module.
 
 - `test/<mirror-path>/<name>.spec.ts` → **unit** project (pure functions, no worker runtime). Example: `src/protocols/vless.ts` ⇔ `test/protocols/vless.spec.ts`.
-- `test/workers/<mirror-path>/<name>.spec.ts` → **workers** project (`@cloudflare/vitest-pool-workers`). Examples: `test/workers/handlers/api/settings.spec.ts` (KV roundtrip + validation), `test/workers/core/router.spec.ts` (route dispatch, kill switch), `test/workers/auth/session.spec.ts` (cookie flow via real fetch).
+- `test/workers/<mirror-path>/<name>.spec.ts` → **workers** project (`@cloudflare/vitest-pool-workers`). Examples: `test/workers/router.spec.ts` (route dispatch, kill-switch gate, auth guards), `test/workers/auth-flow.spec.ts` (login/logout/setup/change-password flow via real fetch), `test/workers/tunnel/smoke.spec.ts` (WS-pair handshake to the point of egress attempt with injected `dialImpl`).
 
 Group assignments:
 
@@ -909,7 +1044,7 @@ Six packages, strict file ownership (owner is the ONLY package allowed to create
 
 **Needs from A:** `DialTarget/FailoverStrategy/EgressOpener/DnsPacketRelay` (implements them), `RouteHandler`, `Env`, `Settings`, `identifyTunnel`, `log`, `respond` (503/405 paths), `utils/net`.
 **Needs from B:** the four inbound factories (§2.7 seam).
-**Delivers:** working datapath end-to-end: early-data extraction, handshake driving loop (16 KiB / 10 s caps), speedtest interception, failover opener with injectable dial, zero-byte mid-session retry, UDP53 relay, socks5/http chain clients, `/doh` reverse proxy (10 MiB cap, content-type passthrough). Kill-switch 503 handled by A's router gate, not here.
+**Delivers:** working datapath end-to-end: early-data extraction, handshake driving loop (16 KiB / 10 s caps), speedtest interception, failover opener with injectable dial, zero-byte mid-session retry, UDP53 relay, socks5/http chain clients, `/doh` reverse proxy (64 KiB cap, content-type passthrough). Kill-switch 503 handled by A's router gate, not here.
 
 ### Package D — Subscription generation & emitters (wave 2)
 

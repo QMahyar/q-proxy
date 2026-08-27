@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WarpApiError, registerWarpDevice } from "../../src/warp/api";
+import { handleWarpApi } from "../../src/handlers/api/warp";
+import { UpstreamError } from "../../src/core/errors";
 
 function registrationBody(): unknown {
   return {
@@ -51,7 +53,6 @@ describe("registerWarpDevice", () => {
   });
 
   it("retries on 5xx then succeeds", async () => {
-    const fetchMock = vi.fn(async () => new Response("boom", { status: 502 })).mockImplementationOnce(async () => new Response("boom", { status: 502 }));
     let calls = 0;
     vi.stubGlobal(
       "fetch",
@@ -73,5 +74,59 @@ describe("registerWarpDevice", () => {
   it("throws when the response is unreadable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => okResponse({ hello: 1 })));
     await expect(registerWarpDevice()).rejects.toBeInstanceOf(WarpApiError);
+  });
+});
+
+describe("handleWarpApi generate", () => {
+  const settings = {} as Parameters<typeof handleWarpApi>[2];
+
+  function fakeEnv() {
+    const store = new Map<string, string>();
+    return {
+      store,
+      QPROXY_KV: {
+        get: async (key: string) => (store.has(key) ? JSON.parse(store.get(key)!) : null),
+        put: async (key: string, value: string) => void store.set(key, value),
+        delete: async (key: string) => void store.delete(key),
+        list: async () => ({ keys: [] as Array<{ name: string }> }),
+      },
+    };
+  }
+
+  function generateRequest(body: unknown): Request {
+    return new Request("http://panel.test/api/warp/account/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Q-Panel": "1" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("maps WarpApiError to UpstreamError", async () => {
+    const fetchMock = vi.fn(async () => new Response("nope", { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(handleWarpApi(generateRequest({}), fakeEnv() as never, settings)).rejects.toBeInstanceOf(
+      UpstreamError,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("validates the body before contacting the warp api", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      handleWarpApi(generateRequest({ endpoint_list: { type: "custom" } }), fakeEnv() as never, settings),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("registers, then stores the account with the real config", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => okResponse(registrationBody())));
+    const env = fakeEnv();
+    const res = await handleWarpApi(generateRequest({ name: "Gen" }), env as never, settings);
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { data: { account: { config: { reserved: number[]; public_key: string } } } };
+    expect(data.data.account.config.reserved).toEqual([5, 6, 7]);
+    expect(data.data.account.config.public_key.length).toBeGreaterThan(40);
+    expect(JSON.stringify(data.data)).not.toContain("private_key");
   });
 });

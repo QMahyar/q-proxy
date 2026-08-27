@@ -96,6 +96,20 @@ export function isValidAddressValue(value: string): boolean {
   return true;
 }
 
+export function decodeReservedTriplet(b64: string): [number, number, number] | null {
+  if (b64.length === 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) return null;
+  let padded = b64;
+  while (padded.length % 4 !== 0) padded += "=";
+  try {
+    const bin = atob(padded);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    if (bytes.length !== 3) return null;
+    return [bytes[0]!, bytes[1]!, bytes[2]!];
+  } catch {
+    return null;
+  }
+}
+
 function decodeReservedBytes(value: string): [number, number, number] | null {
   const parts = value.split(/[,\s]+/).filter((p) => p.length > 0);
   if (parts.length === 3) {
@@ -105,18 +119,7 @@ function decodeReservedBytes(value: string): [number, number, number] | null {
     }
     return null;
   }
-  if (parts.length === 1) {
-    let b64 = parts[0]!;
-    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) return null;
-    while (b64.length % 4 !== 0) b64 += "=";
-    try {
-      const bin = atob(b64);
-      const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-      if (bytes.length === 3) return [bytes[0]!, bytes[1]!, bytes[2]!];
-    } catch {
-      return null;
-    }
-  }
+  if (parts.length === 1) return decodeReservedTriplet(parts[0]!);
   return null;
 }
 
@@ -149,6 +152,7 @@ export function parseWireGuardConf(text: string): ParseResult {
   const lines = raw.split(/\r?\n/);
   let section = "";
   let interfaceCount = 0;
+  let peerCount = 0;
   let privateKey: string | null = null;
   let address: string | null = null;
   let mtu = 1280;
@@ -164,6 +168,9 @@ export function parseWireGuardConf(text: string): ParseResult {
       if (name === "interface") {
         interfaceCount += 1;
         if (interfaceCount > 1) return fail("multiple [Interface] sections");
+      } else if (name === "peer") {
+        peerCount += 1;
+        if (peerCount > 1) return fail("multiple [Peer] sections");
       }
       section = name;
       continue;
@@ -192,6 +199,8 @@ export function parseWireGuardConf(text: string): ParseResult {
         hasAmnezia = true;
       }
     } else if (section === "peer") {
+      if (key === "presharedkey") return fail("PresharedKey not supported");
+      if (key === "persistentkeepalive") return fail("PersistentKeepalive is not supported");
       if (!PEER_KEYS.has(key)) return fail(`unknown peer key: ${key}`);
       if (key === "publickey") peerPublicKey = value;
       else if ((key === "reserved" || key === "clientid") && reserved === null) {
@@ -225,11 +234,10 @@ function splitAddresses(value: string): WarpAddresses | null {
   let ipv4: string | null = null;
   let ipv6: string | null = null;
   for (const part of parts) {
-    const bare = part.includes("/") ? part : part;
     if (part.includes(":")) {
-      if (ipv6 === null) ipv6 = bare;
+      if (ipv6 === null) ipv6 = part;
     } else if (ipv4 === null) {
-      ipv4 = bare;
+      ipv4 = part;
     }
   }
   if (ipv4 === null && ipv6 === null) return null;

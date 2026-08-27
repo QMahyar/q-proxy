@@ -68,7 +68,7 @@ export function synthesizeNat64Address(prefix: string, ipv4: string): string | n
   const slash = bare.indexOf("/");
   if (slash !== -1) {
     const bits = Number(bare.slice(slash + 1));
-    if (!Number.isInteger(bits) || bits < 96 || bits > 128) return null;
+    if (!Number.isInteger(bits) || bits !== 96) return null;
     bare = bare.slice(0, slash);
   }
   const groups = expandGroups(bare);

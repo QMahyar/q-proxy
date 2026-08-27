@@ -83,7 +83,7 @@ export function emitXray(ctx: WarpEmitContext): string {
           publicKey: account.config.peer_public_key,
           preSharedKey: "",
           keepAlive: 25,
-          allowedIPs: ["0.0.0.0/0"],
+          allowedIPs: row.allowedIps,
         },
       ],
       mtu: account.config.mtu,

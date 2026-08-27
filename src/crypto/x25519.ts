@@ -120,6 +120,14 @@ export function isBase64Key32(value: string): boolean {
   }
 }
 
+export function isAllZeroOutput(bytes: Uint8Array): boolean {
+  let acc = 0;
+  for (let i = 0; i < bytes.length; i++) acc |= bytes[i]!;
+  return acc === 0;
+}
+
 export function sharedSecret(myPrivateB64: string, theirPublicB64: string): string {
-  return bytesToB64(x25519(b64ToBytes(myPrivateB64), b64ToBytes(theirPublicB64)));
+  const out = x25519(b64ToBytes(myPrivateB64), b64ToBytes(theirPublicB64));
+  if (isAllZeroOutput(out)) throw new Error("weak public key");
+  return bytesToB64(out);
 }

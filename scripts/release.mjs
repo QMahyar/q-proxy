@@ -24,8 +24,15 @@ if (git("rev-parse --git-dir").length === 0) {
   process.exit(1);
 }
 
+const dirty = git("status --porcelain");
+if (dirty.length > 0) {
+  console.error(`worktree is dirty — commit or stash before releasing ${tag}:`);
+  console.error(dirty);
+  process.exit(1);
+}
+
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-if (!dry && pkg.version !== tag.slice(1)) {
+if (pkg.version !== tag.slice(1)) {
   console.error(`package.json version ${pkg.version} != tag ${tag} — bump package.json first`);
   process.exit(1);
 }
@@ -47,14 +54,9 @@ for (const cmd of ["npm run typecheck", "npm test", "npm run build"]) {
 }
 
 if (dry) {
-  console.log("[dry] would commit + tag " + tag);
+  console.log("[dry] would tag " + tag);
   process.exit(0);
 }
 
-const dirty = git("status --porcelain");
-if (dirty.length > 0) {
-  execSync("git add -A", { stdio: "inherit" });
-  execSync(`git commit -m "release: ${tag}"`, { stdio: "inherit" });
-}
 execSync(`git tag -a ${tag} -m "Release ${tag}"`, { stdio: "inherit" });
 console.log(`tagged ${tag} — push with: git push origin master --tags`);

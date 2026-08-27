@@ -1,12 +1,11 @@
 import type { RouteHandler } from "../../types/context";
 import type { SubFormat } from "../../core/ua";
 import { ValidationError } from "../../core/errors";
-import { jsonOk } from "../../core/respond";
+import { jsonOk, readJsonObject } from "../../core/respond";
 import { resolveHostname } from "../../core/routes";
 import { readUsage } from "../../core/counters";
 import { assertCsrf } from "../../auth/guard";
 import { appVersion, saveSettings } from "../../settings/store";
-import { readJsonObject } from "./auth";
 
 export const handleStatus: RouteHandler = async (req, env, s) => {
   const usage = await readUsage(env);

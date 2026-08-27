@@ -1,3 +1,4 @@
+import { constantTimeEqual } from "../utils/random";
 import { dayKeyUtc } from "../utils/time";
 
 export interface UserAccount {
@@ -56,7 +57,7 @@ export function newUserId(): string {
 export async function findUserByToken(env: { QPROXY_KV: KvLike }, token: string): Promise<UserAccount | null> {
   if (!isUuid(token)) return null;
   const users = await listUsers(env);
-  return users.find((u) => u.token === token) ?? null;
+  return users.find((u) => constantTimeEqual(u.token, token)) ?? null;
 }
 
 export function sanitizeUser(user: UserAccount): PublicUser {

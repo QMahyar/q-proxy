@@ -1,5 +1,6 @@
 import type { RouteHandler } from "../types/context";
 import { jsonOk, htmlResponse } from "../core/respond";
+import { escapeHtml } from "../utils/html";
 
 const TRACE_URL = "https://www.cloudflare.com/cdn-cgi/trace";
 const TRACE_TIMEOUT_MS = 3000;
@@ -37,14 +38,6 @@ interface CfGeo {
   asn?: number;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 function renderIpHtml(info: IpInfo): string {
   const rows: Array<[string, string]> = [
     ["Your IP / IP شما", info.ip],
@@ -68,13 +61,12 @@ function renderIpHtml(info: IpInfo): string {
 <meta name="robots" content="noindex">
 <title>My IP</title>
 <style>
-body{font-family:system-ui,sans-serif;margin:0;padding:2rem;background:#0f172a;color:#e2e8f0;line-height:1.6}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Vazirmatn","Vazir","IRANSansX","Noto Sans Arabic","Noto Sans",Tahoma,sans-serif;margin:0;padding:2rem;background:#05080f;color:#e5e7eb;line-height:1.6}
 main{max-width:40rem;margin:0 auto}
 h1{font-size:1.3rem}
 table{border-collapse:collapse;width:100%;margin-top:.5rem}
-th,td{text-align:left;padding:.5rem;border-bottom:1px solid #1e293b;vertical-align:top}
+th,td{text-align:left;padding:.5rem;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top}
 code{word-break:break-all;font-size:.9rem;color:#7dd3fc}
-[dir="rtl"]{direction:rtl;text-align:right}
 </style>
 </head>
 <body>
@@ -99,14 +91,17 @@ export const handleMyIp: RouteHandler = async (req, _env, _s) => {
   };
   const accept = req.headers.get("Accept") ?? "";
   if (accept.includes("application/json")) {
-    return jsonOk({
-      ip: info.ip,
-      colo: info.colo,
-      country: info.country,
-      city: info.city,
-      asn: info.asn,
-      cfEgressIp: info.cfEgressIp,
-    });
+    return jsonOk(
+      {
+        ip: info.ip,
+        colo: info.colo,
+        country: info.country,
+        city: info.city,
+        asn: info.asn,
+        cfEgressIp: info.cfEgressIp,
+      },
+      { "Cache-Control": "no-store" },
+    );
   }
-  return htmlResponse(renderIpHtml(info));
+  return htmlResponse(renderIpHtml(info), 200, { "Cache-Control": "no-store" });
 };

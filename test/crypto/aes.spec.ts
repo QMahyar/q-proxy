@@ -17,12 +17,6 @@ const NIST_CFB_CT = hexToBytes(
     "c04b05357c5d1c0eeac4c66f9ff7f2e6",
 )!;
 
-function patternBytes(len: number): Uint8Array {
-  const out = new Uint8Array(len);
-  for (let i = 0; i < len; i++) out[i] = (i * 37 + 11) & 0xff;
-  return out;
-}
-
 describe("Aes128 block cipher (ECB single block)", () => {
   it("NIST SP 800-38A F.1.1 first block encrypts to known value", () => {
     const aes = new Aes128(NIST_KEY);

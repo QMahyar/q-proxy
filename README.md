@@ -5,7 +5,7 @@ Self-hosted proxy panel on a single Cloudflare Worker. Terminates VLESS, VMess, 
 > **فارسی:** پنل کاملاً دوزبانه است (EN/FA با RTL). سوییچ زبان در نوار بالای پنل است و انتخاب در کوکی `qp_lang` ذخیره می‌شود.
 
 [![compat](https://img.shields.io/badge/compatibility_date-2026--08--01-orange)](./wrangler.toml)
-[![tests](https://img.shields.io/badge/tests-561%20passing-green)](./vitest.config.ts)
+[![tests](https://img.shields.io/badge/tests-763%20passing-green)](./vitest.config.ts)
 [![bundle](https://img.shields.io/badge/bundle-single_file_~380KB-black)](./scripts/build-single-file.mjs)
 [![deps](https://img.shields.io/badge/runtime_deps-zero-lightgrey)](./package.json)
 
@@ -91,8 +91,8 @@ All 17 WARP format slugs are listed in `src/warp/formats/registry.ts`.
 |---------|--------------|
 | `npm install` | Installs dev dependencies only (no runtime deps) |
 | `npm run typecheck` | `tsc --noEmit` — must pass before commit |
-| `npm test` | Runs all 561 tests (unit + workers projects) |
-| `npm run build` | Bundles to `dist/q-proxy.js` (~380 KB) |
+| `npm test` | Runs all 763 tests (unit + workers projects) |
+| `npm run build` | Bundles to `dist/q-proxy.js` (~400 KB) |
 | `npm run dev` | Local dev server at `http://127.0.0.1:8787` (miniflare KV) |
 | `npm run deploy` | Build + deploy (prefers `wrangler.local.toml` when present) |
 | `npm run version` | Print version derived from git tags |

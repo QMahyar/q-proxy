@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTrojanInbound } from "../../src/protocols/trojan";
 import { sha224Hex } from "../../src/crypto/sha224";
+import type { BodyCodec } from "../../src/protocols/common";
 import { concatBytes, hexToBytes, u16be, utf8Encode } from "../../src/utils/bytes";
 
 const PASSWORD = "secretpassword123";
@@ -22,8 +23,40 @@ function trojanFrame(opts: {
       ? concatBytes(new Uint8Array([3, opts.addrBytes.length]), opts.addrBytes)
       : concatBytes(new Uint8Array([opts.atype]), opts.addrBytes),
     u16be(opts.port ?? 443),
+    new Uint8Array([0x0d, 0x0a]),
     opts.payload ?? new Uint8Array(0),
   );
+}
+
+function udpDatagram(opts: {
+  atype: number;
+  addrBytes: Uint8Array;
+  port?: number;
+  payload: Uint8Array;
+}): Uint8Array {
+  const addr =
+    opts.atype === 3
+      ? concatBytes(new Uint8Array([3, opts.addrBytes.length]), opts.addrBytes)
+      : concatBytes(new Uint8Array([opts.atype]), opts.addrBytes);
+  return concatBytes(
+    addr,
+    u16be(opts.port ?? 53),
+    u16be(opts.payload.length),
+    new Uint8Array([0x0d, 0x0a]),
+    opts.payload,
+  );
+}
+
+async function udpCodec(): Promise<BodyCodec> {
+  const inbound = createTrojanInbound(PASSWORD);
+  const outcome = await inbound.push(
+    trojanFrame({ cmd: 3, port: 53, atype: 1, addrBytes: hexToBytes("01010101")! }),
+  );
+  expect(outcome.state).toBe("ready");
+  const codec = inbound.bodyCodec();
+  expect(codec).not.toBeNull();
+  if (!codec) throw new Error("udp body codec missing");
+  return codec;
 }
 
 function domain(host = "example.com"): Uint8Array {
@@ -68,6 +101,32 @@ describe("createTrojanInbound", () => {
     const bad = concatBytes(utf8Encode(sha224Hex(PASSWORD)), new Uint8Array([0x0a, 0x0d]));
     const outcome = await createTrojanInbound(PASSWORD).push(bad);
     expect(outcome).toMatchObject({ state: "reject", reason: expect.stringContaining("CR LF") });
+  });
+
+  it("rejects a tcp request missing the mandatory trailing CR LF", async () => {
+    const bad = concatBytes(
+      utf8Encode(sha224Hex(PASSWORD)),
+      new Uint8Array([0x0d, 0x0a, 1]),
+      new Uint8Array([3, domain().length]),
+      domain(),
+      u16be(443),
+      utf8Encode("PING"),
+    );
+    const outcome = await createTrojanInbound(PASSWORD).push(bad);
+    expect(outcome).toMatchObject({ state: "reject", reason: "invalid header format (missing CR LF)" });
+  });
+
+  it("waits for a truncated trailing CR LF before rejecting", async () => {
+    const partial = concatBytes(
+      utf8Encode(sha224Hex(PASSWORD)),
+      new Uint8Array([0x0d, 0x0a, 1, 1]),
+      hexToBytes("01020304")!,
+      u16be(443),
+    );
+    const inbound = createTrojanInbound(PASSWORD);
+    expect((await inbound.push(partial)).state).toBe("need-more");
+    const outcome = await inbound.push(new Uint8Array([0x00, 0x00]));
+    expect(outcome).toMatchObject({ state: "reject", reason: "invalid header format (missing CR LF)" });
   });
 
   it("allows udp associate only for port 53", async () => {
@@ -130,5 +189,115 @@ describe("createTrojanInbound", () => {
   });
 });
 
+describe("trojan udp body codec", () => {
+  it("decodes an uplink datagram framed with CR LF and round-trips it back down", async () => {
+    const codec = await udpCodec();
+    const payload = utf8Encode("query");
+    expect(await codec.decodeUp(udpDatagram({ atype: 1, addrBytes: hexToBytes("08080808")!, payload }))).toEqual(
+      payload,
+    );
+    const down = await codec.beginDownlink().encode(utf8Encode("answer"));
+    expect(down).toEqual(
+      concatBytes(
+        new Uint8Array([1, 8, 8, 8, 8]),
+        u16be(53),
+        u16be(6),
+        new Uint8Array([0x0d, 0x0a]),
+        utf8Encode("answer"),
+      ),
+    );
+  });
 
+  it("defaults downlink source to ipv4 0.0.0.0:53 before any datagram is seen", async () => {
+    const codec = await udpCodec();
+    const down = await codec.beginDownlink().encode(utf8Encode("hi"));
+    expect(down).toEqual(
+      concatBytes(
+        new Uint8Array([1, 0, 0, 0, 0]),
+        u16be(53),
+        u16be(2),
+        new Uint8Array([0x0d, 0x0a]),
+        utf8Encode("hi"),
+      ),
+    );
+  });
 
+  it("echoes the most recent request address in domain form", async () => {
+    const codec = await udpCodec();
+    const host = domain("dns.example.org");
+    await codec.decodeUp(udpDatagram({ atype: 3, addrBytes: host, payload: utf8Encode("q") }));
+    const down = await codec.beginDownlink().encode(utf8Encode("r"));
+    expect(down).toEqual(
+      concatBytes(
+        new Uint8Array([3, host.length]),
+        host,
+        u16be(53),
+        u16be(1),
+        new Uint8Array([0x0d, 0x0a]),
+        utf8Encode("r"),
+      ),
+    );
+  });
+
+  it("echoes the most recent request address in ipv6 form", async () => {
+    const codec = await udpCodec();
+    const v6 = hexToBytes("26064700470000000000000000000068")!;
+    await codec.decodeUp(udpDatagram({ atype: 4, addrBytes: v6, payload: utf8Encode("q") }));
+    const down = await codec.beginDownlink().encode(utf8Encode("r"));
+    expect(down).toEqual(
+      concatBytes(
+        new Uint8Array([4]),
+        v6,
+        u16be(53),
+        u16be(1),
+        new Uint8Array([0x0d, 0x0a]),
+        utf8Encode("r"),
+      ),
+    );
+  });
+
+  it("parses two pipelined datagrams independently in one chunk", async () => {
+    const codec = await udpCodec();
+    const first = udpDatagram({ atype: 1, addrBytes: hexToBytes("01020304")!, payload: utf8Encode("one") });
+    const secondHost = domain("two.example");
+    const second = udpDatagram({ atype: 3, addrBytes: secondHost, payload: utf8Encode("twotwo") });
+    expect(await codec.decodeUp(concatBytes(first, second))).toEqual(utf8Encode("onetwotwo"));
+    expect(await codec.decodeUp(new Uint8Array(0))).toEqual(new Uint8Array(0));
+    const down = await codec.beginDownlink().encode(utf8Encode("z"));
+    expect(down).toEqual(
+      concatBytes(
+        new Uint8Array([3, secondHost.length]),
+        secondHost,
+        u16be(53),
+        u16be(1),
+        new Uint8Array([0x0d, 0x0a]),
+        utf8Encode("z"),
+      ),
+    );
+  });
+
+  it("kills the codec on a datagram with a wrong CR LF", async () => {
+    const codec = await udpCodec();
+    const bad = concatBytes(
+      new Uint8Array([1]),
+      hexToBytes("01020304")!,
+      u16be(53),
+      u16be(4),
+      new Uint8Array([0x0a, 0x0d]),
+      utf8Encode("junk"),
+    );
+    expect(await codec.decodeUp(bad)).toBeNull();
+    expect(
+      await codec.decodeUp(udpDatagram({ atype: 1, addrBytes: hexToBytes("01010101")!, payload: utf8Encode("ok") })),
+    ).toBeNull();
+  });
+
+  it("buffers a truncated datagram until its CR LF arrives", async () => {
+    const codec = await udpCodec();
+    const head = concatBytes(new Uint8Array([1]), hexToBytes("01010101")!, u16be(53), u16be(2));
+    expect(await codec.decodeUp(head)).toEqual(new Uint8Array(0));
+    expect(await codec.decodeUp(concatBytes(new Uint8Array([0x0d, 0x0a]), utf8Encode("hi")))).toEqual(
+      utf8Encode("hi"),
+    );
+  });
+});

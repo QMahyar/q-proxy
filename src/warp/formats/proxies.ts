@@ -79,10 +79,12 @@ export function emitSurge(ctx: WarpEmitContext, surfboard: boolean): string {
 export function emitLoon(ctx: WarpEmitContext): string {
   const { account } = ctx;
   const [r0, r1, r2] = account.config.reserved;
+  const hasReserved = r0 !== 0 || r1 !== 0 || r2 !== 0;
   return (
     ctx.rows
       .map((row) => {
-        const peers = `{public-key=${JSON.stringify(account.config.peer_public_key)},allowed-ips=${JSON.stringify(row.allowedIps.join(", "))},endpoint=${row.endpoint},reserved=[${r0},${r1},${r2}]}`;
+        const reserved = hasReserved ? `,reserved=[${r0},${r1},${r2}]` : "";
+        const peers = `{public-key=${JSON.stringify(account.config.peer_public_key)},allowed-ips=${JSON.stringify(row.allowedIps.join(", "))},endpoint=${row.endpoint}${reserved}}`;
         return [
           `${row.tag} = wireguard`,
           `interface-ip=${row.v4Host}`,

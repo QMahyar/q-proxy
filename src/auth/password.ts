@@ -26,11 +26,22 @@ export async function hashPassword(password: string): Promise<{ hash: string; sa
   return { hash, salt };
 }
 
-export async function verifyPassword(password: string, hash: string, salt: string): Promise<boolean> {
-  if (hash.length !== KEY_BITS / 4) return false;
-  if (hexToBytes(salt) === null || hexToBytes(hash) === null) return false;
+export interface PasswordVerifyResult {
+  ok: boolean;
+  tier: "current" | "legacy";
+}
+
+export async function verifyPassword(
+  password: string,
+  hash: string,
+  salt: string,
+): Promise<PasswordVerifyResult> {
+  const reject: PasswordVerifyResult = { ok: false, tier: "current" };
+  if (hash.length !== KEY_BITS / 4) return reject;
+  if (hexToBytes(salt) === null || hexToBytes(hash) === null) return reject;
   const candidate = await deriveBits(password, salt, PBKDF2_ITERATIONS);
-  if (constantTimeEqual(candidate, hash)) return true;
+  if (constantTimeEqual(candidate, hash)) return { ok: true, tier: "current" };
   const legacy = await deriveBits(password, salt, LEGACY_PBKDF2_ITERATIONS);
-  return constantTimeEqual(legacy, hash);
+  if (constantTimeEqual(legacy, hash)) return { ok: true, tier: "legacy" };
+  return reject;
 }

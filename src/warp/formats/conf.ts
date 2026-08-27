@@ -81,9 +81,17 @@ export function emitThrone(ctx: WarpEmitContext, withAmnezia: boolean): string {
         if (r0 !== 0 || r1 !== 0 || r2 !== 0) parts.push(`reserved=${r0}-${r1}-${r2}`);
         if (withAmnezia && ctx.amnezia !== null) {
           parts.push("enable_amnezia=true");
-          for (const key of ["Jc", "Jmin", "Jmax"] as const) {
+          for (const key of ["Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4"] as const) {
             const v = ctx.amnezia[key];
             if (typeof v === "number" && v > 0) parts.push(`${key.toLowerCase()}=${v}`);
+          }
+          for (const key of ["H1", "H2", "H3", "H4"] as const) {
+            const v = ctx.amnezia[key];
+            if (v === undefined || v === null || v === "" || v === 0) continue;
+            parts.push(`${key.toLowerCase()}=${v}`);
+          }
+          if (typeof ctx.amnezia.I1 === "string" && ctx.amnezia.I1.length > 0) {
+            parts.push(`i1=${encodeURIComponent(ctx.amnezia.I1)}`);
           }
         }
         parts.push(encodeURIComponent(row.tag));

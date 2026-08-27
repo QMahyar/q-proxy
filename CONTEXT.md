@@ -6,7 +6,7 @@ Read order: [AGENTS.md](AGENTS.md) (rules) → [docs/ARCHITECTURE.md](docs/ARCHI
 
 | Subsystem | Owns | Key files | Pattern to follow |
 |-----------|------|-----------|-------------------|
-| `src/core/` | Routing, errors, UA classification, counters, logging | `routes.ts` (pure matchers), `router.ts` (`routeRequest` ordered dispatch), `errors.ts` | Pure functions in `routes.ts`; dispatch table in `router.ts` |
+| `src/core/` | Routing, errors, UA classification, counters, logging | `routes.ts` (pure matchers), `router.ts` (`routeRequest` ordered dispatch), `errors.ts`, `respond.ts` (`jsonOk`/`jsonError`/`readJsonObject` body guard) | Pure functions in `routes.ts`; dispatch table in `router.ts` |
 | `src/protocols/` | VLESS/VMess/Trojan/SS inbound parsers over WS | `common.ts` (`ProtocolInbound` seam), `shadowsocks.ts`, `vmess-crypto.ts` | `common.ts` contract: `push()` returns need-more/ready/reject — parsers never throw |
 | `src/nodes/` | ProxyNode generation + subscription emitters | `generate.ts` (invariants), `share-uri.ts`, `emitters/base64-list.ts` (smallest emitter), `yaml-writer.ts` | Emitters are pure `(nodes, opts) => string`; copy `base64-list.ts` shape |
 | `src/subscription/` | Format negotiation, headers, remote-sub merging | `negotiate.ts` (`?target=` > UA > base64), `headers.ts`, `merge.ts` | `negotiate.ts` priority chain |
@@ -49,6 +49,7 @@ npm run typecheck && npm test
 - `src/ui/panel.html` is a large single-file SPA. Edit surgically. Syntax-check your `<script>` block: extract it and run `node -e "new Function(require('fs').readFileSync(0,'utf8'))"` < script.js.
 - KV is eventually consistent; the isolate settings cache adds a 60 s window. Setup and kill-switch writes re-read via `loadSettingsFresh` to avoid TOCTOU.
 - First packet is consumed exactly once: `initialPayload ?? rest` in `src/handlers/tunnel.ts` — never concatenate both.
+- Trojan UDP datagrams are framed ATYP+addr+port+len+CRLF+payload; the downlink re-wraps each chunk with the request's source address (last seen uplink source).
 - SS AEAD nonce increments little-endian (SIP004); the test helper at `test/protocols/shadowsocks.spec.ts` must stay LE too.
 - Port family must match security: TLS ports {443,2053,2083,2087,2096,8443}, plain {80,8080,8880,2052,2082,2086,2095}. Fragment ⇒ TLS ∧ ¬CDN; SS earlyData = 0.
 - Subscription addresses come only from the worker hostname + user-owned lists — never hard-code an IP or domain.
@@ -60,6 +61,6 @@ npm run typecheck && npm test
 |------|----------------------|
 | Setting field | `src/types/settings.ts` → `src/settings/validate.ts` → field registry + en/fa dicts in `src/ui/panel.html` → `test/settings/validate.spec.ts` |
 | API route | `SecureRoute`/`ApiRouteName` in `src/core/routes.ts` → `dispatchApi` in `src/core/router.ts` → handler in `src/handlers/api/` → ARCHITECTURE §3 row → `test/workers/router.spec.ts` |
-| Sub emitter | `SubFormat` in `src/core/ua.ts` → `src/nodes/emitters/<name>.ts` → `registry.ts` → `FORMATS` in `src/handlers/subscribe.ts` (see DEVELOPER_GUIDE §6) |
+| Sub emitter | `SubFormat` in `src/core/ua.ts` → `src/nodes/emitters/<name>.ts` → `registry.ts` → `SUB_FORMATS` in `src/subscription/negotiate.ts` (single source — subscribe + users-sub both consume it; see DEVELOPER_GUIDE §6) |
 | WARP format | `WARP_FORMATS` + `WARP_EMITTERS` + type/extension maps in `src/warp/formats/registry.ts` |
 | User-facing string | en/fa dictionaries in `src/ui/panel.html` |

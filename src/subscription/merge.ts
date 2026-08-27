@@ -23,9 +23,11 @@ async function readCapped(res: Response, budget: { left: number }): Promise<stri
   const reader = res.body?.getReader();
   if (!reader) {
     const raw = await res.text();
-    const allowed = raw.slice(0, Math.max(0, budget.left));
-    budget.left -= allowed.length;
-    return allowed;
+    const encoded = new TextEncoder().encode(raw);
+    let cut = Math.min(encoded.byteLength, Math.max(0, budget.left));
+    while (cut > 0 && cut < encoded.byteLength && (encoded[cut]! & 0xc0) === 0x80) cut--;
+    budget.left -= cut;
+    return new TextDecoder().decode(encoded.subarray(0, cut));
   }
   const decoder = new TextDecoder();
   let text = "";

@@ -44,7 +44,7 @@ projects: [
 
 | Command | What runs |
 |---------|-----------|
-| `npm test` | Both projects (561 tests at time of writing) |
+| `npm test` | Both projects (763 tests at time of writing) |
 | `npx vitest run --project=unit` | Pure logic — no workerd needed (`src/core/**` may not import `cloudflare:*`) |
 | `npx vitest run --project=workers` | Real `fetch` through `src/worker.ts` with `fetchMock` for DoH/remote-subs |
 
@@ -150,6 +150,10 @@ flowchart TD
 
 Routing-rule settings inject Clash/sing-box rule sections at emit time (bypass-LAN, block QUIC/ads/malware, custom suffix lists). URI grammars live in `src/nodes/share-uri.ts`; remark naming in `src/nodes/naming.ts`.
 
+Node-generation caveats: a `cleanIps` entry with an explicit `:port` pins that port only, and its security is inferred purely from `CF_TLS_PORTS` membership — a pinned port outside both CF port families still emits (as `security: "none"`) but is unreachable in practice; keep pinned ports inside {443,2053,2083,2087,2096,8443} ∪ {80,8080,8880,2052,2082,2086,2095}.
+
+Remote-sub merge accepts **share-link lines only** (`vless://`/`vmess://`/`trojan://`/`ss://`/`hysteria2://`, raw or base64-wrapped) — `src/subscription/merge.ts` drops everything else by design, so a remote URL serving Clash YAML contributes zero lines. Merged lines flow into the base64 format only.
+
 ## 5. KV Schema
 
 Namespace binding `QPROXY_KV`.
@@ -183,7 +187,7 @@ Example: adding a `quantumult` Worker-subscription format:
 1. **Types:** extend `SubFormat` in `src/core/ua.ts`; add tokens to `classifyUA` if needed.
 2. **Emitter:** create `src/nodes/emitters/quantumult-conf.ts` exporting `(nodes, opts: EmitOptions): string`; use `opts.isFragment` to filter variant nodes; bracket IPv6.
 3. **Registry:** register in `src/nodes/emitters/registry.ts`.
-4. **Negotiation:** add the format to `FORMATS` in `src/handlers/subscribe.ts` and the sniff table in `src/core/ua.ts`.
+4. **Negotiation:** add the format to `SUB_FORMATS` in `src/subscription/negotiate.ts` — the single source of the format list, consumed by both `handlers/subscribe.ts` and `handlers/users-sub.ts`. There is no separate `FORMATS` table anymore.
 5. **Tests:** golden snapshot in `test/nodes/emitters/quantumult-conf.spec.ts`, UA case in `test/core/ua.spec.ts`, workers sub test asserting `Content-Type` + `Content-Disposition: attachment`.
 6. **Verify:** `npm run typecheck && npm test` — both projects green; no new runtime dep.
 
@@ -239,7 +243,7 @@ Handshake bounded: 16 KiB accumulated + 10 s timeout → WS close 1008. Reasons 
 
 ## 13. Build Reproducibility
 
-`scripts/build-single-file.mjs` bundles `src/worker.ts` with esbuild (bundle, esm, browser, es2023, minify, `.html`→text, `__APP_VERSION__` define). Post-build asserts no bare imports except `cloudflare:*` and writes `dist/q-proxy.js` (~380 KB). Same artifact for dashboard paste and wrangler deploy.
+`scripts/build-single-file.mjs` bundles `src/worker.ts` with esbuild (bundle, esm, browser, es2023, minify, `.html`→text, `__APP_VERSION__` define). Post-build asserts no bare imports except `cloudflare:*` and writes `dist/q-proxy.js` (~400 KB). Same artifact for dashboard paste and wrangler deploy.
 
 ## 14. FAQ for Contributors
 
@@ -274,6 +278,13 @@ Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},f
 - `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated)
 
 Method guards live in `dispatchApi`; `OPTIONS` on APIs → 405.
+
+Two validation tiers exist — pick by surface:
+
+- **Settings framework** (`src/settings/validate.ts`): `validateSettings(input)` walks the whole schema and returns `{ok:true,value}` / `{ok:false,fields}`; handlers throw `ValidationError(result.fields)`. Use for anything stored in `qproxy:settings`.
+- **API-handler inline** (`handlers/api/{users,warp,auth,status}.ts`): local `requireString`-style helpers over `readJsonObject(req)` that throw `ValidationError({field: msg})` per field. Use for request-scoped payloads that never touch the Settings schema.
+
+Both funnel into the same 422 envelope `{ok:false,error:{code:"VALIDATION"},fields}`.
 
 ## 17. Contributor Troubleshooting
 

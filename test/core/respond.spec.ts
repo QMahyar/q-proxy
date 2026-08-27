@@ -5,6 +5,7 @@ import {
   htmlResponse,
   jsonError,
   jsonOk,
+  readJsonObject,
   redirect,
 } from "../../src/core/respond";
 
@@ -74,6 +75,40 @@ describe("htmlResponse / redirect", () => {
     const r = htmlResponse("<p>hi</p>", 404);
     expect(r.status).toBe(404);
     expect(r.headers.get("Content-Type")).toContain("text/html");
+  });
+
+  it("sets security headers on every html response", () => {
+    const r = htmlResponse("<p>hi</p>");
+    expect(r.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(r.headers.get("X-Frame-Options")).toBe("DENY");
+    expect(r.headers.get("Referrer-Policy")).toBe("no-referrer");
+    expect(r.headers.get("Permissions-Policy")).toBe("camera=(), microphone=(), geolocation=()");
+    expect(r.headers.get("Content-Security-Policy")).toBe(
+      "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'",
+    );
+  });
+
+  it("caller-provided headers override the defaults", () => {
+    const r = htmlResponse("<p>hi</p>", 200, {
+      "Cache-Control": "no-store",
+      "X-Frame-Options": "SAMEORIGIN",
+      "Referrer-Policy": "origin",
+    });
+    expect(r.headers.get("Cache-Control")).toBe("no-store");
+    expect(r.headers.get("X-Frame-Options")).toBe("SAMEORIGIN");
+    expect(r.headers.get("Referrer-Policy")).toBe("origin");
+    expect(r.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+
+  it("readJsonObject parses object bodies and rejects others", async () => {
+    const ok = await readJsonObject(new Request("https://x/", { method: "POST", body: '{"a":1}' }));
+    expect(ok).toEqual({ a: 1 });
+    await expect(
+      readJsonObject(new Request("https://x/", { method: "POST", body: "[1,2]" })),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      readJsonObject(new Request("https://x/", { method: "POST", body: "not json" })),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it("redirect sets location", () => {

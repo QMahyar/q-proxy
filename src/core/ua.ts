@@ -1,6 +1,6 @@
 export type SubFormat = "base64" | "clash" | "singbox" | "surge" | "loon";
 
-const CLASH_TOKENS = ["clash", "meta", "mihomo", "stash", "verge"];
+const CLASH_TOKENS = ["clash", "mihomo", "stash"];
 const SINGBOX_TOKENS = ["sing-box", "singbox", "hiddify", "nekobox", "karing", "sfa", "sfi", "sfm", "sft"];
 const SURGE_TOKENS = ["surge"];
 const LOON_TOKENS = ["loon"];

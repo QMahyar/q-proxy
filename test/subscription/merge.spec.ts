@@ -80,4 +80,14 @@ describe("fetchRemoteSubLines", () => {
     expect(lines[1]!.length).toBeLessThan(lines[0]!.length);
     expect(lines[1]!.startsWith("vless://002")).toBe(true);
   });
+
+  it("counts the byte budget in bytes and truncates on a code-point boundary when there is no reader", async () => {
+    const raw = `vless://${"é".repeat(600_000)}@h:1#U\nvless://tail@h:1#T`;
+    const readerLess = { ok: true, status: 200, body: null, text: async () => raw } as unknown as Response;
+    vi.stubGlobal("fetch", vi.fn(async () => readerLess));
+    const lines = await fetchRemoteSubLines(["https://r/1"]);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toBe(`vless://${"é".repeat(524_284)}`);
+    expect(new TextEncoder().encode(lines[0]!).byteLength).toBeLessThanOrEqual(1024 * 1024);
+  });
 });

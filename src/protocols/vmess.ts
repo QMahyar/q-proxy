@@ -1,12 +1,14 @@
 import { chacha20Poly1305Open, chacha20Poly1305Seal } from "../crypto/chacha20";
 import { Shake128 } from "../crypto/shake128";
 import {
+  bytesToHex,
   concatBytes,
   hexToBytes,
   readU16BE,
   readU32BE,
   u16be,
 } from "../utils/bytes";
+import { pruneBoundedRegistry } from "../utils/bounded";
 import { randomBytes } from "../utils/random";
 import {
   appendChunk,
@@ -42,6 +44,7 @@ const CMD_TCP = 1;
 const CMD_UDP = 2;
 const DNS_PORT = 53;
 const SECURITY_UNKNOWN = 0;
+const SECURITY_LEGACY = 1;
 const SECURITY_AUTO = 2;
 const SECURITY_AES_128_GCM = 3;
 const SECURITY_CHACHA20_POLY1305 = 4;
@@ -59,6 +62,25 @@ const TAG_LEN = 16;
 const MAX_FRAME_LEN = 0x3fff;
 const MAX_ENCODE_PIECE = 0x3800;
 const COPY_SLICE = 16384;
+
+const REPLAY_TTL_SECONDS = 240;
+const REPLAY_CACHE_LIMIT = 1024;
+
+const seenAuthIds = new Map<string, number>();
+
+export function clearVmessReplayCache(): void {
+  seenAuthIds.clear();
+}
+
+function isReplayedAuthId(keyHex: string, nowEpochSeconds: number): boolean {
+  const expiry = seenAuthIds.get(keyHex);
+  return expiry !== undefined && expiry > nowEpochSeconds;
+}
+
+function recordAcceptedAuthId(keyHex: string, nowEpochSeconds: number): void {
+  pruneBoundedRegistry(seenAuthIds, REPLAY_CACHE_LIMIT, nowEpochSeconds);
+  seenAuthIds.set(keyHex, nowEpochSeconds + REPLAY_TTL_SECONDS);
+}
 
 type BodyMode = "aes" | "chacha" | "plain";
 
@@ -135,6 +157,7 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
   let initialPayload: Uint8Array | null = null;
   let session: VmessSession | null = null;
   let pendingTail: Uint8Array[] = [];
+  let codecTaken = false;
 
   return {
     async push(data: Uint8Array): Promise<PushOutcome<VmessRequest>> {
@@ -156,6 +179,9 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
         if (!check.ok) {
           return complete({ state: "reject", reason: check.reason ?? "invalid user" });
         }
+        if (isReplayedAuthId(bytesToHex(authIdBytes!), Math.floor(Date.now() / 1000))) {
+          return complete({ state: "reject", reason: "replayed handshake" });
+        }
         authIdChecked = true;
       }
 
@@ -170,6 +196,7 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
       const leftover = buf.subarray(AUTH_ID_LEN + opened.consumedBytes);
       const outcome = await parseLegacyHeader(opened.header);
       if (outcome.state === "ready") {
+        recordAcceptedAuthId(bytesToHex(authIdBytes!), Math.floor(Date.now() / 1000));
         for (let off = 0; off < leftover.length; off += COPY_SLICE) {
           pendingTail.push(leftover.subarray(off, Math.min(off + COPY_SLICE, leftover.length)));
         }
@@ -185,9 +212,10 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
       return p;
     },
     bodyCodec(): BodyCodec | null {
-      if (session === null) return null;
+      if (session === null || codecTaken) return null;
       const plan = planFor(session);
       if (plan === null) return null;
+      codecTaken = true;
       return createVmessBodyCodec(session, plan, pendingTail);
     },
   };
@@ -208,6 +236,9 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
     const security = h[35]! & 0x0f;
     const paddingLen = h[35]! >> 4;
     const command = h[37]!;
+    if (security === SECURITY_LEGACY) {
+      return { state: "reject", reason: "legacy security requires aes-cfb which is disabled" };
+    }
     if (security === SECURITY_UNKNOWN) {
       return { state: "reject", reason: `unsupported security type ${security}` };
     }

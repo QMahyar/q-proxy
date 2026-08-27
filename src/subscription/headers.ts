@@ -6,6 +6,7 @@ import { encodeUtf8Base64 } from "../utils/base64";
 export interface SubscriptionMeta {
   updateIntervalHours: number;
   webPageUrl: string;
+  expireAt?: number | null;
 }
 
 const BYTES_PER_REQUEST = 1024 * 1024;
@@ -31,9 +32,13 @@ export function subscriptionHeaders(
   meta: SubscriptionMeta,
 ): Record<string, string> {
   void nodes;
+  let userinfo = `upload=0; download=${usage.requestsTotal * BYTES_PER_REQUEST}`;
+  if (meta.expireAt !== null && meta.expireAt !== undefined && meta.expireAt > 0) {
+    userinfo += `; expire=${Math.floor(meta.expireAt / 1000)}`;
+  }
   const h: Record<string, string> = {
     "Profile-Title": `base64:${encodeUtf8Base64(title)}`,
-    "Subscription-Userinfo": `upload=0; download=${usage.requestsTotal * BYTES_PER_REQUEST}`,
+    "Subscription-Userinfo": userinfo,
     "Profile-Update-Interval": String(Math.max(1, Math.floor(meta.updateIntervalHours))),
     "Content-Disposition": `attachment; filename*=UTF-8''${filenameFor(format, title)}`,
     "Cache-Control": "public, max-age=60",
