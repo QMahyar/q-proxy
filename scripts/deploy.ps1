@@ -73,26 +73,31 @@ if ($Dry) {
 
 # --- upload ---
 Write-Host "Uploading worker..." -ForegroundColor Gray
-$boundary = [System.Guid]::NewGuid().ToString()
-$LF = "`r`n"
-$bodyLines = @(
-  "--$boundary",
-  "Content-Disposition: form-data; name=`"metadata`"",
-  "Content-Type: application/json",
-  "",
-  (@{main_module=$SCRIPT_NAME; compatibility_date="2026-08-01"; bindings=@(@{type="kv_namespace"; name=$BINDING; namespace_id=$kvId})} | ConvertTo-Json -Compress),
-  "--$boundary",
-  "Content-Disposition: form-data; name=`"$SCRIPT_NAME`"`; filename=`"$SCRIPT_NAME`"",
-  "Content-Type: application/javascript+module",
-  "",
-  $workerData,
-  "--$boundary--"
-) -join $LF
+$metadataJson = @{main_module=$SCRIPT_NAME; compatibility_date="2026-08-01"; bindings=@(@{type="kv_namespace"; name=$BINDING; namespace_id=$kvId})} | ConvertTo-Json -Compress
 
 $uploadHeaders = $headers.Clone()
 $uploadHeaders.Remove("Content-Type")
-$upload = Invoke-RestMethod -Uri "https://api.cloudflare.com/client/v4/accounts/$accountId/workers/scripts/$WORKER" -Headers $uploadHeaders -Method Put -ContentType "multipart/form-data; boundary=$boundary" -Body $bodyLines
-if (-not $upload.success) { Write-Host "Upload failed" -ForegroundColor Red; exit 1 }
+
+$multipart = [System.Net.Http.MultipartFormDataContent]::new()
+$metadataContent = [System.Net.Http.StringContent]::new($metadataJson, [System.Text.Encoding]::UTF8, "application/json")
+$multipart.Add($metadataContent, "metadata")
+
+$scriptBytes = [System.Text.Encoding]::UTF8.GetBytes($workerData)
+$scriptContent = [System.Net.Http.ByteArrayContent]::new($scriptBytes)
+$scriptContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::new("application/javascript+module")
+$multipart.Add($scriptContent, $SCRIPT_NAME, $SCRIPT_NAME)
+
+$httpClient = [System.Net.Http.HttpClient]::new()
+foreach ($kv in $uploadHeaders.GetEnumerator()) {
+  $httpClient.DefaultRequestHeaders.TryAddWithoutValidation($kv.Key, $kv.Value) | Out-Null
+}
+$putMethod = [System.Net.Http.HttpMethod]::Put
+$uploadReq = [System.Net.Http.HttpRequestMessage]::new($putMethod, "https://api.cloudflare.com/client/v4/accounts/$accountId/workers/scripts/$WORKER")
+$uploadReq.Content = $multipart
+$uploadResp = $httpClient.SendAsync($uploadReq).Result
+$uploadBody = $uploadResp.Content.ReadAsStringAsync().Result
+$upload = $uploadBody | ConvertFrom-Json
+if (-not $upload.success) { Write-Host "Upload failed: $uploadBody" -ForegroundColor Red; exit 1 }
 Write-Host "Worker uploaded" -ForegroundColor Green
 
 # --- enable subdomain ---
