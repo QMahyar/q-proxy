@@ -139,22 +139,24 @@ function Upload-Worker($WorkerData, $KvId) {
     bindings           = @(@{ type="kv_namespace"; name=$BINDING; namespace_id=$KvId })
   } | ConvertTo-Json -Compress
 
-  # Write script to temp file (curl.exe reads it as binary — no encoding issues)
+  # Write BOTH metadata and script to temp files — curl.exe reads them as binary
+  $tmpMeta = Join-Path $env:TEMP "q-meta-$([guid]::NewGuid().ToString('N').Substring(0,8)).json"
   $tmpFile = Join-Path $env:TEMP "q-proxy-$([guid]::NewGuid().ToString('N').Substring(0,8)).js"
+  [System.IO.File]::WriteAllText($tmpMeta, $metadata, [System.Text.Encoding]::UTF8)
   [System.IO.File]::WriteAllText($tmpFile, $WorkerData, [System.Text.Encoding]::UTF8)
 
   try {
-    $authHeader = if ($Token -like "cfk_*") {
+    $authArg = if ($Token -like "cfk_*") {
       @("-H", "X-Auth-Key: $Token", "-H", "X-Auth-Email: $Email")
     } else {
       @("-H", "Authorization: Bearer $Token")
     }
 
-    $result = & curl.exe -s -X PUT `
-      "$BASE/accounts/$accountId/workers/scripts/$WORKER" `
-      @authHeader `
-      -F "metadata=$metadata;type=application/json" `
-      -F "$SCRIPT_NAME=@$tmpFile;type=application/javascript+module"
+    # Use @file for BOTH parts — no variable interpolation, no quoting issues
+    $result = & curl.exe -s -X PUT "$BASE/accounts/$accountId/workers/scripts/$WORKER" `
+      @authArg `
+      -F "metadata=@$tmpMeta;type=application/json" `
+      -F "$SCRIPT_NAME=@$tmpFile;type=application/javascript"
 
     $resp = $result | ConvertFrom-Json
     if (-not $resp.success) {
@@ -164,6 +166,7 @@ function Upload-Worker($WorkerData, $KvId) {
     Write-Host "Worker uploaded" -ForegroundColor Green
   } finally {
     if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }
+    if (Test-Path $tmpMeta) { Remove-Item $tmpMeta -Force }
   }
 }
 

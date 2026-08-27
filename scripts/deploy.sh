@@ -215,18 +215,20 @@ update)
   echo "Downloaded $SIZE bytes"
   if [[ "$DRY" -eq 1 ]]; then echo "[dry] Would upload with KV $KV_ID"; rm -f "$TMPFILE"; exit 0; fi
   METADATA="{\"main_module\":\"$SCRIPT_NAME\",\"compatibility_date\":\"2026-08-01\",\"bindings\":[{\"type\":\"kv_namespace\",\"name\":\"$BINDING\",\"namespace_id\":\"$KV_ID\"}]}"
+  TMPMETA=$(mktemp /tmp/q-meta-XXXXXX.json)
+  echo "$METADATA" > "$TMPMETA"
   if [[ "$TOKEN" == cfk_* ]]; then
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
-      -F "metadata=${METADATA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
+      -F "metadata=@${TMPMETA};type=application/json" \
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript")
   else
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "Authorization: Bearer $TOKEN" \
-      -F "metadata=${METADATA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
+      -F "metadata=@${TMPMETA};type=application/json" \
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript")
   fi
-  rm -f "$TMPFILE"
+  rm -f "$TMPFILE" "$TMPMETA"
   ok "$UPLOAD" || die "Upload failed: $UPLOAD"
   echo "Worker updated"
   ;;
@@ -266,18 +268,20 @@ deploy)
   # upload
   echo "Uploading worker..."
   METADATA="{\"main_module\":\"$SCRIPT_NAME\",\"compatibility_date\":\"2026-08-01\",\"bindings\":[{\"type\":\"kv_namespace\",\"name\":\"$BINDING\",\"namespace_id\":\"$KV_ID\"}]}"
+  TMPMETA=$(mktemp /tmp/q-meta-XXXXXX.json)
+  echo "$METADATA" > "$TMPMETA"
   if [[ "$TOKEN" == cfk_* ]]; then
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
-      -F "metadata=${METADATA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
+      -F "metadata=@${TMPMETA};type=application/json" \
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript")
   else
     UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
       -H "Authorization: Bearer $TOKEN" \
-      -F "metadata=${METADATA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript+module")
+      -F "metadata=@${TMPMETA};type=application/json" \
+      -F "${SCRIPT_NAME}=@${TMPFILE};type=application/javascript")
   fi
-  rm -f "$TMPFILE"
+  rm -f "$TMPFILE" "$TMPMETA"
   ok "$UPLOAD" || die "Upload failed: $UPLOAD"
   echo "Worker uploaded"
 
