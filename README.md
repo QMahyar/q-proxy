@@ -13,7 +13,8 @@ Self-hosted proxy panel on a single Cloudflare Worker. Terminates VLESS, VMess, 
 
 | Document | Audience |
 |----------|----------|
-| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Deploy, first-run setup, panel tour, per-client import, troubleshooting |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | **Deploy on Workers or Pages** — one-click button, dashboard paste, Wrangler CLI, setup script, KV + custom domain |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | First-run wizard, panel tour, per-client import, troubleshooting |
 | [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Contributing: architecture flows, KV schema, adding emitters, testing |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Frozen contracts: types, route table, API shapes |
 | [docs/decisions/](docs/decisions/) | Architecture Decision Records — why, not just what |
@@ -33,17 +34,34 @@ Self-hosted proxy panel on a single Cloudflare Worker. Terminates VLESS, VMess, 
 | Routing | Clash/sing-box rule injection (bypass LAN, block QUIC/ads), custom bypass/block lists, ECH on TLS nodes |
 | Ops | Settings export/import JSON (secrets stripped), IP checker page, kill switch (503 before upgrade), camouflage page for wrong paths |
 
-## Quickstart
+## Deploy
+
+Works on **Cloudflare Workers** and **Cloudflare Pages** (Advanced Mode). One KV namespace, zero runtime dependencies, single-file bundle.
+
+| Path | Best for | Time |
+|------|----------|------|
+| [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/<your-user>/Q-Proxy) One-click | Zero CLI setup | 2 min |
+| Dashboard paste (Workers) | No CLI deploy | 3 min |
+| Wrangler CLI (Workers) | Repeatable, CI-friendly | 5 min |
+| Pages Advanced Mode | Existing Pages users | 4 min |
+
+Full steps for all seven paths — including KV creation, custom domains, first-run seed, and updates — are in **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+
+### Quickstart (Workers, Dashboard)
 
 1. Fork or clone this repo.
-2. Run `npm install && npm run build` — this produces `dist/q-proxy.js`.
+2. Run `npm install && npm run build` — this produces `dist/q-proxy.js` and `dist/_worker.js` (Pages).
 3. In Cloudflare Dashboard → Workers & Pages → Create Worker → Edit code → paste the whole `dist/q-proxy.js` → Save.
 4. Add a KV namespace binding named `QPROXY_KV`, then Deploy.
 5. Visit your worker URL once — this seeds settings into KV.
-6. Read your secret path from KV key `qproxy:settings` (field `data.securePath`) via the dashboard binding viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV`.
+6. Read your secret path from KV key `qproxy:settings` (field `data.securePath`) via the dashboard KV viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV`.
 7. Open `https://<worker>.workers.dev/<securePath>/panel` and set a password (8+ chars, letter + digit).
 
-Prefer CLI deploys? Set `$env:CLOUDFLARE_API_KEY` / `CLOUDFLARE_EMAIL` / `CLOUDFLARE_ACCOUNT_ID` to a **Global API Key**, put your KV id in `wrangler.toml`, then run `npm run deploy`. Details in the [user guide](docs/USER_GUIDE.md#2-deploy).
+CLI path: `npx wrangler login` → `npm run setup` → `npm run deploy`. Details in the [deployment guide](docs/DEPLOYMENT.md#c--wrangler-cli-workers-recommended-for-cli-users).
+
+### Quickstart (Pages)
+
+`npm run build` → upload `dist` (contains `_worker.js`) via Pages Direct Upload → bind KV `QPROXY_KV` → redeploy → visit the Pages URL once. See [docs/DEPLOYMENT.md § D](docs/DEPLOYMENT.md#d--pages-advanced-mode-dashboard) and [§ E](docs/DEPLOYMENT.md#e--wrangler-pages-cli-pages).
 
 ## Subscription Types
 
@@ -93,9 +111,12 @@ All 17 WARP format slugs are listed in `src/warp/formats/registry.ts`.
 | `npm install` | Installs dev dependencies only (no runtime deps) |
 | `npm run typecheck` | `tsc --noEmit` — must pass before commit |
 | `npm test` | Runs all 763 tests (unit + workers projects) |
-| `npm run build` | Bundles to `dist/q-proxy.js` (~400 KB) |
-| `npm run dev` | Local dev server at `http://127.0.0.1:8787` (miniflare KV) |
-| `npm run deploy` | Build + deploy (prefers `wrangler.local.toml` when present) |
+| `npm run build` | Bundles to `dist/q-proxy.js` + `dist/_worker.js` (~400 KB) |
+| `npm run setup` | Create KV namespace, patch `wrangler.toml`, build |
+| `npm run dev` | Local Workers dev at `http://127.0.0.1:8787` (miniflare KV) |
+| `npm run dev:pages` | Local Pages dev at `http://127.0.0.1:8787` (`pages dev dist`) |
+| `npm run deploy` | Build + deploy Worker (prefers `wrangler.local.toml` when present) |
+| `npm run deploy:pages` | Build + deploy Pages (`pages deploy dist`) |
 | `npm run version` | Print version derived from git tags |
 | `npm run release` | Tag + changelog check + build gate |
 

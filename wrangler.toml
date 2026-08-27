@@ -2,6 +2,10 @@ name = "q-proxy"
 main = "dist/q-proxy.js"
 compatibility_date = "2026-08-01"
 
+# KV binding — one namespace, zero runtime deps.
+# Replace the placeholder after: npx wrangler kv namespace create QPROXY_KV
+# Or use the automated helper: npm run setup
 [[kv_namespaces]]
 binding = "QPROXY_KV"
 id = "REPLACE_WITH_YOUR_KV_ID"
+# preview_id = "REPLACE_WITH_PREVIEW_KV_ID"  # optional, for wrangler dev --remote

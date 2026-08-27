@@ -7,8 +7,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "node scripts/build-single-file.mjs",
+    "build:pages": "node scripts/build-single-file.mjs",
     "dev": "node scripts/build-single-file.mjs && wrangler dev",
+    "dev:pages": "node scripts/build-single-file.mjs && wrangler pages dev dist",
     "deploy": "node scripts/deploy.mjs",
+    "deploy:pages": "node scripts/deploy-pages.mjs",
+    "setup": "node scripts/setup.mjs",
     "version": "node scripts/version.mjs",
     "release": "node scripts/release.mjs"
   },

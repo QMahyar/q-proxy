@@ -15,9 +15,9 @@ No runtime `dependencies` — `package.json:13` is `devDependencies` only. No D1
 
 ## 2. Deploy
 
-Pick one path. Both produce the identical bundle from `scripts/build-single-file.mjs:10` (`src/worker.ts → dist/q-proxy.js`, `format: esm`, `target: es2023`).
+Full deployment guide with all seven paths — including Workers and Pages, dashboard and CLI, one-click button and setup script, KV creation, custom domains, and updates — lives in **[docs/DEPLOYMENT.md](DEPLOYMENT.md)**. The two quickest paths are below. Both produce the identical bundle from `scripts/build-single-file.mjs:10` (`src/worker.ts → dist/q-proxy.js` for Workers, `dist/_worker.js` for Pages, `format: esm`, `target: es2023`).
 
-### Path A — Dashboard Paste (no CLI, ~3 min)
+### Path A — Dashboard Paste (no CLI, ~3 min, Workers)
 
 | Step | Action |
 |------|--------|
@@ -28,11 +28,11 @@ Pick one path. Both produce the identical bundle from `scripts/build-single-file
 | 5 | Read your secret path from KV key `qproxy:settings`, field `data.securePath` (dashboard binding viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV`) |
 | 6 | Open `https://<worker>.workers.dev/<securePath>/panel` → first-run wizard |
 
-Screenshot: *Dashboard → Edit Code with pasted bundle + KV binding panel*
+For the one-click Deploy Button, Wrangler CLI, `npm run setup`, and Pages paths, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
-### Path B — Wrangler (repeatable, recommended)
+### Path B — Wrangler CLI (repeatable, recommended, Workers)
 
-`wrangler.toml:1` is the source of truth:
+`wrangler.toml` is the source of truth:
 
 ```toml
 name = "q-proxy"
@@ -43,7 +43,15 @@ binding = "QPROXY_KV"
 id = "REPLACE_WITH_YOUR_KV_ID"
 ```
 
-Credentials use a **Global API Key** (dash.cloudflare.com → My Profile → API Tokens → Global API Key):
+Automated:
+
+```bash
+npx wrangler login            # or export CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
+npm run setup                 # creates KV, patches wrangler.toml, builds
+npm run deploy                # = build + wrangler deploy
+```
+
+Manual:
 
 ```powershell
 $env:CLOUDFLARE_API_KEY   = "cfk_<your-global-api-key>"
@@ -51,14 +59,14 @@ $env:CLOUDFLARE_EMAIL     = "you@example.com"
 $env:CLOUDFLARE_ACCOUNT_ID = "<your-account-id>"
 npx wrangler whoami          # must show the chosen account
 npx wrangler kv namespace create QPROXY_KV
-# copy id → paste into wrangler.toml
+# copy id → paste into wrangler.toml (or wrangler.local.toml, gitignored)
 npm run deploy               # = build + wrangler deploy (package.json:11)
 # or: npm run dev            # local miniflare at http://127.0.0.1:8787
 ```
 
 > `CLOUDFLARE_API_TOKEN` with a `cfk_` value fails `[code: 9109] Invalid access token` — use `CLOUDFLARE_API_KEY`.
 
-Screenshot: *Terminal `wrangler whoami` + `deploy` success + assigned `*.workers.dev` URL*
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Pages (`dist/_worker.js`), Deploy Button, and Git-connected Builds. Screenshot: *Terminal `wrangler whoami` + `deploy` success + assigned `*.workers.dev` URL*
 
 ## 3. First-Setup Wizard
 

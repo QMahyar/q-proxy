@@ -4,7 +4,7 @@ Context for AI agents working in this repo. Read this first, then [CONTEXT.md](C
 
 ## What This Is
 
-Self-hosted Cloudflare Worker under one admin: terminates VLESS, VMess, Trojan and Shadowsocks over WebSocket and serves UA-negotiated subscriptions, plus scoped per-user subscription links (`src/users/`), WARP/WireGuard config serving (`src/warp/`) and an optional Telegram bot. Zero runtime npm dependencies. One KV namespace. Single-file build `dist/q-proxy.js` for dashboard paste or `wrangler deploy`. Bilingual EN/FA panel embedded as HTML strings.
+Self-hosted Cloudflare Worker or Pages Function under one admin: terminates VLESS, VMess, Trojan and Shadowsocks over WebSocket and serves UA-negotiated subscriptions, plus scoped per-user subscription links (`src/users/`), WARP/WireGuard config serving (`src/warp/`) and an optional Telegram bot. Zero runtime npm dependencies. One KV namespace. Single-file build `dist/q-proxy.js` (Workers) and `dist/_worker.js` (Pages Advanced Mode) for dashboard paste or `wrangler deploy` / `wrangler pages deploy`. Bilingual EN/FA panel embedded as HTML strings. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for all deployment paths.
 
 ## Tech Stack
 
@@ -23,8 +23,11 @@ npm test             # vitest run (both projects)
 npx vitest run --project unit     # pure logic, no workerd
 npx vitest run --project workers  # full fetch through src/worker.ts
 npm run dev          # wrangler dev → http://127.0.0.1:8787 (local miniflare KV; use `--remote` for prod KV)
-npm run build        # → dist/q-proxy.js (~400 KB)
+npm run dev:pages    # wrangler pages dev dist → same at http://127.0.0.1:8787 (Pages mode)
+npm run build        # → dist/q-proxy.js + dist/_worker.js (~380 KB)
+npm run setup        # create KV namespace, patch wrangler.toml, build
 npm run deploy       # build + wrangler deploy (prefers wrangler.local.toml)
+npm run deploy:pages # build + wrangler pages deploy dist --project-name=q-proxy
 node scripts/version.mjs        # print version (from git tag)
 node scripts/release.mjs <version> [--dry]  # tag + changelog check + build
 ```
@@ -33,7 +36,7 @@ CI: `.github/workflows/ci.yml` runs `npm ci` + `npm run typecheck` + `npm test` 
 
 If a local `wrangler dev` wedges (workerd accepts connections but never responds): kill the stray workerd process on the port, then relaunch on another port (`npx wrangler dev --port 8788`). **Gotcha:** `wrangler dev` serves `dist/q-proxy.js` (per `wrangler.toml main=`) — `npm run dev` rebuilds first, but a bare `npx wrangler dev` shows only what was last built; if a change "doesn't take effect", rebuild before debugging the code.
 
-Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY` (Global Key, cfk_-style) + `$env:CLOUDFLARE_EMAIL` + `$env:CLOUDFLARE_ACCOUNT_ID`. Using `CLOUDFLARE_API_TOKEN` with a Global Key fails `[code: 9109]`. Private deploy targets live in `wrangler.local.toml` (gitignored, same shape as `wrangler.toml`) — `npm run deploy` picks it up when present via `scripts/deploy.mjs`.
+Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY` (Global Key, cfk_-style) + `$env:CLOUDFLARE_EMAIL` + `$env:CLOUDFLARE_ACCOUNT_ID`. Using `CLOUDFLARE_API_TOKEN` with a Global Key fails `[code: 9109]`. Private deploy targets live in `wrangler.local.toml` (gitignored, same shape as `wrangler.toml`) — `npm run deploy` picks it up when present via `scripts/deploy.mjs`. Full matrix (Workers, Pages, Deploy Button, `npm run setup`) is in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Code Conventions
 

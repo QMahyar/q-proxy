@@ -1,0 +1,9 @@
+# Q Proxy has no required secrets — all state lives in KV.
+# This file is a template for local dev only. Copy to .dev.vars if you need
+# to test with remote KV (wrangler dev --remote) and need Cloudflare auth
+# via env vars (see docs/DEPLOYMENT.md).
+#
+# CLOUDFLARE_API_TOKEN=your_token_here
+# CLOUDFLARE_ACCOUNT_ID=your_account_id_here
+
+# No Worker secrets required.

@@ -1,6 +1,6 @@
 import * as esbuild from "esbuild";
 import { execSync } from "node:child_process";
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync, copyFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -52,4 +52,7 @@ if (badImports.length > 0) {
 }
 
 mkdirSync(resolve(root, "dist"), { recursive: true });
-console.log(`dist/q-proxy.js written (${result.metafile.outputs["dist/q-proxy.js"]?.bytes ?? "?"} bytes)`);
+const bytes = result.metafile.outputs["dist/q-proxy.js"]?.bytes ?? "?";
+console.log(`dist/q-proxy.js written (${bytes} bytes)`);
+copyFileSync(resolve(root, "dist/q-proxy.js"), resolve(root, "dist/_worker.js"));
+console.log(`dist/_worker.js written (${bytes} bytes) — Pages Advanced Mode`);
