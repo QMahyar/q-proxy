@@ -1,6 +1,6 @@
 # AGENTS.md — Q Proxy
 
-Context for AI agents working in this repo. Read this first, then [CONTEXT.md](CONTEXT.md) for the subsystem map and conventions cheat-sheet. Frozen contracts live in `docs/ARCHITECTURE.md` — do not rename exported types without an architecture revision.
+Context for AI agents working in this repo. Read this first, then [CONTEXT.md](CONTEXT.md) for the subsystem map and conventions cheat-sheet. Frozen contracts live in `docs/ARCHITECTURE.md` — do not rename exported types without an architecture revision. Why those contracts exist lives in `docs/decisions/` (ADRs 001–005).
 
 ## What This Is
 
@@ -38,7 +38,7 @@ Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY
 ## Code Conventions
 
 - Named exports everywhere; default export only in `src/worker.ts`
-- No comments in implementation code — rationale lives in docs
+- No comments in implementation code — rationale lives in `docs/ARCHITECTURE.md` and `docs/decisions/` (ADRs)
 - Parsers never throw: return `{ok:true,value}` / `{ok:false,reason}` (`ParseResult`) or `PushOutcome` states
 - Errors: throw `AppError` subclasses from `src/core/errors.ts`; handlers convert to WS close codes (1008 reject, 1011 infra) or JSON envelope
 - Result convention for settings validation: `{ok:true,value:Settings}|{ok:false,fields}`
@@ -104,7 +104,7 @@ Adding a setting field:
 Adding an emitter:
 1. Extend `SubFormat` in `src/core/ua.ts` + sniff tokens
 2. Create `src/nodes/emitters/<name>.ts` exporting `(nodes, opts) => string`
-3. Register in `src/nodes/emitters/registry.ts`, add to `FORMATS` in `src/handlers/subscribe.ts`
+3. Register in `src/nodes/emitters/registry.ts`, add to `FORMATS` in `src/subscription/negotiate.ts` (see `docs/decisions/ADR-004.md`)
 4. Golden test in `test/nodes/emitters/<name>.spec.ts` + UA case in `test/core/ua.spec.ts`
 
 Protocol changes: validate against Xray-core fixtures first (`docs/research/04-protocol-formats.md`), keep parsers throwing never.

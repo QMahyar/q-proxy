@@ -16,6 +16,7 @@ Self-hosted proxy panel on a single Cloudflare Worker. Terminates VLESS, VMess, 
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Deploy, first-run setup, panel tour, per-client import, troubleshooting |
 | [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Contributing: architecture flows, KV schema, adding emitters, testing |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Frozen contracts: types, route table, API shapes |
+| [docs/decisions/](docs/decisions/) | Architecture Decision Records — why, not just what |
 | [CONTEXT.md](CONTEXT.md) | Subsystem map for AI coding agents |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Release notes |
 
@@ -97,6 +98,10 @@ All 17 WARP format slugs are listed in `src/warp/formats/registry.ts`.
 | `npm run deploy` | Build + deploy (prefers `wrangler.local.toml` when present) |
 | `npm run version` | Print version derived from git tags |
 | `npm run release` | Tag + changelog check + build gate |
+
+## Architecture
+
+One-admin, one-KV, one-file Worker (see `docs/ARCHITECTURE.md` for frozen contracts). Expensive choices are recorded in [docs/decisions/](docs/decisions/): single-file zero-deps, KV-only 60s cache, stateless HMAC sessions, pure emitters, hand-rolled X25519.
 
 ## License
 
