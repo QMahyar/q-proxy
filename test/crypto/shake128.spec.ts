@@ -4,12 +4,10 @@ import { Shake128 } from "../../src/crypto/shake128";
 import { concatBytes } from "../../src/utils/bytes";
 
 function nodeShake(seed: Uint8Array, length: number): Uint8Array {
-  const hex = nodeHash("shake128", Buffer.from(seed), {
-    outputLength: length,
-    encoding: "hex",
-  }) as string;
+  const buf = nodeHash("shake128", Buffer.from(seed), { outputLength: length });
   const out = new Uint8Array(length);
-  for (let i = 0; i < length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  const src = typeof buf === "string" ? Buffer.from(buf, "hex") : buf;
+  for (let i = 0; i < length; i++) out[i] = src[i]!;
   return out;
 }
 

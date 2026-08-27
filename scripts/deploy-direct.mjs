@@ -169,7 +169,7 @@ async function getWorkerScript() {
   const urls = [
     `https://github.com/QMahyar/q-proxy/releases/latest/download/q-proxy.js`,
     `https://github.com/QMahyar/q-proxy/releases/download/v${version}/q-proxy.js`,
-    `https://raw.githubusercontent.com/QMahyar/q-proxy/main/dist/q-proxy.js`,
+    `https://raw.githubusercontent.com/QMahyar/q-proxy/master/dist/q-proxy.js`,
   ];
   for (const url of urls) {
     try {

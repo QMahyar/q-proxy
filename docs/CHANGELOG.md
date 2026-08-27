@@ -3,16 +3,14 @@
 ## 1.2.0 - 2026-08-27
 
 ### Added
-- **Two easy ways**: Manual 5-step dashboard paste (no CLI) + Automatic one-liner (bash `curl | bash`, PowerShell `irm | iex`, Node `node scripts/deploy-direct.mjs`, Python `deploy.py`) — no `wrangler`, no `git`, pulls `q-proxy.js` from Releases, handles Global Key (`cfk_...` + email) and API Token, asks Workers vs Pages and first password, creates KV via direct Cloudflare API, uploads Worker via `PUT /workers/scripts/q-proxy` (multipart), seeds, sets password via `POST /<sp>/api/auth/setup`, prints `Panel: https://<worker>/<sp>/panel`.
-- **Direct API deploy**: `scripts/deploy-direct.mjs` (Node 18+ `fetch`), `scripts/quick-deploy.sh` (bash `curl`), `scripts/quick-deploy.ps1` (PowerShell `Invoke-RestMethod`), `scripts/deploy.py` (Python stdlib) — all wrangler-free.
-- **Post-deploy helper**: `scripts/post-deploy.mjs` seeds and reads `securePath` without hunting KV viewer.
-- **Release artifacts**: `.github/workflows/release.yml` publishes `dist/q-proxy.js` + `dist/_worker.js` on `v*` tags so one-liners work without a clone.
+- **Direct API deploy**: `scripts/deploy-direct.mjs` — one command, no wrangler, no git, handles API Token and Global Key, creates KV, uploads Worker, seeds, sets password, prints Panel URL. Fixed `main` → `master` branch references.
+- **Release artifacts**: `.github/workflows/release.yml` publishes `dist/q-proxy.js` + `dist/_worker.js` on `v*` tags.
 
 ### Fixed
-- `wrangler.local.toml` trap: `scripts/setup.mjs` now patches both configs, `scripts/deploy.mjs` picks the valid file and warns on placeholder fallback (found via 4 live deploys on 3 accounts).
+- SHAKE128 test: `node:crypto` `outputEncoding` moved to positional arg (Node 22 compat).
 
 ### Changed
-- **Docs**: `docs/DEPLOYMENT.md` rewritten to exactly Way 1 (Manual) + Way 2 (Automatic) with pre-filled token URL, `README.md` Deploy table simplified to 2 rows.
+- Removed 8 bloat scripts (`setup.mjs`, `deploy.mjs`, `deploy-pages.mjs`, `quick-deploy.mjs`, `quick-deploy.sh`, `quick-deploy.ps1`, `deploy.py`, `post-deploy.mjs`). `deploy-direct.mjs` is the single deploy path.
 
 ## 1.1.0 - 2026-08-26
 
