@@ -13,6 +13,8 @@
     "deploy": "node scripts/deploy.mjs",
     "deploy:pages": "node scripts/deploy-pages.mjs",
     "setup": "node scripts/setup.mjs",
+    "quick-deploy": "node scripts/quick-deploy.mjs",
+    "post-deploy": "node scripts/post-deploy.mjs",
     "version": "node scripts/version.mjs",
     "release": "node scripts/release.mjs"
   },

@@ -40,28 +40,42 @@ Works on **Cloudflare Workers** and **Cloudflare Pages** (Advanced Mode). One KV
 
 | Path | Best for | Time |
 |------|----------|------|
+| `npm run quick-deploy` (wizard) | One command, prints Panel URL | 30s |
+| Download `q-proxy.js` from Releases → paste | No Node, no build | 1 min |
 | [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/<your-user>/Q-Proxy) One-click | Zero CLI setup | 2 min |
 | Dashboard paste (Workers) | No CLI deploy | 3 min |
 | Wrangler CLI (Workers) | Repeatable, CI-friendly | 5 min |
 | Pages Advanced Mode | Existing Pages users | 4 min |
 
-Full steps for all seven paths — including KV creation, custom domains, first-run seed, and updates — are in **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+Full steps for all paths — including KV creation, custom domains, first-run seed, and updates — are in **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+
+### Quickest (wizard, 30s)
+
+```bash
+git clone https://github.com/<your-user>/Q-Proxy.git && cd Q-Proxy
+npm install
+npm run quick-deploy          # creates KV, builds, deploys, prints Panel URL
+# Pages: npm run quick-deploy -- --pages
+# No-build alternative: download dist/q-proxy.js from Releases → paste as in Dashboard path
+```
+
+After any deploy: `node scripts/post-deploy.mjs https://q-proxy.xxx.workers.dev` seeds and prints `Panel: https://<worker>/<sp>/panel` so you never hunt the KV viewer.
 
 ### Quickstart (Workers, Dashboard)
 
-1. Fork or clone this repo.
-2. Run `npm install && npm run build` — this produces `dist/q-proxy.js` and `dist/_worker.js` (Pages).
+1. Fork or clone this repo. Or download `q-proxy.js` from Releases (no build).
+2. Run `npm install && npm run build` — this produces `dist/q-proxy.js` and `dist/_worker.js` (Pages). Skip if you downloaded.
 3. In Cloudflare Dashboard → Workers & Pages → Create Worker → Edit code → paste the whole `dist/q-proxy.js` → Save.
 4. Add a KV namespace binding named `QPROXY_KV`, then Deploy.
 5. Visit your worker URL once — this seeds settings into KV.
-6. Read your secret path from KV key `qproxy:settings` (field `data.securePath`) via the dashboard KV viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV`.
+6. Read your secret path from KV key `qproxy:settings` (field `data.securePath`) via the dashboard KV viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV` or `node scripts/post-deploy.mjs https://<worker>.workers.dev`.
 7. Open `https://<worker>.workers.dev/<securePath>/panel` and set a password (8+ chars, letter + digit).
 
-CLI path: `npx wrangler login` → `npm run setup` → `npm run deploy`. Details in the [deployment guide](docs/DEPLOYMENT.md#c--wrangler-cli-workers-recommended-for-cli-users).
+CLI path: `npx wrangler login` → `npm run quick-deploy` (or `npm run setup` → `npm run deploy` → `node scripts/post-deploy.mjs`). Details in the [deployment guide](docs/DEPLOYMENT.md#c--wrangler-cli-workers-recommended-for-cli-users).
 
 ### Quickstart (Pages)
 
-`npm run build` → upload `dist` (contains `_worker.js`) via Pages Direct Upload → bind KV `QPROXY_KV` → redeploy → visit the Pages URL once. See [docs/DEPLOYMENT.md § D](docs/DEPLOYMENT.md#d--pages-advanced-mode-dashboard) and [§ E](docs/DEPLOYMENT.md#e--wrangler-pages-cli-pages).
+`npm run build` → upload `dist` (contains `_worker.js`) via Pages Direct Upload → bind KV `QPROXY_KV` → redeploy → visit the Pages URL once. Or `npm run quick-deploy -- --pages`. See [docs/DEPLOYMENT.md § D](docs/DEPLOYMENT.md#d--pages-advanced-mode-dashboard) and [§ E](docs/DEPLOYMENT.md#e--wrangler-pages-cli-pages).
 
 ## Subscription Types
 
@@ -113,6 +127,8 @@ All 17 WARP format slugs are listed in `src/warp/formats/registry.ts`.
 | `npm test` | Runs all 763 tests (unit + workers projects) |
 | `npm run build` | Bundles to `dist/q-proxy.js` + `dist/_worker.js` (~400 KB) |
 | `npm run setup` | Create KV namespace, patch `wrangler.toml`, build |
+| `npm run quick-deploy` | Wizard: KV + build + deploy + print Panel URL (Workers; add `-- --pages` for Pages) |
+| `npm run post-deploy` | Seed Worker URL + read KV + print Panel/Sub URLs (`node scripts/post-deploy.mjs https://<worker>`) |
 | `npm run dev` | Local Workers dev at `http://127.0.0.1:8787` (miniflare KV) |
 | `npm run dev:pages` | Local Pages dev at `http://127.0.0.1:8787` (`pages dev dist`) |
 | `npm run deploy` | Build + deploy Worker (prefers `wrangler.local.toml` when present) |

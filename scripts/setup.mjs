@@ -103,6 +103,18 @@ const after = before.replace("REPLACE_WITH_YOUR_KV_ID", id);
 writeFileSync(wranglerPath, after, "utf8");
 console.log(`Patched wrangler.toml → ${wranglerPath}`);
 
+const localPath = resolve(root, "wrangler.local.toml");
+if (existsSync(localPath)) {
+  const localBefore = readFileSync(localPath, "utf8");
+  if (localBefore.includes("REPLACE_WITH_YOUR_KV_ID")) {
+    writeFileSync(localPath, localBefore.replace("REPLACE_WITH_YOUR_KV_ID", id), "utf8");
+    console.log(`Patched wrangler.local.toml → ${localPath} (was placeholder)`);
+  } else {
+    console.log(`wrangler.local.toml exists and already has a KV id — left unchanged`);
+    console.log(`  (deploy prefers it over wrangler.toml; ensure its id is the one you want)`);
+  }
+}
+
 console.log("\nBuilding dist/q-proxy.js + dist/_worker.js...");
 execSync("node scripts/build-single-file.mjs", { stdio: "inherit", cwd: root });
 

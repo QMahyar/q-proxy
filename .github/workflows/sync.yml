@@ -1,0 +1,34 @@
+name: Sync Fork
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # daily 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: github.repository != 'QMahyar/q-proxy' # only run on forks
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Sync with upstream
+        run: |
+          git remote add upstream https://github.com/QMahyar/q-proxy.git
+          git fetch upstream
+          # try fast-forward, else merge
+          if git merge-base --is-ancestor upstream/master HEAD; then
+            echo "Already up to date"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git fetch upstream master
+            git merge --no-edit upstream/master || {
+              echo "::warning::Merge conflict — resolve manually"
+              exit 1
+            }
+            git push origin HEAD:master
+          fi

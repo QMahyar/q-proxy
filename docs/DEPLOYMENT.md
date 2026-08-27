@@ -35,10 +35,34 @@ id = "REPLACE_WITH_YOUR_KV_ID"
 
 Both are ESM, `target: es2023`, minified, ~380 KB. `scripts/build-single-file.mjs` copies `q-proxy.js` to `_worker.js` so you never build twice. `wrangler dev` and `wrangler pages dev` both read the built file, not the source. Rebuild after every source edit.
 
-## Choose a deployment path
+Every tagged release (`v*`) publishes both files as GitHub Release artifacts (`q-proxy.js` + `_worker.js`) via `.github/workflows/release.yml:1` — you can deploy without cloning or building (see Quickest path).
+
+## Quickest path (30 seconds, recommended)
+
+Pick one. Both give you the Panel URL with `securePath` in one step, no KV viewer dance.
+
+**0 · No-build paste (no Node):** Download `q-proxy.js` from the latest Release (`https://github.com/QMahyar/q-proxy/releases` → Assets), then paste as in Path B. No `npm install`, no `npm run build`. Good for agents and fresh users.
+
+**1 · One-command wizard (with Node):**
+
+```bash
+git clone https://github.com/QMahyar/q-proxy.git && cd q-proxy
+npm install
+npm run quick-deploy        # interactive: creates KV, patches wrangler.toml, builds, deploys
+# — or for Pages: npm run quick-deploy -- --pages
+# — dry run:       npm run quick-deploy -- --dry
+# After deploy it seeds and prints:
+#   Panel: https://q-proxy.xxx.workers.dev/<sp>/panel
+```
+
+`quick-deploy` is `scripts/quick-deploy.mjs:1`. It checks `wrangler whoami`, creates `QPROXY_KV` (or reuses on `10014`), patches both `wrangler.toml:5` and `wrangler.local.toml:7` if present, builds, deploys, then runs `scripts/post-deploy.mjs:1` (fetches `/` to seed, reads `qproxy:settings` via `--remote`, prints Panel/Sub/WARP URLs). If you already deployed via another path, run `node scripts/post-deploy.mjs https://q-proxy.xxx.workers.dev` to get the URLs without redeploying.
+
+## Choose a deployment path (all paths)
 
 | Path | Time | Needs Node | Creates KV for you | Best for |
 |------|------|------------|--------------------|----------|
+| **0 · No-build paste** | 1 min | No | You create in dashboard | Agents, paste-only |
+| **1 · Quick-deploy wizard** (`npm run quick-deploy`) | 30s | Yes | Yes (auto, prints Panel URL) | Recommended CLI |
 | **A · Deploy Button** (Workers) | 2 min | No | Yes | First deploy without CLI |
 | **B · Dashboard paste** (Workers) | 3 min | Only for `npm run build` | You create in dashboard | No CLI, maximum control |
 | **C · Wrangler CLI** (Workers) | 5 min | Yes | `npm run setup` automates it | Repeatable, CI-friendly |
@@ -46,6 +70,8 @@ Both are ESM, `target: es2023`, minified, ~380 KB. `scripts/build-single-file.mj
 | **E · Wrangler Pages** (`pages deploy`) | 5 min | Yes | You create via CLI or dashboard | Pages + CLI workflow |
 | **F · Setup script** | 5 min | Yes | Yes | CLI users who want one command |
 | **G · Git-connected Workers Builds** | 5 min + push | No (after connect) | Automatic on first build | Auto-deploy on every git push |
+
+`0` uses the pre-built artifact from Releases (`dist/q-proxy.js` for Workers, `dist/_worker.js` for Pages) — no `npm install` or `npm run build`. `1` is the same as `F` but ends with `node scripts/post-deploy.mjs` so you get the Panel URL without hunting the KV viewer.
 
 Cloudflare recommends Workers for new projects. Pages is in maintenance mode but remains available via Advanced Mode and continues to run the same Worker code.
 
@@ -110,6 +136,14 @@ Auth options (pick one):
 | Global API Key | `CLOUDFLARE_API_KEY` + `CLOUDFLARE_EMAIL` + `CLOUDFLARE_ACCOUNT_ID` |
 
 If you use a `cfk_` Global Key with `CLOUDFLARE_API_TOKEN`, deployment fails `[code: 9109] Invalid access token`. Use `CLOUDFLARE_API_KEY` for that key type.
+
+Pre-filled token creation URL (correct permissions for Workers + KV, add `page:edit` for Pages):
+
+```
+https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=workers_scripts%3Aedit%2Cworkers_kv_storage%3Aedit%2Czone%3Aread%2Caccount%3Aread
+```
+
+For Pages also add `page:edit`. `scripts/quick-deploy.mjs:1` prints this URL when auth is missing.
 
 ### C1 · Automated (setup script)
 
