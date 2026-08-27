@@ -1,6 +1,7 @@
 <# Q Proxy — one-command deploy via Cloudflare API (PowerShell only, no wrangler/node/git) #>
 param(
   [string]$Token,
+  [string]$Email,
   [string]$Password,
   [switch]$Dry
 )
@@ -27,7 +28,7 @@ $headers = @{ "Authorization" = "Bearer $Token"; "Content-Type" = "application/j
 $isGlobal = $Token.StartsWith("cfk_")
 
 if ($isGlobal) {
-  $Email = Read-Host "Cloudflare email"
+  if (-not $Email) { $Email = Read-Host "Cloudflare email" }
   $headers = @{ "X-Auth-Key" = $Token; "X-Auth-Email" = $Email; "Content-Type" = "application/json" }
 }
 
