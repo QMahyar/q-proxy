@@ -34,48 +34,57 @@ Self-hosted proxy panel on a single Cloudflare Worker. Terminates VLESS, VMess, 
 | Routing | Clash/sing-box rule injection (bypass LAN, block QUIC/ads), custom bypass/block lists, ECH on TLS nodes |
 | Ops | Settings export/import JSON (secrets stripped), IP checker page, kill switch (503 before upgrade), camouflage page for wrong paths |
 
-## Deploy
+## Deploy — Two Easy Ways
 
-Works on **Cloudflare Workers** and **Cloudflare Pages** (Advanced Mode). One KV namespace, zero runtime dependencies, single-file bundle.
+> Full guide: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — 5-minute read, no prior Cloudflare knowledge needed.
 
-| Path | Best for | Time |
-|------|----------|------|
-| `npm run quick-deploy` (wizard) | One command, prints Panel URL | 30s |
-| Download `q-proxy.js` from Releases → paste | No Node, no build | 1 min |
-| [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/<your-user>/Q-Proxy) One-click | Zero CLI setup | 2 min |
-| Dashboard paste (Workers) | No CLI deploy | 3 min |
-| Wrangler CLI (Workers) | Repeatable, CI-friendly | 5 min |
-| Pages Advanced Mode | Existing Pages users | 4 min |
+| Way | You do | Time | Needs |
+|-----|--------|------|-------|
+| **1. Manual** | 5 clicks in Cloudflare dashboard, paste `q-proxy.js` | 3 min | Browser only |
+| **2. Automatic** | One command, paste API token, type a password, get Panel link | 1 min | Bash / PowerShell / Node / Python (pick one) |
 
-Full steps for all paths — including KV creation, custom domains, first-run seed, and updates — are in **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+No `wrangler`, no `git` required for either way — the worker file ships in Releases.
 
-### Quickest (wizard, 30s)
+### Way 1 — Manual (dashboard paste, 5 steps)
 
-```bash
-git clone https://github.com/<your-user>/Q-Proxy.git && cd Q-Proxy
-npm install
-npm run quick-deploy          # creates KV, builds, deploys, prints Panel URL
-# Pages: npm run quick-deploy -- --pages
-# No-build alternative: download dist/q-proxy.js from Releases → paste as in Dashboard path
+1. Download `q-proxy.js` from **Releases** (`https://github.com/QMahyar/q-proxy/releases/latest/download/q-proxy.js`).
+2. Cloudflare Dashboard → **Workers & Pages** → **Create Worker** → name `q-proxy` → **Edit code** → paste entire `q-proxy.js` → **Save**.
+3. **Settings** → **Bindings** → **Add KV Namespace** → **Variable name** `QPROXY_KV` → **Create namespace** `q-proxy` → **Save** → **Deploy**.
+4. Visit `https://q-proxy.<your-subdomain>.workers.dev/` once (seeds).
+5. Open `https://q-proxy.<sub>.workers.dev/<securePath>/panel` — get `<securePath>` from **KV** → View `qproxy:settings` → `data.securePath`, or run `node scripts/post-deploy.mjs https://q-proxy.xxx.workers.dev` to print it.
+
+### Way 2 — Automatic (one command, no wrangler)
+
+The script gives you a pre-filled Cloudflare link to create an API token (Workers Scripts:Edit + KV Storage:Edit), waits for you to paste it, asks for your first password, asks Workers vs Pages, downloads `q-proxy.js` from Releases, creates the KV, uploads the Worker via `curl` (Cloudflare API), seeds, sets the password, and prints:
+
+```
+Panel: https://q-proxy.xxx.workers.dev/<sp>/panel
 ```
 
-After any deploy: `node scripts/post-deploy.mjs https://q-proxy.xxx.workers.dev` seeds and prints `Panel: https://<worker>/<sp>/panel` so you never hunt the KV viewer.
+It works with **API Token** and **Global Key** (`cfk_...` → asks for email). No `wrangler`, no `git`, no file edits.
 
-### Quickstart (Workers, Dashboard)
+**Bash (macOS/Linux/WSL):**
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/main/scripts/quick-deploy.sh)
+```
 
-1. Fork or clone this repo. Or download `q-proxy.js` from Releases (no build).
-2. Run `npm install && npm run build` — this produces `dist/q-proxy.js` and `dist/_worker.js` (Pages). Skip if you downloaded.
-3. In Cloudflare Dashboard → Workers & Pages → Create Worker → Edit code → paste the whole `dist/q-proxy.js` → Save.
-4. Add a KV namespace binding named `QPROXY_KV`, then Deploy.
-5. Visit your worker URL once — this seeds settings into KV.
-6. Read your secret path from KV key `qproxy:settings` (field `data.securePath`) via the dashboard KV viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV` or `node scripts/post-deploy.mjs https://<worker>.workers.dev`.
-7. Open `https://<worker>.workers.dev/<securePath>/panel` and set a password (8+ chars, letter + digit).
+**PowerShell (Windows):**
+```powershell
+irm https://raw.githubusercontent.com/QMahyar/q-proxy/main/scripts/quick-deploy.ps1 | iex
+```
 
-CLI path: `npx wrangler login` → `npm run quick-deploy` (or `npm run setup` → `npm run deploy` → `node scripts/post-deploy.mjs`). Details in the [deployment guide](docs/DEPLOYMENT.md#c--wrangler-cli-workers-recommended-for-cli-users).
+**Node (if you have Node 18+):**
+```bash
+node scripts/deploy-direct.mjs
+# or: npx --yes github:QMahyar/q-proxy#main
+```
 
-### Quickstart (Pages)
+**Python (stdlib only):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/main/scripts/deploy.py | python3 -
+```
 
-`npm run build` → upload `dist` (contains `_worker.js`) via Pages Direct Upload → bind KV `QPROXY_KV` → redeploy → visit the Pages URL once. Or `npm run quick-deploy -- --pages`. See [docs/DEPLOYMENT.md § D](docs/DEPLOYMENT.md#d--pages-advanced-mode-dashboard) and [§ E](docs/DEPLOYMENT.md#e--wrangler-pages-cli-pages).
+All four do the same direct-API deploy. See [docs/DEPLOYMENT.md — Way 2](docs/DEPLOYMENT.md#way-2--automatic-one-command-no-wrangler-no-git) for flags (`--token`, `--password`, `--dry`).
 
 ## Subscription Types
 

@@ -1,520 +1,162 @@
 # Deployment Guide
 
-> How to deploy Q Proxy to your own Cloudflare account. Works on both Cloudflare Workers and Cloudflare Pages. Pick one path. All paths produce the same single-file bundle (`dist/q-proxy.js` for Workers, `dist/_worker.js` for Pages).
+> Two ways to deploy Q Proxy. Both use the same single-file bundle (`dist/q-proxy.js` for Workers, `dist/_worker.js` for Pages). No runtime dependencies. One KV namespace.
 
-Related: [USER_GUIDE.md](USER_GUIDE.md) (panel tour, subscriptions, troubleshooting) · [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) (contributing) · [ARCHITECTURE.md](ARCHITECTURE.md) (frozen contracts).
+Related: [USER_GUIDE.md](USER_GUIDE.md) (panel tour) · [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) (contributing) · [ARCHITECTURE.md](ARCHITECTURE.md) (frozen contracts).
 
 ## Before you start
 
-| Requirement | Notes |
-|-------------|-------|
-| Cloudflare account | Free tier works. One KV namespace is the only resource. `npx wrangler whoami` verifies login. |
-| Node 20+ · npm | Only for CLI builds. Dashboard paste needs no local toolchain. `node -v` |
-| Git (optional) | Only for the Deploy Button and Workers Builds paths. |
+| Need | Notes |
+|------|-------|
+| Cloudflare account | Free tier works. |
+| API token **or** Global Key | Automatic way will give you a pre-filled link. Manual way needs you to create a KV and paste the worker. |
+| `q-proxy.js` | Every tagged release publishes it (`https://github.com/QMahyar/q-proxy/releases` → Assets). No build needed. `npm run build` also writes `dist/q-proxy.js` + `dist/_worker.js`. |
 
-No runtime `dependencies`. `package.json` lists `devDependencies` only. The build rejects any bare import except `cloudflare:*`.
-
-The bundle requires one binding:
-
-```toml
-[[kv_namespaces]]
-binding = "QPROXY_KV"
-id = "REPLACE_WITH_YOUR_KV_ID"
-```
-
-`wrangler.toml` ships with the placeholder above. Replace it after you create the namespace. For local overrides, put your real id in `wrangler.local.toml` (gitignored). `npm run deploy` prefers `wrangler.local.toml` when it exists. `scripts/deploy.mjs` refuses to deploy while the placeholder remains and tells you to run `npm run setup`.
-
-## Build artifact
-
-`npm run build` reads `src/worker.ts` and writes two identical files:
-
-| File | Use |
-|------|-----|
-| `dist/q-proxy.js` | Workers — `wrangler.toml` `main` |
-| `dist/_worker.js` | Pages — Advanced Mode (`_worker.js` in the output directory) |
-
-Both are ESM, `target: es2023`, minified, ~380 KB. `scripts/build-single-file.mjs` copies `q-proxy.js` to `_worker.js` so you never build twice. `wrangler dev` and `wrangler pages dev` both read the built file, not the source. Rebuild after every source edit.
-
-Every tagged release (`v*`) publishes both files as GitHub Release artifacts (`q-proxy.js` + `_worker.js`) via `.github/workflows/release.yml:1` — you can deploy without cloning or building (see Quickest path).
-
-## Quickest path (30 seconds, recommended)
-
-Pick one. Both give you the Panel URL with `securePath` in one step, no KV viewer dance.
-
-**0 · No-build paste (no Node):** Download `q-proxy.js` from the latest Release (`https://github.com/QMahyar/q-proxy/releases` → Assets), then paste as in Path B. No `npm install`, no `npm run build`. Good for agents and fresh users.
-
-**1 · One-command wizard (with Node):**
-
-```bash
-git clone https://github.com/QMahyar/q-proxy.git && cd q-proxy
-npm install
-npm run quick-deploy        # interactive: creates KV, patches wrangler.toml, builds, deploys
-# — or for Pages: npm run quick-deploy -- --pages
-# — dry run:       npm run quick-deploy -- --dry
-# After deploy it seeds and prints:
-#   Panel: https://q-proxy.xxx.workers.dev/<sp>/panel
-```
-
-`quick-deploy` is `scripts/quick-deploy.mjs:1`. It checks `wrangler whoami`, creates `QPROXY_KV` (or reuses on `10014`), patches both `wrangler.toml:5` and `wrangler.local.toml:7` if present, builds, deploys, then runs `scripts/post-deploy.mjs:1` (fetches `/` to seed, reads `qproxy:settings` via `--remote`, prints Panel/Sub/WARP URLs). If you already deployed via another path, run `node scripts/post-deploy.mjs https://q-proxy.xxx.workers.dev` to get the URLs without redeploying.
-
-## Choose a deployment path (all paths)
-
-| Path | Time | Needs Node | Creates KV for you | Best for |
-|------|------|------------|--------------------|----------|
-| **0 · No-build paste** | 1 min | No | You create in dashboard | Agents, paste-only |
-| **1 · Quick-deploy wizard** (`npm run quick-deploy`) | 30s | Yes | Yes (auto, prints Panel URL) | Recommended CLI |
-| **A · Deploy Button** (Workers) | 2 min | No | Yes | First deploy without CLI |
-| **B · Dashboard paste** (Workers) | 3 min | Only for `npm run build` | You create in dashboard | No CLI, maximum control |
-| **C · Wrangler CLI** (Workers) | 5 min | Yes | `npm run setup` automates it | Repeatable, CI-friendly |
-| **D · Pages Advanced Mode** (Dashboard) | 4 min | Only for build | You create in dashboard | You already use Pages |
-| **E · Wrangler Pages** (`pages deploy`) | 5 min | Yes | You create via CLI or dashboard | Pages + CLI workflow |
-| **F · Setup script** | 5 min | Yes | Yes | CLI users who want one command |
-| **G · Git-connected Workers Builds** | 5 min + push | No (after connect) | Automatic on first build | Auto-deploy on every git push |
-
-`0` uses the pre-built artifact from Releases (`dist/q-proxy.js` for Workers, `dist/_worker.js` for Pages) — no `npm install` or `npm run build`. `1` is the same as `F` but ends with `node scripts/post-deploy.mjs` so you get the Panel URL without hunting the KV viewer.
-
-Cloudflare recommends Workers for new projects. Pages is in maintenance mode but remains available via Advanced Mode and continues to run the same Worker code.
+The worker needs one KV binding `QPROXY_KV`. You create it in step 2 of the Manual way. The Automatic way creates it for you.
 
 ---
 
-## A · Deploy Button (Workers, one click)
+## Way 1 — Manual (5 steps, no CLI)
 
-Use this when you want zero local setup. The button forks the repository to your GitHub account, provisions the KV namespace, and enables Workers Builds.
+Do everything in the Cloudflare dashboard. No `wrangler`, no `git`, no `npm`.
 
-1. Fork this repository to your GitHub account (the button will also fork if needed).
-2. Add the button to your README or open it directly:
+| Step | Do |
+|------|----|
+| 1. Get the worker file | Download `q-proxy.js` from **Releases** (`https://github.com/QMahyar/q-proxy/releases/latest/download/q-proxy.js`) — or run `npm run build` locally and use `dist/q-proxy.js`. |
+| 2. Create KV | Cloudflare Dashboard → **Workers & Pages** → **KV** → **Create namespace** → name `q-proxy` → **Create**. Remember the ID. |
+| 3. Create Worker | **Workers & Pages** → **Create application** → **Create Worker** → name `q-proxy` → **Edit code** → delete placeholder → paste the entire `q-proxy.js` → **Save**. |
+| 4. Bind KV | In the Worker → **Settings** → **Bindings** → **Add binding** → **KV Namespace** → **Variable name** `QPROXY_KV` → select the namespace from step 2 → **Save** → **Deploy**. |
+| 5. Seed + Panel | Visit `https://q-proxy.<your-subdomain>.workers.dev/` once (seeds `qproxy:settings`). Then open **Workers & Pages** → **KV** → your namespace → **View** → key `qproxy:settings` → copy `data.securePath` → open `https://q-proxy.<sub>.workers.dev/<securePath>/panel` → set password (8+ chars, letter + digit). Or run `node scripts/post-deploy.mjs https://q-proxy.xxx.workers.dev` to print the Panel URL. |
 
-   ```md
-   [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/<your-user>/Q-Proxy)
+Update: re-download `q-proxy.js` from Releases → paste again → **Save and deploy**. KV migrates automatically (`src/settings/migrate.ts`). No data loss.
+
+For Pages (Advanced Mode): upload `dist` (contains `_worker.js`) via **Pages** → **Direct Upload** → bind `QPROXY_KV` in **Settings** → **Bindings** → redeploy.
+
+---
+
+## Way 2 — Automatic (one command, no wrangler, no git)
+
+The script downloads `q-proxy.js` from Releases, creates the KV, uploads the Worker via Cloudflare API (`curl`), seeds, reads `securePath`, optionally sets your first password, and prints the Panel link.
+
+It works with **API Token** and **Global Key**. If you paste a Global Key (`cfk_...`) it asks for your email. If you paste a normal API Token it just deploys.
+
+### Pre-filled token link
+
+The script will give you this link and wait for you to paste the token. You don't need to pick permissions — it's pre-filled with **Workers Scripts:Edit** + **Workers KV Storage:Edit**:
+
+```
+https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%5D&name=Q%20Proxy&accountId=*&zoneId=all
+```
+
+Open it, click **Continue to summary** → **Create Token** → **Copy**, paste back into the terminal.
+
+### One-liners
+
+Pick the shell you use. All do the same thing — no `wrangler` installed, no repo cloned, just `curl` + `q-proxy.js` from Releases.
+
+**Bash / macOS / Linux / WSL:**
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/main/scripts/quick-deploy.sh)
+# with args (non-interactive):
+# curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/main/scripts/quick-deploy.sh | bash -s -- --token <token> --password <pass>
+```
+
+**PowerShell (Windows):**
+```powershell
+irm https://raw.githubusercontent.com/QMahyar/q-proxy/main/scripts/quick-deploy.ps1 | iex
+# with args:
+# & ([scriptblock]::Create((irm https://raw.githubusercontent.com/QMahyar/q-proxy/main/scripts/quick-deploy.ps1))) -Token <token> -Password <pass>
+```
+
+**Node (if you have Node 18+):**
+```bash
+npx --yes github:QMahyar/q-proxy#main -- --token <token> --password <pass>
+# or from a clone:
+node scripts/deploy-direct.mjs --token <token> --password <pass>
+# dry run:
+node scripts/deploy-direct.mjs --dry
+```
+
+**Python (stdlib only):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/main/scripts/deploy.py | python3 -
+# with args:
+# curl -fsSL https://raw.githubusercontent.com/QMahyar/q-proxy/main/scripts/deploy.py | python3 - --token <token>
+```
+
+### What the script asks
+
+```
+Paste API Token or Global Key (cfk_...):  <you paste>
+[if Global Key] Cloudflare email:         <you type>
+First panel password [empty to set later]: <you type>
+Workers or Pages? [Workers]:              <you type>
+```
+
+Then it:
+
+1. Resolves `account_id` via `GET /accounts` (or asks if multiple)
+2. Creates KV `q-proxy-QPROXY_KV` via `POST /accounts/{id}/storage/kv/namespaces` (or reuses on `10014`)
+3. Downloads `q-proxy.js` from Releases (or uses `dist/q-proxy.js` if you run from a clone)
+4. Uploads Worker via `PUT /accounts/{id}/workers/scripts/q-proxy` (multipart `metadata` + `q-proxy.js`, `compatibility_date 2026-08-01`, binding `QPROXY_KV`)
+5. Enables `*.workers.dev` subdomain if needed
+6. `fetch https://q-proxy.<sub>.workers.dev/` to seed `qproxy:settings`
+7. Reads `securePath` from `GET /accounts/{id}/storage/kv/namespaces/{kv_id}/values/qproxy:settings`
+8. If you gave a password, `POST https://<worker>/<sp>/api/auth/setup {"newPassword":"..."}` to set it
+9. Prints:
+   ```
+   Panel:        https://q-proxy.xxx.workers.dev/<sp>/panel
+   Subscription: https://.../<sp>/sub
    ```
 
-   Replace `<your-user>/Q-Proxy` with the fork URL. When the repo is public, use it as the template.
+No file is changed in your repo. No `wrangler.toml` edit. No `git` needed.
 
-3. Click the button. On the setup page you choose the repository name, Worker name, and KV namespace name. Cloudflare provisions `QPROXY_KV` automatically.
-
-4. Wait for the build (`npm run build` runs in Workers Builds, then `wrangler deploy`). The first request seeds settings.
-
-5. Read the next section ["After deploy"](#after-deploy-seed--secure-path) to open the panel.
-
-Deploy Buttons only support Workers, not Pages. The button appears in the Worker detail page under Share if you already deployed via Workers Builds.
-
----
-
-## B · Dashboard paste (Workers, no CLI deploy)
-
-You build locally, then paste in the Cloudflare dashboard.
+### Already deployed? Just get the Panel URL
 
 ```bash
-git clone https://github.com/<your-user>/Q-Proxy.git
-cd Q-Proxy
-npm install
-npm run build
-# verify dist/q-proxy.js exists, ~380 KB
-```
-
-In the dashboard:
-
-1. Go to **Workers & Pages** → **Create application** → **Create Worker** → name it `q-proxy`.
-2. Click **Edit code**. Delete the placeholder, paste the entire `dist/q-proxy.js`, click **Save and deploy**.
-3. Go to **Settings** → **Bindings** → **Add binding** → **KV Namespace**. Set **Variable name** to `QPROXY_KV`. Click **Create namespace** (name it `qproxy` or any name), then bind it.
-4. Click **Deploy**.
-5. Visit any URL of the Worker once (for example `https://q-proxy.<subdomain>.workers.dev/`). This seeds `qproxy:settings` in KV.
-6. Continue at [After deploy](#after-deploy-seed--secure-path).
-
-To update later, run `npm run build` again, paste the new `dist/q-proxy.js`, and click **Save and deploy**. KV data migrates automatically (`src/settings/migrate.ts`).
-
----
-
-## C · Wrangler CLI (Workers, recommended for CLI users)
-
-Auth options (pick one):
-
-| Method | Command or env |
-|--------|----------------|
-| OAuth (recommended) | `npx wrangler login` → `npx wrangler whoami` |
-| API Token | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
-| Global API Key | `CLOUDFLARE_API_KEY` + `CLOUDFLARE_EMAIL` + `CLOUDFLARE_ACCOUNT_ID` |
-
-If you use a `cfk_` Global Key with `CLOUDFLARE_API_TOKEN`, deployment fails `[code: 9109] Invalid access token`. Use `CLOUDFLARE_API_KEY` for that key type.
-
-Pre-filled token creation URL (correct permissions for Workers + KV, add `page:edit` for Pages):
-
-```
-https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=workers_scripts%3Aedit%2Cworkers_kv_storage%3Aedit%2Czone%3Aread%2Caccount%3Aread
-```
-
-For Pages also add `page:edit`. `scripts/quick-deploy.mjs:1` prints this URL when auth is missing.
-
-### C1 · Automated (setup script)
-
-```bash
-git clone https://github.com/<your-user>/Q-Proxy.git
-cd Q-Proxy
-npm install
-npx wrangler login          # or export CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
-npm run setup               # creates KV, patches wrangler.toml, builds
-npm run deploy              # build + wrangler deploy
-```
-
-`npm run setup` does three things: `wrangler kv namespace create QPROXY_KV`, replaces `REPLACE_WITH_YOUR_KV_ID` in `wrangler.toml`, and runs `npm run build`. Pass `--dry` to preview: `node scripts/setup.mjs --dry`.
-
-### C2 · Manual
-
-```bash
-npx wrangler whoami
-npx wrangler kv namespace create QPROXY_KV
-# copy the returned id
-```
-
-Edit `wrangler.toml`:
-
-```toml
-name = "q-proxy"
-main = "dist/q-proxy.js"
-compatibility_date = "2026-08-01"
-
-[[kv_namespaces]]
-binding = "QPROXY_KV"
-id = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6"
-```
-
-If you want to keep the public file untouched, put the real id in `wrangler.local.toml` instead (gitignored):
-
-```toml
-name = "q-proxy"
-main = "dist/q-proxy.js"
-compatibility_date = "2026-08-01"
-
-[[kv_namespaces]]
-binding = "QPROXY_KV"
-id = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6"
-```
-
-Then:
-
-```bash
-npm run build
-npm run deploy              # refuses while the placeholder remains
-# or directly:
-npx wrangler deploy --config wrangler.toml
-# local preview (in-memory KV):
-npm run dev                 # http://127.0.0.1:8787
-# remote preview (real KV):
-npx wrangler dev --remote
-```
-
-If `wrangler dev` wedges (accepts connections, never responds), kill the stray `workerd` process and retry on another port: `npx wrangler dev --port 8788`.
-
----
-
-## D · Pages Advanced Mode (Dashboard)
-
-Use this only if you prefer Pages. Workers and Pages run the same `src/worker.ts` code. Pages Advanced Mode routes every request through `dist/_worker.js`.
-
-1. Build locally:
-
-   ```bash
-   npm install
-   npm run build          # writes dist/_worker.js
-   ```
-
-2. Create a KV namespace: **Workers & Pages** → **KV** → **Create namespace** → name `qproxy-pages` (any name).
-
-3. Create the Pages project: **Workers & Pages** → **Create application** → **Pages** → **Direct Upload** (or **Upload assets**) → name `q-proxy`.
-
-4. Upload the `dist` directory. Ensure `_worker.js` is at the root of the upload (not nested). The output directory is `dist`. No build command is needed because you already built.
-
-5. After the upload, go to **Settings** → **Bindings** → **Add binding** → **KV Namespace** → **Variable name** `QPROXY_KV` → select the namespace you created → **Save**.
-
-6. Redeploy (upload `dist` again, or trigger a retry) so the new binding takes effect. Pages requires a redeploy after adding a binding.
-
-7. Visit the Pages URL once to seed, then continue at [After deploy](#after-deploy-seed--secure-path).
-
-For Pages via **Git integration** (automatic deploys on push): create the project as **Pages** → **Connect to Git** → pick the repository → set **Build command** to `npm run build` and **Build output directory** to `dist`. Add the KV binding as above. The `_worker.js` file in `dist` is picked up automatically. The `/functions` directory is ignored when `_worker.js` exists.
-
----
-
-## E · Wrangler Pages (CLI, Pages)
-
-```bash
-npm install
-npm run build
-npx wrangler login
-npx wrangler kv namespace create QPROXY_KV
-# note the id for dashboard binding, or add via config:
-```
-
-Pages KV bindings are configured in the dashboard or in a Wrangler configuration file via `kv_namespaces` and `pages_build_output_dir`. Minimal `wrangler.toml` for `wrangler pages deploy`:
-
-```toml
-name = "q-proxy"
-pages_build_output_dir = "dist"
-
-[[kv_namespaces]]
-binding = "QPROXY_KV"
-id = "your-kv-id"
-```
-
-Deploy:
-
-```bash
-# first-time project creation (if not yet created in dashboard):
-npx wrangler pages project create q-proxy --production-branch main
-
-# deploy the built output:
-npm run deploy:pages
-# or explicitly:
-npx wrangler pages deploy dist --project-name=q-proxy
-```
-
-The helper `npm run deploy:pages` runs `npm run build` and then `wrangler pages deploy dist`. Set `PAGES_PROJECT_NAME` to override the project name: `PAGES_PROJECT_NAME=q-proxy npm run deploy:pages`.
-
-If the Pages project was created in the dashboard, you can also bind KV there instead of in the config file — either place works. After adding a binding via the dashboard, redeploy once.
-
-Local Pages development:
-
-```bash
-npm run dev:pages        # wrangler pages dev dist
-# with KV:
-npx wrangler pages dev dist --kv=QPROXY_KV
+node scripts/post-deploy.mjs https://q-proxy.xxx.workers.dev
+# or with token override:
+CLOUDFLARE_API_TOKEN=xxx node scripts/post-deploy.mjs https://q-proxy.xxx.workers.dev
 ```
 
 ---
 
-## F · Setup script (reference)
+## After deploy
 
-`scripts/setup.mjs` automates path C. It verifies auth (`wrangler whoami`), creates the namespace, patches `wrangler.toml`, and builds.
-
-```bash
-node scripts/setup.mjs --help
-node scripts/setup.mjs --dry     # preview without side effects
-npm run setup                    # execute
-```
-
-`scripts/deploy.mjs` builds, checks that the placeholder is replaced, and runs `wrangler deploy --config wrangler.toml` (or `wrangler.local.toml` if present). `scripts/deploy-pages.mjs` does the same for Pages.
-
----
-
-## G · Git-connected Workers Builds (CI/CD)
-
-Connect your fork to Workers Builds for automatic deploys.
-
-1. Push the fork to GitHub.
-2. In the dashboard: **Workers & Pages** → **Create application** → **Workers** → **Import a repository** → authorize GitHub → pick the fork.
-3. Set:
-   - **Build command:** `npm run build`
-   - **Deploy command:** `npx wrangler deploy`
-4. Cloudflare provisions the KV namespace on the first build if `wrangler.toml` declares `kv_namespaces` with the `QPROXY_KV` binding. If the build fails with `[code: 10014] a namespace with this account ID and title already exists`, reuse the existing id: run `npx wrangler kv namespace list`, copy the id, and commit it to `wrangler.toml`.
-5. Every push to the production branch rebuilds and deploys. Pull requests get preview URLs when preview builds are enabled.
-
-Secrets (if you add any) go in **Settings** → **Variables and Secrets**, not in `wrangler.toml`. Q Proxy needs no secrets — everything lives in KV.
-
----
-
-## After deploy: seed + secure path
-
-All deployment paths converge here.
-
-1. Visit any URL of your Worker or Pages deployment once. For example:
-
-   ```
-   https://q-proxy.<your-subdomain>.workers.dev/
-   https://q-proxy.pages.dev/
-   ```
-
-   The first request seeds `qproxy:settings` in KV (`src/settings/store.ts` → `src/settings/seed.ts`).
-
-2. Read the `securePath` (12 hex chars). Two ways:
-
-   - **Dashboard KV viewer:** Workers & Pages → your Worker or Pages project → **Settings** → **Bindings** → **KV Namespace** → **View** → key `qproxy:settings` → JSON field `data.securePath`.
-   - **CLI:**
-
-     ```bash
-     npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV --preview false
-     # look for "securePath": "a1b2c3d4e5f6"
-     # with remote (production) binding explicitly:
-     npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV --remote
-     ```
-
-3. Open the panel:
-
-   ```
-   https://q-proxy.<subdomain>.workers.dev/<securePath>/panel
-   ```
-
-   The first-run wizard asks for a password (8+ characters, at least one letter and one digit). It is stored as PBKDF2-SHA256, 100k iterations, 16-byte salt. The wizard is only available while `passwordHash` is null.
-
-4. After login, the panel shows subscription URLs and settings. Keep the full `https://<host>/<securePath>` URL — rotating the path invalidates every client config.
-
----
-
-## KV details
-
-| Topic | Workers | Pages |
-|-------|---------|-------|
-| Where to create | `npx wrangler kv namespace create QPROXY_KV` or dashboard **Workers & Pages** → **KV** → **Create namespace** | Same command or dashboard **Workers & Pages** → **KV** → **Create namespace** |
-| Where to bind | `wrangler.toml` `[[kv_namespaces]] binding = "QPROXY_KV"` or dashboard **Worker** → **Settings** → **Bindings** | Dashboard **Pages project** → **Settings** → **Bindings** → **Add** → **KV Namespace**, or `wrangler.toml` with `pages_build_output_dir` |
-| Binding name | `QPROXY_KV` exactly. Mismatch returns a binding error. | Same. `src/types/env.ts` freezes the name. |
-| When binding takes effect | Next `wrangler deploy` or dashboard Save | Next Pages deployment (re-upload `dist` after adding) |
-| Local dev id | Any placeholder works with `wrangler dev` (in-memory KV). Use a real id only with `wrangler dev --remote`. | `wrangler pages dev dist --kv=QPROXY_KV` uses in-memory KV unless `--remote` or real binding. |
-| Preview vs production | Optional `preview_id` in `wrangler.toml` points `wrangler dev --remote` and preview deployments at a separate namespace. | `[env.preview.kv_namespaces]` in `wrangler.toml` overrides the production id for preview. |
-
-All keys use the `qproxy:` prefix. Do not rename them. Do not share the KV namespace between two deployments.
-
----
-
-## Custom domains
-
-Workers: **Worker** → **Settings** → **Triggers** → **Custom Domains** → **Add Custom Domain**. Point the hostname to the proxied (orange cloud) DNS record. After adding, set **Settings → Routing → hostnameOverride** or **customDomains** in the Q Proxy panel to emit nodes with that hostname.
-
-Pages: **Pages project** → **Custom domains** → **Set up a custom domain**. The same panel settings control the emitted SNI and host.
-
-TLS nodes use ports `443,2053,2083,2087,2096,8443`. Plain nodes use `80,8080,8880,2052,2082,2086,2095`. The port family must match `security` (enforced in `src/nodes/generate.ts`). Fragment nodes are TLS-only.
-
----
-
-## Update, backup, and reset
-
-### Update
-
-| Deployment type | Command |
-|-----------------|---------|
-| Dashboard paste (Workers or Pages) | `npm run build` → paste `dist/q-proxy.js` or re-upload `dist` |
-| Wrangler Workers | `npm run deploy` |
-| Wrangler Pages | `npm run deploy:pages` |
-| Deploy Button / Workers Builds | `git push` to the production branch |
-
-`SETTINGS_VERSION` is `1`. On write, `src/settings/migrate.ts` deep-merges stored settings over a clone of `DEFAULT_SETTINGS` and runs any pending migrations. Unknown keys are preserved on downgrade.
-
-### Backup and restore
-
-**Export** (authenticated): `GET /{securePath}/api/settings/export` — returns secrets-stripped JSON. The panel has an Export button on the settings page.
-
-**Import**: `POST /{securePath}/api/settings/import` with the exported file. The handler checks `version` and validates every field (`src/settings/validate.ts`).
-
-**Full KV dump** (CLI):
-
-```bash
-npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV --remote > backup.json
-```
-
-To restore on a new deployment, deploy first, complete the first-run wizard, then import the exported JSON.
-
-### Reset
-
-Panel → **Settings** → **Reset** (`POST /{securePath}/api/settings/reset`) restores defaults but keeps identity fields (`securePath`, UUIDs, `sessionSecret`, password).
-
-To remove all data, delete keys that start with `qproxy:` in the KV viewer, or delete the KV namespace itself.
-
----
-
-## Local configuration files
-
-| File | Tracked | Purpose |
-|------|---------|---------|
-| `wrangler.toml` | Yes | Public template. Placeholder `REPLACE_WITH_YOUR_KV_ID`. Commit this. |
-| `wrangler.local.toml` | No (gitignored) | Your local override with the real id. `npm run deploy` prefers it when present. |
-| `.dev.vars` | No (gitignored) | Local secrets for `wrangler dev --remote`. No secrets required by Q Proxy. |
-| `.dev.vars.example` | Yes | Template. Copy to `.dev.vars` if you need remote dev. |
-| `dist/` | No (gitignored) | Build output. Regenerate with `npm run build`. |
-
-Never commit `wrangler.local.toml`, `.dev.vars`, or a `wrangler.toml` that contains a real KV id when contributing to the public repository.
-
----
+- Keep the full `https://<host>/<securePath>` URL — rotating the path invalidates clients.
+- Custom domains: **Worker** → **Settings** → **Triggers** → **Custom Domains** → set `hostnameOverride` or `customDomains` in the Q Proxy panel.
+- Update: Automatic way re-runs the same command. Manual way re-pastes `q-proxy.js`.
+- Backup: Panel → **Settings** → **Export** (`GET /{sp}/api/settings/export`), restore via **Import**.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `REPLACE_WITH_YOUR_KV_ID` error on deploy | Placeholder not replaced | `npx wrangler kv namespace create QPROXY_KV` → copy id → paste into `wrangler.toml` → `npm run setup` |
-| `wrangler whoami` shows no account | Not logged in | `npx wrangler login` or set `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
-| `[code: 9109] Invalid access token` with `cfk_` | Global Key passed as `CLOUDFLARE_API_TOKEN` | Use `CLOUDFLARE_API_KEY` + `CLOUDFLARE_EMAIL` + `CLOUDFLARE_ACCOUNT_ID` |
-| `No KV Namespaces configured` | Binding not in config file used by the command | Ensure `[[kv_namespaces]] binding = "QPROXY_KV"` is top-level in the `wrangler.toml` you pass with `--config` |
-| Secure path 404 after deploy | KV not seeded or wrong path | Visit the worker root URL once to seed. Read `qproxy:settings` → `data.securePath`. Paths are case-sensitive. |
-| `wrangler dev` serves old code | `dist/q-proxy.js` stale | `npm run build` before `wrangler dev`. `npm run dev` does both. |
-| `workerd` wedged (accepts, never responds) | Stale miniflare session | Kill the `workerd` process, retry on another port: `npx wrangler dev --port 8788` |
-| Pages binding not visible | Project not redeployed | After adding the KV binding in dashboard, re-upload `dist` or `npx wrangler pages deploy dist` |
-| `a namespace with this account ID and title already exists [code: 10014]` | Namespace already exists (Workers Builds) | Reuse it: `npx wrangler kv namespace list` → copy id → put it in `wrangler.toml` |
+| `No such module: q-proxy.js` on upload | Multipart field name mismatch | Use the provided scripts — they set `main_module` + filename correctly. |
+| `already exists [10014]` on KV create | Namespace exists | Script reuses it. Manual: `GET /accounts/{id}/storage/kv/namespaces` → reuse ID. |
+| `key not found` reading `qproxy:settings` | KV eventual consistency or not seeded | `curl https://<worker>/` then retry after 3s. Or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV --remote`. |
+| Panel 404 | Wrong `securePath` | Read `qproxy:settings` → `data.securePath` is 12 hex chars, case-sensitive. |
+| Workers.dev subdomain not found | Not enabled | Script enables it via `PUT /accounts/{id}/workers/subdomain {"enabled":true}`. Manual: visit Worker → **Settings** → **Triggers**. |
 
-For panel and subscription issues, see [USER_GUIDE.md §6](USER_GUIDE.md#6-troubleshooting). Enable `debugLogging` in Settings and run `npx wrangler tail` for structured logs (`src/core/log.ts`). Never log `passwordHash`, `passwordSalt`, `sessionSecret`, or `telegram.botToken` — the logger redacts them.
+No `wrangler` is required for either way. If you do use `wrangler`, `npm run quick-deploy` (Node 20+) does the same flow but via `wrangler` API. `npm run dev` still needs `wrangler` for local dev (`http://127.0.0.1:8787`).
+
+## For developers (advanced)
+
+The two ways above are enough for users. If you contribute, you may also use:
+
+- `npm run dev` / `npm run dev:pages` (local miniflare, no KV seed needed — uses in-memory KV)
+- `wrangler deploy` / `wrangler pages deploy` (requires `wrangler.toml` with `QPROXY_KV` id)
+- `npm run setup` + `npm run deploy` (legacy wrangler path, now superseded by `quick-deploy.sh`)
+
+`wrangler.toml` ships with `REPLACE_WITH_YOUR_KV_ID`. `wrangler.local.toml` (gitignored) overrides it. `scripts/deploy.mjs` now picks the valid file and warns if the other has a placeholder (fix for earlier bug).
 
 ---
 
-## Before going public: sanitize the repository
+## Before going public
 
-Current files contain no secrets. `wrangler.toml` ships with `REPLACE_WITH_YOUR_KV_ID`. Local overrides live in `wrangler.local.toml` and `.dev.vars` (both gitignored). `.dev.vars.example` is the tracked template.
-
-Before you push a fork as a public template, do three checks.
-
-### 1 · Check the working tree
+`wrangler.toml` has a placeholder. Local overrides are gitignored. Before you push a fork as a template:
 
 ```bash
-git ls-files | xargs grep -l "REPLACE_WITH_YOUR_KV_ID"   # should show only wrangler.toml and docs
+git ls-files | xargs grep -l "REPLACE_WITH_YOUR_KV_ID"   # only wrangler.toml and docs
 git status                                                # wrangler.local.toml and .dev.vars must not appear
-# if you know a previous personal id or worker URL, search for it:
-# grep -r "YOUR_KV_ID\|YOUR_ACCOUNT_ID\|YOUR_WORKER_URL" . --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.wrangler
 ```
-
-If the last command prints matches, remove them. Rotate the leaked value (delete the KV namespace and create a new one, regenerate the `securePath` via **Settings → Reset** or by deleting `qproxy:settings`).
-
-### 2 · Check git history
-
-The placeholder was added in `175e1cf`. Earlier history (`1f6f753`) still stores the original KV id, Account ID, worker URL, `securePath`, and vault paths. That history will become public when you push.
-
-To rewrite it locally, pick one method.
-
-**Option A — start a clean history (simplest, keeps only the public state):**
-
-```bash
-# from the repo root
-git checkout --orphan public-main
-git add -A
-git commit -m "chore: public release — clean history, placeholder KV id"
-git branch -D master
-git branch -m public-main master
-# then: git push -f origin master  (only if the remote is your new public fork)
-```
-
-You lose old history but guarantee no leak. Tag `v1.1.0` again if needed.
-
-**Option B — filter the existing history (keeps commits, rewrites hashes):**
-
-```bash
-# install git-filter-repo once: pip install git-filter-repo
-
-# discover the values you need to scrub (run in the original repo before you push it public):
-git log -S "REPLACE_WITH" --all -p | head -n 100   # look for KV ids, account ids, worker URLs
-
-# create a replacements file with your real values (use your own ids, not the examples):
-cat > /tmp/replacements.txt <<'EOF'
-YOUR_KV_NAMESPACE_ID==>REPLACE_WITH_YOUR_KV_ID
-YOUR_ACCOUNT_ID==>REPLACE_WITH_ACCOUNT_ID
-YOUR_WORKER_URL==>REPLACE_WITH_WORKER_URL
-YOUR_SECURE_PATH==>REPLACE_WITH_SECURE_PATH
-E:\vault\Platforms\cloudflare\qproxy.md==>REPLACE_WITH_VAULT_PATH
-E:\vault\Platforms\cloudflare\platform.md==>REPLACE_WITH_VAULT_PATH
-EOF
-
-git filter-repo --replace-text /tmp/replacements.txt --force
-
-# verify (search for the literal prefixes you just replaced):
-git log -S "YOUR_KV" --all --oneline   # should print nothing after scrub
-git log -S "YOUR_ACCOUNT" --all --oneline
-
-# force-push to your public fork only:
-git push -f origin master --tags
-```
-
-`git filter-repo` rewrites every commit hash. Do not run it on a branch others already depend on. Coordinate with collaborators or push to a new repository.
-
-### 3 · Remove tracked dev artifacts
-
-`.playwright-mcp/` is now gitignored. If you forked before this change, untrack its old snapshots:
-
-```bash
-git rm --cached -r .playwright-mcp/
-echo ".playwright-mcp/" >> .gitignore
-git commit -m "chore: untrack playwright snapshots"
-```
-
-`.wrangler/` and `dist/` are already ignored. Never commit them.

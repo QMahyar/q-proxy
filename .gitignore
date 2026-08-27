@@ -13,3 +13,6 @@ wrangler.jsonc
 .opencode/
 *.png
 !docs/screenshots/*.png
+
+__pycache__/
+*.pyc
