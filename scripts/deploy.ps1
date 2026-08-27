@@ -119,18 +119,21 @@ function Get-SecurePath($KvId) {
 # ── download ─────────────────────────────────────────────────────────────────
 function Download-Worker {
   Write-Host "Downloading $SCRIPT_NAME from Releases..." -ForegroundColor Gray
+  $tmpFile = Join-Path $env:TEMP "q-proxy-$([guid]::NewGuid().ToString('N').Substring(0,8)).js"
   try {
-    $data = (Invoke-WebRequest -Uri "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -UseBasicParsing).Content
+    curl.exe -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o $tmpFile 2>$null
   } catch {
-    $data = (Invoke-WebRequest -Uri "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -UseBasicParsing).Content
+    curl.exe -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o $tmpFile
   }
-  if ($data.Length -lt 10000) { Write-Host "Download failed ($($data.Length) bytes)" -ForegroundColor Red; exit 1 }
-  Write-Host "Downloaded $($data.Length) bytes" -ForegroundColor Green
-  return $data
+  if (-not (Test-Path $tmpFile)) { Write-Host "Download failed" -ForegroundColor Red; exit 1 }
+  $size = (Get-Item $tmpFile).Length
+  if ($size -lt 10000) { Write-Host "Download failed ($size bytes)" -ForegroundColor Red; Remove-Item $tmpFile -Force; exit 1 }
+  Write-Host "Downloaded $size bytes" -ForegroundColor Green
+  return $tmpFile
 }
 
 # ── upload via curl.exe (avoids PowerShell multipart corruption) ─────────────
-function Upload-Worker($WorkerData, $KvId) {
+function Upload-Worker($WorkerFilePath, $KvId) {
   Write-Host "Uploading worker..." -ForegroundColor Gray
 
   $metadata = @{
@@ -139,11 +142,10 @@ function Upload-Worker($WorkerData, $KvId) {
     bindings           = @(@{ type="kv_namespace"; name=$BINDING; namespace_id=$KvId })
   } | ConvertTo-Json -Compress
 
-  # Write BOTH metadata and script to temp files — curl.exe reads them as binary
+  # Write metadata as bytes (no BOM) — WriteAllText can inject BOM in some PS versions
   $tmpMeta = Join-Path $env:TEMP "q-meta-$([guid]::NewGuid().ToString('N').Substring(0,8)).json"
-  $tmpFile = Join-Path $env:TEMP "q-proxy-$([guid]::NewGuid().ToString('N').Substring(0,8)).js"
-  [System.IO.File]::WriteAllText($tmpMeta, $metadata, [System.Text.Encoding]::UTF8)
-  [System.IO.File]::WriteAllText($tmpFile, $WorkerData, [System.Text.Encoding]::UTF8)
+  $metaBytes = [System.Text.Encoding]::UTF8.GetBytes($metadata)
+  [System.IO.File]::WriteAllBytes($tmpMeta, $metaBytes)
 
   try {
     $authArg = if ($Token -like "cfk_*") {
@@ -156,7 +158,7 @@ function Upload-Worker($WorkerData, $KvId) {
     $result = & curl.exe -s -X PUT "$BASE/accounts/$accountId/workers/scripts/$WORKER" `
       @authArg `
       -F "metadata=@$tmpMeta;type=application/json" `
-      -F "$SCRIPT_NAME=@$tmpFile;type=application/javascript"
+      -F "$SCRIPT_NAME=@$WorkerFilePath;type=application/javascript"
 
     $resp = $result | ConvertFrom-Json
     if (-not $resp.success) {
@@ -165,7 +167,7 @@ function Upload-Worker($WorkerData, $KvId) {
     }
     Write-Host "Worker uploaded" -ForegroundColor Green
   } finally {
-    if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }
+    if (Test-Path $WorkerFilePath) { Remove-Item $WorkerFilePath -Force }
     if (Test-Path $tmpMeta) { Remove-Item $tmpMeta -Force }
   }
 }
@@ -270,9 +272,10 @@ switch ($Action) {
       $kv = Find-KV
       if ($kv) { $KVId = $kv.id } else { Write-Host "No Q Proxy KV found. Deploy first." -ForegroundColor Red; exit 1 }
     }
-    $data = Download-Worker
-    if ($Dry) { Write-Host "[dry] Would upload $($data.Length) bytes with KV $KVId" -ForegroundColor Yellow; exit 0 }
-    Upload-Worker $data $KVId
+    $workerFile = Download-Worker
+    $size = (Get-Item $workerFile).Length
+    if ($Dry) { Write-Host "[dry] Would upload $size bytes with KV $KVId" -ForegroundColor Yellow; Remove-Item $workerFile -Force; exit 0 }
+    Upload-Worker $workerFile $KVId
     Write-Host "Update complete" -ForegroundColor Green
     exit 0
   }
@@ -280,9 +283,9 @@ switch ($Action) {
   "deploy" {
     if (-not $Password) { $Password = Read-Host "First panel password [empty to set later]" }
     $kvId = Ensure-KV
-    $data = Download-Worker
-    if ($Dry) { Write-Host "[dry] Would upload worker with KV $kvId" -ForegroundColor Yellow; exit 0 }
-    Upload-Worker $data $kvId
+    $workerFile = Download-Worker
+    if ($Dry) { Write-Host "[dry] Would upload worker with KV $kvId" -ForegroundColor Yellow; Remove-Item $workerFile -Force; exit 0 }
+    Upload-Worker $workerFile $kvId
     $workerUrl = Get-WorkerUrl
     Write-Host "Worker URL: $workerUrl" -ForegroundColor Green
 
