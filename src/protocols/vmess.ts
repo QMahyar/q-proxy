@@ -1,13 +1,7 @@
 import { chacha20Poly1305Open, chacha20Poly1305Seal } from "../crypto/chacha20";
 import { Shake128 } from "../crypto/shake128";
-import {
-  bytesToHex,
-  concatBytes,
-  hexToBytes,
-  readU16BE,
-  readU32BE,
-  u16be,
-} from "../utils/bytes";
+import { bytesToHex, concatBytes, readU16BE, readU32BE, u16be } from "../utils/bytes";
+import { parseUuid } from "../utils/uuid";
 import { pruneBoundedRegistry } from "../utils/bounded";
 import { randomBytes } from "../utils/random";
 import {
@@ -446,8 +440,4 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
   }
 }
 
-function parseUuid(uuid: string): Uint8Array | null {
-  const compact = uuid.replaceAll("-", "").toLowerCase();
-  if (compact.length !== 32) return null;
-  return hexToBytes(compact);
-}
+

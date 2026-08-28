@@ -21,7 +21,7 @@ const CF_PLAIN_PORT_LIST: readonly number[] = CF_PLAIN_PORTS;
 const KNOWN_ALPN = ["h2", "http/1.1", "h3"];
 
 const LANGUAGES: readonly Language[] = ["en", "fa"];
-const SS_METHODS: readonly SsMethod[] = ["aes-128-gcm", "aes-256-gcm"];
+const SS_METHODS: readonly SsMethod[] = ["aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305"];
 const PLAIN_PORT_POLICIES: readonly PlainPortPolicy[] = ["always", "workers-dev", "never"];
 const PROXY_IP_MODES = ["proxyip", "nat64"] as const;
 const CAMOUFLAGE_MODES: readonly CamouflageMode[] = ["off", "static", "proxy"];

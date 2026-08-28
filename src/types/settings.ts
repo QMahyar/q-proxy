@@ -4,7 +4,7 @@ export const CF_TLS_PORTS = [443, 2053, 2083, 2087, 2096, 8443] as const;
 export const CF_PLAIN_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095] as const;
 
 export type Language = "en" | "fa";
-export type SsMethod = "aes-128-gcm" | "aes-256-gcm";
+export type SsMethod = "aes-128-gcm" | "aes-256-gcm" | "chacha20-ietf-poly1305";
 export type Fingerprint =
   | "chrome"
   | "firefox"

@@ -1,4 +1,5 @@
-import { equalsBytes, hexToBytes, readU16BE } from "../utils/bytes";
+import { equalsBytes, readU16BE } from "../utils/bytes";
+import { parseUuid } from "../utils/uuid";
 import {
   ByteAccumulator,
   parseAddressValue,
@@ -88,10 +89,4 @@ export function createVlessInbound(expectedUuid: string): ProtocolInbound<VlessR
       rest: initialPayload,
     };
   }
-}
-
-function parseUuid(uuid: string): Uint8Array | null {
-  const compact = uuid.replaceAll("-", "");
-  if (compact.length !== 32) return null;
-  return hexToBytes(compact);
 }
