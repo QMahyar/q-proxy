@@ -158,6 +158,17 @@ async function uploadWorker(token, email, accountId, kvId, scriptContent) {
   return json;
 }
 
+async function getDefaultBranchRemote() {
+  try {
+    const res = await fetch("https://api.github.com/repos/QMahyar/q-proxy", { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const j = await res.json();
+      if (j.default_branch) return j.default_branch;
+    }
+  } catch {}
+  return null;
+}
+
 async function getWorkerScript() {
   const local = resolve(root, "dist/q-proxy.js");
   if (existsSync(local)) {
@@ -166,10 +177,14 @@ async function getWorkerScript() {
   }
   const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
   const version = pkg.version || "latest";
+  const defaultBranch = await getDefaultBranchRemote();
+  const branches = defaultBranch ? [defaultBranch] : [];
+  if (!branches.includes("master")) branches.push("master");
+  if (!branches.includes("main")) branches.push("main");
   const urls = [
     `https://github.com/QMahyar/q-proxy/releases/latest/download/q-proxy.js`,
     `https://github.com/QMahyar/q-proxy/releases/download/v${version}/q-proxy.js`,
-    `https://raw.githubusercontent.com/QMahyar/q-proxy/master/dist/q-proxy.js`,
+    ...branches.map((b) => `https://raw.githubusercontent.com/QMahyar/q-proxy/${b}/dist/q-proxy.js`),
   ];
   for (const url of urls) {
     try {
@@ -355,7 +370,8 @@ What it does:
   } catch (e) {
     console.warn(`Seed fetch failed: ${String(e.message).slice(0, 200)} — KV may still seed on next visit`);
   }
-  await new Promise((r) => setTimeout(r, 1500));
+  // KV is eventually consistent — wait 2s for propagation before reading securePath
+  await new Promise((r) => setTimeout(r, 2000));
 
   console.log("Reading securePath from KV via API...");
   let securePath = "";

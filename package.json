@@ -9,6 +9,7 @@
     "build": "node scripts/build-single-file.mjs",
     "dev": "node scripts/build-single-file.mjs && wrangler dev",
     "deploy": "node scripts/deploy-direct.mjs",
+    "deploy:pages": "wrangler pages deploy dist --project-name=q-proxy",
     "version": "node scripts/version.mjs",
     "release": "node scripts/release.mjs"
   },

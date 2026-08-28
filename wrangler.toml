@@ -3,8 +3,12 @@ main = "dist/q-proxy.js"
 compatibility_date = "2026-08-01"
 
 # KV binding — one namespace, zero runtime deps.
-# Replace the placeholder after: npx wrangler kv namespace create QPROXY_KV
-# Or use the automated helper: npm run setup
+# ⚠ Placeholder — wrangler will error "KV namespace id is not valid" until replaced.
+# Fix (pick one):
+#   1) npm run deploy              — direct Cloudflare API (no wrangler, creates KV automatically)
+#   2) npx wrangler kv namespace create QPROXY_KV --remote  → paste id below
+#   3) Copy to wrangler.local.toml (gitignored) and set id there — deploy prefers wrangler.local.toml
+# See docs/DEPLOYMENT.md for all paths: npm run deploy, npm run deploy:pages, scripts/deploy.ps1, wrangler.local.toml
 [[kv_namespaces]]
 binding = "QPROXY_KV"
 id = "REPLACE_WITH_YOUR_KV_ID"
