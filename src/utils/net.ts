@@ -195,3 +195,14 @@ export function isLocalOrPrivateTarget(host: string): boolean {
   }
   return false;
 }
+
+export function normalizeCleanAddress(raw: string): string | null {
+  const hp = parseHostPort(raw.trim(), 0);
+  if (hp === null || hp.host.length === 0) return null;
+  const host = hp.host.toLowerCase();
+  const isAddr = isIPv4(host) || isIPv6(host);
+  const looksDomain = host.includes(".") && /^[a-z0-9.-]+$/.test(host) && !host.startsWith(".") && !host.endsWith("-");
+  if (!isAddr && !looksDomain) return null;
+  const display = isIPv6(host) ? `[${host}]` : host;
+  return hp.port > 0 ? `${display}:${hp.port}` : display;
+}

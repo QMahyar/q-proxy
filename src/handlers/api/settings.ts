@@ -8,6 +8,22 @@ import { deepMergeDefaults } from "../../settings/migrate";
 import { validateSettings } from "../../settings/validate";
 import { saveSettings, settingsEtag } from "../../settings/store";
 
+const PRESERVED_FIELDS = [
+  "securePath",
+  "passwordHash",
+  "passwordSalt",
+  "sessionSecret",
+  "language",
+  "vlessUuid",
+  "vmessUuid",
+  "trojanPassword",
+  "ssPassword",
+  "vlessPath",
+  "vmessPath",
+  "trojanPath",
+  "ssPath",
+] as const satisfies readonly (keyof Settings)[];
+
 export function publicSettingsView(s: Settings): PublicSettings & { hasPassword: boolean } {
   const view = structuredClone(s) as unknown as Record<string, unknown>;
   for (const path of SENSITIVE_SETTING_PATHS) delete view[path];
@@ -42,19 +58,9 @@ export const handleSaveSettings: RouteHandler = async (req, env, s) => {
 export const handleResetSettings: RouteHandler = async (req, env, s) => {
   assertCsrf(req);
   const fresh = structuredClone(DEFAULT_SETTINGS);
-  fresh.securePath = s.securePath;
-  fresh.passwordHash = s.passwordHash;
-  fresh.passwordSalt = s.passwordSalt;
-  fresh.sessionSecret = s.sessionSecret;
-  fresh.language = s.language;
-  fresh.vlessUuid = s.vlessUuid;
-  fresh.vmessUuid = s.vmessUuid;
-  fresh.trojanPassword = s.trojanPassword;
-  fresh.ssPassword = s.ssPassword;
-  fresh.vlessPath = s.vlessPath;
-  fresh.vmessPath = s.vmessPath;
-  fresh.trojanPath = s.trojanPath;
-  fresh.ssPath = s.ssPath;
+  for (const key of PRESERVED_FIELDS) {
+    (fresh as unknown as Record<string, unknown>)[key] = (s as unknown as Record<string, unknown>)[key];
+  }
   await saveSettings(env, fresh);
   return jsonOk({ saved: true });
 };
@@ -89,18 +95,9 @@ export const handleImportSettings: RouteHandler = async (req, env, s) => {
   }
   for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "version", "updatedAt"]) delete blob[k];
   const merged = deepMergeDefaults(structuredClone(DEFAULT_SETTINGS), blob);
-  merged.securePath = s.securePath;
-  merged.passwordHash = s.passwordHash;
-  merged.passwordSalt = s.passwordSalt;
-  merged.sessionSecret = s.sessionSecret;
-  merged.vlessUuid = s.vlessUuid;
-  merged.vmessUuid = s.vmessUuid;
-  merged.trojanPassword = s.trojanPassword;
-  merged.ssPassword = s.ssPassword;
-  merged.vlessPath = s.vlessPath;
-  merged.vmessPath = s.vmessPath;
-  merged.trojanPath = s.trojanPath;
-  merged.ssPath = s.ssPath;
+  for (const key of PRESERVED_FIELDS) {
+    (merged as unknown as Record<string, unknown>)[key] = (s as unknown as Record<string, unknown>)[key];
+  }
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);
   await saveSettings(env, result.value);

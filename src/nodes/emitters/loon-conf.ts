@@ -1,17 +1,15 @@
 import type { ProxyNode } from "../../types/node";
+import { TEST_URL, visibleNodes as baseVisibleNodes } from "./registry";
 import type { EmitOptions } from "./registry";
-
-const TEST_URL = "https://www.gstatic.com/generate_204";
 
 type LoonNode = Extract<ProxyNode, { kind: "vmess" | "trojan" | "vless" }>;
 
 function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): LoonNode[] {
-  return nodes.filter(
+  return baseVisibleNodes(nodes, isFragment).filter(
     (n): n is LoonNode =>
-      (isFragment || n.variant !== "fragment") &&
-      (n.kind === "vmess" ||
-        (n.kind === "vless" && n.security === "tls") ||
-        (n.kind === "trojan" && n.security === "tls")),
+      n.kind === "vmess" ||
+      (n.kind === "vless" && n.security === "tls") ||
+      (n.kind === "trojan" && n.security === "tls"),
   );
 }
 

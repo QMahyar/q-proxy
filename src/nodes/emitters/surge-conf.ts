@@ -1,15 +1,12 @@
 import type { ProxyNode } from "../../types/node";
+import { TEST_URL, visibleNodes as baseVisibleNodes } from "./registry";
 import type { EmitOptions } from "./registry";
-
-const TEST_URL = "https://www.gstatic.com/generate_204";
 
 type SurgeNode = Extract<ProxyNode, { kind: "vmess" | "trojan" }>;
 
 function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): SurgeNode[] {
-  return nodes.filter(
-    (n): n is SurgeNode =>
-      (isFragment || n.variant !== "fragment") &&
-      (n.kind === "vmess" || (n.kind === "trojan" && n.security === "tls")),
+  return baseVisibleNodes(nodes, isFragment).filter(
+    (n): n is SurgeNode => n.kind === "vmess" || (n.kind === "trojan" && n.security === "tls"),
   );
 }
 

@@ -1,7 +1,6 @@
 import type { ProxyNode } from "../../types/node";
+import { TEST_URL, visibleNodes } from "./registry";
 import type { EmitOptions } from "./registry";
-
-const TEST_URL = "https://www.gstatic.com/generate_204";
 
 interface SingBoxTls {
   enabled: boolean;
@@ -82,7 +81,7 @@ function outboundOf(node: ProxyNode): Record<string, unknown> {
 }
 
 export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions): string {
-  const visible = nodes.filter((n) => opts.isFragment || n.variant !== "fragment");
+  const visible = visibleNodes(nodes, opts.isFragment);
   const names = visible.map((n) => n.name);
   const hasNodes = names.length > 0;
   const group: Record<string, unknown> | null = hasNodes

@@ -1,9 +1,8 @@
 import type { ProxyNode } from "../../types/node";
+import { TEST_URL, visibleNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 import type { YamlObject } from "./yaml-writer";
 import { writeYaml } from "./yaml-writer";
-
-const TEST_URL = "https://www.gstatic.com/generate_204";
 
 function wsOpts(node: ProxyNode): YamlObject {
   const o: YamlObject = { path: node.path, headers: { Host: node.host } };
@@ -67,8 +66,8 @@ function proxyEntry(node: ProxyNode): YamlObject {
 }
 
 export function emitClashYaml(nodes: readonly ProxyNode[], opts: EmitOptions): string {
-  const visible = nodes.filter(
-    (n) => (opts.isFragment || n.variant !== "fragment") && !(n.kind === "trojan" && n.security === "none"),
+  const visible = visibleNodes(nodes, opts.isFragment).filter(
+    (n) => !(n.kind === "trojan" && n.security === "none"),
   );
   const proxies = visible.map(proxyEntry);
   const names = proxies.map((p) => String(p.name));
