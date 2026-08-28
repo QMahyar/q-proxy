@@ -2,7 +2,6 @@ import type { RouteHandler } from "../../types/context";
 import type { PublicUser, UserAccount } from "../../users/store";
 import { NotFoundError, ValidationError } from "../../core/errors";
 import { jsonOk, readJsonObject } from "../../core/respond";
-import { assertCsrf } from "../../auth/guard";
 import {
   MAX_USERS,
   getUserHits,
@@ -77,7 +76,6 @@ export const handleUsersApi: RouteHandler = async (req, env, _s) => {
   const segs = url.pathname.split("/").filter((p) => p.length > 0);
   const rest = segs.slice(segs.indexOf("users") + 1);
   const method = req.method;
-  if (method !== "GET") assertCsrf(req);
 
   if (rest.length === 0 && method === "GET") {
     return jsonOk({ users: await withHits(env, await listUsers(env)) });
