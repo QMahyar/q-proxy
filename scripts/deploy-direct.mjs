@@ -221,7 +221,7 @@ async function main() {
 Q Proxy direct deploy — no wrangler needed
 
 Usage:
-  node scripts/deploy-direct.mjs [--dry] [--token <token>] [--email <email>] [--account-id <id>] [--worker-name <name>]
+  node scripts/deploy-direct.mjs [--dry] [--token <token>] [--email <email>] [--account-id <id>] [--password <pw>]
   npm run deploy:direct -- --dry
   CLOUDFLARE_API_TOKEN=xxx node scripts/deploy-direct.mjs
   CLOUDFLARE_API_KEY=cfk_xxx CLOUDFLARE_EMAIL=you@example.com CLOUDFLARE_ACCOUNT_ID=xxx node scripts/deploy-direct.mjs
@@ -253,7 +253,6 @@ What it does:
     if (args[i] === "--token" && args[i + 1]) token = args[++i];
     if (args[i] === "--email" && args[i + 1]) email = args[++i];
     if (args[i] === "--account-id" && args[i + 1]) accountId = args[++i];
-    if (args[i] === "--worker-name" && args[i + 1]) accountId = args[++i];
   }
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -298,18 +297,6 @@ What it does:
     if (password) console.log(`[dry] Would set first password via POST /<sp>/api/auth/setup`);
     rl.close();
     process.exit(0);
-  }
-
-  try {
-    const whoUrl = isGlobalKey(token)
-      ? `https://api.cloudflare.com/client/v4/accounts/${accountId || "me"}/workers/subdomain`
-      : "https://api.cloudflare.com/client/v4/accounts";
-    const headers = isGlobalKey(token) ? { "X-Auth-Email": email, "X-Auth-Key": token } : { Authorization: `Bearer ${token}` };
-    const res = await fetch(whoUrl, { headers });
-    if (!res.ok) throw new Error(await res.text());
-    console.log("Auth OK");
-  } catch (e) {
-    console.warn(`Auth check warning: ${String(e.message).slice(0, 300)}`);
   }
 
   try {

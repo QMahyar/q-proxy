@@ -17,7 +17,71 @@ KV_TITLE="q-proxy-QPROXY_KV"
 BINDING="QPROXY_KV"
 SCRIPT_NAME="q-proxy.js"
 BASE="https://api.cloudflare.com/client/v4"
+COMPAT_DATE="2026-08-01"
 TOKEN_URL="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22workers_kv_storage%22%2C%22type%22%3A%22edit%22%7D%5D&name=Q%20Proxy&accountId=*&zoneId=all"
+
+ok() { echo "$1" | grep -q '"success":true'; }
+extract() { grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed 's/.*: *"//;s/".*//'; }
+die() { echo "$1" >&2; exit 1; }
+winpath() { command -v cygpath >/dev/null 2>&1 && cygpath -w "$1" || echo "$1"; }
+
+cf() {
+  local method="$1" path="$2"; shift 2
+  local auth=(-H "Authorization: Bearer $TOKEN")
+  [[ "$TOKEN" == cfk_* ]] && auth=(-H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL")
+  curl -s -X "$method" "$BASE$path" "${auth[@]}" -H "Content-Type: application/json" "$@"
+}
+
+get_kv_id() {
+  cf GET "/accounts/$ACCOUNT_ID/storage/kv/namespaces" \
+    | grep -o "\"id\":\"[^\"]*\",\"title\":\"$KV_TITLE\"" | head -1 | grep -o '"id":"[^"]*"' | sed 's/"id":"//;s/"//'
+}
+
+get_subdomain() {
+  cf PUT "/accounts/$ACCOUNT_ID/workers/subdomain" -d '{"enabled":true}' > /dev/null 2>&1 || true
+  cf GET "/accounts/$ACCOUNT_ID/workers/subdomain" | extract subdomain
+}
+
+get_secure_path() {
+  cf GET "/accounts/$ACCOUNT_ID/storage/kv/namespaces/$1/values/qproxy:settings" \
+    | grep -o '"securePath":"[^"]*"' | head -1 | sed 's/"securePath":"//;s/"//'
+}
+
+ensure_kv() {
+  local id; id=$(get_kv_id)
+  if [[ -n "$id" ]]; then echo "Reusing existing KV: $id"; echo "$id"; return; fi
+  echo "Creating KV namespace ($KV_TITLE)..."
+  local r; r=$(cf POST "/accounts/$ACCOUNT_ID/storage/kv/namespaces" -d "{\"title\":\"$KV_TITLE\"}")
+  id=$(echo "$r" | extract id)
+  [[ -n "$id" ]] || id=$(get_kv_id)
+  [[ -n "$id" ]] || die "KV creation failed: $r"
+  echo "Created KV: $id"
+  echo "$id"
+}
+
+download_worker() {
+  echo "Downloading $SCRIPT_NAME..."
+  local out="$1"
+  curl -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o "$out" 2>/dev/null || \
+    curl -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o "$out"
+  local size; size=$(wc -c < "$out")
+  [[ "$size" -lt 10000 ]] && die "Download failed ($size bytes)"
+  echo "Downloaded $size bytes"
+}
+
+upload_worker() {
+  local script="$1" meta="$2"
+  echo "Uploading worker..."
+  local s_win m_win
+  s_win=$(winpath "$script")
+  m_win=$(winpath "$meta")
+  local r
+  r=$(cf PUT "/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
+    -F "metadata=@$m_win;type=application/json" \
+    -F "$SCRIPT_NAME=@$s_win;filename=$SCRIPT_NAME;type=application/javascript+module")
+  ok "$r" || die "Upload failed: $r"
+  echo "Worker uploaded"
+}
 
 DRY=0; TOKEN=""; EMAIL=""; PASSWORD=""; ACTION="deploy"; KV_ID_TARGET=""
 while [[ $# -gt 0 ]]; do
@@ -29,104 +93,14 @@ while [[ $# -gt 0 ]]; do
     --action) ACTION="$2"; shift 2;;
     --kv-id) KV_ID_TARGET="$2"; shift 2;;
     --title) KV_TITLE="$2"; shift 2;;
-    *) die "Unknown option: $1";;
+    *) echo "Unknown option: $1" >&2; exit 1;;
   esac
 done
 
-# ── helpers ──────────────────────────────────────────────────────────────────
-auth_header() {
-  if [[ "$TOKEN" == cfk_* ]]; then
-    echo "-H \"X-Auth-Key: $TOKEN\" -H \"X-Auth-Email: $EMAIL\""
-  else
-    echo "-H \"Authorization: Bearer $TOKEN\""
-  fi
-}
-
-cf() {
-  local method="$1" path="$2"; shift 2
-  local hdr; hdr=$(auth_header)
-  # shellcheck disable=SC2086
-  local resp; resp=$(curl -s -w '\n%{http_code}' -X "$method" "$BASE$path" \
-    -H "Content-Type: application/json" $hdr "$@")
-  local body status; body=$(echo "$resp" | sed '$d'); status=$(echo "$resp" | tail -1)
-  case "$status" in
-    2[0-9][0-9]) echo "$body" ;;
-    000) echo '{"success":false,"errors":[{"code":0,"message":"network error"}]}' ;;
-    *) echo "$body" ;;
-  esac
-}
-
-cf_post() {
-  local path="$1" data="$2"
-  if [[ "$TOKEN" == cfk_* ]]; then
-    curl -s -X POST "$BASE$path" \
-      -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" -H "Content-Type: application/json" \
-      -d "$data"
-  else
-    curl -s -X POST "$BASE$path" \
-      -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-      -d "$data"
-  fi
-}
-
-cf_put() {
-  local path="$1" data="${2:-}"
-  if [[ "$TOKEN" == cfk_* ]]; then
-    curl -s -X PUT "$BASE$path" \
-      -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" -H "Content-Type: application/json" \
-      ${data:+-d "$data"}
-  else
-    curl -s -X PUT "$BASE$path" \
-      -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-      ${data:+-d "$data"}
-  fi
-}
-
-cf_delete() {
-  local path="$1"
-  if [[ "$TOKEN" == cfk_* ]]; then
-    curl -s -X DELETE "$BASE$path" \
-      -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL"
-  else
-    curl -s -X DELETE "$BASE$path" \
-      -H "Authorization: Bearer $TOKEN"
-  fi
-}
-
-cf_get() {
-  local path="$1"
-  if [[ "$TOKEN" == cfk_* ]]; then
-    curl -s "$BASE$path" -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL"
-  else
-    curl -s "$BASE$path" -H "Authorization: Bearer $TOKEN"
-  fi
-}
-
-ok() { echo "$1" | grep -q '"success":true'; }
-extract() { grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed 's/.*: *"//;s/".*//'; }
-die() { echo "$1" >&2; exit 1; }
-
-get_kv_id() {
-  local r; r=$(cf_get "/accounts/$ACCOUNT_ID/storage/kv/namespaces")
-  echo "$r" | grep -o "\"id\":\"[^\"]*\",\"title\":\"$KV_TITLE\"" | head -1 | grep -o '"id":"[^"]*"' | sed 's/"id":"//;s/"//'
-}
-
-get_subdomain() {
-  cf_put "/accounts/$ACCOUNT_ID/workers/subdomain" '{"enabled":true}' > /dev/null 2>&1 || true
-  local r; r=$(cf_get "/accounts/$ACCOUNT_ID/workers/subdomain")
-  echo "$r" | extract "subdomain"
-}
-
-get_secure_path() {
-  local r; r=$(cf_get "/accounts/$ACCOUNT_ID/storage/kv/namespaces/$1/values/qproxy:settings")
-  echo "$r" | grep -o '"securePath":"[^"]*"' | head -1 | sed 's/"securePath":"//;s/"//'
-}
-
-# ── auth ─────────────────────────────────────────────────────────────────────
+# auth
 if [[ -z "$TOKEN" ]]; then
   echo ""
   echo "Open this URL to create an API token (pre-filled permissions):"
-  echo ""
   echo "  $TOKEN_URL"
   echo ""
   read -rp "Paste API Token or Global Key (cfk_...): " TOKEN
@@ -135,14 +109,14 @@ if [[ "$TOKEN" == cfk_* && -z "$EMAIL" ]]; then
   read -rp "Cloudflare email: " EMAIL
 fi
 
-ACCOUNTS=$(cf_get "/accounts?per_page=5")
-ACCOUNT_ID=$(echo "$ACCOUNTS" | extract "id")
-[[ -z "$ACCOUNT_ID" ]] && die "Failed to get account ID"
+ACCOUNT_ID=$(cf GET "/accounts?per_page=5" | extract id)
+[[ -z "$ACCOUNT_ID" ]] && die "Failed to get account ID (bad token?)"
 echo "Account: $ACCOUNT_ID"
 
-# ═════════════════════════════════════════════════════════════════════════════
-# ACTIONS
-# ═════════════════════════════════════════════════════════════════════════════
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+SCRIPT_FILE="$WORKDIR/q-proxy.js"
+META_FILE="$WORKDIR/metadata.json"
 
 case "$ACTION" in
 
@@ -151,9 +125,7 @@ list-kv)
   echo "KV Namespaces:"
   printf "%-40s %s\n" "ID" "Title"
   printf "%-40s %s\n" "----" "-----"
-  KV_RAW=$(cf_get "/accounts/$ACCOUNT_ID/storage/kv/namespaces")
-  # Split JSON objects on },{ boundaries and extract id+title from each
-  echo "$KV_RAW" | tr '}' '\n' | while IFS= read -r obj; do
+  cf GET "/accounts/$ACCOUNT_ID/storage/kv/namespaces" | tr '}' '\n' | while IFS= read -r obj; do
     id=$(echo "$obj" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
     title=$(echo "$obj" | grep -o '"title":"[^"]*"' | head -1 | sed 's/"title":"//;s/"//')
     [[ -z "$id" || -z "$title" ]] && continue
@@ -170,13 +142,13 @@ remove-kv)
   echo "KV: $KV_ID ($KV_TITLE)"
   read -rp "Delete this KV namespace? (yes/no): " confirm
   [[ "$confirm" != "yes" ]] && die "Cancelled"
-  cf_delete "/accounts/$ACCOUNT_ID/storage/kv/namespaces/$KV_ID" > /dev/null
+  cf DELETE "/accounts/$ACCOUNT_ID/storage/kv/namespaces/$KV_ID" > /dev/null
   echo "KV deleted"
   ;;
 
 status)
   echo ""
-  WR=$(cf_get "/accounts/$ACCOUNT_ID/workers/scripts/$WORKER")
+  WR=$(cf GET "/accounts/$ACCOUNT_ID/workers/scripts/$WORKER")
   if ok "$WR"; then
     echo "Worker: $WORKER"
     echo "  Modified: $(echo "$WR" | grep -o '"modified_on":"[^"]*"' | head -1 | sed 's/"modified_on":"//;s/"//')"
@@ -214,119 +186,42 @@ set-password)
   URL="https://$WORKER.$SUB.workers.dev"
   SP=$(get_secure_path "$KV_ID")
   [[ -z "$SP" ]] && die "Could not read securePath. Seed first."
-  TMPBODY=$(mktemp /tmp/q-body-XXXXXX.json)
-  printf '{"newPassword":"%s"}' "$PASSWORD" > "$TMPBODY"
-  SETUP=$(curl -s -X POST "$URL/$SP/api/auth/setup" \
-    -H "Content-Type: application/json" \
-    -d @"$TMPBODY")
-  rm -f "$TMPBODY"
+  SETUP=$(printf '{"newPassword":"%s"}' "$PASSWORD" | curl -s -X POST "$URL/$SP/api/auth/setup" -H "Content-Type: application/json" -d @-)
   ok "$SETUP" && echo "Password set" || echo "Failed"
   ;;
 
 update)
   KV_ID="${KV_ID_TARGET:-}"
-  if [[ -z "$KV_ID" ]]; then
-    KV_ID=$(get_kv_id)
-    [[ -z "$KV_ID" ]] && die "No Q Proxy KV found. Deploy first."
-  fi
-  echo "Downloading $SCRIPT_NAME..."
-  TMPFILE=$(mktemp /tmp/q-proxy-XXXXXX.js)
-  curl -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o "$TMPFILE" 2>/dev/null || \
-    curl -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o "$TMPFILE"
-  SIZE=$(wc -c < "$TMPFILE")
-  [[ "$SIZE" -lt 10000 ]] && die "Download failed ($SIZE bytes)"
-  echo "Downloaded $SIZE bytes"
-  if [[ "$DRY" -eq 1 ]]; then echo "[dry] Would upload with KV $KV_ID"; rm -f "$TMPFILE"; exit 0; fi
-  METADATA="{\"main_module\":\"$SCRIPT_NAME\",\"compatibility_date\":\"2026-08-01\",\"bindings\":[{\"type\":\"kv_namespace\",\"name\":\"$BINDING\",\"namespace_id\":\"$KV_ID\"}]}"
-  TMPMETA=$(mktemp /tmp/q-meta-XXXXXX.json)
-  echo "$METADATA" > "$TMPMETA"
-  if [[ "$TOKEN" == cfk_* ]]; then
-    UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
-      -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
-      -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};filename=${SCRIPT_NAME};type=application/javascript+module")
-  else
-    UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
-      -H "Authorization: Bearer $TOKEN" \
-      -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};filename=${SCRIPT_NAME};type=application/javascript+module")
-  fi
-  rm -f "$TMPFILE" "$TMPMETA"
-  ok "$UPLOAD" || die "Upload failed: $UPLOAD"
-  echo "Worker updated"
+  [[ -z "$KV_ID" ]] && KV_ID=$(get_kv_id)
+  [[ -z "$KV_ID" ]] && die "No Q Proxy KV found. Deploy first."
+  download_worker "$SCRIPT_FILE"
+  [[ "$DRY" -eq 1 ]] && { echo "[dry] Would upload with KV $KV_ID"; exit 0; }
+  printf '{"main_module":"%s","compatibility_date":"%s","bindings":[{"type":"kv_namespace","name":"%s","namespace_id":"%s"}]}' \
+    "$SCRIPT_NAME" "$COMPAT_DATE" "$BINDING" "$KV_ID" > "$META_FILE"
+  upload_worker "$SCRIPT_FILE" "$META_FILE"
+  echo "Update complete"
   ;;
 
 deploy)
   [[ -z "$PASSWORD" ]] && read -rp "First panel password [empty to set later]: " PASSWORD
+  KV_ID=$(ensure_kv)
+  download_worker "$SCRIPT_FILE"
+  [[ "$DRY" -eq 1 ]] && { echo "[dry] Would upload worker with KV $KV_ID"; exit 0; }
+  printf '{"main_module":"%s","compatibility_date":"%s","bindings":[{"type":"kv_namespace","name":"%s","namespace_id":"%s"}]}' \
+    "$SCRIPT_NAME" "$COMPAT_DATE" "$BINDING" "$KV_ID" > "$META_FILE"
+  upload_worker "$SCRIPT_FILE" "$META_FILE"
 
-  # KV
-  KV_ID=$(get_kv_id)
-  if [[ -n "$KV_ID" ]]; then
-    echo "Reusing existing KV: $KV_ID"
-  else
-    echo "Creating KV namespace..."
-    KV_RESP=$(cf_post "/accounts/$ACCOUNT_ID/storage/kv/namespaces" "{\"title\":\"$KV_TITLE\"}")
-    KV_ID=$(echo "$KV_RESP" | extract "id")
-    if [[ -z "$KV_ID" ]]; then
-      # might already exist (race)
-      KV_ID=$(get_kv_id)
-      [[ -z "$KV_ID" ]] && die "KV creation failed: $KV_RESP"
-      echo "Reusing existing KV: $KV_ID"
-    else
-      echo "Created KV: $KV_ID"
-    fi
-  fi
-
-  # download
-  echo "Downloading $SCRIPT_NAME..."
-  TMPFILE=$(mktemp /tmp/q-proxy-XXXXXX.js)
-  curl -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o "$TMPFILE" 2>/dev/null || \
-    curl -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o "$TMPFILE"
-  SIZE=$(wc -c < "$TMPFILE")
-  [[ "$SIZE" -lt 10000 ]] && die "Download failed ($SIZE bytes)"
-  echo "Downloaded $SIZE bytes"
-
-  if [[ "$DRY" -eq 1 ]]; then echo "[dry] Would upload with KV $KV_ID"; rm -f "$TMPFILE"; exit 0; fi
-
-  # upload
-  echo "Uploading worker..."
-  METADATA="{\"main_module\":\"$SCRIPT_NAME\",\"compatibility_date\":\"2026-08-01\",\"bindings\":[{\"type\":\"kv_namespace\",\"name\":\"$BINDING\",\"namespace_id\":\"$KV_ID\"}]}"
-  TMPMETA=$(mktemp /tmp/q-meta-XXXXXX.json)
-  echo "$METADATA" > "$TMPMETA"
-  if [[ "$TOKEN" == cfk_* ]]; then
-    UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
-      -H "X-Auth-Key: $TOKEN" -H "X-Auth-Email: $EMAIL" \
-      -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};filename=${SCRIPT_NAME};type=application/javascript+module")
-  else
-    UPLOAD=$(curl -s -X PUT "$BASE/accounts/$ACCOUNT_ID/workers/scripts/$WORKER" \
-      -H "Authorization: Bearer $TOKEN" \
-      -F "metadata=@${TMPMETA};type=application/json" \
-      -F "${SCRIPT_NAME}=@${TMPFILE};filename=${SCRIPT_NAME};type=application/javascript+module")
-  fi
-  rm -f "$TMPFILE" "$TMPMETA"
-  ok "$UPLOAD" || die "Upload failed: $UPLOAD"
-  echo "Worker uploaded"
-
-  # subdomain
   SUB=$(get_subdomain)
   WORKER_URL="https://$WORKER.$SUB.workers.dev"
   echo "Worker URL: $WORKER_URL"
 
-  # seed
   echo "Seeding..."
   curl -sf "$WORKER_URL/" > /dev/null 2>&1 || true
   sleep 2
 
-  # securePath
   SP=$(get_secure_path "$KV_ID")
   if [[ -n "$SP" && -n "$PASSWORD" ]]; then
-    TMPBODY=$(mktemp /tmp/q-body-XXXXXX.json)
-    printf '{"newPassword":"%s"}' "$PASSWORD" > "$TMPBODY"
-    SETUP=$(curl -s -X POST "$WORKER_URL/$SP/api/auth/setup" \
-      -H "Content-Type: application/json" \
-      -d @"$TMPBODY")
-    rm -f "$TMPBODY"
+    SETUP=$(printf '{"newPassword":"%s"}' "$PASSWORD" | curl -s -X POST "$WORKER_URL/$SP/api/auth/setup" -H "Content-Type: application/json" -d @-)
     ok "$SETUP" && echo "Password set" || echo "Password setup failed (set manually)"
   fi
 
@@ -336,7 +231,7 @@ deploy)
     echo "Subscription: $WORKER_URL/$SP/sub"
   else
     echo "Could not read securePath."
-    echo "Check KV → $KV_TITLE → qproxy:settings → data.securePath"
+    echo "Check KV -> $KV_TITLE -> qproxy:settings -> data.securePath"
     echo "Panel: $WORKER_URL/<securePath>/panel"
   fi
   ;;

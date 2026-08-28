@@ -47,19 +47,28 @@ function cf($Method, $Path, $Body) {
   } catch {
     $errBody = $_.ErrorDetails.Message
     if ($errBody) {
-      $p = $errBody | ConvertFrom-Json
-      $code = if ($p.errors.Count -gt 0) { $p.errors[0].code } else { "?" }
-      $msg  = if ($p.errors.Count -gt 0) { $p.errors[0].message } else { $errBody }
-      return @{ ok=$false; code=$code; msg=$msg; raw=$p }
+      try { $p = $errBody | ConvertFrom-Json } catch { return @{ ok=$false; code="?"; msg=$errBody; raw=$null } }
+      if ($p -and $p.PSObject.Properties['errors']) {
+        $code = if ($p.errors.Count -gt 0) { $p.errors[0].code } else { "?" }
+        $msg  = if ($p.errors.Count -gt 0) { $p.errors[0].message } else { $errBody }
+        return @{ ok=$false; code=$code; msg=$msg; raw=$p }
+      }
+      return @{ ok=$false; code="?"; msg=$errBody; raw=$null }
     }
     return @{ ok=$false; code="?"; msg=$_.Exception.Message; raw=$null }
   }
-  if (-not $resp.success) {
-    $code = if ($resp.errors.Count -gt 0) { $resp.errors[0].code } else { "?" }
-    $msg  = if ($resp.errors.Count -gt 0) { $resp.errors[0].message } else { "unknown" }
-    return @{ ok=$false; code=$code; msg=$msg; raw=$resp }
+  if ($resp -is [string]) {
+    return @{ ok=$true; result=$resp; raw=$null }
   }
-  return @{ ok=$true; result=$resp.result; raw=$resp }
+  if ($null -ne $resp.PSObject.Properties['success']) {
+    if (-not $resp.success) {
+      $code = if ($resp.errors.Count -gt 0) { $resp.errors[0].code } else { "?" }
+      $msg  = if ($resp.errors.Count -gt 0) { $resp.errors[0].message } else { "unknown" }
+      return @{ ok=$false; code=$code; msg=$msg; raw=$resp }
+    }
+    return @{ ok=$true; result=$resp.result; raw=$resp }
+  }
+  return @{ ok=$true; result=$resp; raw=$null }
 }
 
 # ── auth ─────────────────────────────────────────────────────────────────────
@@ -111,8 +120,8 @@ function Ensure-KV {
 function Get-SecurePath($KvId) {
   $r = cf GET "/accounts/$accountId/storage/kv/namespaces/$KvId/values/qproxy:settings"
   if (-not $r.ok) { return $null }
-  $json = $r.result | ConvertTo-Json -Compress
-  if ($json -match '"securePath":"([a-f0-9]{12})"') { return $Matches[1] }
+  $json = if ($r.result -is [string]) { $r.result } else { $r.result | ConvertTo-Json -Compress -Depth 10 }
+  if ($json -match '"securePath"\s*:\s*"([a-f0-9]{12})"') { return $Matches[1] }
   return $null
 }
 
