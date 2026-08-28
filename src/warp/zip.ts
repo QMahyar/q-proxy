@@ -20,8 +20,9 @@ function dosDateTime(date: Date): { time: number; date: number } {
   return { time, date: d };
 }
 
+const encoder = new TextEncoder();
+
 export function zipStore(files: Record<string, string>): Uint8Array {
-  const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;

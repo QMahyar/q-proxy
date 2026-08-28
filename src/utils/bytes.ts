@@ -10,6 +10,8 @@ export function utf8Decode(bytes: Uint8Array): string {
 }
 
 export function concatBytes(...chunks: Uint8Array[]): Uint8Array {
+  if (chunks.length === 0) return new Uint8Array(0);
+  if (chunks.length === 1) return chunks[0]!.slice();
   let len = 0;
   for (const c of chunks) len += c.length;
   const out = new Uint8Array(len);

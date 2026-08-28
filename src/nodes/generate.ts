@@ -60,16 +60,16 @@ function fnv1a(input: string): number {
 
 function scrambleSni(sni: string, seedKey: string): string {
   let h = fnv1a(seedKey);
-  let out = "";
+  const out: string[] = [];
   for (const ch of sni) {
     h = (Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0) || 1;
     const isLower = ch >= "a" && ch <= "z";
     const isUpper = ch >= "A" && ch <= "Z";
-    if ((h & 1) === 0 && isUpper) out += ch.toLowerCase();
-    else if ((h & 1) === 1 && isLower) out += ch.toUpperCase();
-    else out += ch;
+    if ((h & 1) === 0 && isUpper) out.push(ch.toLowerCase());
+    else if ((h & 1) === 1 && isLower) out.push(ch.toUpperCase());
+    else out.push(ch);
   }
-  return out;
+  return out.join("");
 }
 
 function tunnelSuffix(cred: string, securePath: string): string {

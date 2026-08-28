@@ -50,6 +50,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   let writeBusy = false;
 
   const decodeQueue: Uint8Array[] = [];
+  let decodeHead = 0;
   let decodeQueued = 0;
   let decoding = false;
 
@@ -109,7 +110,8 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
     if (upQueued === 0) return;
     const target = slot;
     const genBefore = generation;
-    const chunks = upQueue.splice(0);
+    const chunks = upQueue.slice();
+    upQueue.length = 0;
     const data = concatBytes(...chunks);
     upQueued = 0;
     writeBusy = true;
@@ -139,13 +141,23 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
     if (decoding) return;
     decoding = true;
     try {
-      while (decodeQueue.length > 0 && !finished && !halfOpen) {
-        const chunk = decodeQueue.shift()!;
+      while (decodeHead < decodeQueue.length && !finished && !halfOpen) {
+        const chunk = decodeQueue[decodeHead++]!;
         decodeQueued -= chunk.length;
         const decode = opts.uplinkDecode;
         if (decode === undefined || decode === null) continue;
         const out = await decode(chunk);
         if (out !== null && out.length > 0 && !finished && !halfOpen) enqueueUp(out);
+      }
+      if (decodeHead > 0) {
+        if (decodeHead >= decodeQueue.length) {
+          decodeQueue.length = 0;
+          decodeHead = 0;
+        } else if (decodeHead > 32) {
+          decodeQueue.copyWithin(0, decodeHead);
+          decodeQueue.length -= decodeHead;
+          decodeHead = 0;
+        }
       }
     } catch (err) {
       decoding = false;
@@ -188,7 +200,9 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
 
   const flushPendingDownlink = (): Promise<void> => {
     if (pendingDownBytes === 0) return Promise.resolve();
-    const payload = concatBytes(...pendingDown.splice(0));
+    const chunks = pendingDown.slice();
+    pendingDown.length = 0;
+    const payload = concatBytes(...chunks);
     pendingDownBytes = 0;
     return sendDown(payload);
   };
@@ -231,7 +245,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
       return false;
     }
     downlinkBytes = 0;
-    pendingDown.splice(0);
+    pendingDown.length = 0;
     pendingDownBytes = 0;
     slot = {
       socket: next.socket,
@@ -282,7 +296,9 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
         pendingDown.push(value);
         pendingDownBytes += value.length;
         if (pendingDownBytes >= DOWNLINK_BATCH_BYTES) {
-          const payload = concatBytes(...pendingDown.splice(0));
+          const chunks = pendingDown.slice();
+          pendingDown.length = 0;
+          const payload = concatBytes(...chunks);
           pendingDownBytes = 0;
           await sendDown(payload);
           if (finished) return;

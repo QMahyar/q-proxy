@@ -149,10 +149,11 @@ export function createEgressOpener(
   ): Promise<OpenedEgress> => {
     const candidate = strategy.candidates[index];
     if (candidate === undefined) throw new Error(`no egress candidate at index ${index}`);
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const pending = dial(candidate, target, firstPacket);
+    const signal = AbortSignal.timeout(timeoutMs);
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`dial timed out after ${timeoutMs}ms`)), timeoutMs);
+      if (signal.aborted) reject(new Error(`dial timed out after ${timeoutMs}ms`));
+      else signal.addEventListener("abort", () => reject(new Error(`dial timed out after ${timeoutMs}ms`)), { once: true });
     });
     try {
       const socket = await Promise.race([pending, timeout]);
@@ -163,8 +164,6 @@ export function createEgressOpener(
         .then((s) => s.close().catch(() => {}))
         .catch(() => {});
       throw err instanceof Error ? err : new Error(String(err));
-    } finally {
-      if (timer !== undefined) clearTimeout(timer);
     }
   };
   return {
