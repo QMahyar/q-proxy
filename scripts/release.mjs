@@ -12,10 +12,19 @@ function git(args) {
 
 const version = process.argv[2];
 const dry = process.argv.includes("--dry");
+const push = process.argv.includes("--push");
 
 if (version === undefined || !/^v?\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
-  console.error("usage: node scripts/release.mjs <version> [--dry]   e.g. node scripts/release.mjs v1.0.1");
+  console.error("usage: node scripts/release.mjs <version> [--dry] [--push]   e.g. node scripts/release.mjs v1.0.1 --push");
   process.exit(1);
+}
+
+function defaultBranch() {
+  const ref = git("symbolic-ref refs/remotes/origin/HEAD");
+  if (ref.startsWith("refs/remotes/origin/")) return ref.replace("refs/remotes/origin/", "");
+  const head = git("rev-parse --abbrev-ref HEAD");
+  if (head) return head;
+  return "master";
 }
 const tag = version.startsWith("v") ? version : `v${version}`;
 
@@ -55,8 +64,16 @@ for (const cmd of ["npm run typecheck", "npm test", "npm run build"]) {
 
 if (dry) {
   console.log("[dry] would tag " + tag);
+  if (push) console.log(`[dry] would push: git push origin ${defaultBranch()} --tags`);
   process.exit(0);
 }
 
 execSync(`git tag -a ${tag} -m "Release ${tag}"`, { stdio: "inherit" });
-console.log(`tagged ${tag} — push with: git push origin master --tags`);
+const branch = defaultBranch();
+if (push) {
+  console.log(`pushing ${tag} to origin/${branch} ...`);
+  execSync(`git push origin ${branch} --tags`, { stdio: "inherit" });
+  console.log(`pushed ${tag} to origin/${branch}`);
+} else {
+  console.log(`tagged ${tag} — push with: git push origin ${branch} --tags  (or re-run with --push)`);
+}

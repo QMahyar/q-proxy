@@ -59,12 +59,26 @@ ensure_kv() {
   echo "$id"
 }
 
+detect_default_branch() {
+  local br
+  br=$(curl -fsSL "https://api.github.com/repos/$REPO" 2>/dev/null | grep -o '"default_branch"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*: *"//;s/"//')
+  if [[ -n "$br" ]]; then echo "$br"; else echo "master"; fi
+}
+
 download_worker() {
   echo "Downloading $SCRIPT_NAME..."
   local out="$1"
-  curl -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o "$out" 2>/dev/null || \
-    curl -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o "$out"
-  local size; size=$(wc -c < "$out")
+  if curl -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o "$out" 2>/dev/null; then
+    :
+  else
+    local branch; branch=$(detect_default_branch)
+    local fallback="main"
+    [[ "$branch" == "main" ]] && fallback="master"
+    curl -fsSL "https://raw.githubusercontent.com/$REPO/$branch/dist/$SCRIPT_NAME" -o "$out" 2>/dev/null || \
+      curl -fsSL "https://raw.githubusercontent.com/$REPO/$fallback/dist/$SCRIPT_NAME" -o "$out" 2>/dev/null || \
+      curl -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o "$out"
+  fi
+  local size; size=$(wc -c < "$out" 2>/dev/null || echo 0)
   [[ "$size" -lt 10000 ]] && die "Download failed ($size bytes)"
   echo "Downloaded $size bytes"
 }
@@ -217,6 +231,7 @@ deploy)
 
   echo "Seeding..."
   curl -sf "$WORKER_URL/" > /dev/null 2>&1 || true
+  # KV is eventually consistent — wait 2s for propagation before reading securePath
   sleep 2
 
   SP=$(get_secure_path "$KV_ID")

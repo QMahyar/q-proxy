@@ -125,14 +125,28 @@ function Get-SecurePath($KvId) {
   return $null
 }
 
+function Get-DefaultBranch {
+  try {
+    $r = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO" -UseBasicParsing -TimeoutSec 3 2>$null
+    if ($r.default_branch) { return $r.default_branch }
+  } catch {}
+  return "master"
+}
+
 # ── download ─────────────────────────────────────────────────────────────────
 function Download-Worker {
   Write-Host "Downloading $SCRIPT_NAME from Releases..." -ForegroundColor Gray
   $tmpFile = Join-Path $env:TEMP "q-proxy-$([guid]::NewGuid().ToString('N').Substring(0,8)).js"
   curl.exe -fsSL "https://github.com/$REPO/releases/latest/download/$SCRIPT_NAME" -o $tmpFile 2>$null
-  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tmpFile)) {
-    Write-Host "Release not found, trying main branch..." -ForegroundColor Gray
-    curl.exe -fsSL "https://raw.githubusercontent.com/$REPO/master/dist/$SCRIPT_NAME" -o $tmpFile 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tmpFile) -or (Test-Path $tmpFile -and (Get-Item $tmpFile).Length -lt 10000)) {
+    $branch = Get-DefaultBranch
+    Write-Host "Release not found, trying $branch branch..." -ForegroundColor Gray
+    curl.exe -fsSL "https://raw.githubusercontent.com/$REPO/$branch/dist/$SCRIPT_NAME" -o $tmpFile 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tmpFile) -or (Get-Item $tmpFile).Length -lt 10000) {
+      $fallback = if ($branch -eq "master") { "main" } else { "master" }
+      Write-Host "Trying fallback branch $fallback..." -ForegroundColor Gray
+      curl.exe -fsSL "https://raw.githubusercontent.com/$REPO/$fallback/dist/$SCRIPT_NAME" -o $tmpFile 2>$null
+    }
   }
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tmpFile)) {
     Write-Host "Download failed" -ForegroundColor Red; exit 1
@@ -309,6 +323,7 @@ switch ($Action) {
 
     Write-Host "Seeding..." -ForegroundColor Gray
     try { Invoke-WebRequest -Uri "$workerUrl/" -UseBasicParsing | Out-Null } catch {}
+    # KV is eventually consistent — wait 2s for propagation before reading securePath
     Start-Sleep -Seconds 2
 
     $sp = Get-SecurePath $kvId
