@@ -15,7 +15,7 @@ import {
 } from "../subscription/render";
 import { pickSubFormat, SUB_FORMATS } from "../subscription/negotiate";
 import { dayKeyUtc } from "../utils/time";
-import { findUserByToken, getUserHits, recordUserHit } from "../users/store";
+import { findUserByToken, getUserHits, getUserTotalHits, recordUserHit } from "../users/store";
 
 function plain(status: number, message: string, extra: Record<string, string> = {}): Response {
   return new Response(`${message}\n`, {
@@ -47,6 +47,7 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
   if (!user.enabled || (user.expiresAt !== null && user.expiresAt < now)) return plain(410, "gone");
 
   const hits = await getUserHits(env, token);
+  const total = await getUserTotalHits(env, token);
 
   if (format === null) {
     const subUrls = SUB_FORMATS.map((f) => ({ format: f, url: `${url.origin}${url.pathname}?target=${f}` }));
@@ -81,7 +82,7 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
     format,
     s.profileTitle,
     nodes,
-    { day: dayKeyUtc(), requestsToday: hits, requestsTotal: hits },
+    { day: dayKeyUtc(), requestsToday: hits, requestsTotal: total },
     {
       updateIntervalHours: s.subUpdateIntervalHours,
       webPageUrl: `${url.origin}/${s.securePath}/panel`,

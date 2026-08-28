@@ -16,6 +16,7 @@ export type PublicUser = UserAccount & { todayHits?: number };
 
 export const USERS_KEY = "qproxy:users";
 export const USER_USAGE_PREFIX = "qproxy:user-usage:";
+export const USER_TOTAL_PREFIX = "qproxy:user-total:";
 export const MAX_USERS = 50;
 
 type KvLike = {
@@ -100,9 +101,21 @@ export async function recordUserHit(env: { QPROXY_KV: KvLike }, token: string): 
   if (row) row.count += 1;
   else rows.push({ token, count: 1 });
   await env.QPROXY_KV.put(usageKey(), JSON.stringify(rows));
+  const total = await getUserTotalHits(env, token);
+  await env.QPROXY_KV.put(USER_TOTAL_PREFIX + token, JSON.stringify(total + 1));
 }
 
 export async function getUserHits(env: { QPROXY_KV: KvLike }, token: string): Promise<number> {
   const rows = await readUsageRows(env);
   return rows.find((r) => r.token === token)?.count ?? 0;
+}
+
+export async function getUserTotalHits(env: { QPROXY_KV: KvLike }, token: string): Promise<number> {
+  const raw = await env.QPROXY_KV.get(USER_TOTAL_PREFIX + token, "json");
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
+  if (typeof raw === "string") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+  }
+  return 0;
 }

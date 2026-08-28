@@ -5,7 +5,7 @@ import { jsonOk, readJsonObject } from "../../core/respond";
 import { resolveHostname } from "../../core/routes";
 import { readUsage } from "../../core/counters";
 import { assertCsrf } from "../../auth/guard";
-import { appVersion, saveSettings } from "../../settings/store";
+import { appVersion, loadSettingsFresh, saveSettings } from "../../settings/store";
 
 export const handleStatus: RouteHandler = async (req, env, s) => {
   const usage = await readUsage(env);
@@ -20,13 +20,14 @@ export const handleStatus: RouteHandler = async (req, env, s) => {
   });
 };
 
-export const handleKillSwitch: RouteHandler = async (req, env, s) => {
+export const handleKillSwitch: RouteHandler = async (req, env, _s) => {
   assertCsrf(req);
   const body = await readJsonObject(req);
   if (typeof body.enabled !== "boolean") {
     throw new ValidationError({ enabled: "must be a boolean" });
   }
-  await saveSettings(env, { ...structuredClone(s), killSwitch: body.enabled });
+  const fresh = await loadSettingsFresh(env);
+  await saveSettings(env, { ...fresh, killSwitch: body.enabled });
   return jsonOk({ killSwitch: body.enabled });
 };
 

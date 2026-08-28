@@ -65,6 +65,9 @@ export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
   if (view.telegram !== null && typeof view.telegram === "object") {
     delete (view.telegram as Record<string, unknown>).botToken;
   }
+  delete view.remoteSubUrls;
+  delete view.customDomains;
+  delete view.cleanIps;
   const body = JSON.stringify({ kind: "q-proxy-settings", version: SETTINGS_VERSION, exportedAt: new Date().toISOString(), settings: view }, null, 2);
   return new Response(body, {
     status: 200,

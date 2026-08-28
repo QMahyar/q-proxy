@@ -4,7 +4,7 @@ import { expandAccount, sanitizeFilename } from "../warp/expand";
 import { isWarpFormat, WARP_CONTENT_TYPES, WARP_EXTENSIONS, WARP_EMITTERS } from "../warp/formats/registry";
 import { resolveSecureRoute } from "../core/routes";
 import { appVersion } from "../settings/store";
-import { afterResponse } from "../core/counters";
+import { afterResponse, readUsage } from "../core/counters";
 import { encodeUtf8Base64 } from "../utils/base64";
 
 function notFound(): Response {
@@ -40,12 +40,13 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
   const result = WARP_EMITTERS[formatName](ctx);
 
   const origin = url.origin;
+  const usage = await readUsage(env);
   const headers: Record<string, string> = {
     "Content-Type": WARP_CONTENT_TYPES[formatName],
     "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`${sanitizeFilename(account.name)}-${formatName}.${WARP_EXTENSIONS[formatName]}`)}`,
     "Profile-Update-Interval": String(Math.max(1, Math.floor(s.subUpdateIntervalHours))),
     "Profile-Title": `base64:${encodeUtf8Base64(account.name)}`,
-    "Subscription-Userinfo": `upload=0; download=0; total=0`,
+    "Subscription-Userinfo": `upload=0; download=${usage.requestsTotal * 1024 * 1024}`,
     "profile-web-page-url": `${origin}/${s.securePath}/panel`,
     "X-WG-Version": appVersion(),
     "Cache-Control": "public, max-age=60",
