@@ -42,6 +42,7 @@ export function infoPageHtml(subUrls: Array<{ format: SubFormat; url: string }>,
 body{font-family:system-ui,sans-serif;margin:0;padding:2rem;background:#0f172a;color:#e2e8f0;line-height:1.6}
 main{max-width:60rem;margin:0 auto}
 h1{font-size:1.4rem}h2{font-size:1.1rem;margin-top:2rem}
+section{margin:1rem 0}
 table{border-collapse:collapse;width:100%;margin-top:.5rem}
 th,td{text-align:left;padding:.5rem;border-bottom:1px solid #1e293b;vertical-align:top}
 code{word-break:break-all;font-size:.85rem;color:#7dd3fc}
@@ -51,8 +52,12 @@ code{word-break:break-all;font-size:.85rem;color:#7dd3fc}
 <body>
 <main>
 <h1>${escapeHtml(title)}</h1>
+<section lang="en">
 <p>This is a VPN subscription endpoint. Open one of these URLs in your client app / add manually.</p>
-<p dir="rtl" lang="fa">این یک اندپوینت اشتراک VPN است. یکی از آدرس‌های زیر را در برنامه کلاینت خود اضافه کنید.</p>
+</section>
+<section lang="fa" dir="rtl">
+<p>این یک اندپوینت اشتراک VPN است. یکی از آدرس‌های زیر را در برنامه کلاینت خود اضافه کنید.</p>
+</section>
 <h2>Subscription URLs</h2>
 <table>
 ${rows}
