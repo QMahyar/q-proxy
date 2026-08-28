@@ -22,6 +22,12 @@ export interface EmitOptions {
   rules?: EmitRules;
 }
 
+export const TEST_URL = "https://www.gstatic.com/generate_204";
+
+export function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): ProxyNode[] {
+  return nodes.filter((n) => isFragment || n.variant !== "fragment");
+}
+
 export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;
 
 export const EMITTERS: Record<SubFormat, NodeEmitter> = {

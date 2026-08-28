@@ -3,7 +3,7 @@ import type { Settings } from "../types/settings";
 import type { DialTarget, DnsPacketRelay } from "../types/tunnel";
 import { NotFoundError } from "../core/errors";
 import { log } from "../core/log";
-import { identifyTunnel } from "../core/routes";
+import { identifyTunnel, type TunnelKind } from "../core/routes";
 import { ByteAccumulator } from "../protocols/common";
 import type {
   DownlinkEncoder,
@@ -21,7 +21,6 @@ import { matchesSpeedtestHost, speedtestResponseBytes } from "../tunnel/speedtes
 import { acceptTunnelSocket, isUpgradeRequest } from "../tunnel/websocket";
 import { utf8Encode } from "../utils/bytes";
 
-type TunnelKind = "vless" | "vmess" | "trojan" | "ss";
 type TunnelParsed = ParsedRequest<"tcp"> | ParsedRequest<"udp">;
 
 const HANDSHAKE_TIMEOUT_MS = 10_000;

@@ -10,7 +10,7 @@ import type {
 } from "../types/settings";
 import { CF_PLAIN_PORTS, CF_TLS_PORTS, DEFAULT_SETTINGS } from "../types/settings";
 import { isPlainObject } from "./migrate";
-import { isIPv4, isIPv6, parseHostPort } from "../utils/net";
+import { normalizeCleanAddress } from "../utils/net";
 
 export type ValidationResult =
   | { ok: true; value: Settings }
@@ -252,17 +252,6 @@ function urlListField(
     }
   }
   (out as unknown as Record<string, unknown>)[key] = cleaned;
-}
-
-export function normalizeCleanAddress(raw: string): string | null {
-  const hp = parseHostPort(raw.trim(), 0);
-  if (hp === null || hp.host.length === 0) return null;
-  const host = hp.host.toLowerCase();
-  const isAddr = isIPv4(host) || isIPv6(host);
-  const looksDomain = host.includes(".") && /^[a-z0-9.-]+$/.test(host) && !host.startsWith(".") && !host.endsWith("-");
-  if (!isAddr && !looksDomain) return null;
-  const display = isIPv6(host) ? `[${host}]` : host;
-  return hp.port > 0 ? `${display}:${hp.port}` : display;
 }
 
 function cleanAddrListField(

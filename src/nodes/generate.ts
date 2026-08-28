@@ -3,8 +3,7 @@ import type { NodeTag, ProxyNode, SSNode, TrojanNode, VMessNode, VlessNode } fro
 import { CF_TLS_PORTS, type Settings } from "../types/settings";
 import { fragmentQuery } from "./fragments";
 import { renderName } from "./naming";
-import { isIPv6, parseHostPort } from "../utils/net";
-import { normalizeCleanAddress } from "../settings/validate";
+import { isIPv6, normalizeCleanAddress, parseHostPort } from "../utils/net";
 
 interface AddressEntry {
   address: string;
