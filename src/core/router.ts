@@ -4,7 +4,14 @@ import { AppError, UnauthorizedError } from "./errors";
 import { redirect } from "./respond";
 import { setDebugEnabled } from "./log";
 import { recordConnection } from "./counters";
-import { identifyTunnel, resolveSecureRoute, splitPath, type ApiRouteName, type SecureRoute } from "./routes";
+import {
+  HEALTHZ_PATH,
+  identifyTunnel,
+  resolveSecureRoute,
+  splitPath,
+  type ApiRouteName,
+  type SecureRoute,
+} from "./routes";
 import { loadSettings } from "../settings/store";
 import { assertCsrf, getSession, requireAuth } from "../auth/guard";
 import { getSessionFloor, verifySession } from "../auth/session";
@@ -14,6 +21,7 @@ import { handleDoh } from "../handlers/doh";
 import { handleSubscribe } from "../handlers/subscribe";
 import { handleMyIp } from "../handlers/myip";
 import { handleRobots } from "../handlers/robots";
+import { handleHealth } from "../handlers/health";
 
 import { serveLoginPage, servePanelPage } from "../handlers/panel-page";
 import { handleCamouflage } from "../handlers/camouflage";
@@ -145,9 +153,11 @@ async function dispatchApi(
       expectMethods(req, ["GET"]);
       return guardedSubUrls(req, env, s);
     case "warp":
-      return authed(handleWarpApi)(req, env, s);
+      if (req.method === "GET") return authed(handleWarpApi)(req, env, s);
+      return authedCsrf(handleWarpApi)(req, env, s);
     case "users":
-      return authed(handleUsersApi)(req, env, s);
+      if (req.method === "GET") return authed(handleUsersApi)(req, env, s);
+      return authedCsrf(handleUsersApi)(req, env, s);
     case "telegram-webhook":
       expectMethods(req, ["POST"]);
       return handleTelegramWebhook(req, env, s);
@@ -218,6 +228,10 @@ export async function routeRequest(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
 
   if (url.pathname === "/robots.txt" && req.method === "GET") return handleRobots();
+  if (url.pathname === HEALTHZ_PATH) {
+    if (req.method !== "GET") methodNotAllowed();
+    return handleHealth(req, env, null as never);
+  }
 
   const s = await loadSettings(env);
   setDebugEnabled(s.debugLogging);

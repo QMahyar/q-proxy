@@ -35,7 +35,8 @@ export function requireAuth(handler: RouteHandler): RouteHandler {
 }
 
 export function assertCsrf(req: Request): void {
-  if (req.headers.get("X-Q-Panel") !== "1") throw new ForbiddenError("missing csrf header");
+  if (req.headers.get("X-Q-Panel") !== "1")
+    throw new ForbiddenError("missing or invalid csrf header: expected X-Q-Panel: 1");
 }
 
 export function clientIp(req: Request): string {

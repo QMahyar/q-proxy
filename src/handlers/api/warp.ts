@@ -3,7 +3,6 @@ import type { AmneziaParams, WarpAccount, WarpConfig, WarpEndpoint, WarpPreset }
 import { ValidationError, NotFoundError, UpstreamError } from "../../core/errors";
 import { afterResponse } from "../../core/counters";
 import { jsonOk, readJsonObject } from "../../core/respond";
-import { assertCsrf } from "../../auth/guard";
 import { parseWarpConfig } from "../../warp/config";
 import { registerWarpDevice, removeWarpDevice, WarpApiError } from "../../warp/api";
 import { purgeAllWarpSubs, purgeWarpSub } from "../../warp/cache";
@@ -140,7 +139,6 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
   const segs = url.pathname.split("/").filter((p) => p.length > 0);
   const rest = segs.slice(segs.indexOf("warp") + 1);
   const method = req.method;
-  if (method !== "GET") assertCsrf(req);
   await ensureWarpDefaults(env);
   const origin = url.origin;
   const purgeAll = () => purgeAllWarpSubs(env, origin).catch(() => {});

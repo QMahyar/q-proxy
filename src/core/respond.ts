@@ -31,6 +31,8 @@ export function jsonError(
 
 export function errorToResponse(err: unknown, debug: boolean): Response {
   if (err instanceof AppError) {
+    // debug=true intentionally exposes 5xx internal messages for troubleshooting;
+    // avoid enabling in production as it may leak sensitive internals
     const showMessage = err.expose || (debug && err.status >= 500);
     let res: Response;
     if (err instanceof ValidationError) {
