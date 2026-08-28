@@ -39,9 +39,9 @@ export async function verifyPassword(
   const reject: PasswordVerifyResult = { ok: false, tier: "current" };
   if (hash.length !== KEY_BITS / 4) return reject;
   if (hexToBytes(salt) === null || hexToBytes(hash) === null) return reject;
-  const candidate = await deriveBits(password, salt, PBKDF2_ITERATIONS);
-  if (constantTimeEqual(candidate, hash)) return { ok: true, tier: "current" };
   const legacy = await deriveBits(password, salt, LEGACY_PBKDF2_ITERATIONS);
   if (constantTimeEqual(legacy, hash)) return { ok: true, tier: "legacy" };
+  const candidate = await deriveBits(password, salt, PBKDF2_ITERATIONS);
+  if (constantTimeEqual(candidate, hash)) return { ok: true, tier: "current" };
   return reject;
 }

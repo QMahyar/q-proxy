@@ -18,6 +18,7 @@ import { createEgressOpener, makeFailoverStrategy } from "../tunnel/egress";
 import { createRelay } from "../tunnel/relay";
 import { createDnsPacketRelay } from "../tunnel/resolver";
 import { matchesSpeedtestHost, speedtestResponseBytes } from "../tunnel/speedtest";
+import { getCounterContext } from "../core/counters";
 import { acceptTunnelSocket, isUpgradeRequest } from "../tunnel/websocket";
 import { utf8Encode } from "../utils/bytes";
 
@@ -63,9 +64,15 @@ export const handleTunnel: RouteHandler = async (req, _env, s) => {
     earlyDataEnabled: kind === "ss" ? false : s.earlyDataEnabled,
     earlyDataMaxBytes: s.earlyDataMaxBytes,
   });
-  void driveSession(accepted.ws, kind, s, accepted.earlyData).catch((err: unknown) => {
+  const session = driveSession(accepted.ws, kind, s, accepted.earlyData).catch((err: unknown) => {
     log.error("tunnel", "driveSession unhandled", String(err));
+    try {
+      if (accepted.ws.readyState !== 3) accepted.ws.close(1011);
+    } catch {}
   });
+  const ctx = getCounterContext();
+  if (ctx !== null && typeof ctx.waitUntil === "function") ctx.waitUntil(session);
+  else void session;
   return new Response(null, { status: 101, webSocket: accepted.client });
 };
 

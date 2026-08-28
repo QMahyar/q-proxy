@@ -38,6 +38,10 @@ export function bindCounterContext(ctx: ExecutionContext): void {
   buffer.ctx = ctx;
 }
 
+export function getCounterContext(): ExecutionContext | null {
+  return buffer.ctx;
+}
+
 export function afterResponse(p: Promise<unknown>): void {
   const tracked = p.then(
     () => undefined,
@@ -81,6 +85,7 @@ export async function recordConnection(env: Env): Promise<void> {
   if (!stale && buffer.connectionsSinceFlush < FLUSH_EVERY_CONNECTIONS) return;
   if (flushing) return;
   flushing = true;
+  // Capture and reset deltas atomically before any await — increments during KV I/O buffer for next flush (per-isolate, eventually consistent).
   const capturedToday = buffer.todayDelta;
   const capturedTotal = buffer.totalDelta;
   buffer.todayDelta = 0;

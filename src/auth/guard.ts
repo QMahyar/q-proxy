@@ -58,8 +58,11 @@ export function recordLoginFailure(ip: string): void {
     rec.count += 1;
   }
   if (failures.size > MAX_TRACKED_IPS) {
+    let checked = 0;
     for (const [key, value] of failures) {
+      if (checked++ >= 8) break;
       if (value.resetAt <= now) failures.delete(key);
+      if (failures.size <= MAX_TRACKED_IPS) break;
     }
     while (failures.size > MAX_TRACKED_IPS) {
       const oldest = failures.keys().next().value as string | undefined;
