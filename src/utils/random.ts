@@ -16,9 +16,19 @@ export function randomHex(byteLength: number): string {
 }
 
 export function randomString(length: number, charset: string = ALNUM_CHARSET): string {
-  const bytes = randomBytes(length);
+  if (length <= 0) return "";
+  if (charset.length === 0) return "";
+  if (charset.length === 1) return charset[0]!.repeat(length);
+  const threshold = Math.floor(256 / charset.length) * charset.length;
   let s = "";
-  for (let i = 0; i < length; i++) s += charset[bytes[i]! % charset.length];
+  while (s.length < length) {
+    const need = length - s.length;
+    const batch = randomBytes(Math.ceil((need * 256) / threshold) + 8);
+    for (let i = 0; i < batch.length && s.length < length; i++) {
+      const b = batch[i]!;
+      if (b < threshold) s += charset[b % charset.length]!;
+    }
+  }
   return s;
 }
 
