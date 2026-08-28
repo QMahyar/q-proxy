@@ -7,8 +7,15 @@ import { fillIdentity, hasIdentity } from "./seed";
 export const SETTINGS_KEY = "qproxy:settings";
 export const META_KEY = "qproxy:meta";
 
+// 60s per-isolate memo + 60s KV cacheTtl: readers may see stale up to 60s after another isolate writes.
+// Mutating handlers requiring TOCTOU safety must use loadSettingsFresh() before validate+save.
 const CACHE_TTL_MS = 60_000;
 const KV_CACHE_TTL = 60;
+
+// JSON deep copy is safe for plain JSON-serializable Settings and cheaper than structuredClone.
+function cloneSettings(s: Settings): Settings {
+  return JSON.parse(JSON.stringify(s));
+}
 
 export function appVersion(): string {
   return typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0-dev";
@@ -26,6 +33,8 @@ interface StoredBlob {
   data?: unknown;
 }
 
+// Per-isolate in-memory cache shared across requests; stale up to 60s (CACHE_TTL_MS).
+// Kept intentionally; callers needing freshness use loadSettingsFresh().
 let cache: CacheEntry | null = null;
 let loadedDebug = false;
 let lastWrittenJson: string | null = null;
@@ -97,7 +106,7 @@ export async function loadSettingsFresh(env: Env): Promise<Settings> {
 }
 
 export async function saveSettings(env: Env, next: Settings): Promise<void> {
-  const stamped: Settings = structuredClone(next);
+  const stamped: Settings = cloneSettings(next);
   stamped.version = SETTINGS_VERSION;
   const updatedAt = Date.now();
   const blob: StoredBlob = { version: SETTINGS_VERSION, updatedAt, data: stamped };

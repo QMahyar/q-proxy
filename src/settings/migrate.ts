@@ -24,10 +24,10 @@ function mergeInto(target: PlainObject, patch: PlainObject): void {
   }
 }
 
-export function deepMergeDefaults(base: Settings, patch: unknown): Settings {
-  const out = structuredClone(base) as unknown as PlainObject;
+export function deepMergeDefaults<T extends object>(base: T, patch: unknown): T {
+  const out = structuredClone(base) as T & PlainObject;
   if (isPlainObject(patch)) mergeInto(out, patch);
-  return out as unknown as Settings;
+  return out;
 }
 
 function storedPayload(raw: PlainObject): unknown {

@@ -53,6 +53,10 @@ function fail(fields: Record<string, string>, key: string, msg: string): void {
   if (!(key in fields)) fields[key] = msg;
 }
 
+function setField<T extends object>(target: T, key: keyof T & string, value: unknown): void {
+  (target as Record<string, unknown>)[key] = value;
+}
+
 function isHttpUrl(value: string): boolean {
   try {
     const u = new URL(value);
@@ -195,7 +199,7 @@ function strArrayField(
     fail(fields, key, "must be an array of strings");
     return;
   }
-  (out as unknown as Record<string, unknown>)[key] = sanitizeStrArray(v, opts);
+  setField(out, key, sanitizeStrArray(v, opts));
 }
 
 function portListField(
@@ -251,7 +255,7 @@ function urlListField(
       return;
     }
   }
-  (out as unknown as Record<string, unknown>)[key] = cleaned;
+  setField(out, key as keyof Settings & string, cleaned);
 }
 
 export function normalizeCleanAddress(raw: string): string | null {
@@ -286,7 +290,7 @@ function cleanAddrListField(
     seen.add(norm);
     if (seen.size >= maxItems) break;
   }
-  (out as unknown as Record<string, unknown>)[key] = [...seen];
+  setField(out, key as keyof Settings & string, [...seen]);
 }
 
 function validateNested(
@@ -486,32 +490,28 @@ export function validateSettings(input: unknown): ValidationResult {
     if (mode !== undefined) out.camouflage.mode = mode;
     const url = strField(sub, "url", f, { maxLen: 2048 });
     if (url !== undefined) out.camouflage.url = url;
-  const routing = patch["routingRules"];
-  if (routing !== undefined) {
-    if (routing === null || typeof routing !== "object" || Array.isArray(routing)) fail(fields, "routingRules", "must be an object");
-    else {
-      const r = routing as Record<string, unknown>;
-      const rrOut: RoutingRules = { ...out.routingRules };
-      for (const k of ["bypassLan", "blockAds", "blockMalware", "blockQuic"] as const) {
-        const b = boolField(r as Record<string, unknown>, k, fields);
-        if (b !== undefined) (rrOut as unknown as Record<string, unknown>)[k] = b;
-      }
-      const bypassV = r["customBypass"];
-      if (bypassV !== undefined) {
-        if (!Array.isArray(bypassV)) fail(fields, "routingRules.customBypass", "must be an array");
-        else rrOut.customBypass = sanitizeStrArray(bypassV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
-      }
-      const blockV = r["customBlock"];
-      if (blockV !== undefined) {
-        if (!Array.isArray(blockV)) fail(fields, "routingRules.customBlock", "must be an array");
-        else rrOut.customBlock = sanitizeStrArray(blockV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
-      }
-      out.routingRules = rrOut;
-    }
-  }
-      if (out.camouflage.mode === "proxy" && !isHttpUrl(out.camouflage.url)) {
+    if (out.camouflage.mode === "proxy" && !isHttpUrl(out.camouflage.url)) {
       fail(f, "url", "must be a valid http(s) URL when camouflage mode is proxy");
     }
+  });
+
+  validateNested(patch, "routingRules", fields, (sub, f) => {
+    const rrOut: RoutingRules = { ...out.routingRules };
+    for (const k of ["bypassLan", "blockAds", "blockMalware", "blockQuic"] as const) {
+      const b = boolField(sub, k, f);
+      if (b !== undefined) rrOut[k] = b;
+    }
+    const bypassV = sub["customBypass"];
+    if (bypassV !== undefined) {
+      if (!Array.isArray(bypassV)) fail(f, "customBypass", "must be an array");
+      else rrOut.customBypass = sanitizeStrArray(bypassV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
+    }
+    const blockV = sub["customBlock"];
+    if (blockV !== undefined) {
+      if (!Array.isArray(blockV)) fail(f, "customBlock", "must be an array");
+      else rrOut.customBlock = sanitizeStrArray(blockV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
+    }
+    out.routingRules = rrOut;
   });
 
   validateNested(patch, "telegram", fields, (sub, f) => {
