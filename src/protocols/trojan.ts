@@ -22,6 +22,7 @@ interface UdpSource {
   atype: number;
   host: string;
   port: number;
+  rawAddr?: Uint8Array;
 }
 
 const DEFAULT_UDP_SOURCE: UdpSource = { atype: 1, host: "0.0.0.0", port: DNS_PORT };
@@ -110,7 +111,8 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
   function createTrojanUdpCodec(): BodyCodec {
     let buf: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
     let alive = true;
-    let lastSource: UdpSource | null = null;
+    const srcQueue: UdpSource[] = [];
+    let currentSrc: UdpSource = DEFAULT_UDP_SOURCE;
     return {
       async decodeUp(chunk: Uint8Array): Promise<Uint8Array | null> {
         if (!alive) return null;
@@ -141,7 +143,12 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
           const total = afterAddr + 4 + len;
           if (buf.length < total) break;
           parts.push(buf.subarray(afterAddr + 4, total));
-          lastSource = { atype, host: addr.value.host, port: addr.value.port };
+          srcQueue.push({
+            atype,
+            host: addr.value.host,
+            port: addr.value.port,
+            rawAddr: buf.subarray(off, afterAddr).slice(),
+          });
           off = total;
         }
         if (off > 0) buf = buf.subarray(off);
@@ -155,12 +162,16 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
           },
           async encode(chunk: Uint8Array): Promise<Uint8Array> {
             if (chunk.length === 0) return new Uint8Array(0);
-            const src = lastSource ?? DEFAULT_UDP_SOURCE;
+            if (chunk.length > 0xffff) return new Uint8Array(0);
+            const next = srcQueue.shift();
+            if (next !== undefined) currentSrc = next;
+            const src = currentSrc;
+            const addrPart = src.rawAddr ?? encodeAddressPart(src.atype, src.host, src.port);
             const tail = new Uint8Array(4);
             writeU16BE(tail, 0, chunk.length);
             tail[2] = 0x0d;
             tail[3] = 0x0a;
-            return concatBytes(encodeAddressPart(src.atype, src.host, src.port), tail, chunk);
+            return concatBytes(addrPart, tail, chunk);
           },
         };
       },

@@ -263,8 +263,20 @@ describe("trojan udp body codec", () => {
     const second = udpDatagram({ atype: 3, addrBytes: secondHost, payload: utf8Encode("twotwo") });
     expect(await codec.decodeUp(concatBytes(first, second))).toEqual(utf8Encode("onetwotwo"));
     expect(await codec.decodeUp(new Uint8Array(0))).toEqual(new Uint8Array(0));
-    const down = await codec.beginDownlink().encode(utf8Encode("z"));
-    expect(down).toEqual(
+    const down = codec.beginDownlink();
+    const firstFrame = await down.encode(utf8Encode("z"));
+    expect(firstFrame).toEqual(
+      concatBytes(
+        new Uint8Array([1]),
+        hexToBytes("01020304")!,
+        u16be(53),
+        u16be(1),
+        new Uint8Array([0x0d, 0x0a]),
+        utf8Encode("z"),
+      ),
+    );
+    const secondFrame = await down.encode(utf8Encode("z"));
+    expect(secondFrame).toEqual(
       concatBytes(
         new Uint8Array([3, secondHost.length]),
         secondHost,
@@ -274,6 +286,19 @@ describe("trojan udp body codec", () => {
         utf8Encode("z"),
       ),
     );
+    const followUp = await down.encode(utf8Encode("z"));
+    expect(followUp.subarray(0, 1)).toEqual(new Uint8Array([3]));
+  });
+
+  it("drops an oversized merged downlink payload instead of truncating the length", async () => {
+    const codec = await udpCodec();
+    const first = udpDatagram({ atype: 1, addrBytes: hexToBytes("01020304")!, payload: utf8Encode("one") });
+    expect(await codec.decodeUp(first)).toEqual(utf8Encode("one"));
+    const down = codec.beginDownlink();
+    expect(await down.encode(new Uint8Array(0x10000))).toEqual(new Uint8Array(0));
+    const ok = await down.encode(utf8Encode("z"));
+    expect(ok.length).toBeGreaterThan(0);
+    expect(ok.subarray(0, 1)).toEqual(new Uint8Array([1]));
   });
 
   it("kills the codec on a datagram with a wrong CR LF", async () => {

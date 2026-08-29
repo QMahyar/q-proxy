@@ -72,7 +72,7 @@ function isReplayedAuthId(keyHex: string, nowEpochSeconds: number): boolean {
 }
 
 function recordAcceptedAuthId(keyHex: string, nowEpochSeconds: number): void {
-  pruneBoundedRegistry(seenAuthIds, REPLAY_CACHE_LIMIT, nowEpochSeconds);
+  pruneBoundedRegistry(seenAuthIds, REPLAY_CACHE_LIMIT - 1, nowEpochSeconds);
   seenAuthIds.set(keyHex, nowEpochSeconds + REPLAY_TTL_SECONDS);
 }
 
@@ -396,7 +396,6 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
           return null;
         },
         async encode(chunk: Uint8Array): Promise<Uint8Array> {
-          if (!upAlive) throw new Error("uplink failed");
           if (!plan.framed) return chunk.slice();
           if (chunk.length === 0) return new Uint8Array(0);
           const ctx = await ensureDown();

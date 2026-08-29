@@ -111,7 +111,7 @@ export function createSSInbound(
       const target = parseAddress(payloadFrame[0]!, payloadFrame, 1);
       if (!target.ok) return complete({ state: "reject", reason: target.reason });
 
-      pruneBoundedRegistry(seenSalts, SALT_REGISTRY_LIMIT, pendingSaltNowSec);
+      pruneBoundedRegistry(seenSalts, SALT_REGISTRY_LIMIT - 1, pendingSaltNowSec);
       seenSalts.set(pendingSaltKey!, pendingSaltNowSec + SALT_REUSE_TTL_SECONDS);
       initialPayload = payloadFrame.subarray(target.value.nextOffset);
       pendingBody = [];
