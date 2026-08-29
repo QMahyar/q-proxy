@@ -29,11 +29,9 @@ export function jsonError(
   });
 }
 
-export function errorToResponse(err: unknown, debug: boolean): Response {
+export function errorToResponse(err: unknown, _debug: boolean): Response {
   if (err instanceof AppError) {
-    // debug=true intentionally exposes 5xx internal messages for troubleshooting;
-    // avoid enabling in production as it may leak sensitive internals
-    const showMessage = err.expose || (debug && err.status >= 500);
+    const showMessage = err.expose;
     let res: Response;
     if (err instanceof ValidationError) {
       res = jsonError(err.status, err.code, err.message, err.fields);
@@ -62,9 +60,21 @@ export function htmlResponse(html: string, status = 200, headers?: Record<string
 }
 
 export async function readJsonObject(req: Request): Promise<Record<string, unknown>> {
+  const lenRaw = req.headers.get("content-length");
+  if (lenRaw !== null) {
+    const n = Number(lenRaw.trim());
+    if (!Number.isFinite(n) || n > 64 * 1024) throw new BadRequestError("body too large");
+  }
+  let text: string;
+  try {
+    text = await req.text();
+  } catch {
+    throw new BadRequestError("invalid json body");
+  }
+  if (text.length > 64 * 1024) throw new BadRequestError("body too large");
   let parsed: unknown;
   try {
-    parsed = await req.json();
+    parsed = JSON.parse(text);
   } catch {
     throw new BadRequestError("invalid json body");
   }

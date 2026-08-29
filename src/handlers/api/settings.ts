@@ -6,7 +6,7 @@ import { jsonOk, readJsonObject } from "../../core/respond";
 import { assertCsrf } from "../../auth/guard";
 import { deepMergeDefaults } from "../../settings/migrate";
 import { validateSettings } from "../../settings/validate";
-import { saveSettings, settingsEtag } from "../../settings/store";
+import { loadSettingsFresh, saveSettings, settingsEtag } from "../../settings/store";
 
 const PRESERVED_FIELDS = [
   "securePath",
@@ -44,22 +44,26 @@ export const handleGetSettings: RouteHandler = async (req, _env, s) => {
   return jsonOk(publicSettingsView(s), headers);
 };
 
-export const handleSaveSettings: RouteHandler = async (req, env, s) => {
+export const handleSaveSettings: RouteHandler = async (req, _env, s) => {
   assertCsrf(req);
   const body = await readJsonObject(req);
   for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath"]) delete (body as Record<string, unknown>)[k];
-  const merged = deepMergeDefaults(s, body);
+  const fresh = await loadSettingsFresh(_env);
+  const merged = deepMergeDefaults(fresh, body);
+  void s;
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);
-  await saveSettings(env, result.value);
+  await saveSettings(_env, result.value);
   return jsonOk({ saved: true });
 };
 
-export const handleResetSettings: RouteHandler = async (req, env, s) => {
+export const handleResetSettings: RouteHandler = async (req, env, _s) => {
   assertCsrf(req);
+  const freshSrc = await loadSettingsFresh(env);
+  void _s;
   const fresh = structuredClone(DEFAULT_SETTINGS);
   for (const key of PRESERVED_FIELDS) {
-    (fresh as unknown as Record<string, unknown>)[key] = (s as unknown as Record<string, unknown>)[key];
+    (fresh as unknown as Record<string, unknown>)[key] = (freshSrc as unknown as Record<string, unknown>)[key];
   }
   await saveSettings(env, fresh);
   return jsonOk({ saved: true });
@@ -71,9 +75,6 @@ export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
   if (view.telegram !== null && typeof view.telegram === "object") {
     delete (view.telegram as Record<string, unknown>).botToken;
   }
-  delete view.remoteSubUrls;
-  delete view.customDomains;
-  delete view.cleanIps;
   const body = JSON.stringify({ kind: "q-proxy-settings", version: SETTINGS_VERSION, exportedAt: new Date().toISOString(), settings: view }, null, 2);
   return new Response(body, {
     status: 200,
@@ -98,8 +99,10 @@ export const handleImportSettings: RouteHandler = async (req, env, s) => {
   }
   for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "version", "updatedAt"]) delete blob[k];
   const merged = deepMergeDefaults(structuredClone(DEFAULT_SETTINGS), blob);
+  const fresh = await loadSettingsFresh(env);
+  void s;
   for (const key of PRESERVED_FIELDS) {
-    (merged as unknown as Record<string, unknown>)[key] = (s as unknown as Record<string, unknown>)[key];
+    (merged as unknown as Record<string, unknown>)[key] = (fresh as unknown as Record<string, unknown>)[key];
   }
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);

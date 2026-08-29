@@ -337,6 +337,10 @@ export function validateSettings(input: unknown): ValidationResult {
   if (v !== undefined) out.trojanPassword = v;
   v = strField(patch, "ssPassword", fields, { maxLen: 128 });
   if (v !== undefined) out.ssPassword = v;
+  if (out.vlessEnabled && out.vlessUuid.length === 0) fail(fields, "vlessUuid", "must not be empty when VLESS is enabled");
+  if (out.vmessEnabled && out.vmessUuid.length === 0) fail(fields, "vmessUuid", "must not be empty when VMess is enabled");
+  if (out.trojanEnabled && out.trojanPassword.length === 0) fail(fields, "trojanPassword", "must not be empty when Trojan is enabled");
+  if (out.ssEnabled && out.ssPassword.length === 0) fail(fields, "ssPassword", "must not be empty when Shadowsocks is enabled");
   const ssMethod = enumField(patch, "ssMethod", fields, SS_METHODS);
   if (ssMethod !== undefined) out.ssMethod = ssMethod;
   for (const p of ["vlessPath", "vmessPath", "trojanPath", "ssPath"] as const) {
@@ -460,7 +464,10 @@ export function validateSettings(input: unknown): ValidationResult {
     else fail(fields, "remoteDns", "must be a URL or IP/hostname");
   }
   v = strField(patch, "localDns", fields, { maxLen: 253, minLen: 1 });
-  if (v !== undefined) out.localDns = v;
+  if (v !== undefined) {
+    if (!HOST_TOKEN_RE.test(v) && !/^\d{1,3}(\.\d{1,3}){3}$/.test(v) && v !== "localhost") fail(fields, "localDns", "must be a hostname or IP");
+    else out.localDns = v;
+  }
   const urlTestIntervalSec = intField(patch, "urlTestIntervalSec", fields, 60, 86_400);
   if (urlTestIntervalSec !== undefined) out.urlTestIntervalSec = urlTestIntervalSec;
   v = strField(patch, "profileTitle", fields, { maxLen: 64 });

@@ -1,6 +1,6 @@
 import type { Env } from "../types/env";
 import type { Settings } from "../types/settings";
-import { AppError, UnauthorizedError } from "./errors";
+import { AppError } from "./errors";
 import { redirect } from "./respond";
 import { setDebugEnabled } from "./log";
 import { recordConnection } from "./counters";
@@ -13,8 +13,7 @@ import {
   type SecureRoute,
 } from "./routes";
 import { loadSettings } from "../settings/store";
-import { assertCsrf, getSession, requireAuth } from "../auth/guard";
-import { getSessionFloor, verifySession } from "../auth/session";
+import { assertCsrf, requireAuth } from "../auth/guard";
 import type { RouteHandler } from "../types/context";
 import { handleTunnel } from "../handlers/tunnel";
 import { handleDoh } from "../handlers/doh";
@@ -78,20 +77,8 @@ function csrfOnly(handler: RouteHandler): RouteHandler {
   };
 }
 
-function withSessionFloor(handler: RouteHandler): RouteHandler {
-  return async (req, env, s) => {
-    const raw = getSession(req);
-    if (raw === null) return handler(req, env, s);
-    const floor = await getSessionFloor(env);
-    if (floor > 0 && (await verifySession(raw, s.sessionSecret, floor)) === null) {
-      throw new UnauthorizedError();
-    }
-    return handler(req, env, s);
-  };
-}
-
 function authed(handler: RouteHandler): RouteHandler {
-  return requireAuth(withSessionFloor(handler));
+  return requireAuth(handler);
 }
 
 const guardedSaveSettings = authedCsrf(handleSaveSettings);
@@ -241,8 +228,8 @@ export async function routeRequest(req: Request, env: Env): Promise<Response> {
   }
 
   if (identifyTunnel(url.pathname, s) !== null) {
-    if (!isWebSocketUpgrade(req)) return handleCamouflage(req, env, s);
     if (s.killSwitch) return killSwitchResponse();
+    if (!isWebSocketUpgrade(req)) return handleCamouflage(req, env, s);
     void recordConnection(env).catch(() => {});
     return handleTunnel(req, env, s);
   }
