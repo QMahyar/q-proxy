@@ -21,7 +21,8 @@ const EXTENSIONS: Record<SubFormat, string> = {
 
 function filenameFor(format: SubFormat, title: string): string {
   const ext = EXTENSIONS[format];
-  return `${encodeURIComponent(title)}.${ext}`;
+  const enc = encodeURIComponent(title).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${enc}.${ext}`;
 }
 
 export function subscriptionHeaders(

@@ -1,4 +1,5 @@
 import { decodeBase64 } from "../utils/base64";
+import { isLocalOrPrivateTarget } from "../utils/net";
 
 const SCHEME_RE = /^(?:vless|vmess|trojan|ss|hysteria2?):\/\//;
 const MAX_TOTAL_BYTES = 1024 * 1024;
@@ -51,7 +52,26 @@ async function readCapped(res: Response, budget: { left: number }): Promise<stri
 
 async function fetchOne(url: string, budget: { left: number }): Promise<string[]> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "follow" });
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return [];
+    }
+    if (isLocalOrPrivateTarget(parsed.hostname)) return [];
+    const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "manual" });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (loc !== null) {
+        try {
+          const next = new URL(loc, url);
+          if (isLocalOrPrivateTarget(next.hostname)) return [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    }
     if (!res.ok || budget.left <= 0) return [];
     const text = await readCapped(res, budget);
     return extractLines(text);
@@ -80,16 +100,20 @@ export async function fetchRemoteSubLines(urls: readonly string[], ttlSeconds = 
     return remoteMemo.lines;
   }
   const budget = { left: MAX_TOTAL_BYTES };
-  const settled = await Promise.all(urls.map((u) => fetchOne(u, budget)));
-  const seen = new Set<string>();
   const out: string[] = [];
-  for (const lines of settled) {
+  const seen = new Set<string>();
+  for (const u of urls) {
+    if (budget.left <= 0) break;
+    const lines = await fetchOne(u, budget);
     for (const line of lines) {
       if (seen.has(line)) continue;
       seen.add(line);
       out.push(line);
     }
   }
-  if (ttlSeconds > 0) remoteMemo = { key, lines: out, expiresAt: now + ttlSeconds * 1000 };
+  if (ttlSeconds > 0) {
+    const expiresAt = out.length > 0 ? now + ttlSeconds * 1000 : now + 60 * 1000;
+    remoteMemo = { key, lines: out, expiresAt };
+  }
   return out;
 }

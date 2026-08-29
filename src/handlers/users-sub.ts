@@ -44,14 +44,14 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
   if (user === null) return handleCamouflage(req, env, s);
 
   const now = Date.now();
-  if (!user.enabled || (user.expiresAt !== null && user.expiresAt < now)) return plain(410, "gone");
+  if (!user.enabled || (user.expiresAt !== null && user.expiresAt <= now)) return plain(410, "gone");
 
   const hits = await getUserHits(env, token);
   const total = await getUserTotalHits(env, token);
 
   if (format === null) {
     const subUrls = SUB_FORMATS.map((f) => ({ format: f, url: `${url.origin}${url.pathname}?target=${f}` }));
-    return htmlResponse(infoPageHtml(subUrls, s.profileTitle));
+    return htmlResponse(infoPageHtml(subUrls, s.profileTitle), 200, { "Cache-Control": "no-store" });
   }
 
   if (user.dailyReqLimit !== null && hits >= user.dailyReqLimit) {
@@ -60,7 +60,10 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
 
   const cacheKey = makeEdgeCacheKey(req, format, isFragmentMode, token);
   const cached = await matchEdgeCache(cacheKey);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    afterResponse(recordUserHit(env, token));
+    return cached;
+  }
 
   afterResponse(recordUserHit(env, token));
 
@@ -70,8 +73,9 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
       ? generateNodes(ctx)
       : generateNodes(ctx).filter((n) => (user.protocols as string[]).includes(n.kind));
   const nodes = selectVariantNodes(scoped, isFragmentMode ? "fragment" : "normal");
+  const subSettings = { ...s, remoteSubUrls: [] as string[] };
   const body = await renderSubscriptionBody({
-    settings: s,
+    settings: subSettings,
     nodes,
     format,
     isFragmentMode,
@@ -90,6 +94,7 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
     },
   );
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
+  headers["Cache-Control"] = "private, max-age=60";
   const res = new Response(body, { status: 200, headers });
   if (typeof caches !== "undefined") afterResponse(caches.default.put(cacheKey, res.clone()));
   return res;
