@@ -49,10 +49,14 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
     "Subscription-Userinfo": `upload=0; download=${usage.requestsTotal * 1024 * 1024}`,
     "profile-web-page-url": `${origin}/${s.securePath}/panel`,
     "X-WG-Version": appVersion(),
-    "Cache-Control": "public, max-age=60",
+    "Cache-Control": "private, max-age=60",
   };
   const body: BodyInit = typeof result === "string" ? result : new Uint8Array(result);
-  const res = new Response(body, { status: 200, headers });
-  if (edgeCache !== null) afterResponse(edgeCache.put(cacheKey, res.clone()).catch(() => {}));
+  const res = new Response(body as BodyInit, { status: 200, headers });
+  if (edgeCache !== null) {
+    const cacheHeaders = { ...headers, "Cache-Control": "public, max-age=60" };
+    const cacheRes = new Response(body as BodyInit, { status: 200, headers: cacheHeaders });
+    afterResponse(edgeCache.put(cacheKey, cacheRes).catch(() => {}));
+  }
   return res;
 };

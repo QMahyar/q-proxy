@@ -63,7 +63,7 @@ export async function readJsonObject(req: Request): Promise<Record<string, unkno
   const lenRaw = req.headers.get("content-length");
   if (lenRaw !== null) {
     const n = Number(lenRaw.trim());
-    if (!Number.isFinite(n) || n > 64 * 1024) throw new BadRequestError("body too large");
+    if (!Number.isInteger(n) || n < 0 || n > 64 * 1024) throw new BadRequestError("body too large");
   }
   let text: string;
   try {
@@ -71,7 +71,7 @@ export async function readJsonObject(req: Request): Promise<Record<string, unkno
   } catch {
     throw new BadRequestError("invalid json body");
   }
-  if (text.length > 64 * 1024) throw new BadRequestError("body too large");
+  if (new TextEncoder().encode(text).byteLength > 64 * 1024) throw new BadRequestError("body too large");
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

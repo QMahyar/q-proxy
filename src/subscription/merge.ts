@@ -59,19 +59,11 @@ async function fetchOne(url: string, budget: { left: number }): Promise<string[]
       return [];
     }
     if (isLocalOrPrivateTarget(parsed.hostname)) return [];
-    const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "manual" });
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get("location");
-      if (loc !== null) {
-        try {
-          const next = new URL(loc, url);
-          if (isLocalOrPrivateTarget(next.hostname)) return [];
-        } catch {
-          return [];
-        }
-      }
-      return [];
-    }
+    const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "follow" });
+    try {
+      const finalUrl = new URL(res.url);
+      if (isLocalOrPrivateTarget(finalUrl.hostname)) return [];
+    } catch {}
     if (!res.ok || budget.left <= 0) return [];
     const text = await readCapped(res, budget);
     return extractLines(text);
