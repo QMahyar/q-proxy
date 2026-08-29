@@ -228,8 +228,8 @@ export async function routeRequest(req: Request, env: Env): Promise<Response> {
   }
 
   if (identifyTunnel(url.pathname, s) !== null) {
-    if (s.killSwitch) return killSwitchResponse();
     if (!isWebSocketUpgrade(req)) return handleCamouflage(req, env, s);
+    if (s.killSwitch) return killSwitchResponse();
     void recordConnection(env).catch(() => {});
     return handleTunnel(req, env, s);
   }

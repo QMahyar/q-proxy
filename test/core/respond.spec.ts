@@ -40,11 +40,12 @@ describe("errorToResponse", () => {
     expect((body.error as Record<string, unknown>).message).toBe("nope");
   });
 
-  it("hides upstream errors unless debug", async () => {
+  it("hides upstream errors even in debug", async () => {
     const hidden = await readJson(errorToResponse(new UpstreamError("http://secret-upstream"), false));
     expect((hidden.error as Record<string, unknown>).message).not.toContain("secret");
     const debug = await readJson(errorToResponse(new UpstreamError("leak-me"), true));
-    expect((debug.error as Record<string, unknown>).message).toBe("leak-me");
+    expect((debug.error as Record<string, unknown>).message).not.toBe("leak-me");
+    expect((debug.error as Record<string, unknown>).message).toBe("internal error");
   });
 
   it("maps ValidationError fields", async () => {

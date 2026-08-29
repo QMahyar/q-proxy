@@ -1,6 +1,10 @@
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { invalidateSettingsCache } from "../../src/settings/store";
+import { clearSessionFloorCache } from "../../src/auth/session";
 import { clearLoginFailures, clientIp } from "../../src/auth/guard";
+import { clearRemoteSubCache } from "../../src/subscription/merge";
+import { clearSaltRegistry } from "../../src/protocols/shadowsocks";
+import { clearVmessReplayCache } from "../../src/protocols/vmess";
 
 export const SETTINGS_KEY = "qproxy:settings";
 
@@ -23,6 +27,10 @@ export async function seed(
     }),
   );
   invalidateSettingsCache();
+  clearSessionFloorCache();
+  clearRemoteSubCache();
+  clearSaltRegistry();
+  clearVmessReplayCache();
 }
 
 export function resetThrottle(): void {

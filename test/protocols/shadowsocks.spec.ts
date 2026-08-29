@@ -414,6 +414,14 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
     expect(opened[2]!.length).toBe(40000 - 2 * 0x3fff);
     expect(Array.from(concatBytes(...opened))).toEqual(Array.from(big));
   });
+
+  it("incrementingNonce is little-endian (SIP004)", () => {
+    expect(Array.from(incrementingNonce(0x0102030405060708n).subarray(0, 8))).toEqual([
+      0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
+    ]);
+    expect(incrementingNonce(256n)[0]).toBe(0);
+    expect(incrementingNonce(256n)[1]).toBe(1);
+  });
 });
 
 

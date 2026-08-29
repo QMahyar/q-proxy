@@ -48,4 +48,20 @@ describe("classifyUA", () => {
     expect(classifyUA("")).toBe("base64");
     expect(classifyUA("curl/8.4.0")).toBe("base64");
   });
+
+  it("sing-box token variants", () => {
+    expect(classifyUA("SFI/1.0")).toBe("singbox");
+    expect(classifyUA("SFM/2.0")).toBe("singbox");
+    expect(classifyUA("SFT/1.5")).toBe("singbox");
+    expect(classifyUA("singbox/1.9 dalvik")).toBe("singbox");
+  });
+
+  it("base64 client token variants", () => {
+    expect(classifyUA("Streisand/1.0")).toBe("base64");
+    expect(classifyUA("V2Box/3.0")).toBe("base64");
+    expect(classifyUA("Foxray/2.1")).toBe("base64");
+    expect(classifyUA("Husi/1.0")).toBe("base64");
+    expect(classifyUA("Xray-core/1.8")).toBe("base64");
+    expect(classifyUA("NapsternetV/1.0")).toBe("base64");
+  });
 });

@@ -49,7 +49,7 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
     "Subscription-Userinfo": `upload=0; download=${usage.requestsTotal * 1024 * 1024}`,
     "profile-web-page-url": `${origin}/${s.securePath}/panel`,
     "X-WG-Version": appVersion(),
-    "Cache-Control": "private, max-age=60",
+    "Cache-Control": "public, max-age=60",
   };
   const body: BodyInit = typeof result === "string" ? result : new Uint8Array(result);
   const res = new Response(body, { status: 200, headers });

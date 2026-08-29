@@ -94,7 +94,6 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
     },
   );
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
-  headers["Cache-Control"] = "private, max-age=60";
   const res = new Response(body, { status: 200, headers });
   if (typeof caches !== "undefined") afterResponse(caches.default.put(cacheKey, res.clone()));
   return res;

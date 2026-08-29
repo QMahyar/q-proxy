@@ -337,10 +337,6 @@ export function validateSettings(input: unknown): ValidationResult {
   if (v !== undefined) out.trojanPassword = v;
   v = strField(patch, "ssPassword", fields, { maxLen: 128 });
   if (v !== undefined) out.ssPassword = v;
-  if (out.vlessEnabled && out.vlessUuid.length === 0) fail(fields, "vlessUuid", "must not be empty when VLESS is enabled");
-  if (out.vmessEnabled && out.vmessUuid.length === 0) fail(fields, "vmessUuid", "must not be empty when VMess is enabled");
-  if (out.trojanEnabled && out.trojanPassword.length === 0) fail(fields, "trojanPassword", "must not be empty when Trojan is enabled");
-  if (out.ssEnabled && out.ssPassword.length === 0) fail(fields, "ssPassword", "must not be empty when Shadowsocks is enabled");
   const ssMethod = enumField(patch, "ssMethod", fields, SS_METHODS);
   if (ssMethod !== undefined) out.ssMethod = ssMethod;
   for (const p of ["vlessPath", "vmessPath", "trojanPath", "ssPath"] as const) {
