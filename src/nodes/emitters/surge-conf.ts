@@ -1,8 +1,10 @@
 import type { ProxyNode } from "../../types/node";
-import { TEST_URL, visibleNodes as baseVisibleNodes } from "./registry";
+import { TEST_URL, bareServer, visibleNodes as baseVisibleNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 
 type SurgeNode = Extract<ProxyNode, { kind: "vmess" | "trojan" }>;
+
+const enc = (v: string): string => v.replace(/[,=\r\n]/g, (c) => encodeURIComponent(c));
 
 function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): SurgeNode[] {
   return baseVisibleNodes(nodes, isFragment).filter(
@@ -12,8 +14,8 @@ function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): SurgeNo
 
 function vmessLine(node: Extract<ProxyNode, { kind: "vmess" }>): string {
   const parts = [
-    `${node.name} = vmess`,
-    node.address,
+    `${enc(node.name)} = vmess`,
+    bareServer(node.address),
     String(node.port),
     `username=${node.uuid}`,
     node.security === "tls" ? "tls=true" : "tls=false",
@@ -28,10 +30,10 @@ function vmessLine(node: Extract<ProxyNode, { kind: "vmess" }>): string {
 
 function trojanLine(node: Extract<ProxyNode, { kind: "trojan" }>): string {
   const parts = [
-    `${node.name} = trojan`,
-    node.address,
+    `${enc(node.name)} = trojan`,
+    bareServer(node.address),
     String(node.port),
-    `password=${node.password}`,
+    `password=${enc(node.password)}`,
     "tls=true",
     "ws=true",
     `ws-path=${node.path}`,
@@ -47,7 +49,7 @@ export function emitSurgeConf(
 ): string {
   const visible = visibleNodes(nodes, opts.isFragment);
   const lines = visible.map((n) => (n.kind === "vmess" ? vmessLine(n) : trojanLine(n)));
-  const names = lines.map((l) => l.slice(0, l.indexOf(" =")));
+  const names = visible.map((n) => enc(n.name));
   const group =
     names.length > 1
       ? `PROXY = url-test, ${names.join(", ")}, url=${TEST_URL}, interval=${opts.urlTestIntervalSec}, tolerance=50`

@@ -103,4 +103,38 @@ describe("emitSurgeConf golden", () => {
     expect(out).toContain("tls=false");
     expect(out).not.toContain("PLAINTR");
   });
+
+  it("strips brackets from IPv6 server field", () => {
+    const ipv6: TrojanNode = { ...trojan(), address: "[2606:4700::1]", name: "TROJAN [2606:4700::1] 443" };
+    const out = emitSurgeConf([ipv6], OPTS);
+    expect(out).toContain("TROJAN [2606:4700::1] 443 = trojan, 2606:4700::1, 443, password=");
+    expect(out).not.toContain(", [2606");
+  });
+
+  it("percent-encodes special characters in name and password without breaking comma split", () => {
+    const trickyName = "My,=Weird\nName";
+    const trickyPass = "p,=a\nb";
+    const node: TrojanNode = { ...trojan(), name: trickyName, password: trickyPass };
+    const out = emitSurgeConf([node], OPTS);
+    expect(out).not.toContain("My,=Weird");
+    expect(out).toContain("My%2C%3DWeird%0AName = trojan");
+    expect(out).toContain("password=p%2C%3Da%0Ab");
+    const proxyLine = out.split("\n").find((l) => l.includes("password="))!;
+    const fields = proxyLine.split(", ");
+    const pwField = fields.find((f) => f.startsWith("password="))!;
+    const encoded = pwField.slice("password=".length);
+    const decoded = decodeURIComponent(encoded);
+    expect(decoded).toBe(trickyPass);
+    const namePart = proxyLine.slice(0, proxyLine.indexOf(" ="));
+    expect(decodeURIComponent(namePart)).toBe(trickyName);
+  });
+
+  it("round-trips password containing all Surge delimiters", () => {
+    const pwd = 'a,b=c\nd\re';
+    const node: TrojanNode = { ...trojan(), password: pwd };
+    const out = emitSurgeConf([node], OPTS);
+    const line = out.split("\n").find((l) => l.includes("password="))!;
+    const pwField = line.split(", ").find((f) => f.startsWith("password="))!;
+    expect(decodeURIComponent(pwField.slice("password=".length))).toBe(pwd);
+  });
 });

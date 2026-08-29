@@ -81,7 +81,7 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
       format: f,
       url: `${origin}${url.pathname}?target=${f}`,
     }));
-    return htmlResponse(infoPageHtml(subUrls, s.profileTitle));
+    return htmlResponse(infoPageHtml(subUrls, s.profileTitle), 200, { "Cache-Control": "no-store" });
   }
 
   const cacheKey = makeEdgeCacheKey(req, format, isFragmentMode);

@@ -36,7 +36,7 @@ export async function getSessionFloor(env: Env): Promise<number> {
 }
 
 export async function bumpSessionFloor(env: Env): Promise<void> {
-  const at = unixNow();
+  const at = unixNow() + 1;
   await env.QPROXY_KV.put(SESSION_FLOOR_KEY, String(at));
   floorCache = { value: at, expiresAt: Date.now() + SESSION_FLOOR_TTL_MS };
 }
@@ -60,12 +60,22 @@ export async function issueSession(secret: string): Promise<string> {
   return `${payload}.${sig}`;
 }
 
+export async function issueSessionWithIat(secret: string, iat: number): Promise<string> {
+  const payload = encodeBase64Url(JSON.stringify({ exp: iat + SESSION_TTL_SECONDS, iat }));
+  const sig = await hmacHex(payload, secret);
+  return `${payload}.${sig}`;
+}
+
 function sessionCookie(token: string, maxAge: number): string {
   return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
 }
 
 export function issuedSessionCookie(secret: string): Promise<string> {
   return issueSession(secret).then((token) => sessionCookie(token, SESSION_TTL_SECONDS));
+}
+
+export function issuedSessionCookieWithIat(secret: string, iat: number): Promise<string> {
+  return issueSessionWithIat(secret, iat).then((token) => sessionCookie(token, SESSION_TTL_SECONDS));
 }
 
 export function clearedSessionCookie(): string {
@@ -98,6 +108,6 @@ export async function verifySession(
   const iatRaw = (parsed as { iat?: unknown }).iat;
   if (iatRaw !== undefined && (typeof iatRaw !== "number" || !Number.isFinite(iatRaw))) return null;
   const iat = typeof iatRaw === "number" ? iatRaw : undefined;
-  if ((iat ?? 0) < minIat) return null;
+  if (minIat > 0 && (iat ?? 0) <= minIat) return null;
   return iat === undefined ? { exp } : { exp, iat };
 }

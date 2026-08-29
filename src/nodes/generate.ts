@@ -1,6 +1,6 @@
 import type { NodeBuilderContext } from "../types/context";
 import type { NodeTag, ProxyNode, SSNode, TrojanNode, VMessNode, VlessNode } from "../types/node";
-import { CF_TLS_PORTS, type Settings } from "../types/settings";
+import { CF_PLAIN_PORTS, CF_TLS_PORTS, type Settings } from "../types/settings";
 import { fragmentQuery } from "./fragments";
 import { renderName } from "./naming";
 import { isIPv6, normalizeCleanAddress, parseHostPort } from "../utils/net";
@@ -71,16 +71,20 @@ function scrambleSni(sni: string, seedKey: string): string {
   return out.join("");
 }
 
+const ALNUM_RE = /[A-Za-z0-9]/;
+const CF_TLS_PORT_SET: ReadonlySet<number> = new Set(CF_TLS_PORTS as readonly number[]);
+const CF_PLAIN_PORT_SET: ReadonlySet<number> = new Set(CF_PLAIN_PORTS as readonly number[]);
+
 function tunnelSuffix(cred: string, securePath: string): string {
   const cleanChars: string[] = [];
   for (const ch of cred) {
-    if (/[A-Za-z0-9]/.test(ch)) cleanChars.push(ch);
+    if (ALNUM_RE.test(ch)) cleanChars.push(ch);
     if (cleanChars.length === 16) break;
   }
   let suffix = cleanChars.join("");
   for (const ch of securePath) {
     if (suffix.length >= 8) break;
-    if (/[A-Za-z0-9]/.test(ch)) suffix += ch;
+    if (ALNUM_RE.test(ch)) suffix += ch;
   }
   while (suffix.length < 8) suffix += "0";
   return suffix;
@@ -125,12 +129,14 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
   for (const entry of input.addresses) {
     const familySets: Array<{ ports: number[]; security: "tls" | "none" }> =
       entry.pinnedPort !== undefined
-        ? [
-            {
-              ports: [entry.pinnedPort],
-              security: (CF_TLS_PORTS as readonly number[]).includes(entry.pinnedPort) ? "tls" : "none",
-            },
-          ]
+        ? CF_TLS_PORT_SET.has(entry.pinnedPort) || CF_PLAIN_PORT_SET.has(entry.pinnedPort)
+          ? [
+              {
+                ports: [entry.pinnedPort],
+                security: CF_TLS_PORT_SET.has(entry.pinnedPort) ? "tls" : "none",
+              },
+            ]
+          : []
         : [
             { ports: input.tlsPorts, security: "tls" },
             ...(input.allowPlain ? [{ ports: input.plainPorts, security: "none" as const }] : []),
@@ -211,8 +217,8 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
     (s.plainPortPolicy === "workers-dev" && ctx.hostname.endsWith(".workers.dev"));
   const fragOn = s.fragment.mode !== "off";
   const fragQ = fragOn ? fragmentQuery(s.fragment) : "";
-  const tlsPorts = [...new Set(s.tlsPorts)];
-  const plainPorts = [...new Set(s.plainPorts)];
+  const tlsPorts = [...new Set(s.tlsPorts)].filter((p) => CF_TLS_PORT_SET.has(p));
+  const plainPorts = [...new Set(s.plainPorts)].filter((p) => CF_PLAIN_PORT_SET.has(p));
   const addresses = collectAddresses(s, ctx.hostname);
 
   const protos: ProtoSpec[] = [
@@ -240,13 +246,19 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
   }
 
   const out: ProxyNode[] = [];
+  const usedNames = new Set<string>();
   const cursors = new Array<number>(perKind.length).fill(0);
   while (out.length < limit) {
     let progressed = false;
     for (let i = 0; i < perKind.length && out.length < limit; i++) {
       const list = perKind[i]!;
       if (cursors[i]! >= list.length) continue;
-      out.push(list[cursors[i]!++]!);
+      const raw = list[cursors[i]!++]!;
+      let name = raw.name;
+      let k = 2;
+      while (usedNames.has(name)) name = `${raw.name} ${k++}`;
+      usedNames.add(name);
+      out.push(name === raw.name ? raw : { ...raw, name });
       progressed = true;
     }
     if (!progressed) break;

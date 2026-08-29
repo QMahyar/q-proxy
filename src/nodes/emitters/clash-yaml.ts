@@ -1,5 +1,5 @@
 import type { ProxyNode } from "../../types/node";
-import { TEST_URL, visibleNodes } from "./registry";
+import { TEST_URL, bareServer, visibleNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 import type { YamlObject } from "./yaml-writer";
 import { writeYaml } from "./yaml-writer";
@@ -26,7 +26,7 @@ function proxyEntry(node: ProxyNode): YamlObject {
   const p: YamlObject = {
     name: node.name,
     type: node.kind,
-    server: node.address,
+    server: bareServer(node.address),
     port: node.port,
     udp: true,
   };

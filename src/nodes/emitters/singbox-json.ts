@@ -1,5 +1,5 @@
 import type { ProxyNode } from "../../types/node";
-import { TEST_URL, visibleNodes } from "./registry";
+import { TEST_URL, bareServer, visibleNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 
 interface SingBoxTls {
@@ -43,7 +43,7 @@ function outboundOf(node: ProxyNode): Record<string, unknown> {
   const base: Record<string, unknown> = {
     type: node.kind === "ss" ? "shadowsocks" : node.kind,
     tag: node.name,
-    server: node.address,
+    server: bareServer(node.address),
     server_port: node.port,
   };
   if (node.kind === "vless") {

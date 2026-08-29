@@ -4,6 +4,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 import { execSync } from "node:child_process";
+import vm from "node:vm";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKER_NAME = "q-proxy";
@@ -169,11 +170,26 @@ async function getDefaultBranchRemote() {
   return null;
 }
 
+function isValidWorkerSource(source) {
+  if (source.length < 10240) return false;
+  if (!source.includes("export default")) return false;
+  try {
+    new vm.Script(source, { filename: "q-proxy.js" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function getWorkerScript() {
   const local = resolve(root, "dist/q-proxy.js");
   if (existsSync(local)) {
     console.log(`Using local ${local}`);
-    return readFileSync(local, "utf8");
+    const txt = readFileSync(local, "utf8");
+    if (!isValidWorkerSource(txt)) {
+      throw new Error(`Local worker ${local} failed validation (missing export default, too small, or not parseable JS)`);
+    }
+    return txt;
   }
   const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
   const version = pkg.version || "latest";
@@ -192,7 +208,7 @@ async function getWorkerScript() {
       const res = await fetch(url);
       if (res.ok) {
         const txt = await res.text();
-        if (txt.length > 10000 && txt.includes("export default")) {
+        if (isValidWorkerSource(txt)) {
           console.log(`Downloaded ${txt.length} bytes from ${url}`);
           return txt;
         }

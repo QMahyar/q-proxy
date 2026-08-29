@@ -14,9 +14,9 @@ describe("pickSubFormat negotiation priority", () => {
     expect(pickSubFormat(req("https://w/sp/sub?target=base64", "Loon/3"))).toBe("base64");
   });
 
-  it("rejects invalid target values and falls through to UA sniffing", () => {
-    expect(pickSubFormat(req("https://w/sp/sub?target=SINGBOX", "clash-verge/1"))).toBe("clash");
-    expect(pickSubFormat(req("https://w/sp/sub?target=hysteria", "v2rayNG/1.8"))).toBe("base64");
+  it("rejects invalid target values with BadRequest", () => {
+    expect(() => pickSubFormat(req("https://w/sp/sub?target=SINGBOX", "clash-verge/1"))).toThrow();
+    expect(() => pickSubFormat(req("https://w/sp/sub?target=hysteria", "v2rayNG/1.8"))).toThrow();
   });
 
   it("classifies the R4 priority table by UA", () => {

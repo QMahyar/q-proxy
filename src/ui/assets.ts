@@ -8,4 +8,6 @@ export const ASSETS = {
   camo: camoHtml,
 } as const;
 
+export const TOKEN_HINT_SUFFIX = "…";
+
 export type AssetName = keyof typeof ASSETS;

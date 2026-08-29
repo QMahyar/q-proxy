@@ -94,7 +94,8 @@ describe("session sign/verify", () => {
     const payload = encodeBase64Url(JSON.stringify({ exp: unixNow() + 1000, iat: 500 }));
     const token = `${payload}.${await sign(payload)}`;
     expect(await verifySession(token, SECRET, 0)).not.toBeNull();
-    expect(await verifySession(token, SECRET, 500)).not.toBeNull();
+    expect(await verifySession(token, SECRET, 499)).not.toBeNull();
+    expect(await verifySession(token, SECRET, 500)).toBeNull();
     expect(await verifySession(token, SECRET, 501)).toBeNull();
     expect(await verifySession(token, SECRET, unixNow() + 10)).toBeNull();
   });

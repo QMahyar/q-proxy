@@ -5,11 +5,15 @@ import {
   USERS_KEY,
   findUserByToken,
   getUserHits,
+  getUserTotalHits,
+  hashToken,
   listUsers,
+  migrateUserUsage,
   newUserToken,
   recordUserHit,
   sanitizeUser,
   saveUsers,
+  tokenHintFor,
   type UserAccount,
 } from "../../src/users/store";
 
@@ -35,11 +39,30 @@ class FakeKV {
   }
 }
 
-function mkUser(over: Partial<UserAccount> = {}): UserAccount {
+async function mkUser(over: Partial<UserAccount> & { token?: string } = {}): Promise<UserAccount> {
+  const plain = over.token ?? "22222222-2222-4222-8222-222222222222";
+  const tokenHash = await hashToken(plain);
+  const tokenHint = tokenHintFor(plain);
+  const base: UserAccount = {
+    id: "11111111-1111-4111-8111-111111111111",
+    name: "Alice",
+    tokenHash,
+    tokenHint,
+    enabled: true,
+    expiresAt: null,
+    dailyReqLimit: null,
+    protocols: "all",
+    createdAt: "2026-08-25T00:00:00.000Z",
+  };
+  const { token: _t, ...rest } = over as Record<string, unknown>;
+  return { ...base, ...(rest as Partial<UserAccount>) };
+}
+
+function mkLegacyRaw(token = "22222222-2222-4222-8222-222222222222", over: Record<string, unknown> = {}) {
   return {
     id: "11111111-1111-4111-8111-111111111111",
     name: "Alice",
-    token: "22222222-2222-4222-8222-222222222222",
+    token,
     enabled: true,
     expiresAt: null,
     dailyReqLimit: null,
@@ -63,8 +86,8 @@ describe("users store", () => {
 
   it("saves, lists and drops malformed entries", async () => {
     const env = kv.asEnv();
-    const alice = mkUser();
-    const bob = mkUser({
+    const alice = await mkUser();
+    const bob = await mkUser({
       id: "99999999-9999-4999-8999-999999999999",
       name: "Bob",
       token: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
@@ -79,9 +102,9 @@ describe("users store", () => {
 
   it("finds a user by token and rejects malformed or unknown tokens", async () => {
     const env = kv.asEnv();
-    const alice = mkUser();
+    const alice = await mkUser();
     await saveUsers(env, [alice]);
-    expect((await findUserByToken(env, alice.token))!.id).toBe(alice.id);
+    expect((await findUserByToken(env, "22222222-2222-4222-8222-222222222222"))!.id).toBe(alice.id);
     expect(await findUserByToken(env, "../etc/passwd")).toBeNull();
     expect(await findUserByToken(env, "")).toBeNull();
     expect(await findUserByToken(env, "33333333-3333-4333-8333-333333333333")).toBeNull();
@@ -94,25 +117,18 @@ describe("users store", () => {
     expect(a).not.toBe(b);
   });
 
-  it("sanitizes to the exact public field set, keeping the token as the credential", () => {
-    const u = mkUser({ dailyReqLimit: 100, expiresAt: 1893456000000 });
+  it("sanitizes to the exact public field set, exposing tokenHint not tokenHash", async () => {
+    const u = await mkUser({ dailyReqLimit: 100, expiresAt: 1893456000000 });
     const view = sanitizeUser(u);
     expect(Object.keys(view).sort()).toEqual(
-      [
-        "createdAt",
-        "dailyReqLimit",
-        "enabled",
-        "expiresAt",
-        "id",
-        "name",
-        "protocols",
-        "token",
-      ].sort(),
+      ["createdAt", "dailyReqLimit", "enabled", "expiresAt", "id", "name", "protocols", "tokenHint"].sort(),
     );
-    expect(view.token).toBe(u.token);
+    expect((view as Record<string, unknown>).token).toBeUndefined();
+    expect((view as Record<string, unknown>).tokenHash).toBeUndefined();
+    expect(view.tokenHint).toBe(u.tokenHint);
   });
 
-  it("records and reads per-token daily hits", async () => {
+  it("records and reads per-token daily hits via hashed keys", async () => {
     const env = kv.asEnv();
     expect(await getUserHits(env, "22222222-2222-4222-8222-222222222222")).toBe(0);
     await recordUserHit(env, "22222222-2222-4222-8222-222222222222");
@@ -133,5 +149,79 @@ describe("users store", () => {
 
   it("caps the directory at 50 users", () => {
     expect(MAX_USERS).toBe(50);
+  });
+
+  it("hashes tokens to sha256 hex and round-trips via findUserByToken", async () => {
+    const env = kv.asEnv();
+    const plain = "33333333-3333-4333-8333-333333333333";
+    const hash = await hashToken(plain);
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    const hint = tokenHintFor(plain);
+    expect(hint).toBe(plain.slice(0, 8) + "…");
+    const user: UserAccount = {
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      name: "Hashed",
+      tokenHash: hash,
+      tokenHint: hint,
+      enabled: true,
+      expiresAt: null,
+      dailyReqLimit: null,
+      protocols: "all",
+      createdAt: new Date().toISOString(),
+    };
+    await saveUsers(env, [user]);
+    const raw = kv.map.get(USERS_KEY)!;
+    expect(raw).not.toContain(plain);
+    expect(raw).toContain(hash);
+    expect(await findUserByToken(env, plain)).not.toBeNull();
+    expect((await findUserByToken(env, plain))!.id).toBe(user.id);
+  });
+
+  it("lazy-migrates legacy plaintext token records", async () => {
+    const env = kv.asEnv();
+    const legacyToken = "44444444-4444-4444-8444-444444444444";
+    const legacy = mkLegacyRaw(legacyToken);
+    kv.map.set(USERS_KEY, JSON.stringify([legacy]));
+    const users = await listUsers(env);
+    expect(users.length).toBe(1);
+    expect(users[0]!.tokenHash).toBe(await hashToken(legacyToken));
+    expect(users[0]!.tokenHint).toBe(legacyToken.slice(0, 8) + "…");
+    expect((users[0] as unknown as Record<string, unknown>).token).toBeUndefined();
+    expect(await findUserByToken(env, legacyToken)).not.toBeNull();
+    await saveUsers(env, users);
+    const persisted = JSON.parse(kv.map.get(USERS_KEY)!) as unknown[];
+    const rec = persisted[0] as Record<string, unknown>;
+    expect(rec.token).toBeUndefined();
+    expect(rec.tokenHash).toBe(await hashToken(legacyToken));
+  });
+
+  it("tokenHint is first 8 chars plus ellipsis", () => {
+    expect(tokenHintFor("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")).toBe("aaaaaaaa…");
+    expect(tokenHintFor("12345678-aaaa-4aaa-8aaa-aaaaaaaaaaaa")).toBe("12345678…");
+  });
+
+  it("migrates usage rows on token regeneration", async () => {
+    const env = kv.asEnv();
+    const oldPlain = "55555555-5555-4555-8555-555555555555";
+    const newPlain = "66666666-6666-4666-8666-666666666666";
+    const oldHash = await hashToken(oldPlain);
+    await recordUserHit(env, oldPlain);
+    await recordUserHit(env, oldPlain);
+    await recordUserHit(env, oldPlain);
+    expect(await getUserHits(env, oldPlain)).toBe(3);
+    expect(await getUserTotalHits(env, oldPlain)).toBe(3);
+    await migrateUserUsage(env, oldHash, newPlain);
+    expect(await getUserHits(env, oldPlain)).toBe(0);
+    expect(await getUserHits(env, newPlain)).toBe(3);
+    expect(await getUserTotalHits(env, oldPlain)).toBe(0);
+    expect(await getUserTotalHits(env, newPlain)).toBe(3);
+  });
+
+  it("sanitizeUser never exposes tokenHash", async () => {
+    const u = await mkUser();
+    const sanitized = sanitizeUser(u) as Record<string, unknown>;
+    expect(sanitized.tokenHash).toBeUndefined();
+    expect(sanitized.token).toBeUndefined();
+    expect(typeof sanitized.tokenHint).toBe("string");
   });
 });

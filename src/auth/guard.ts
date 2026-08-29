@@ -1,6 +1,6 @@
 import type { RouteHandler } from "../types/context";
 import { ForbiddenError, RateLimitedError, UnauthorizedError } from "../core/errors";
-import { verifySession } from "./session";
+import { getSessionFloor, verifySession } from "./session";
 
 const COOKIE_RE = /(?:^|;\s*)q_session=([^;\s]+)/;
 const FAILURE_WINDOW_MS = 60_000;
@@ -28,7 +28,11 @@ export function getSession(req: Request): string | null {
 export function requireAuth(handler: RouteHandler): RouteHandler {
   return async (req, env, s) => {
     const raw = getSession(req);
-    const session = raw !== null ? await verifySession(raw, s.sessionSecret) : null;
+    let floor = 0;
+    try {
+      floor = await getSessionFloor(env);
+    } catch {}
+    const session = raw !== null ? await verifySession(raw, s.sessionSecret, floor) : null;
     if (session === null) throw new UnauthorizedError();
     return handler(req, env, s);
   };

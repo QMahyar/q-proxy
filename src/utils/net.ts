@@ -177,9 +177,42 @@ const CF_IPV6_RANGES = [
   "2c0f:f248::/32",
 ];
 
+type CfBound = { low: bigint; high: bigint };
+
+function cfCidrToBound(cidr: string): CfBound {
+  const slash = cidr.indexOf("/");
+  const ipPart = cidr.slice(0, slash);
+  const len = Number(cidr.slice(slash + 1));
+  const parsed = ipToBigInt(ipPart)!;
+  const shift = BigInt(parsed.bits - len);
+  const low = (parsed.value >> shift) << shift;
+  const high = shift === 0n ? low : low | ((1n << shift) - 1n);
+  return { low, high };
+}
+
+let cfV4Bounds: CfBound[] | null = null;
+let cfV6Bounds: CfBound[] | null = null;
+
+function getCfV4Bounds(): CfBound[] {
+  if (cfV4Bounds) return cfV4Bounds;
+  cfV4Bounds = CF_IPV4_RANGES.map(cfCidrToBound);
+  return cfV4Bounds;
+}
+
+function getCfV6Bounds(): CfBound[] {
+  if (cfV6Bounds) return cfV6Bounds;
+  cfV6Bounds = CF_IPV6_RANGES.map(cfCidrToBound);
+  return cfV6Bounds;
+}
+
 export function isCloudflareIp(ip: string): boolean {
-  if (isIPv4(ip)) return CF_IPV4_RANGES.some((r) => cidrContains(ip, r));
-  return CF_IPV6_RANGES.some((r) => cidrContains(ip, r));
+  const parsed = ipToBigInt(ip);
+  if (parsed === null) return false;
+  const bounds = parsed.bits === 32 ? getCfV4Bounds() : getCfV6Bounds();
+  for (const b of bounds) {
+    if (parsed.value >= b.low && parsed.value <= b.high) return true;
+  }
+  return false;
 }
 
 const PRIVATE_V4 = ["0.0.0.0/8", "10.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16"];

@@ -129,12 +129,27 @@ describe("generateNodes address axis and tags", () => {
     expect(nodes.some((n) => n.address === "junkline")).toBe(false);
   });
 
-  it("treats a pinned non-CF port as plaintext family", () => {
+  it("drops a pinned port outside both CF port families", () => {
     const s = settings();
     s.cleanIps = ["1.2.3.4:9999"];
     const nodes = generateNodes(ctx(s)).filter((n) => n.address === "1.2.3.4");
+    expect(nodes.length).toBe(0);
+  });
+
+  it("maps a pinned CF TLS port to the tls family", () => {
+    const s = settings();
+    s.cleanIps = ["1.2.3.4:8443"];
+    const nodes = generateNodes(ctx(s)).filter((n) => n.address === "1.2.3.4");
     expect(nodes.length).toBeGreaterThan(0);
-    expect(nodes.every((n) => n.security === "none" && n.port === 9999 && n.sni === null)).toBe(true);
+    expect(nodes.every((n) => n.security === "tls" && n.port === 8443)).toBe(true);
+  });
+
+  it("maps a pinned CF plain port to the none family", () => {
+    const s = settings();
+    s.cleanIps = ["1.2.3.4:2052"];
+    const nodes = generateNodes(ctx(s)).filter((n) => n.address === "1.2.3.4");
+    expect(nodes.length).toBeGreaterThan(0);
+    expect(nodes.every((n) => n.security === "none" && n.port === 2052 && n.sni === null)).toBe(true);
   });
 
   it("masks cdn addresses with cdn host/sni and tags them cdn", () => {

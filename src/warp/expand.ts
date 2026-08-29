@@ -45,7 +45,7 @@ export async function expandAccount(env: unknown, account: WarpAccount): Promise
   }
   const seen = new Set<string>();
   const unique = endpoints.filter((e) => {
-    const key = `${e.ip}:${e.port}`;
+    const key = `${e.ip.toLowerCase()}:${e.port}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

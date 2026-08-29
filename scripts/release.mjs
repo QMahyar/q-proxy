@@ -27,6 +27,10 @@ function defaultBranch() {
   return "master";
 }
 const tag = version.startsWith("v") ? version : `v${version}`;
+if (!/^v?\d+\.\d+\.\d+$/.test(tag)) {
+  console.error(`invalid tag "${tag}" — expected vX.Y.Z`);
+  process.exit(1);
+}
 
 if (git("rev-parse --git-dir").length === 0) {
   console.error("not a git repository");
@@ -68,11 +72,23 @@ if (dry) {
   process.exit(0);
 }
 
-execSync(`git tag -a ${tag} -m "Release ${tag}"`, { stdio: "inherit" });
+{
+  const r = spawnSync("git", ["tag", "-a", tag, "-m", `Release ${tag}`], { stdio: "inherit" });
+  if (r.status !== 0) {
+    console.error(`git tag failed (exit ${r.status ?? "unknown"})`);
+    process.exit(r.status ?? 1);
+  }
+  if (r.error) throw r.error;
+}
 const branch = defaultBranch();
 if (push) {
   console.log(`pushing ${tag} to origin/${branch} ...`);
-  execSync(`git push origin ${branch} --tags`, { stdio: "inherit" });
+  const r = spawnSync("git", ["push", "origin", branch, "--tags"], { stdio: "inherit" });
+  if (r.status !== 0) {
+    console.error(`git push failed (exit ${r.status ?? "unknown"})`);
+    process.exit(r.status ?? 1);
+  }
+  if (r.error) throw r.error;
   console.log(`pushed ${tag} to origin/${branch}`);
 } else {
   console.log(`tagged ${tag} — push with: git push origin ${branch} --tags  (or re-run with --push)`);

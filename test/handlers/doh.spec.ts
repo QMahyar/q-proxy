@@ -49,23 +49,19 @@ describe("handleDoh", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("POST without a content-length header rejects before buffering", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new Error("upstream must not be called");
+  it("POST without a content-length header proceeds to upstream", async () => {
+    const fetchMock = vi.fn(async () => dnsResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await handleDoh(
+      new Request("https://panel.example/doh", {
+        method: "POST",
+        body: new Uint8Array(16),
       }),
+      {} as never,
+      settings,
     );
-    await expect(
-      handleDoh(
-        new Request("https://panel.example/doh", {
-          method: "POST",
-          body: new Uint8Array(16),
-        }),
-        {} as never,
-        settings,
-      ),
-    ).rejects.toMatchObject({ status: 400, code: "BAD_REQUEST", message: "content-length required" });
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("POST with a non-numeric content-length rejects", async () => {
@@ -80,7 +76,7 @@ describe("handleDoh", () => {
         {} as never,
         settings,
       ),
-    ).rejects.toMatchObject({ status: 400, message: "content-length required" });
+    ).rejects.toMatchObject({ status: 400, message: "invalid content-length" });
   });
 
   it("POST with an undersized declared length but oversized buffered body rejects", async () => {

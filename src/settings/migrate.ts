@@ -11,13 +11,14 @@ export function isPlainObject(value: unknown): value is PlainObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function mergeInto(target: PlainObject, patch: PlainObject): void {
+function mergeInto(target: PlainObject, patch: PlainObject, depth = 0): void {
+  if (depth > 32) return;
   for (const [key, value] of Object.entries(patch)) {
     if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
     if (value === undefined) continue;
     const current = target[key];
     if (isPlainObject(current) && isPlainObject(value)) {
-      mergeInto(current, value);
+      mergeInto(current, value, depth + 1);
     } else if (Object.hasOwn(target, key)) {
       target[key] = structuredClone(value) as unknown;
     }
@@ -55,5 +56,7 @@ export function migrateSettings(raw: unknown): Settings {
       v += 1;
     }
   }
-  return deepMergeDefaults(DEFAULT_SETTINGS, payload);
+  const out = deepMergeDefaults(DEFAULT_SETTINGS, payload);
+  out.version = SETTINGS_VERSION;
+  return out;
 }

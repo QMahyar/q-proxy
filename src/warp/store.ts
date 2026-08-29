@@ -150,9 +150,24 @@ export async function deleteAccount(env: { QPROXY_KV: KvLike }, account: WarpAcc
 export async function regenerateToken(env: { QPROXY_KV: KvLike }, account: WarpAccount): Promise<string> {
   const next = newSubToken();
   const oldToken = account.token;
+  const snapshot = account.token;
   account.token = next;
-  await storeAccount(env, account);
-  await env.QPROXY_KV.delete(WARP_TOKEN_PREFIX + oldToken);
+  try {
+    await env.QPROXY_KV.put(WARP_TOKEN_PREFIX + next, JSON.stringify(account.id));
+    await env.QPROXY_KV.put(WARP_ACCOUNT_PREFIX + account.id, JSON.stringify(account));
+  } catch (err) {
+    account.token = snapshot;
+    try {
+      await env.QPROXY_KV.put(WARP_ACCOUNT_PREFIX + account.id, JSON.stringify({ ...account, token: snapshot }));
+    } catch {}
+    try {
+      await env.QPROXY_KV.delete(WARP_TOKEN_PREFIX + next);
+    } catch {}
+    throw err;
+  }
+  try {
+    await env.QPROXY_KV.delete(WARP_TOKEN_PREFIX + oldToken);
+  } catch {}
   return next;
 }
 

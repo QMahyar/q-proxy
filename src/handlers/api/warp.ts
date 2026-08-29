@@ -1,7 +1,6 @@
 import type { RouteHandler } from "../../types/context";
 import type { AmneziaParams, WarpAccount, WarpConfig, WarpEndpoint, WarpPreset } from "../../types/warp";
 import { ValidationError, NotFoundError, UpstreamError } from "../../core/errors";
-import { afterResponse } from "../../core/counters";
 import { jsonOk, readJsonObject } from "../../core/respond";
 import { parseWarpConfig } from "../../warp/config";
 import { registerWarpDevice, removeWarpDevice, WarpApiError } from "../../warp/api";
@@ -137,7 +136,8 @@ async function buildAccount(env: Parameters<RouteHandler>[1], body: Record<strin
 export const handleWarpApi: RouteHandler = async (req, env, _s) => {
   const url = new URL(req.url);
   const segs = url.pathname.split("/").filter((p) => p.length > 0);
-  const rest = segs.slice(segs.indexOf("warp") + 1);
+  const warpIdx = segs.indexOf("warp", 1);
+  const rest = warpIdx === -1 ? [] : segs.slice(warpIdx + 1);
   const method = req.method;
   await ensureWarpDefaults(env);
   const origin = url.origin;
@@ -149,6 +149,7 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
       return jsonOk({ accounts: accounts.map(sanitizeAccount) });
     }
     if (rest[1] === "generate" && rest.length === 2 && method === "POST") {
+      if ((await listAccounts(env)).length >= 100) throw new ValidationError({ account: "too many warp accounts (max 100)" });
       const body = await readJsonObject(req);
       const account = await buildAccount(env, body, PLACEHOLDER_CONFIG, null);
       let reg: Awaited<ReturnType<typeof registerWarpDevice>>;
@@ -170,6 +171,7 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
       return jsonOk({ account: sanitizeAccount(account) });
     }
     if (rest[1] === "import" && rest.length === 2 && method === "POST") {
+      if ((await listAccounts(env)).length >= 100) throw new ValidationError({ account: "too many warp accounts (max 100)" });
       const body = await readJsonObject(req);
       if (typeof body.config !== "string" || body.config.trim().length === 0) {
         throw new ValidationError({ config: "must be a WireGuard .conf or wg:// URI" });
@@ -208,19 +210,19 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
           }
         }
         await storeAccount(env, account);
-        void purgeWarpSub(origin, account.token).catch(() => {});
+        await purgeWarpSub(origin, account.token).catch(() => {});
         return jsonOk({ account: sanitizeAccount(account) });
       }
       if (rest.length === 2 && method === "DELETE") {
         await deleteAccount(env, account);
         void removeWarpDevice(account.warp_id, account.warp_token).catch(() => {});
-        void purgeWarpSub(origin, account.token).catch(() => {});
+        await purgeWarpSub(origin, account.token).catch(() => {});
         return jsonOk({ deleted: true });
       }
       if (rest.length === 3 && rest[2] === "regenerate-token" && method === "POST") {
         const oldToken = account.token;
         const token = await regenerateToken(env, account);
-        afterResponse(purgeWarpSub(origin, oldToken));
+        await Promise.all([purgeWarpSub(origin, oldToken).catch(() => {}), purgeWarpSub(origin, token).catch(() => {})]);
         return jsonOk({ token });
       }
     }

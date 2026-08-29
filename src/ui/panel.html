@@ -771,7 +771,7 @@ function userRowHtml(u){
 const acts='<div class="btn-row"><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-edit" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.edit'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-regen" data-id="'+esc(u.id)+'" aria-label="'+esc(t('warp.detail.regen'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="users-del" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>';
 const sw='<label class="switch"><input type="checkbox" role="switch" data-user-toggle="'+esc(u.id)+'"'+(u.enabled?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span></label>';
 return '<tr><td data-l="'+esc(t('users.col.name'))+'" style="max-width:10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(u.name)+'</td>'
-+'<td data-l="'+esc(t('users.col.token'))+'" dir="ltr">'+copyFieldHtml(userSubUrl(u.token),'usr-'+esc(u.id))+'</td>'
++'<td data-l="'+esc(t('users.col.token'))+'" dir="ltr"><code dir="ltr" class="mono" style="font-size:var(--fs-sm);direction:ltr">'+esc(u.tokenHint||'')+'</code></td>'
 +'<td data-l="'+esc(t('users.col.status'))+'">'+userChip(u)+'</td>'
 +'<td data-l="'+esc(t('users.col.enabled'))+'">'+sw+'</td>'
 +'<td style="text-align:end">'+acts+'</td></tr>'}
@@ -1487,7 +1487,7 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  'users-regen'(el){
  confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
  if(!yes)return;
- try{await api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});toast(t('users.toast.regen'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
+ try{const d=await api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});const tok=d&&d.token;toast(t('users.toast.regen'),'ok');if(tok){const url=userSubUrl(tok);copyText(url);openQr(url)}await loadUsers()}catch(err){toastErr(err)}})},
  'tg-setup'(el){
  (async()=>{el.disabled=true;
  try{const d=await api('api/telegram/setup',{method:'POST',body:{}});
@@ -1652,9 +1652,9 @@ const body={name:$('mu-name').value.trim(),protocols:picked.includes('all')?'all
 const limit=$('mu-limit').value.trim();body.dailyReqLimit=limit===''?null:Number(limit);
 const exp=$('mu-expiry').value;body.expiresAt=exp===''?null:new Date(exp).getTime();
 try{
-if(editId)await api('api/users/'+editId,{method:'PUT',body});
-else await api('api/users',{method:'POST',body});
-closeModal('m-user');toast(t(editId?'users.toast.saved':'users.toast.created'),'ok');await loadUsers()}
+if(editId){await api('api/users/'+editId,{method:'PUT',body});closeModal('m-user');toast(t('users.toast.saved'),'ok')}
+else{const d=await api('api/users',{method:'POST',body});const tok=d&&d.user&&d.user.token;closeModal('m-user');toast(t('users.toast.created'),'ok');if(tok){const url=userSubUrl(tok);copyText(url);openQr(url)}}
+await loadUsers()}
 catch(err){if(err&&err.fields){$('mu-error').textContent=Object.values(err.fields)[0]||t('common.error');$('mu-error').style.display='block'}else toastErr(err)}
 finally{btn.disabled=false}})}
 function wireTabKeys(bar,sel){

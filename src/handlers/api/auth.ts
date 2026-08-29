@@ -7,7 +7,9 @@ import { hashPassword, verifyPassword } from "../../auth/password";
 import {
   bumpSessionFloor,
   clearedSessionCookie,
+  getSessionFloor,
   issuedSessionCookie,
+  issuedSessionCookieWithIat,
 } from "../../auth/session";
 import {
   assertLoginAllowed,
@@ -73,26 +75,28 @@ export const handleSetup: RouteHandler = async (req, env, s) => {
   );
 };
 
-export const handlePasswordChange: RouteHandler = async (req, env, s) => {
+export const handlePasswordChange: RouteHandler = async (req, env, _s) => {
+  void _s;
   const body = await readJsonObject(req);
-  if (s.passwordHash === null || s.passwordSalt === null) {
+  const fresh = await loadSettingsFresh(env);
+  if (fresh.passwordHash === null || fresh.passwordSalt === null) {
     throw new UnauthorizedError("invalid password");
   }
   const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
   const currentOk =
     currentPassword.length > 0 &&
-    (await verifyPassword(currentPassword, s.passwordHash, s.passwordSalt)).ok;
+    (await verifyPassword(currentPassword, fresh.passwordHash, fresh.passwordSalt)).ok;
   if (!currentOk) throw new UnauthorizedError("invalid password");
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
   if (newPassword.length < 8) {
     throw new ValidationError({ newPassword: "must be at least 8 characters" });
   }
-  const fresh = await loadSettingsFresh(env);
   const { hash, salt } = await hashPassword(newPassword);
   await saveSettings(env, { ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
   await bumpSessionFloor(env);
+  const floor = await getSessionFloor(env);
   return jsonOk(
     { changed: true },
-    { "Set-Cookie": await issuedSessionCookie(s.sessionSecret) },
+    { "Set-Cookie": await issuedSessionCookieWithIat(fresh.sessionSecret, floor + 1) },
   );
 };

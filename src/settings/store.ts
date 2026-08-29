@@ -1,8 +1,9 @@
 import type { Env } from "../types/env";
 import type { Settings } from "../types/settings";
-import { SETTINGS_VERSION } from "../types/settings";
+import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../types/settings";
 import { migrateSettings } from "./migrate";
 import { fillIdentity, hasIdentity } from "./seed";
+import { validateSettings } from "./validate";
 
 export const SETTINGS_KEY = "qproxy:settings";
 export const META_KEY = "qproxy:meta";
@@ -12,9 +13,8 @@ export const META_KEY = "qproxy:meta";
 const CACHE_TTL_MS = 60_000;
 const KV_CACHE_TTL = 60;
 
-// JSON deep copy is safe for plain JSON-serializable Settings and cheaper than structuredClone.
 function cloneSettings(s: Settings): Settings {
-  return JSON.parse(JSON.stringify(s));
+  return structuredClone(s);
 }
 
 export function appVersion(): string {
@@ -83,6 +83,9 @@ export async function loadSettings(env: Env): Promise<Settings> {
     cacheTtl: KV_CACHE_TTL,
   })) as unknown;
   let next = migrateSettings(raw);
+  const v = validateSettings(next);
+  if (!v.ok) next = structuredClone(DEFAULT_SETTINGS);
+  else next = v.value;
   const updatedAt = blobUpdatedAt(raw);
   if (!hasIdentity(next)) {
     next = fillIdentity(next);
@@ -98,6 +101,9 @@ export async function loadSettingsFresh(env: Env): Promise<Settings> {
     cacheTtl: KV_CACHE_TTL,
   })) as unknown;
   let next = migrateSettings(raw);
+  const v2 = validateSettings(next);
+  if (!v2.ok) next = structuredClone(DEFAULT_SETTINGS);
+  else next = v2.value;
   if (!hasIdentity(next)) {
     next = fillIdentity(next);
     await persist(env, next, Date.now());

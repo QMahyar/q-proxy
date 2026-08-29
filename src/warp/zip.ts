@@ -27,7 +27,18 @@ export function zipStore(files: Record<string, string>): Uint8Array {
   const central: Uint8Array[] = [];
   let offset = 0;
   const now = dosDateTime(new Date());
-  for (const [name, content] of Object.entries(files)) {
+  const seen = new Set<string>();
+  for (let [name, content] of Object.entries(files)) {
+    if (seen.has(name)) {
+      const dot = name.lastIndexOf(".");
+      const base = dot === -1 ? name : name.slice(0, dot);
+      const ext = dot === -1 ? "" : name.slice(dot);
+      let i = 1;
+      let candidate = `${base}-${i}${ext}`;
+      while (seen.has(candidate)) candidate = `${base}-${++i}${ext}`;
+      name = candidate;
+    }
+    seen.add(name);
     const nameBytes = encoder.encode(name);
     const data = encoder.encode(content);
     const crc = crc32(data);

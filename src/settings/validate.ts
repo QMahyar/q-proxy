@@ -460,7 +460,10 @@ export function validateSettings(input: unknown): ValidationResult {
     else fail(fields, "remoteDns", "must be a URL or IP/hostname");
   }
   v = strField(patch, "localDns", fields, { maxLen: 253, minLen: 1 });
-  if (v !== undefined) out.localDns = v;
+  if (v !== undefined) {
+    if (!HOST_TOKEN_RE.test(v) && !/^\d{1,3}(\.\d{1,3}){3}$/.test(v) && v !== "localhost") fail(fields, "localDns", "must be a hostname or IP");
+    else out.localDns = v;
+  }
   const urlTestIntervalSec = intField(patch, "urlTestIntervalSec", fields, 60, 86_400);
   if (urlTestIntervalSec !== undefined) out.urlTestIntervalSec = urlTestIntervalSec;
   v = strField(patch, "profileTitle", fields, { maxLen: 64 });
