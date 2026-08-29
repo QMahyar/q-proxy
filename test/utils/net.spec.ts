@@ -97,6 +97,29 @@ describe("isCloudflareIp", () => {
     expect(isCloudflareIp("2606:4700:4700::1111")).toBe(true);
     expect(isCloudflareIp("8.8.8.8")).toBe(false);
   });
+  it("handles 104.16.0.0/13 edges", () => {
+    expect(isCloudflareIp("104.16.0.0")).toBe(true);
+    expect(isCloudflareIp("104.23.255.255")).toBe(true);
+    expect(isCloudflareIp("104.15.255.255")).toBe(false);
+    expect(isCloudflareIp("104.24.0.0")).toBe(true);
+    expect(isCloudflareIp("104.27.255.255")).toBe(true);
+    expect(isCloudflareIp("104.28.0.0")).toBe(false);
+  });
+  it("handles ipv6 edges", () => {
+    expect(isCloudflareIp("2400:cb00::")).toBe(true);
+    expect(isCloudflareIp("2400:cb00:ffff:ffff:ffff:ffff:ffff:ffff")).toBe(true);
+    expect(isCloudflareIp("2400:cb01::")).toBe(false);
+    expect(isCloudflareIp("2606:4700::")).toBe(true);
+    expect(isCloudflareIp("2606:4700:ffff:ffff:ffff:ffff:ffff:ffff")).toBe(true);
+    expect(isCloudflareIp("2606:4701::")).toBe(false);
+    expect(isCloudflareIp("2a06:98c0::1")).toBe(true);
+    expect(isCloudflareIp("2a06:98c7:ffff::1")).toBe(true);
+    expect(isCloudflareIp("2a06:98c8::1")).toBe(false);
+    expect(isCloudflareIp("2c0f:f248::1")).toBe(true);
+    expect(isCloudflareIp("2c0f:f249::1")).toBe(false);
+    expect(isCloudflareIp("not-an-ip")).toBe(false);
+    expect(isCloudflareIp("")).toBe(false);
+  });
 });
 
 describe("isLocalOrPrivateTarget", () => {
