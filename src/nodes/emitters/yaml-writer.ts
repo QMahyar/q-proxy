@@ -10,12 +10,22 @@ const SAFE_PLAIN = /^[A-Za-z0-9_][A-Za-z0-9_\-./]*$/;
 const NUMBER_LIKE = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 const BOOL_LIKE = /^(?:true|false|yes|no|on|off|null|~)$/i;
 
+function escapeDoubleQuoted(v: string): string {
+  return v
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t")
+    .replace(/[\u0000-\u001F]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
 function fmtScalar(v: YamlScalar): string {
   if (typeof v === "number") return Number.isFinite(v) ? String(v) : "null";
   if (typeof v === "boolean") return v ? "true" : "false";
   if (v === null) return "null";
   if (v.length === 0 || !SAFE_PLAIN.test(v) || NUMBER_LIKE.test(v) || BOOL_LIKE.test(v)) {
-    return `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    return `"${escapeDoubleQuoted(v)}"`;
   }
   return v;
 }

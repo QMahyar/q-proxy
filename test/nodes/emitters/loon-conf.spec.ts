@@ -94,4 +94,38 @@ describe("emitLoonConf golden", () => {
     );
     expect(out).not.toContain("PLAINTR");
   });
+
+  it("strips brackets from IPv6 server field", () => {
+    const ipv6: TrojanNode = { ...trojan(), address: "[2606:4700::1]", name: "TROJAN [2606:4700::1] 443" };
+    const out = emitLoonConf([ipv6], OPTS);
+    expect(out).toContain("TROJAN [2606:4700::1] 443 = trojan, 2606:4700::1, 443,");
+    expect(out).not.toContain(", [2606");
+  });
+
+  it("escapes quotes, backslashes and newlines in quoted password and name", () => {
+    const trickyName = 'My "weird\nName\\test';
+    const trickyPass = 'p"ass\\word\nnext\rmore';
+    const node: TrojanNode = { ...trojan(), name: trickyName, password: trickyPass };
+    const out = emitLoonConf([node], OPTS);
+    expect(out).toContain('\\"');
+    expect(out).toContain("\\\\");
+    expect(out).toContain("\\n");
+    expect(out).toContain("\\r");
+    const baseline = emitLoonConf([{ ...trojan(), name: "CLEAN NODE", password: "cleanpass" }], OPTS);
+    expect(out.split("\n").length).toBe(baseline.split("\n").length);
+    const line = out.split("\n").find((l) => l.includes("password") || l.includes("trojan"))!;
+    expect(line).toContain('"p\\"ass\\\\word\\nnext\\rmore"');
+  });
+
+  it("round-trips password containing all Loon delimiters", () => {
+    const pwd = 'a"b\\c\nd\re';
+    const node: TrojanNode = { ...trojan(), password: pwd };
+    const out = emitLoonConf([node], OPTS);
+    const line = out.split("\n").find((l) => l.includes("trojan"))!;
+    const m = line.match(/"((?:\\.|[^"])*)"/);
+    expect(m).not.toBeNull();
+    const inner = m![1]!;
+    const unescaped = inner.replace(/\\\\/g, "\u0000").replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\u0000/g, "\\");
+    expect(unescaped).toBe(pwd);
+  });
 });

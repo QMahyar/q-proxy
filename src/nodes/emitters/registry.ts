@@ -24,6 +24,10 @@ export interface EmitOptions {
 
 export const TEST_URL = "https://www.gstatic.com/generate_204";
 
+export function bareServer(address: string): string {
+  return address.replace(/^\[/, "").replace(/\]$/, "");
+}
+
 export function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): ProxyNode[] {
   return nodes.filter((n) => isFragment || n.variant !== "fragment");
 }

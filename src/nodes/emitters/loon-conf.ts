@@ -1,8 +1,16 @@
 import type { ProxyNode } from "../../types/node";
-import { TEST_URL, visibleNodes as baseVisibleNodes } from "./registry";
+import { TEST_URL, bareServer, visibleNodes as baseVisibleNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 
 type LoonNode = Extract<ProxyNode, { kind: "vmess" | "trojan" | "vless" }>;
+
+const q = (v: string): string =>
+  v
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
+const nameEsc = (v: string): string => v.replace(/[\r\n]+/g, " ");
 
 function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): LoonNode[] {
   return baseVisibleNodes(nodes, isFragment).filter(
@@ -15,11 +23,11 @@ function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): LoonNod
 
 function vmessLine(node: Extract<ProxyNode, { kind: "vmess" }>): string {
   const parts = [
-    `${node.name} = vmess`,
-    node.address,
+    `${nameEsc(node.name)} = vmess`,
+    bareServer(node.address),
     String(node.port),
     node.cipher,
-    `"${node.uuid}"`,
+    `"${q(node.uuid)}"`,
     `alterId=${node.alterId}`,
     "udp=true",
     node.security === "tls" ? "over-tls=true" : "over-tls=false",
@@ -31,10 +39,10 @@ function vmessLine(node: Extract<ProxyNode, { kind: "vmess" }>): string {
 
 function trojanLine(node: Extract<ProxyNode, { kind: "trojan" }>): string {
   const parts = [
-    `${node.name} = trojan`,
-    node.address,
+    `${nameEsc(node.name)} = trojan`,
+    bareServer(node.address),
     String(node.port),
-    `"${node.password}"`,
+    `"${q(node.password)}"`,
     "udp=true",
   ];
   if (node.sni !== null) parts.push(`sni=${node.sni}`);
@@ -45,10 +53,10 @@ function trojanLine(node: Extract<ProxyNode, { kind: "trojan" }>): string {
 
 function vlessLine(node: Extract<ProxyNode, { kind: "vless" }>): string {
   const parts = [
-    `${node.name} = vless`,
-    node.address,
+    `${nameEsc(node.name)} = vless`,
+    bareServer(node.address),
     String(node.port),
-    `"${node.uuid}"`,
+    `"${q(node.uuid)}"`,
     "udp=true",
   ];
   if (node.security === "tls") {
@@ -62,7 +70,7 @@ function vlessLine(node: Extract<ProxyNode, { kind: "vless" }>): string {
 export function emitLoonConf(nodes: readonly ProxyNode[], opts: EmitOptions): string {
   const visible = visibleNodes(nodes, opts.isFragment);
   const lines = visible.map((n) => (n.kind === "vmess" ? vmessLine(n) : n.kind === "vless" ? vlessLine(n) : trojanLine(n)));
-  const names = lines.map((l) => l.slice(0, l.indexOf(" =")));
+  const names = visible.map((n) => nameEsc(n.name));
   const group =
     names.length > 1
       ? `PROXY = url-test, ${names.join(", ")}, url=${TEST_URL}, interval=${opts.urlTestIntervalSec}, tolerance=50, timeout=5`
