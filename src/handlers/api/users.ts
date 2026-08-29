@@ -5,15 +5,19 @@ import { jsonOk, readJsonObject } from "../../core/respond";
 import {
   MAX_USERS,
   getUserHits,
+  hashToken,
   listUsers,
+  migrateUserUsage,
   newUserId,
   newUserToken,
   saveUsers,
   sanitizeUser,
+  tokenHintFor,
 } from "../../users/store";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROTOCOLS = ["vless", "vmess", "trojan", "ss"] as const;
+const TEN_YEARS_MS = 10 * 365 * 24 * 60 * 60 * 1000;
 
 function requireName(value: unknown): string {
   if (typeof value !== "string") throw new ValidationError({ name: "must be a string" });
@@ -41,6 +45,7 @@ function parseLimit(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
   const n = Number(value);
   if (!Number.isInteger(n) || n < 1) throw new ValidationError({ dailyReqLimit: "must be a positive integer" });
+  if (n > 10000) throw new ValidationError({ dailyReqLimit: "must be at most 10000" });
   return n;
 }
 
@@ -49,25 +54,33 @@ function parseExpiry(value: unknown): number | null {
   const n = Number(value);
   if (!Number.isInteger(n)) throw new ValidationError({ expiresAt: "must be an epoch milliseconds integer" });
   if (n <= Date.now()) throw new ValidationError({ expiresAt: "must be in the future" });
+  if (n > Date.now() + TEN_YEARS_MS) throw new ValidationError({ expiresAt: "must be within 10 years" });
   return n;
 }
 
-function buildUser(body: Record<string, unknown>): UserAccount {
+async function buildUser(body: Record<string, unknown>): Promise<{ user: UserAccount; plain: string }> {
+  const plain = newUserToken();
+  const tokenHash = await hashToken(plain);
+  const tokenHint = tokenHintFor(plain);
   return {
-    id: newUserId(),
-    name: requireName(body.name),
-    token: newUserToken(),
-    enabled: true,
-    expiresAt: parseExpiry(body.expiresAt),
-    dailyReqLimit: parseLimit(body.dailyReqLimit),
-    protocols: parseProtocols(body.protocols),
-    createdAt: new Date().toISOString(),
+    plain,
+    user: {
+      id: newUserId(),
+      name: requireName(body.name),
+      tokenHash,
+      tokenHint,
+      enabled: true,
+      expiresAt: parseExpiry(body.expiresAt),
+      dailyReqLimit: parseLimit(body.dailyReqLimit),
+      protocols: parseProtocols(body.protocols),
+      createdAt: new Date().toISOString(),
+    },
   };
 }
 
 async function withHits(env: Parameters<RouteHandler>[1], users: UserAccount[]): Promise<PublicUser[]> {
   return Promise.all(
-    users.map(async (u) => ({ ...sanitizeUser(u), todayHits: await getUserHits(env, u.token) })),
+    users.map(async (u) => ({ ...sanitizeUser(u), todayHits: await getUserHits(env, u.tokenHash) })),
   );
 }
 
@@ -82,12 +95,12 @@ export const handleUsersApi: RouteHandler = async (req, env, _s) => {
   }
   if (rest.length === 0 && method === "POST") {
     const body = await readJsonObject(req);
-    const user = buildUser(body);
-    const users = await listUsers(env);
-    if (users.length >= MAX_USERS) throw new ValidationError({ limit: `at most ${MAX_USERS} users` });
-    users.push(user);
-    await saveUsers(env, users);
-    return jsonOk({ user: sanitizeUser(user) });
+    const { user, plain } = await buildUser(body);
+    const fresh = await listUsers(env);
+    if (fresh.length >= MAX_USERS) throw new ValidationError({ limit: `at most ${MAX_USERS} users` });
+    fresh.push(user);
+    await saveUsers(env, fresh);
+    return jsonOk({ user: { ...sanitizeUser(user), token: plain } });
   }
 
   const id = rest[0];
@@ -121,9 +134,14 @@ export const handleUsersApi: RouteHandler = async (req, env, _s) => {
       return jsonOk({ deleted: true });
     }
     if (rest.length === 2 && rest[1] === "regenerate-token" && method === "POST") {
-      users[index] = { ...user, token: newUserToken() };
+      const oldHash = user.tokenHash;
+      const plain = newUserToken();
+      const tokenHash = await hashToken(plain);
+      const tokenHint = tokenHintFor(plain);
+      users[index] = { ...user, tokenHash, tokenHint };
+      await migrateUserUsage(env, oldHash, plain);
       await saveUsers(env, users);
-      return jsonOk({ token: users[index]!.token });
+      return jsonOk({ token: plain });
     }
   }
 
