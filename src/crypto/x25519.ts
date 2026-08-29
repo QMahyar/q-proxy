@@ -53,10 +53,13 @@ export function x25519(scalarBytes: Uint8Array, uBytes: Uint8Array): Uint8Array 
   let swap = 0n;
   for (let t = 254; t >= 0; t--) {
     const kt = (k >> BigInt(t)) & 1n;
-    if (swap ^ kt) {
-      [x2, x3] = [x3, x2];
-      [z2, z3] = [z3, z2];
-    }
+    const mask = (swap ^ kt) ? -1n : 0n;
+    let t1 = (x2 ^ x3) & mask;
+    x2 ^= t1;
+    x3 ^= t1;
+    let t2 = (z2 ^ z3) & mask;
+    z2 ^= t2;
+    z3 ^= t2;
     swap = kt;
     const a = (x2 + z2) % P;
     const aa = (a * a) % P;
@@ -74,9 +77,14 @@ export function x25519(scalarBytes: Uint8Array, uBytes: Uint8Array): Uint8Array 
     x2 = (aa * bb) % P;
     z2 = (e * ((aa + 121665n * e) % P)) % P;
   }
-  if (swap) {
-    [x2, x3] = [x3, x2];
-    [z2, z3] = [z3, z2];
+  {
+    const mask2 = swap ? -1n : 0n;
+    let t1 = (x2 ^ x3) & mask2;
+    x2 ^= t1;
+    x3 ^= t1;
+    let t2 = (z2 ^ z3) & mask2;
+    z2 ^= t2;
+    z3 ^= t2;
   }
   return encodeU((x2 * powMod(z2, P - 2n)) % P);
 }
@@ -103,10 +111,18 @@ export function generatePrivateKey(): string {
 export function publicKeyFromPrivate(privateKeyB64: string): string {
   const priv = b64ToBytes(privateKeyB64);
   if (priv.length !== 32) throw new Error("private key must be 32 bytes");
-  return bytesToB64(x25519(priv, BASE_POINT));
+  const out = x25519(priv, BASE_POINT);
+  if (isAllZeroOutput(out)) throw new Error("weak public key");
+  return bytesToB64(out);
 }
 
 export function generateKeypair(): { privateKey: string; publicKey: string } {
+  for (let i = 0; i < 16; i++) {
+    const privateKey = generatePrivateKey();
+    try {
+      return { privateKey, publicKey: publicKeyFromPrivate(privateKey) };
+    } catch {}
+  }
   const privateKey = generatePrivateKey();
   return { privateKey, publicKey: publicKeyFromPrivate(privateKey) };
 }

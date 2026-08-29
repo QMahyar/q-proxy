@@ -17,12 +17,10 @@ export const handleDoh: RouteHandler = async (req, _env, s) => {
   let init: RequestInit;
   if (req.method === "POST") {
     const clRaw = req.headers.get("content-length");
-    const declared = clRaw === null ? Number.NaN : Number(clRaw.trim());
-    if (!Number.isInteger(declared) || declared < 0) {
-      throw new BadRequestError("content-length required");
-    }
-    if (declared > MAX_DOH_BODY_BYTES) {
-      throw new BadRequestError("dns query body exceeds the 64 KiB cap");
+    if (clRaw !== null) {
+      const declared = Number(clRaw.trim());
+      if (!Number.isInteger(declared) || declared < 0) throw new BadRequestError("invalid content-length");
+      if (declared > MAX_DOH_BODY_BYTES) throw new BadRequestError("dns query body exceeds the 64 KiB cap");
     }
     const body = await req.arrayBuffer();
     if (body.byteLength === 0) throw new BadRequestError("empty dns query body");

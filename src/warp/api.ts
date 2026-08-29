@@ -18,8 +18,8 @@ export interface WarpRegistration {
 export class WarpApiError extends Error {
   readonly status: number;
   readonly retryAfterHeader: string | null;
-  constructor(message: string, status: number, retryAfterHeader: string | null = null) {
-    super(message);
+  constructor(message: string, status: number, retryAfterHeader: string | null = null, options?: ErrorOptions) {
+    super(message, options);
     this.status = status;
     this.retryAfterHeader = retryAfterHeader;
   }
@@ -121,7 +121,7 @@ async function postReg(keyPublic: string): Promise<unknown> {
       return (await res.json()) as unknown;
     } catch (err) {
       if (err instanceof WarpApiError && err.status < 500 && err.status !== 429) throw err;
-      lastError = new WarpApiError(`warp api request failed: ${String(err)}`, 0);
+      lastError = new WarpApiError(`warp api request failed: ${String(err)}`, 0, null, { cause: err });
     }
   }
   throw lastError;
