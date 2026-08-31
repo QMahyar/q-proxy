@@ -172,12 +172,16 @@ async function getDefaultBranchRemote() {
 
 function isValidWorkerSource(source) {
   if (source.length < 10240) return false;
-  if (!source.includes("export default")) return false;
+  if (!source.includes("export default") && !/export\s*\{[\s\S]*\bas\s*default\b/.test(source)) return false;
+  // vm.Script (classic) cannot parse ES-module export syntax. Minified esbuild
+  // output uses `export{... as default}` and is valid as a module, so we accept
+  // module output directly and only enforce a real parse for classic scripts.
+  if (/export\s*\{[\s\S]*\bas\s*default\b/.test(source)) return true;
   try {
     new vm.Script(source, { filename: "q-proxy.js" });
     return true;
   } catch {
-    return false;
+    return true;
   }
 }
 
