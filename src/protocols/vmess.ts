@@ -76,6 +76,10 @@ function recordAcceptedAuthId(keyHex: string, nowEpochSeconds: number): void {
   seenAuthIds.set(keyHex, nowEpochSeconds + REPLAY_TTL_SECONDS);
 }
 
+function rollbackAcceptedAuthId(keyHex: string): void {
+  seenAuthIds.delete(keyHex);
+}
+
 type BodyMode = "aes" | "chacha" | "plain";
 
 interface VmessSession {
@@ -176,6 +180,7 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
         if (isReplayedAuthId(bytesToHex(authIdBytes!), Math.floor(Date.now() / 1000))) {
           return complete({ state: "reject", reason: "replayed handshake" });
         }
+        recordAcceptedAuthId(bytesToHex(authIdBytes!), Math.floor(Date.now() / 1000));
         authIdChecked = true;
       }
 
@@ -185,12 +190,16 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
         return { state: "need-more" };
       }
       if (opened.header === null) {
+        rollbackAcceptedAuthId(bytesToHex(authIdBytes!));
         return complete({ state: "reject", reason: opened.failReason ?? "AEAD open failed" });
       }
       const leftover = buf.subarray(AUTH_ID_LEN + opened.consumedBytes);
       const outcome = await parseLegacyHeader(opened.header);
-      if (outcome.state === "ready") {
-        recordAcceptedAuthId(bytesToHex(authIdBytes!), Math.floor(Date.now() / 1000));
+      if (outcome.state !== "ready") {
+        rollbackAcceptedAuthId(bytesToHex(authIdBytes!));
+        return complete(outcome);
+      }
+      {
         for (let off = 0; off < leftover.length; off += COPY_SLICE) {
           pendingTail.push(leftover.subarray(off, Math.min(off + COPY_SLICE, leftover.length)));
         }
@@ -294,9 +303,21 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
       ? buildLenKeys(s.requestBodyKey, s.requestBodyIv, plan.mode)
       : null;
 
+    let pendingEmitted = false;
+
     async function decodeUp(chunk: Uint8Array): Promise<Uint8Array | null> {
       if (!upAlive) return null;
-      if (!plan.framed) return chunk;
+      if (!plan.framed) {
+        if (!pendingEmitted) {
+          pendingEmitted = true;
+          if (pending.length > 0) {
+            const tail = concatBytes(...pending);
+            pending.length = 0;
+            return tail.length > 0 ? concatBytes(tail, chunk) : chunk;
+          }
+        }
+        return chunk;
+      }
       if (upEof) return null;
       if (chunk.length > 0 && !appendChunk(pending, chunk)) {
         upAlive = false;

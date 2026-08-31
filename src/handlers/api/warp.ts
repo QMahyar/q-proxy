@@ -3,6 +3,7 @@ import type { AmneziaParams, WarpAccount, WarpConfig, WarpEndpoint, WarpPreset }
 import { ValidationError, NotFoundError, UpstreamError } from "../../core/errors";
 import { jsonOk, readJsonObject } from "../../core/respond";
 import { parseWarpConfig } from "../../warp/config";
+import { isIPv6 } from "../../utils/net";
 import { registerWarpDevice, removeWarpDevice, WarpApiError } from "../../warp/api";
 import { purgeAllWarpSubs, purgeWarpSub } from "../../warp/cache";
 import {
@@ -60,6 +61,10 @@ function parseEndpoint(value: string): WarpEndpoint | null {
   const port = Number(portStr);
   if (portStr === "" || !Number.isInteger(port) || port < 1 || port > 65535) return null;
   host = host.replace(/^\[|\]$/g, "");
+  if (host.includes(":")) {
+    if (!isIPv6(host) || host.startsWith("-") || host.endsWith("-")) return null;
+    return { ip: host, port };
+  }
   if (!/^[A-Za-z0-9.-]+$/.test(host) || host.length === 0 || host.startsWith("-") || host.endsWith("-")) return null;
   if (host.includes(".")) {
     const labels = host.split(".");

@@ -32,6 +32,12 @@ export function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): 
   return nodes.filter((n) => isFragment || n.variant !== "fragment");
 }
 
+export function tlsRequiredNodes(nodes: readonly ProxyNode[], isFragment: boolean): ProxyNode[] {
+  return visibleNodes(nodes, isFragment).filter(
+    (n) => !((n.kind === "vless" || n.kind === "trojan") && n.security === "none"),
+  );
+}
+
 export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;
 
 export const EMITTERS: Record<SubFormat, NodeEmitter> = {

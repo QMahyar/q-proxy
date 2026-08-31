@@ -1,8 +1,10 @@
 import type { ProxyNode } from "../../types/node";
-import { TEST_URL, bareServer, visibleNodes } from "./registry";
+import { TEST_URL, bareServer, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 import type { YamlObject } from "./yaml-writer";
 import { writeYaml } from "./yaml-writer";
+
+const echOpts = (node: ProxyNode): YamlObject => ({ enable: true, ech_server_name: node.ech });
 
 function wsOpts(node: ProxyNode): YamlObject {
   const o: YamlObject = { path: node.path, headers: { Host: node.host } };
@@ -34,22 +36,22 @@ function proxyEntry(node: ProxyNode): YamlObject {
     p.uuid = node.uuid;
     p.tls = isTls;
     if (isTls) p.servername = node.sni ?? node.host;
-    if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = { enable: true };
+    if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = echOpts(node);
   } else if (node.kind === "vmess") {
     p.uuid = node.uuid;
     p.alterId = node.alterId;
     p.cipher = node.cipher;
     p.tls = isTls;
     if (isTls) p.servername = node.sni ?? node.host;
-    if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = { enable: true };
+    if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = echOpts(node);
   } else if (node.kind === "trojan") {
     p.password = node.password;
     if (isTls) {
       p.sni = node.sni ?? node.host;
-      if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = { enable: true };
+      if (node.ech !== null && node.ech.length > 0) p["ech-opts"] = echOpts(node);
     }
   } else {
-    p.udp = false;
+    p.udp = true;
     p.cipher = node.method;
     p.password = node.password;
     p.plugin = "v2ray-plugin";
@@ -66,9 +68,7 @@ function proxyEntry(node: ProxyNode): YamlObject {
 }
 
 export function emitClashYaml(nodes: readonly ProxyNode[], opts: EmitOptions): string {
-  const visible = visibleNodes(nodes, opts.isFragment).filter(
-    (n) => !(n.kind === "trojan" && n.security === "none"),
-  );
+  const visible = tlsRequiredNodes(nodes, opts.isFragment);
   const proxies = visible.map(proxyEntry);
   const names = proxies.map((p) => String(p.name));
   const groups: YamlObject[] =

@@ -1,5 +1,5 @@
 import type { ProxyNode } from "../../types/node";
-import { TEST_URL, bareServer, visibleNodes } from "./registry";
+import { TEST_URL, bareServer, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 
 interface SingBoxTls {
@@ -7,7 +7,7 @@ interface SingBoxTls {
   server_name: string;
   alpn?: string[];
   utls?: { enabled: boolean; fingerprint: string };
-  ech?: { enabled: boolean };
+  ech?: { enabled: boolean; query_server_name: string };
 }
 
 interface SingBoxTransport {
@@ -22,7 +22,7 @@ function tlsObject(serverName: string, fingerprint: string | null, alpn: string[
   const t: SingBoxTls = { enabled: true, server_name: serverName };
   if (alpn.length > 0) t.alpn = [...alpn];
   if (fingerprint !== null) t.utls = { enabled: true, fingerprint };
-  if (ech !== null && ech.length > 0) t.ech = { enabled: true };
+  if (ech !== null && ech.length > 0) t.ech = { enabled: true, query_server_name: ech };
   return t;
 }
 
@@ -81,7 +81,7 @@ function outboundOf(node: ProxyNode): Record<string, unknown> {
 }
 
 export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions): string {
-  const visible = visibleNodes(nodes, opts.isFragment);
+  const visible = tlsRequiredNodes(nodes, opts.isFragment);
   const names = visible.map((n) => n.name);
   const hasNodes = names.length > 0;
   const group: Record<string, unknown> | null = hasNodes
@@ -104,11 +104,23 @@ export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions):
       ]
     : [{ tag: "local-dns", address: opts.remoteDns }];
 
+  const routeRules: Record<string, unknown>[] = [{ protocol: "dns", action: "hijack-dns" }];
+  if (opts.rules && opts.rules.blockDomains.length > 0) {
+    routeRules.push({ domain_suffix: [...opts.rules.blockDomains], action: "reject", method: "drop" });
+  }
+  if (opts.rules && opts.rules.blockQuic) {
+    routeRules.push({ network: "udp", port: 443, action: "reject", method: "drop" });
+  }
+  routeRules.push({ ip_is_private: true, action: "route", outbound: "DIRECT" });
+  if (opts.rules && opts.rules.bypassDomains.length > 0) {
+    routeRules.push({ domain_suffix: [...opts.rules.bypassDomains], action: "route", outbound: "DIRECT" });
+  }
+
   const doc = {
     log: { level: "info", timestamp: true },
     dns: {
       servers: dnsServers,
-      rules: [{ outbound: "any", server: "local-dns" }],
+      rules: [],
       final: hasNodes ? "proxy-dns" : "local-dns",
     },
     inbounds: [
@@ -132,17 +144,7 @@ export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions):
       { type: "direct", tag: "DIRECT" },
     ],
     route: {
-      rules: [
-        { protocol: "dns", action: "hijack-dns" },
-        ...(opts.rules && opts.rules.blockDomains.length > 0
-          ? [{ domain_suffix: [...opts.rules.blockDomains], action: "reject" }]
-          : []),
-        ...(opts.rules && opts.rules.blockQuic ? [{ network: "udp", port: 443, action: "reject" }] : []),
-        { ip_is_private: true, outbound: "DIRECT" },
-        ...(opts.rules && opts.rules.bypassDomains.length > 0
-          ? [{ domain_suffix: [...opts.rules.bypassDomains], outbound: "DIRECT" }]
-          : []),
-      ],
+      rules: routeRules,
       final: hasNodes ? "PROXY" : "DIRECT",
       auto_detect_interface: true,
     },

@@ -229,7 +229,7 @@ export function validateAmnezia(params: AmneziaParams): { ok: true; value: Amnez
   int("Jc", 128);
   int("Jmin", 1280);
   int("Jmax", 1280);
-  for (const key of ["S1", "S2", "S3", "S4"] as const) int(key, 255);
+  for (const key of ["S1", "S2", "S3", "S4"] as const) int(key, 65535);
   const hRanges: Array<[string, number, number]> = [];
   for (const key of ["H1", "H2", "H3", "H4"] as const) {
     const v = params[key];
@@ -261,6 +261,7 @@ export function validateAmnezia(params: AmneziaParams): { ok: true; value: Amnez
     for (let j = i + 1; j < hRanges.length; j++) {
       const [, aLo, aHi] = hRanges[i]!;
       const [, bLo, bHi] = hRanges[j]!;
+      if ((aLo === 0 && aHi === 0) || (bLo === 0 && bHi === 0)) continue;
       if (aLo <= bHi && bLo <= aHi) {
         fields[hRanges[i]![0]] = "H ranges must not overlap";
         break;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emitSingBoxJson } from "../../../src/nodes/emitters/singbox-json";
 import type { EmitOptions } from "../../../src/nodes/emitters/registry";
-import type { ProxyNode, SSNode, TrojanNode, VlessNode } from "../../../src/types/node";
+import type { ProxyNode, SSNode, TrojanNode, VlessNode, VMessNode } from "../../../src/types/node";
 
 const OPTS: EmitOptions = {
   remoteDns: "https://8.8.8.8/dns-query",
@@ -90,12 +90,7 @@ describe("emitSingBoxJson golden", () => {
         "address": "local"
       }
     ],
-    "rules": [
-      {
-        "outbound": "any",
-        "server": "local-dns"
-      }
-    ],
+    "rules": [],
     "final": "proxy-dns"
   },
   "inbounds": [
@@ -204,6 +199,7 @@ describe("emitSingBoxJson golden", () => {
       },
       {
         "ip_is_private": true,
+        "action": "route",
         "outbound": "DIRECT"
       }
     ],
@@ -241,8 +237,8 @@ describe("emitSingBoxJson golden", () => {
     expect(s.plugin).toBe("v2ray-plugin");
   });
 
-  it("omits tls objects on plain-security nodes and drops early data when zero", () => {
-    const plain: VlessNode = {
+  it("excludes plain-security vless and trojan nodes because those cores require TLS", () => {
+    const plainVless: VlessNode = {
       ...vless(),
       port: 80,
       security: "none",
@@ -250,14 +246,48 @@ describe("emitSingBoxJson golden", () => {
       fingerprint: null,
       alpn: [],
       ech: null,
+    };
+    const plainTrojan: TrojanNode = {
+      ...trojan(),
+      port: 80,
+      security: "none",
+      sni: null,
+      fingerprint: null,
+    };
+    const out = emitSingBoxJson([plainVless, plainTrojan, vless()], OPTS);
+    const parsed = JSON.parse(out) as { outbounds: Array<Record<string, unknown>> };
+    const kinds = parsed.outbounds.map((o) => o.type);
+    expect(kinds.filter((k) => k === "vless").length).toBe(1);
+    expect(kinds.filter((k) => k === "trojan").length).toBe(0);
+    expect(out.includes("server_port: 80")).toBe(false);
+  });
+
+  it("omits tls objects on plain-security nodes and drops early data when zero", () => {
+    const plain: VMessNode = {
+      kind: "vmess",
+      name: "VMP",
+      address: "example.com",
+      port: 80,
+      security: "none",
+      sni: null,
+      host: "example.com",
+      path: "/vm/abcd1234",
       earlyData: 0,
-      path: "/vl/abcd1234",
+      fingerprint: null,
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      uuid: "1386f85e-657b-4d6e-9d56-78badb75e1fd",
+      cipher: "auto",
+      alterId: 0,
     };
     const parsed = JSON.parse(emitSingBoxJson([plain], OPTS)) as { outbounds: Array<Record<string, unknown>> };
     const o = parsed.outbounds[0]!;
+    expect(o.type).toBe("vmess");
     expect("tls" in o).toBe(false);
     const t = o.transport as Record<string, unknown>;
     expect("max_early_data" in t).toBe(false);
-    expect(t.path).toBe("/vl/abcd1234");
+    expect(t.path).toBe("/vm/abcd1234");
   });
 });

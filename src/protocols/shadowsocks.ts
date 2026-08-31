@@ -44,12 +44,19 @@ export function createSSInbound(
   let acc = new ByteAccumulator();
   let subkey: Uint8Array | null = null;
   let pendingSaltKey: string | null = null;
-  let pendingSaltNowSec = 0;
   let handshakeDone = false;
   let handshakeOk = false;
   let initialPayload: Uint8Array | null = null;
   const upState = { counter: 0 };
   let pendingBody: Uint8Array[] = [];
+
+  const rollbackSalt = (): void => {
+    if (subkey !== null && pendingSaltKey !== null) {
+      seenSalts.delete(pendingSaltKey);
+      subkey = null;
+      pendingSaltKey = null;
+    }
+  };
 
   return {
     async push(data: Uint8Array): Promise<PushOutcome<SsRequest>> {
@@ -69,9 +76,10 @@ export function createSSInbound(
         if (expiry !== undefined && expiry > nowSec) {
           return complete({ state: "reject", reason: "salt reuse detected" });
         }
-        pendingSaltKey = saltKey;
-        pendingSaltNowSec = nowSec;
+        pruneBoundedRegistry(seenSalts, SALT_REGISTRY_LIMIT - 1, nowSec);
+        seenSalts.set(saltKey, nowSec + SALT_REUSE_TTL_SECONDS);
         subkey = await hkdfSha1(masterKey, salt, subkeyInfo, keyLen);
+        pendingSaltKey = saltKey;
       }
       const stream = buf.subarray(keyLen);
 
@@ -83,10 +91,12 @@ export function createSSInbound(
       const isChacha = method === "chacha20-ietf-poly1305";
       const lenFrame = await openFrame(subkey, upState.counter++, stream.subarray(0, LEN_FRAME_LEN), isChacha);
       if (lenFrame === null || lenFrame.length !== 2) {
+        rollbackSalt();
         return complete({ state: "reject", reason: "length chunk decrypt failed" });
       }
       const chunkLen = readU16BE(lenFrame, 0);
       if (chunkLen === 0 || chunkLen > MAX_CHUNK_LEN) {
+        rollbackSalt();
         return complete({ state: "reject", reason: `invalid chunk length ${chunkLen}` });
       }
 
@@ -102,17 +112,20 @@ export function createSSInbound(
         isChacha,
       );
       if (payloadFrame === null || payloadFrame.length !== chunkLen) {
+        rollbackSalt();
         return complete({ state: "reject", reason: "payload chunk decrypt failed" });
       }
 
       if (payloadFrame.length < 1) {
+        rollbackSalt();
         return complete({ state: "reject", reason: "missing target header" });
       }
       const target = parseAddress(payloadFrame[0]!, payloadFrame, 1);
-      if (!target.ok) return complete({ state: "reject", reason: target.reason });
+      if (!target.ok) {
+        rollbackSalt();
+        return complete({ state: "reject", reason: target.reason });
+      }
 
-      pruneBoundedRegistry(seenSalts, SALT_REGISTRY_LIMIT - 1, pendingSaltNowSec);
-      seenSalts.set(pendingSaltKey!, pendingSaltNowSec + SALT_REUSE_TTL_SECONDS);
       initialPayload = payloadFrame.subarray(target.value.nextOffset);
       pendingBody = [];
       for (let off = LEN_FRAME_LEN + payloadFrameLen; off < stream.length; off += COPY_SLICE) {

@@ -9,9 +9,13 @@ import {
   requireAuth,
 } from "../../src/auth/guard";
 import { ForbiddenError, RateLimitedError, UnauthorizedError } from "../../src/core/errors";
-import { issueSession } from "../../src/auth/session";
+import { clearSessionFloorCache, issueSession } from "../../src/auth/session";
 
 const SECRET = "guard-secret";
+
+function stubEnv(): { QPROXY_KV: { get(key: string): Promise<unknown> } } {
+  return { QPROXY_KV: { get: async () => null } };
+}
 
 function reqWith(headers: Record<string, string>): Request {
   return new Request("https://example.com/x", { headers });
@@ -56,7 +60,7 @@ describe("requireAuth", () => {
     const handler = requireAuth(inner);
     const res = await handler(
       reqWith({ Cookie: `q_session=${token}` }),
-      {} as never,
+      stubEnv() as never,
       { sessionSecret: SECRET } as never,
     );
     expect(res.status).toBe(200);
@@ -65,10 +69,20 @@ describe("requireAuth", () => {
   it("throws UnauthorizedError for missing or invalid sessions", async () => {
     const handler = requireAuth(inner);
     const settings = { sessionSecret: SECRET } as never;
-    await expect(handler(reqWith({}), {} as never, settings)).rejects.toThrow(UnauthorizedError);
+    await expect(handler(reqWith({}), stubEnv() as never, settings)).rejects.toThrow(UnauthorizedError);
     const token = await issueSession("different-secret");
     await expect(
-      handler(reqWith({ Cookie: `q_session=${token}` }), {} as never, settings),
+      handler(reqWith({ Cookie: `q_session=${token}` }), stubEnv() as never, settings),
+    ).rejects.toThrow(UnauthorizedError);
+  });
+
+  it("fails closed when the session floor cannot be read", async () => {
+    clearSessionFloorCache();
+    const token = await issueSession(SECRET);
+    const handler = requireAuth(inner);
+    const broken = { QPROXY_KV: { get: async () => { throw new Error("kv down"); } } };
+    await expect(
+      handler(reqWith({ Cookie: `q_session=${token}` }), broken as never, { sessionSecret: SECRET } as never),
     ).rejects.toThrow(UnauthorizedError);
   });
 });

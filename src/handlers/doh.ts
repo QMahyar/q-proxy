@@ -6,6 +6,31 @@ import { jsonError } from "../core/respond";
 const MAX_DOH_BODY_BYTES = 64 * 1024;
 const PASSTHROUGH_HEADERS = ["content-type", "cache-control"] as const;
 
+async function readCappedBody(req: Request, cap: number): Promise<Uint8Array> {
+  const reader = req.body?.getReader();
+  if (!reader) return new Uint8Array(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done || value === undefined) break;
+    total += value.byteLength;
+    if (total > cap) {
+      void reader.cancel().catch(() => {});
+      throw new BadRequestError(`dns query body exceeds the ${Math.floor(cap / 1024)} KiB cap`);
+    }
+    chunks.push(value);
+  }
+  if (chunks.length === 1) return chunks[0]!;
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return out;
+}
+
 export const handleDoh: RouteHandler = async (req, _env, s) => {
   if (req.method !== "GET" && req.method !== "POST") {
     return jsonError(405, "METHOD_NOT_ALLOWED", "doh endpoint supports GET and POST only");
@@ -22,11 +47,8 @@ export const handleDoh: RouteHandler = async (req, _env, s) => {
       if (!Number.isInteger(declared) || declared < 0) throw new BadRequestError("invalid content-length");
       if (declared > MAX_DOH_BODY_BYTES) throw new BadRequestError("dns query body exceeds the 64 KiB cap");
     }
-    const body = await req.arrayBuffer();
+    const body = await readCappedBody(req, MAX_DOH_BODY_BYTES);
     if (body.byteLength === 0) throw new BadRequestError("empty dns query body");
-    if (body.byteLength > MAX_DOH_BODY_BYTES) {
-      throw new BadRequestError("dns query body exceeds the 64 KiB cap");
-    }
     headers["Content-Type"] = req.headers.get("content-type") ?? "application/dns-message";
     init = { method: "POST", headers, body, signal: AbortSignal.timeout(5000) };
   } else {

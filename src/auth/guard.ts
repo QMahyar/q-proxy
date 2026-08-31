@@ -31,7 +31,9 @@ export function requireAuth(handler: RouteHandler): RouteHandler {
     let floor = 0;
     try {
       floor = await getSessionFloor(env);
-    } catch {}
+    } catch {
+      throw new UnauthorizedError();
+    }
     const session = raw !== null ? await verifySession(raw, s.sessionSecret, floor) : null;
     if (session === null) throw new UnauthorizedError();
     return handler(req, env, s);

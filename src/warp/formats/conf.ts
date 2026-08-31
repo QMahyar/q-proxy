@@ -71,8 +71,8 @@ export function emitThrone(ctx: WarpEmitContext, withAmnezia: boolean): string {
       .map((row) => {
         const parts = [
           `wg://${row.endpoint}`,
-          `private_key=${account.config.private_key}`,
-          `public_key=${account.config.peer_public_key}`,
+          `private_key=${encodeURIComponent(account.config.private_key)}`,
+          `public_key=${encodeURIComponent(account.config.peer_public_key)}`,
           `local_address=${[row.v4Host, row.v6Host].filter((h) => h.length > 0).join("-")}`,
           `mtu=${account.config.mtu}`,
           `persistent_keepalive_interval=${KEEPALIVE}`,
@@ -94,7 +94,7 @@ export function emitThrone(ctx: WarpEmitContext, withAmnezia: boolean): string {
             parts.push(`i1=${encodeURIComponent(ctx.amnezia.I1)}`);
           }
         }
-        parts.push(encodeURIComponent(row.tag));
+        parts.push(`#${encodeURIComponent(row.tag)}`);
         return `${parts[0]}?${parts.slice(1).join("&")}`;
       })
       .join("\n") + "\n"

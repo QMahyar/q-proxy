@@ -153,15 +153,46 @@ async function readUsageRows(env: { QPROXY_KV: KvLike }): Promise<UsageRow[]> {
   return out;
 }
 
-export async function recordUserHit(env: { QPROXY_KV: KvLike }, token: string): Promise<void> {
-  const rows = await readUsageRows(env);
-  const row = rows.find((r) => r.token === token);
-  if (row) row.count += 1;
-  else rows.push({ token, count: 1 });
-  await env.QPROXY_KV.put(usageKey(), JSON.stringify(rows));
-  const h = await toHash(token);
-  const total = await getUserTotalHits(env, h);
-  await env.QPROXY_KV.put(USER_TOTAL_PREFIX + h, JSON.stringify(total + 1));
+const usageLocks = new Map<string, Promise<unknown>>();
+
+function withUsageLock<T>(token: string, fn: () => Promise<T>): Promise<T> {
+  const prev = usageLocks.get(token) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  usageLocks.set(token, next.catch(() => undefined));
+  return next;
+}
+
+export function recordUserHit(env: { QPROXY_KV: KvLike }, token: string): Promise<void> {
+  return withUsageLock(token, async () => {
+    const rows = await readUsageRows(env);
+    const row = rows.find((r) => r.token === token);
+    if (row) row.count += 1;
+    else rows.push({ token, count: 1 });
+    await env.QPROXY_KV.put(usageKey(), JSON.stringify(rows));
+    const h = await toHash(token);
+    const total = await getUserTotalHits(env, h);
+    await env.QPROXY_KV.put(USER_TOTAL_PREFIX + h, JSON.stringify(total + 1));
+  });
+}
+
+export function consumeUserHit(
+  env: { QPROXY_KV: KvLike },
+  token: string,
+  limit: number | null,
+): Promise<{ allowed: boolean; hits: number }> {
+  return withUsageLock(token, async () => {
+    const rows = await readUsageRows(env);
+    const row = rows.find((r) => r.token === token);
+    const hits = row ? row.count : 0;
+    if (limit !== null && hits >= limit) return { allowed: false, hits };
+    if (row) row.count += 1;
+    else rows.push({ token, count: hits + 1 });
+    await env.QPROXY_KV.put(usageKey(), JSON.stringify(rows));
+    const h = await toHash(token);
+    const total = await getUserTotalHits(env, h);
+    await env.QPROXY_KV.put(USER_TOTAL_PREFIX + h, JSON.stringify(total + 1));
+    return { allowed: true, hits: hits + 1 };
+  });
 }
 
 export async function getUserHits(env: { QPROXY_KV: KvLike }, token: string): Promise<number> {

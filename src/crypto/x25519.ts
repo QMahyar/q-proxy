@@ -7,6 +7,7 @@ const BASE_POINT = (() => {
 
 function decodeScalar(bytes: Uint8Array): bigint {
   const k = bytes.slice();
+  if (k.length < 32) return 0n;
   k[0]! &= 248;
   k[31]! &= 127;
   k[31]! |= 64;
@@ -143,7 +144,10 @@ export function isAllZeroOutput(bytes: Uint8Array): boolean {
 }
 
 export function sharedSecret(myPrivateB64: string, theirPublicB64: string): string {
-  const out = x25519(b64ToBytes(myPrivateB64), b64ToBytes(theirPublicB64));
+  const priv = b64ToBytes(myPrivateB64);
+  const pub = b64ToBytes(theirPublicB64);
+  if (priv.length !== 32 || pub.length !== 32) throw new Error("keys must be 32 bytes");
+  const out = x25519(priv, pub);
   if (isAllZeroOutput(out)) throw new Error("weak public key");
   return bytesToB64(out);
 }

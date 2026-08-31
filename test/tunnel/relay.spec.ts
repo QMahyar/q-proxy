@@ -268,6 +268,21 @@ describe("half-open drain", () => {
     await vi.advanceTimersByTimeAsync(60);
     expect(sock.writes).toHaveLength(0);
   });
+
+  it("flushes already-queued uplink to origin when the client half-closes", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink);
+    void relay.run(establishedOf(sock.socket, 0));
+    relay.feedClient(utf8Encode("tail-bytes"));
+    relay.clientClosed();
+    await vi.advanceTimersByTimeAsync(60);
+    expect(utf8Decode(concatBytes(...sock.writes))).toBe("tail-bytes");
+    expect(sink.closedWith).toBeNull();
+    sock.closeRemote();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(sink.closedWith).toBe(1000);
+  });
 });
 
 describe("failure handling", () => {

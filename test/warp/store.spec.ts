@@ -126,7 +126,8 @@ describe("warp store", () => {
     expect(validateAmnezia({ Jmin: 100, Jmax: 50 }).ok).toBe(false);
     expect(validateAmnezia({ H1: "100-200", H2: "150-300" }).ok).toBe(false);
     expect(validateAmnezia({ H1: "100-200", H2: "300-400" }).ok).toBe(true);
-    expect(validateAmnezia({ S1: 300 }).ok).toBe(false);
+    expect(validateAmnezia({ S1: 300 }).ok).toBe(true);
+    expect(validateAmnezia({ S1: 65536 }).ok).toBe(false);
     expect(validateAmnezia({ I1: "<r 20>" }).ok).toBe(true);
     expect(validateAmnezia({ I1: "junk" }).ok).toBe(false);
   });

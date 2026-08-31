@@ -77,7 +77,6 @@ async function readStored(env: Env): Promise<StoredUsage> {
 }
 
 export async function recordConnection(env: Env): Promise<void> {
-  const today = dayKeyUtc();
   buffer.todayDelta += 1;
   buffer.totalDelta += 1;
   buffer.connectionsSinceFlush += 1;
@@ -95,8 +94,7 @@ export async function recordConnection(env: Env): Promise<void> {
   try {
     const stored = await readStored(env);
     const writeDay = dayKeyUtc();
-    const requestsToday =
-      (stored.day === writeDay ? stored.requestsToday : 0) + (writeDay === today ? capturedToday : 0);
+    const requestsToday = (stored.day === writeDay ? stored.requestsToday : 0) + capturedToday;
     const requestsTotal = stored.requestsTotal + capturedTotal;
     const put = env.QPROXY_KV.put(
       KV_KEY,

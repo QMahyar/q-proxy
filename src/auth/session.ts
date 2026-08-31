@@ -55,13 +55,15 @@ async function hmacHex(payload: string, secret: string): Promise<string> {
 
 export async function issueSession(secret: string): Promise<string> {
   const now = unixNow();
-  const payload = encodeBase64Url(JSON.stringify({ exp: now + SESSION_TTL_SECONDS, iat: now }));
+  const jti = crypto.randomUUID();
+  const payload = encodeBase64Url(JSON.stringify({ exp: now + SESSION_TTL_SECONDS, iat: now, jti }));
   const sig = await hmacHex(payload, secret);
   return `${payload}.${sig}`;
 }
 
 export async function issueSessionWithIat(secret: string, iat: number): Promise<string> {
-  const payload = encodeBase64Url(JSON.stringify({ exp: iat + SESSION_TTL_SECONDS, iat }));
+  const jti = crypto.randomUUID();
+  const payload = encodeBase64Url(JSON.stringify({ exp: iat + SESSION_TTL_SECONDS, iat, jti }));
   const sig = await hmacHex(payload, secret);
   return `${payload}.${sig}`;
 }

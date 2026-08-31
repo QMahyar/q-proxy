@@ -647,6 +647,23 @@ describe("vmess body codecs", () => {
     expect(new TextDecoder().decode(got!)).toBe("pipelined-after-header");
   });
 
+  it("carries pipelined post-header bytes for unframed none/zero security", async () => {
+    const inbound = createVmessInbound(UUID);
+    const reqIv = randomBytes(16);
+    const reqKey = randomBytes(16);
+    const headerWire = await sealVmessAeadHeader(
+      CMD_KEY,
+      legacyHeader({ requestIv: reqIv, requestKey: reqKey, security: 6, option: 0x00 }),
+      Math.floor(Date.now() / 1000),
+    );
+    const pipelined = utf8Encode("unframed-pipelined-body");
+    const outcome = await inbound.push(concatBytes(headerWire, pipelined));
+    expect(outcome.state).toBe("ready");
+    const codec = inbound.bodyCodec()!;
+    const got = await codec.decodeUp(new Uint8Array(0));
+    expect(new TextDecoder().decode(got!)).toBe("unframed-pipelined-body");
+  });
+
   it("strips global-padding bytes appended by the client", async () => {
     const { inbound, p } = await readyInbound(3, 0x0d);
     const codec = inbound.bodyCodec()!;

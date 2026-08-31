@@ -115,7 +115,7 @@ describe("emitClashYaml golden", () => {
       "    type: ss",
       "    server: example.com",
       "    port: 443",
-      "    udp: false",
+      "    udp: true",
       "    cipher: aes-128-gcm",
       "    password: sspass12345",
       "    plugin: v2ray-plugin",
@@ -205,11 +205,29 @@ describe("emitClashYaml golden", () => {
     expect(out).toContain('rules: ["MATCH,PROXY"]');
   });
 
-  it("adds ech-opts to the trojan branch and keeps udp false on ss plugin entries", () => {
+  it("adds ech-opts to the trojan branch and sets udp true on ss plugin entries", () => {
     const echTrojan: TrojanNode = { ...trojan(), name: "TROJAN ECH", ech: "crypto.example.com" };
     const out = emitClashYaml([echTrojan, ss()], OPTS);
-    expect(out).toContain("    password: secretpass123\n    sni: example.com\n    ech-opts:\n      enable: true");
-    expect(out).toContain("    type: ss\n    server: example.com\n    port: 443\n    udp: false");
+    expect(out).toContain("    password: secretpass123\n    sni: example.com\n    ech-opts:\n      enable: true\n      ech_server_name: crypto.example.com");
+    expect(out).toContain("    type: ss\n    server: example.com\n    port: 443\n    udp: true");
+  });
+
+  it("excludes plain-security vless nodes because mihomo vless requires tls", () => {
+    const plainVless: VlessNode = {
+      ...vless(),
+      name: "VLESS plain",
+      port: 80,
+      security: "none",
+      sni: null,
+      fingerprint: null,
+      alpn: [],
+      ech: null,
+    };
+    const out = emitClashYaml([vless(), plainVless], OPTS);
+    expect(out).toContain("type: vless");
+    expect(out).toContain("server: example.com\n    port: 443");
+    expect(out).toContain('proxies: ["VLESS example.com 443"]');
+    expect(out).not.toContain("VLESS plain");
   });
 });
 

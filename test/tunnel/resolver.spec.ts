@@ -166,6 +166,23 @@ describe("createResolver", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("does not share cache entries across different DoH URLs", async () => {
+    clearResolverCache();
+    const fetchMock = vi.fn(async (url: string) =>
+      new Response(buildDnsResponse("shared.example", [
+        { type: DNS_TYPE_A, rdata: new Uint8Array([url.startsWith("https://one") ? 1 : 2, 0, 0, 1]) },
+      ])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const one = createResolver("https://one.example/dns-query");
+    const two = createResolver("https://two.example/dns-query");
+    await one.resolveA("shared.example");
+    await two.resolveA("shared.example");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((await one.resolveA("shared.example"))[0]).toBe("1.0.0.1");
+    expect((await two.resolveA("shared.example"))[0]).toBe("2.0.0.1");
+  });
+
   it("returns [] silently when upstream fails", async () => {
     clearResolverCache();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 502 })));

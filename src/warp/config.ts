@@ -200,7 +200,7 @@ export function parseWireGuardConf(text: string): ParseResult {
       }
     } else if (section === "peer") {
       if (key === "presharedkey") return fail("PresharedKey not supported");
-      if (key === "persistentkeepalive") return fail("PersistentKeepalive is not supported");
+      if (key === "persistentkeepalive") continue;
       if (!PEER_KEYS.has(key)) return fail(`unknown peer key: ${key}`);
       if (key === "publickey") peerPublicKey = value;
       else if ((key === "reserved" || key === "clientid") && reserved === null) {
@@ -218,9 +218,15 @@ export function parseWireGuardConf(text: string): ParseResult {
   if (!isValidAddressValue(address)) return fail("invalid Address");
   const addresses = splitAddresses(address);
   if (addresses === null) return fail("no usable Address");
+  let publicKey: string;
+  try {
+    publicKey = publicKeyFromPrivate(privateKey);
+  } catch {
+    return fail("invalid PrivateKey (weak key)");
+  }
   const config: WarpConfig = {
     private_key: privateKey,
-    public_key: publicKeyFromPrivate(privateKey),
+    public_key: publicKey,
     addresses,
     peer_public_key: peerPublicKey,
     mtu,
@@ -324,9 +330,15 @@ export function parseWgUri(uri: string): ParseResult {
       hasAmnezia = true;
     }
   }
+  let derivedPublicKey: string;
+  try {
+    derivedPublicKey = publicKeyFromPrivate(privateKey);
+  } catch {
+    return fail("invalid private_key (weak key)");
+  }
   const config: WarpConfig = {
     private_key: privateKey,
-    public_key: publicKeyFromPrivate(privateKey),
+    public_key: derivedPublicKey,
     addresses: { ipv4, ipv6 },
     peer_public_key: publicKey,
     mtu,

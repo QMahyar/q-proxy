@@ -60,4 +60,32 @@ describe("emitBase64List", () => {
     const rOn = decodeBase64(emitBase64List([frag], { ...OPTS, isFragment: true }));
     expect(new TextDecoder().decode(rOn.ok ? rOn.value : new Uint8Array()).startsWith("vless://")).toBe(true);
   });
+
+  it("drops ss and plain-security vless/trojan nodes for base64 clients", () => {
+    const ss: ProxyNode = {
+      kind: "ss",
+      name: "SS",
+      address: "203.0.113.10",
+      port: 8388,
+      security: "tls",
+      sni: null,
+      host: "example.com",
+      path: "/ss/abc",
+      earlyData: 0,
+      fingerprint: null,
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      method: "aes-128-gcm",
+      password: "p",
+    };
+    const plainVless: ProxyNode = { ...vless(), name: "PV", port: 80, security: "none", sni: null, fingerprint: null, alpn: [], path: "/vl/a" };
+    const r = decodeBase64(emitBase64List([vless(), ss, plainVless], OPTS));
+    const text = new TextDecoder().decode(r.ok ? r.value : new Uint8Array());
+    const lines = text.split("\n");
+    expect(lines.some((l) => l.startsWith("ss://"))).toBe(false);
+    expect(lines.some((l) => l.includes("security=none"))).toBe(false);
+    expect(lines.some((l) => l.startsWith("vless://"))).toBe(true);
+  });
 });

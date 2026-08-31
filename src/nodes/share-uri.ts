@@ -6,6 +6,10 @@ function enc(v: string): string {
   return encodeURIComponent(v);
 }
 
+function bareServer(host: string): string {
+  return host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+}
+
 function authority(host: string, port: number): string {
   return `${bracketIpv6(host)}:${port}`;
 }
@@ -46,7 +50,7 @@ export function buildVMessShareUri(node: VMessNode): string {
   const json = {
     v: "2",
     ps: node.name,
-    add: node.address,
+    add: bareServer(node.address),
     port: String(node.port),
     id: node.uuid,
     aid: "0",

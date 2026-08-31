@@ -11,19 +11,19 @@ function yamlList(values: string[]): string {
 function amneziaOption(ctx: WarpEmitContext, indent: string): string[] {
   if (ctx.amnezia === null) return [];
   const lines: string[] = [];
-  const entries: Array<[string, string]> = [];
+  const entries: Array<[string, string | number]> = [];
   for (const key of ["Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4"] as const) {
     const v = ctx.amnezia[key];
-    if (typeof v === "number" && v > 0) entries.push([key.toLowerCase(), String(v)]);
+    if (typeof v === "number" && v > 0) entries.push([key.toLowerCase(), v]);
   }
   for (const key of ["H1", "H2", "H3", "H4"] as const) {
     const v = ctx.amnezia[key];
     if (v === undefined || v === null || v === "" || v === 0) continue;
-    entries.push([key.toLowerCase(), String(v)]);
+    entries.push([key.toLowerCase(), typeof v === "number" ? v : yamlString(v)]);
   }
   if (entries.length === 0) return [];
   lines.push(`${indent}amnezia-wg-option:`);
-  for (const [k, v] of entries) lines.push(`${indent}  ${k}: ${yamlString(v)}`);
+  for (const [k, v] of entries) lines.push(`${indent}  ${k}: ${v}`);
   return lines;
 }
 
@@ -55,10 +55,12 @@ export function emitSurge(ctx: WarpEmitContext, surfboard: boolean): string {
   const [r0, r1, r2] = account.config.reserved;
   const hasReserved = r0 !== 0 || r1 !== 0 || r2 !== 0;
   const out: string[] = ["[Proxy]"];
-  for (const row of ctx.rows) out.push(`${row.tag} = wireguard, section-name=${row.tag}`);
-  for (const row of ctx.rows) {
+  const tags = ctx.rows.map((r) => surgeTag(r.tag));
+  tags.forEach((tag) => out.push(`${tag} = wireguard, section-name=${tag}`));
+  ctx.rows.forEach((row) => {
+    const tag = surgeTag(row.tag);
     out.push("");
-    out.push(`[WireGuard ${row.tag}]`);
+    out.push(`[WireGuard ${tag}]`);
     out.push(`private-key = ${account.config.private_key}`);
     if (row.v4Host.length > 0) out.push(`self-ip = ${row.v4Host}`);
     if (!surfboard && row.v6Host.length > 0) out.push(`self-ip-v6 = ${row.v6Host}`);
@@ -72,8 +74,12 @@ export function emitSurge(ctx: WarpEmitContext, surfboard: boolean): string {
     ];
     if (!surfboard && hasReserved) peerParts.push(`client-id = ${r0}/${r1}/${r2}`);
     out.push(`peer = (${peerParts.join(", ")})`);
-  }
+  });
   return `${out.join("\n")}\n`;
+}
+
+function surgeTag(name: string): string {
+  return name.replace(/[\[\]\r\n#=,]/g, "").replace(/\s+/g, " ").trim() || "wg";
 }
 
 export function emitLoon(ctx: WarpEmitContext): string {
@@ -83,10 +89,11 @@ export function emitLoon(ctx: WarpEmitContext): string {
   return (
     ctx.rows
       .map((row) => {
+        const tag = surgeTag(row.tag);
         const reserved = hasReserved ? `,reserved=[${r0},${r1},${r2}]` : "";
         const peers = `{public-key=${JSON.stringify(account.config.peer_public_key)},allowed-ips=${JSON.stringify(row.allowedIps.join(", "))},endpoint=${row.endpoint}${reserved}}`;
         return [
-          `${row.tag} = wireguard`,
+          `${tag} = wireguard`,
           `interface-ip=${row.v4Host}`,
           `interface-ipv6=${row.v6Host}`,
           `private-key=${JSON.stringify(account.config.private_key)}`,

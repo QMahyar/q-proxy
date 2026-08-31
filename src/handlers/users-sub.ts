@@ -15,7 +15,7 @@ import {
 } from "../subscription/render";
 import { pickSubFormat, SUB_FORMATS } from "../subscription/negotiate";
 import { dayKeyUtc } from "../utils/time";
-import { findUserByToken, getUserHits, getUserTotalHits, recordUserHit } from "../users/store";
+import { findUserByToken, getUserTotalHits, consumeUserHit } from "../users/store";
 
 function plain(status: number, message: string, extra: Record<string, string> = {}): Response {
   return new Response(`${message}\n`, {
@@ -46,26 +46,20 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
   const now = Date.now();
   if (!user.enabled || (user.expiresAt !== null && user.expiresAt <= now)) return plain(410, "gone");
 
-  const hits = await getUserHits(env, token);
-  const total = await getUserTotalHits(env, token);
-
   if (format === null) {
     const subUrls = SUB_FORMATS.map((f) => ({ format: f, url: `${url.origin}${url.pathname}?target=${f}` }));
     return htmlResponse(infoPageHtml(subUrls, s.profileTitle), 200, { "Cache-Control": "no-store" });
   }
 
-  if (user.dailyReqLimit !== null && hits >= user.dailyReqLimit) {
+  const { allowed, hits } = await consumeUserHit(env, token, user.dailyReqLimit);
+  if (!allowed) {
     return plain(429, "daily quota exceeded", { "Retry-After": String(secondsUntilUtcMidnight(now)) });
   }
+  const total = await getUserTotalHits(env, token);
 
   const cacheKey = makeEdgeCacheKey(req, format, isFragmentMode, token);
   const cached = await matchEdgeCache(cacheKey);
-  if (cached !== undefined) {
-    afterResponse(recordUserHit(env, token));
-    return cached;
-  }
-
-  afterResponse(recordUserHit(env, token));
+  if (cached !== undefined) return cached;
 
   const ctx = { settings: s, hostname: resolveHostname(s, url), request: req };
   const scoped =

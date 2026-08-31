@@ -22,8 +22,8 @@ export function clearResolverCache(): void {
   cache.clear();
 }
 
-function cacheKey(name: string, qtype: number): string {
-  return `${name.toLowerCase()}|${qtype}`;
+function cacheKey(dohUrl: string, name: string, qtype: number): string {
+  return `${dohUrl}|${name.toLowerCase()}|${qtype}`;
 }
 
 function cacheGet(key: string): string[] | null {
@@ -192,7 +192,7 @@ export function createResolver(dohUrl: string): DohResolver {
   const lookup = async (name: string, qtype: number): Promise<string[]> => {
     const trimmed = name.trim().replace(/\.+$/, "").toLowerCase();
     if (trimmed.length === 0) return [];
-    const key = cacheKey(trimmed, qtype);
+    const key = cacheKey(dohUrl, trimmed, qtype);
     const hit = cacheGet(key);
     if (hit !== null) return hit;
     const query = buildDnsQuery(trimmed, qtype);

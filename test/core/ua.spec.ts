@@ -22,6 +22,13 @@ describe("classifyUA", () => {
     expect(classifyUA("HiddifyNext/2.0.5")).toBe("singbox");
     expect(classifyUA("NekoBox/1.3.2 Android")).toBe("singbox");
     expect(classifyUA("Karing/1.1")).toBe("singbox");
+    expect(classifyUA("Throne/1.2.4")).toBe("singbox");
+    expect(classifyUA("nekoray/3.26")).toBe("singbox");
+  });
+
+  it("sing-box wins over a browser token in a composite UA", () => {
+    expect(classifyUA("Mozilla/5.0 (Throne/1.2.4)")).toBe("singbox");
+    expect(classifyUA("sing-box 1.13.0; ClashMeta; mihomo/1.19.16")).toBe("clash");
   });
 
   it("surge then loon", () => {
@@ -33,6 +40,9 @@ describe("classifyUA", () => {
     expect(classifyUA("v2rayNG/1.8.23")).toBe("base64");
     expect(classifyUA("Shadowrocket/1956 CFNetwork/1404")).toBe("base64");
     expect(classifyUA("Happ/1.12.0")).toBe("base64");
+    expect(classifyUA("v2rayN/7.24.9")).toBe("base64");
+    expect(classifyUA("Matsuri/0.6.5")).toBe("base64");
+    expect(classifyUA("SagerNet/1.5.0")).toBe("base64");
   });
 
   it("browsers get html", () => {

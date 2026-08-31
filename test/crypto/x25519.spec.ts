@@ -84,6 +84,11 @@ describe("x25519", () => {
     expect(isBase64Key32("AAAA" + "A".repeat(39) + "==")).toBe(false);
   });
 
+  it("does not throw on short scalar/key inputs", () => {
+    expect(() => x25519(new Uint8Array([1]), new Uint8Array(32))).not.toThrow();
+    expect(() => sharedSecret(btoa("short"), btoa("even-shorter"))).toThrow("keys must be 32 bytes");
+  });
+
   it("matches the known WARP test keypair derivation", () => {
     const priv = btoa(
       String.fromCharCode(...hexToBytes("e8f19f92aa1a2e8a3d0c0b0a0b0c0d0e0f00112233445566778899aabbccddee")),

@@ -78,13 +78,12 @@ describe("parseWireGuardConf", () => {
     expect(parseWireGuardConf("short").ok).toBe(false);
   });
 
-  it("rejects PresharedKey and PersistentKeepalive", () => {
+  it("rejects PresharedKey but accepts PersistentKeepalive", () => {
     const psk = parseWarpConfig(conf({}, { PresharedKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" }));
     expect(psk.ok).toBe(false);
     if (!psk.ok) expect(psk.reason).toContain("PresharedKey");
     const keepalive = parseWarpConfig(conf({}, { PersistentKeepalive: "25" }));
-    expect(keepalive.ok).toBe(false);
-    if (!keepalive.ok) expect(keepalive.reason).toContain("PersistentKeepalive");
+    expect(keepalive.ok).toBe(true);
   });
 
   it("rejects multiple [Peer] sections", () => {

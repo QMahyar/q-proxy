@@ -10,7 +10,7 @@ import type {
 } from "../types/settings";
 import { CF_PLAIN_PORTS, CF_TLS_PORTS, DEFAULT_SETTINGS } from "../types/settings";
 import { isPlainObject } from "./migrate";
-import { normalizeCleanAddress } from "../utils/net";
+import { isIpLiteral, normalizeCleanAddress } from "../utils/net";
 
 export type ValidationResult =
   | { ok: true; value: Settings }
@@ -68,6 +68,12 @@ function isHttpUrl(value: string): boolean {
 
 function validHostnameOrEmpty(value: string): boolean {
   return value.length === 0 || (HOSTNAME_RE.test(value) && value.length <= 253);
+}
+
+function validCdnAddress(value: string): boolean {
+  if (isIpLiteral(value)) return true;
+  if (value.includes(":")) return false;
+  return HOSTNAME_RE.test(value) && value.length <= 253;
 }
 
 function boolField(
@@ -393,8 +399,16 @@ export function validateSettings(input: unknown): ValidationResult {
     if (enabled !== undefined) out.cdn.enabled = enabled;
     const addresses = sub["addresses"];
     if (addresses !== undefined) {
-      if (!Array.isArray(addresses)) fail(f, "addresses", "must be an array of strings");
-      else out.cdn.addresses = sanitizeStrArray(addresses, { maxItems: 16, pattern: HOST_TOKEN_RE });
+      if (!Array.isArray(addresses)) {
+        fail(f, "addresses", "must be an array of strings");
+      } else {
+        const cleaned = sanitizeStrArray(addresses, { maxItems: 16 });
+        if (cleaned.some((a) => !validCdnAddress(a))) {
+          fail(f, "addresses", "each address must be a hostname or IP literal");
+        } else {
+          out.cdn.addresses = cleaned;
+        }
+      }
     }
     const host = strField(sub, "host", f, { maxLen: 253 });
     if (host !== undefined && !validHostnameOrEmpty(host)) fail(f, "host", "must be a hostname");

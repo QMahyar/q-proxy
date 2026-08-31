@@ -93,7 +93,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   };
 
   const scheduleFlush = (): void => {
-    if (flushScheduled || finished || halfOpen) return;
+    if (flushScheduled || finished) return;
     flushScheduled = true;
     setTimeout(() => {
       flushScheduled = false;
@@ -102,7 +102,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   };
 
   const flushUplink = async (): Promise<void> => {
-    if (finished || halfOpen) return;
+    if (finished) return;
     if (writeBusy || slot === null) {
       if (upQueued > 0) scheduleFlush();
       return;
@@ -123,7 +123,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
       return;
     }
     writeBusy = false;
-    if (!finished && !halfOpen && upQueued > 0) scheduleFlush();
+    if (!finished && upQueued > 0) scheduleFlush();
   };
 
   const enqueueUp = (bytes: Uint8Array): void => {
@@ -141,13 +141,13 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
     if (decoding) return;
     decoding = true;
     try {
-      while (decodeHead < decodeQueue.length && !finished && !halfOpen) {
+      while (decodeHead < decodeQueue.length && !finished) {
         const chunk = decodeQueue[decodeHead++]!;
         decodeQueued -= chunk.length;
         const decode = opts.uplinkDecode;
         if (decode === undefined || decode === null) continue;
         const out = await decode(chunk);
-        if (out !== null && out.length > 0 && !finished && !halfOpen) enqueueUp(out);
+        if (out !== null && out.length > 0 && !finished) enqueueUp(out);
       }
       if (decodeHead > 0) {
         if (decodeHead >= decodeQueue.length) {
@@ -210,6 +210,8 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   const clientClosed = (): void => {
     if (finished || halfOpen) return;
     halfOpen = true;
+    void flushUplink();
+    void processDecodes();
     graceDeadline = Date.now() + HALF_OPEN_GRACE_MS;
     graceTimer = setTimeout(() => {
       void flushPendingDownlink().finally(() => finish(1000));
