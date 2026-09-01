@@ -8,8 +8,6 @@ import { validateSettings } from "./validate";
 export const SETTINGS_KEY = "qproxy:settings";
 export const META_KEY = "qproxy:meta";
 
-// 60s per-isolate memo + 60s KV cacheTtl: readers may see stale up to 60s after another isolate writes.
-// Mutating handlers requiring TOCTOU safety must use loadSettingsFresh() before validate+save.
 const CACHE_TTL_MS = 60_000;
 const KV_CACHE_TTL = 60;
 
@@ -33,8 +31,6 @@ interface StoredBlob {
   data?: unknown;
 }
 
-// Per-isolate in-memory cache shared across requests; stale up to 60s (CACHE_TTL_MS).
-// Kept intentionally; callers needing freshness use loadSettingsFresh().
 let cache: CacheEntry | null = null;
 let loadedDebug = false;
 let lastWrittenJson: string | null = null;

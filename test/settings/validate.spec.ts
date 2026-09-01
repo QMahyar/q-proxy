@@ -43,6 +43,40 @@ describe("validateSettings", () => {
     expect(fields["fragment.lengthMin"]).toBeTruthy();
   });
 
+  it("rejects local or private doh and remote dns targets", () => {
+    expect(fieldsOf({ dohUpstream: "http://127.0.0.1:53/dns-query" }).dohUpstream).toBeTruthy();
+    expect(fieldsOf({ dohUpstream: "https://localhost/dns-query" }).dohUpstream).toBeTruthy();
+    expect(fieldsOf({ dohUpstream: "http://169.254.169.254/dns-query" }).dohUpstream).toBeTruthy();
+    expect(fieldsOf({ remoteDns: "http://10.0.0.5/dns-query" }).remoteDns).toBeTruthy();
+    expect(fieldsOf({ remoteDns: "192.168.1.1" }).remoteDns).toBeTruthy();
+    expect(fieldsOf({ remoteDns: "192.168.1.1:443" }).remoteDns).toBeTruthy();
+    expect(fieldsOf({ remoteDns: "127.0.0.1:53" }).remoteDns).toBeTruthy();
+    expect(fieldsOf({ remoteDns: "localhost:3000" }).remoteDns).toBeTruthy();
+    expect(validateSettings({ dohUpstream: "https://dns.google/dns-query" }).ok).toBe(true);
+    expect(validateSettings({ remoteDns: "https://dns.google/dns-query" }).ok).toBe(true);
+    expect(validateSettings({ remoteDns: "8.8.8.8" }).ok).toBe(true);
+    expect(validateSettings({ remoteDns: "8.8.8.8:53" }).ok).toBe(true);
+  });
+
+  it("validates echServerName domain shape", () => {
+    expect(validateSettings({ echServerName: "cloudflare-ech.com" }).ok).toBe(true);
+    expect(validateSettings({ echServerName: "EXAMPLE.COM" }).ok).toBe(true);
+    expect(validateSettings({ echServerName: "" }).ok).toBe(true);
+    expect(fieldsOf({ echServerName: "localhost" }).echServerName).toBeTruthy();
+    expect(fieldsOf({ echServerName: "example.com." }).echServerName).toBeTruthy();
+    expect(fieldsOf({ echServerName: "-bad.example.com" }).echServerName).toBeTruthy();
+    expect(fieldsOf({ echServerName: "has space.example.com" }).echServerName).toBeTruthy();
+  });
+
+  it("normalizes a bare remoteDns host into an https dns-query URL", () => {
+    const result = validateSettings({ remoteDns: "8.8.8.8" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.remoteDns).toBe("https://8.8.8.8/dns-query");
+    const v6 = validateSettings({ remoteDns: "2606:4700::1111" });
+    expect(v6.ok).toBe(true);
+    if (v6.ok) expect(v6.value.remoteDns).toBe("https://[2606:4700::1111]/dns-query");
+  });
+
   it("range-checks numeric fields", () => {
     for (const [key, value] of [
       ["earlyDataMaxBytes", -1],

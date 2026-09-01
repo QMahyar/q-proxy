@@ -2,6 +2,7 @@ import type { RouteHandler } from "../types/context";
 import { BadRequestError, UpstreamError } from "../core/errors";
 import { log } from "../core/log";
 import { jsonError } from "../core/respond";
+import { isLocalOrPrivateTarget } from "../utils/net";
 
 const MAX_DOH_BODY_BYTES = 64 * 1024;
 const PASSTHROUGH_HEADERS = ["content-type", "cache-control"] as const;
@@ -36,6 +37,9 @@ export const handleDoh: RouteHandler = async (req, _env, s) => {
     return jsonError(405, "METHOD_NOT_ALLOWED", "doh endpoint supports GET and POST only");
   }
   const upstream = new URL(s.dohUpstream);
+  if (isLocalOrPrivateTarget(upstream.hostname)) {
+    throw new BadRequestError("doh upstream must not target a local or private address");
+  }
   const headers: Record<string, string> = {
     Accept: req.headers.get("accept") ?? "application/dns-message",
   };

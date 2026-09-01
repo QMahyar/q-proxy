@@ -6,6 +6,7 @@ import { resolveHostname } from "../../core/routes";
 import { readUsage } from "../../core/counters";
 import { assertCsrf } from "../../auth/guard";
 import { appVersion, loadSettingsFresh, saveSettings } from "../../settings/store";
+import { validateSettings } from "../../settings/validate";
 
 export const handleStatus: RouteHandler = async (req, env, s) => {
   const usage = await readUsage(env);
@@ -27,7 +28,9 @@ export const handleKillSwitch: RouteHandler = async (req, env, _s) => {
     throw new ValidationError({ enabled: "must be a boolean" });
   }
   const fresh = await loadSettingsFresh(env);
-  await saveSettings(env, { ...fresh, killSwitch: body.enabled });
+  const v = validateSettings({ ...fresh, killSwitch: body.enabled });
+  if (!v.ok) throw new ValidationError(v.fields);
+  await saveSettings(env, v.value);
   return jsonOk({ killSwitch: body.enabled });
 };
 

@@ -25,8 +25,10 @@ export async function fetchLatestVersion(repo: string = UPSTREAM_REPO): Promise<
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { tag_name?: unknown };
-    return typeof body.tag_name === "string" ? body.tag_name : null;
+    const body: unknown = await res.json();
+    if (body === null || typeof body !== "object" || Array.isArray(body)) return null;
+    const tag = (body as Record<string, unknown>).tag_name;
+    return typeof tag === "string" ? tag : null;
   } catch {
     return null;
   }

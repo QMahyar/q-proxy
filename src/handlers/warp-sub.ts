@@ -6,6 +6,7 @@ import { resolveSecureRoute } from "../core/routes";
 import { appVersion } from "../settings/store";
 import { afterResponse, readUsage } from "../core/counters";
 import { encodeUtf8Base64 } from "../utils/base64";
+import { subscriptionUserinfo } from "../subscription/headers";
 
 function notFound(): Response {
   return new Response("not found\n", {
@@ -46,7 +47,7 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
     "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`${sanitizeFilename(account.name)}-${formatName}.${WARP_EXTENSIONS[formatName]}`)}`,
     "Profile-Update-Interval": String(Math.max(1, Math.floor(s.subUpdateIntervalHours))),
     "Profile-Title": `base64:${encodeUtf8Base64(account.name)}`,
-    "Subscription-Userinfo": `upload=0; download=${usage.requestsTotal * 1024 * 1024}`,
+    "Subscription-Userinfo": subscriptionUserinfo(usage),
     "profile-web-page-url": `${origin}/${s.securePath}/panel`,
     "X-WG-Version": appVersion(),
     "Cache-Control": "private, max-age=60",

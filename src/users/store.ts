@@ -28,6 +28,29 @@ type KvLike = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HASH_RE = /^[0-9a-f]{64}$/i;
+const PROTOCOL_KINDS = ["vless", "vmess", "trojan", "ss"] as const;
+
+export function normalizeProtocols(value: unknown): "all" | string[] {
+  if (value === "all") return "all";
+  if (!Array.isArray(value)) return "all";
+  const out: string[] = [];
+  for (const v of value) {
+    if (typeof v === "string" && (PROTOCOL_KINDS as readonly string[]).includes(v) && !out.includes(v)) {
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+function sanitizeStoredUser(u: UserAccount): UserAccount {
+  return {
+    ...u,
+    enabled: typeof u.enabled === "boolean" ? u.enabled : true,
+    expiresAt: typeof u.expiresAt === "number" || u.expiresAt === null ? u.expiresAt : null,
+    dailyReqLimit: typeof u.dailyReqLimit === "number" || u.dailyReqLimit === null ? u.dailyReqLimit : null,
+    protocols: normalizeProtocols(u.protocols),
+  };
+}
 
 export function isUuid(value: string): boolean {
   return UUID_RE.test(value);
@@ -75,7 +98,7 @@ export async function listUsers(env: { QPROXY_KV: KvLike }): Promise<UserAccount
   const out: UserAccount[] = [];
   for (const entry of raw) {
     if (isUser(entry)) {
-      out.push(entry);
+      out.push(sanitizeStoredUser(entry));
       continue;
     }
     if (isLegacyUser(entry)) {
@@ -91,7 +114,7 @@ export async function listUsers(env: { QPROXY_KV: KvLike }): Promise<UserAccount
         enabled: typeof rec.enabled === "boolean" ? (rec.enabled as boolean) : true,
         expiresAt: typeof rec.expiresAt === "number" || rec.expiresAt === null ? (rec.expiresAt as number | null) : null,
         dailyReqLimit: typeof rec.dailyReqLimit === "number" || rec.dailyReqLimit === null ? (rec.dailyReqLimit as number | null) : null,
-        protocols: Array.isArray(rec.protocols) || rec.protocols === "all" ? (rec.protocols as "all" | string[]) : "all",
+        protocols: normalizeProtocols(rec.protocols),
         createdAt: typeof rec.createdAt === "string" ? (rec.createdAt as string) : new Date().toISOString(),
       });
       continue;
@@ -162,14 +185,27 @@ function withUsageLock<T>(token: string, fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
+async function findUsageRow(rows: UsageRow[], hash: string): Promise<UsageRow | undefined> {
+  const exact = rows.find((r) => r.token === hash);
+  if (exact !== undefined) return exact;
+  for (const r of rows) {
+    if (HASH_RE.test(r.token) || !isUuid(r.token)) continue;
+    if ((await hashToken(r.token)) === hash) {
+      r.token = hash;
+      return r;
+    }
+  }
+  return undefined;
+}
+
 export function recordUserHit(env: { QPROXY_KV: KvLike }, token: string): Promise<void> {
   return withUsageLock(token, async () => {
-    const rows = await readUsageRows(env);
-    const row = rows.find((r) => r.token === token);
-    if (row) row.count += 1;
-    else rows.push({ token, count: 1 });
-    await env.QPROXY_KV.put(usageKey(), JSON.stringify(rows));
     const h = await toHash(token);
+    const rows = await readUsageRows(env);
+    const row = await findUsageRow(rows, h);
+    if (row) row.count += 1;
+    else rows.push({ token: h, count: 1 });
+    await env.QPROXY_KV.put(usageKey(), JSON.stringify(rows));
     const total = await getUserTotalHits(env, h);
     await env.QPROXY_KV.put(USER_TOTAL_PREFIX + h, JSON.stringify(total + 1));
   });
@@ -181,14 +217,14 @@ export function consumeUserHit(
   limit: number | null,
 ): Promise<{ allowed: boolean; hits: number }> {
   return withUsageLock(token, async () => {
+    const h = await toHash(token);
     const rows = await readUsageRows(env);
-    const row = rows.find((r) => r.token === token);
+    const row = await findUsageRow(rows, h);
     const hits = row ? row.count : 0;
     if (limit !== null && hits >= limit) return { allowed: false, hits };
     if (row) row.count += 1;
-    else rows.push({ token, count: hits + 1 });
+    else rows.push({ token: h, count: hits + 1 });
     await env.QPROXY_KV.put(usageKey(), JSON.stringify(rows));
-    const h = await toHash(token);
     const total = await getUserTotalHits(env, h);
     await env.QPROXY_KV.put(USER_TOTAL_PREFIX + h, JSON.stringify(total + 1));
     return { allowed: true, hits: hits + 1 };
@@ -196,45 +232,18 @@ export function consumeUserHit(
 }
 
 export async function getUserHits(env: { QPROXY_KV: KvLike }, token: string): Promise<number> {
-  if (HASH_RE.test(token)) {
-    const h = token.toLowerCase();
-    const rows = await readUsageRows(env);
-    for (const r of rows) {
-      if (HASH_RE.test(r.token)) {
-        if (r.token.toLowerCase() === h) return r.count;
-      } else if (isUuid(r.token)) {
-        const rh = await hashToken(r.token);
-        if (rh === h) return r.count;
-      } else if (r.token === token) return r.count;
-    }
-    return 0;
-  }
+  const h = await toHash(token);
   const rows = await readUsageRows(env);
-  return rows.find((r) => r.token === token)?.count ?? 0;
+  const row = await findUsageRow(rows, h);
+  return row ? row.count : 0;
 }
 
 export async function getUserTotalHits(env: { QPROXY_KV: KvLike }, token: string): Promise<number> {
-  if (HASH_RE.test(token)) {
-    const h = token.toLowerCase();
-    const rawHash = await env.QPROXY_KV.get(USER_TOTAL_PREFIX + h, "json");
-    if (typeof rawHash === "number" && Number.isFinite(rawHash) && rawHash >= 0) return Math.floor(rawHash);
-    if (typeof rawHash === "string") {
-      const n = Number(rawHash);
-      if (Number.isFinite(n) && n >= 0) return Math.floor(n);
-    }
-    return 0;
-  }
-  const raw = await env.QPROXY_KV.get(USER_TOTAL_PREFIX + token, "json");
+  const h = await toHash(token);
+  const raw = await env.QPROXY_KV.get(USER_TOTAL_PREFIX + h, "json");
   if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
   if (typeof raw === "string") {
     const n = Number(raw);
-    if (Number.isFinite(n) && n >= 0) return Math.floor(n);
-  }
-  const h = await hashToken(token);
-  const rawHash = await env.QPROXY_KV.get(USER_TOTAL_PREFIX + h, "json");
-  if (typeof rawHash === "number" && Number.isFinite(rawHash) && rawHash >= 0) return Math.floor(rawHash);
-  if (typeof rawHash === "string") {
-    const n = Number(rawHash);
     if (Number.isFinite(n) && n >= 0) return Math.floor(n);
   }
   return 0;
@@ -242,8 +251,6 @@ export async function getUserTotalHits(env: { QPROXY_KV: KvLike }, token: string
 
 export async function migrateUserUsage(env: { QPROXY_KV: KvLike }, oldTokenOrHash: string, newTokenOrHash: string): Promise<void> {
   const oldHash = (await toHash(oldTokenOrHash)).toLowerCase();
-  const newIsUuid = isUuid(newTokenOrHash);
-  const newPlain = newIsUuid ? newTokenOrHash : null;
   const newHash = (await toHash(newTokenOrHash)).toLowerCase();
   if (oldHash === newHash) return;
   const rows = await readUsageRows(env);
@@ -261,15 +268,9 @@ export async function migrateUserUsage(env: { QPROXY_KV: KvLike }, oldTokenOrHas
     else remaining.push(r);
   }
   if (oldCount > 0) {
-    if (newPlain) {
-      const existing = remaining.find((r) => r.token === newPlain);
-      if (existing) existing.count += oldCount;
-      else remaining.push({ token: newPlain, count: oldCount });
-    } else {
-      const existing = remaining.find((r) => r.token.toLowerCase() === newHash);
-      if (existing) existing.count += oldCount;
-      else remaining.push({ token: newHash, count: oldCount });
-    }
+    const existing = await findUsageRow(remaining, newHash);
+    if (existing) existing.count += oldCount;
+    else remaining.push({ token: newHash, count: oldCount });
     await env.QPROXY_KV.put(usageKey(), JSON.stringify(remaining));
   }
   const oldTotalKey = USER_TOTAL_PREFIX + oldHash;

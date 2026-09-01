@@ -2,7 +2,7 @@ import type { Env } from "../types/env";
 import type { Settings } from "../types/settings";
 import { AppError } from "./errors";
 import { redirect } from "./respond";
-import { setDebugEnabled } from "./log";
+import { setDebugEnabled, log } from "./log";
 import { recordConnection } from "./counters";
 import {
   HEALTHZ_PATH,
@@ -174,14 +174,14 @@ async function dispatchSecureRoute(
       return handleDoh(req, env, s);
     case "sub":
       expectMethods(req, ["GET"]);
-      void recordConnection(env).catch(() => {});
+      void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
       return handleSubscribe(req, env, s);
     case "warp-sub":
       expectMethods(req, ["GET", "HEAD"]);
       return handleWarpSub(req, env, s);
     case "user-sub":
       expectMethods(req, ["GET", "HEAD"]);
-      void recordConnection(env).catch(() => {});
+      void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
       return handleUserSub(req, env, s);
     case "myip":
       expectMethods(req, ["GET"]);
@@ -217,7 +217,7 @@ export async function routeRequest(req: Request, env: Env): Promise<Response> {
   if (url.pathname === "/robots.txt" && req.method === "GET") return handleRobots();
   if (url.pathname === HEALTHZ_PATH) {
     if (req.method !== "GET") methodNotAllowed();
-    return handleHealth(req, env, null as never);
+    return handleHealth(req);
   }
 
   const s = await loadSettings(env);
@@ -230,7 +230,7 @@ export async function routeRequest(req: Request, env: Env): Promise<Response> {
   if (identifyTunnel(url.pathname, s) !== null) {
     if (!isWebSocketUpgrade(req)) return handleCamouflage(req, env, s);
     if (s.killSwitch) return killSwitchResponse();
-    void recordConnection(env).catch(() => {});
+    void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
     return handleTunnel(req, env, s);
   }
 

@@ -9,7 +9,15 @@ export interface SubscriptionMeta {
   expireAt?: number | null;
 }
 
-const BYTES_PER_REQUEST = 1024 * 1024;
+export const BYTES_PER_REQUEST = 1024 * 1024;
+
+export function subscriptionUserinfo(usage: Pick<UsageSnapshot, "requestsTotal">, expireAt?: number | null): string {
+  let userinfo = `upload=0; download=${usage.requestsTotal * BYTES_PER_REQUEST}`;
+  if (expireAt !== null && expireAt !== undefined && expireAt > 0) {
+    userinfo += `; expire=${Math.floor(expireAt / 1000)}`;
+  }
+  return userinfo;
+}
 
 const EXTENSIONS: Record<SubFormat, string> = {
   base64: "txt",
@@ -33,10 +41,7 @@ export function subscriptionHeaders(
   meta: SubscriptionMeta,
 ): Record<string, string> {
   void nodes;
-  let userinfo = `upload=0; download=${usage.requestsTotal * BYTES_PER_REQUEST}`;
-  if (meta.expireAt !== null && meta.expireAt !== undefined && meta.expireAt > 0) {
-    userinfo += `; expire=${Math.floor(meta.expireAt / 1000)}`;
-  }
+  const userinfo = subscriptionUserinfo(usage, meta.expireAt);
   const h: Record<string, string> = {
     "Profile-Title": `base64:${encodeUtf8Base64(title)}`,
     "Subscription-Userinfo": userinfo,

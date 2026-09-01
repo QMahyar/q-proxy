@@ -1,19 +1,10 @@
 import type { WarpEmitContext } from "../expand";
-import type { AmneziaParams } from "../../types/warp";
+import { amneziaEntries } from "./amnezia";
 
-function amneziaWg(amnezia: AmneziaParams | null): Record<string, number | string> | null {
+function amneziaWg(amnezia: WarpEmitContext["amnezia"]): Record<string, number | string> | null {
   if (amnezia === null) return null;
   const out: Record<string, number | string> = {};
-  for (const key of ["Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4"] as const) {
-    const v = amnezia[key];
-    if (typeof v === "number" && v > 0) out[key.toLowerCase()] = v;
-  }
-  for (const key of ["H1", "H2", "H3", "H4"] as const) {
-    const v = amnezia[key];
-    if (v === undefined || v === null || v === "" || v === 0) continue;
-    out[key.toLowerCase()] = v;
-  }
-  if (typeof amnezia.I1 === "string" && amnezia.I1.length > 0) out.i1 = amnezia.I1;
+  for (const [key, value] of amneziaEntries(amnezia)) out[key.toLowerCase()] = value;
   return Object.keys(out).length > 0 ? out : null;
 }
 

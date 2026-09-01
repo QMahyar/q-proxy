@@ -165,6 +165,45 @@ describe("panel auth lifecycle", () => {
     expect(res.status).toBe(401);
   });
 
+  it("revokes the presented session server-side on logout", async () => {
+    resetThrottle();
+    await seed(kv, SP);
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    expect(res.status).toBe(200);
+    const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+
+    res = await SELF.fetch(`${BASE}/api/status`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+
+    res = await SELF.fetch(`${BASE}/api/auth/logout`, {
+      method: "POST",
+      headers: { "X-Q-Panel": "1", Cookie: cookie },
+    });
+    expect(res.status).toBe(200);
+
+    res = await SELF.fetch(`${BASE}/api/status`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(401);
+  });
+
+  it("does not revoke sessions when logout is called without a valid cookie", async () => {
+    resetThrottle();
+    await seed(kv, SP);
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    expect(res.status).toBe(200);
+    const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+
+    res = await SELF.fetch(`${BASE}/api/auth/logout`, { method: "POST", headers: { "X-Q-Panel": "1" } });
+    expect(res.status).toBe(200);
+    res = await SELF.fetch(`${BASE}/api/auth/logout`, {
+      method: "POST",
+      headers: { "X-Q-Panel": "1", Cookie: "q_session=forged.value" },
+    });
+    expect(res.status).toBe(200);
+
+    res = await SELF.fetch(`${BASE}/api/status`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+  });
+
   it("rate limits repeated failed logins", async () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));

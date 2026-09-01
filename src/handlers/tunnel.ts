@@ -20,13 +20,26 @@ import { createDnsPacketRelay } from "../tunnel/resolver";
 import { matchesSpeedtestHost, speedtestResponseBytes } from "../tunnel/speedtest";
 import { getCounterContext } from "../core/counters";
 import { acceptTunnelSocket, isUpgradeRequest } from "../tunnel/websocket";
-import { utf8Encode } from "../utils/bytes";
+import { concatBytes, utf8Encode } from "../utils/bytes";
 
 type TunnelParsed = ParsedRequest<"tcp"> | ParsedRequest<"udp">;
 
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const SPEEDTEST_CLOSE_DELAY_MS = 200;
 const EMPTY_BYTES = new Uint8Array(0);
+
+export async function resolveTcpFirstPacket(
+  inbound: ProtocolInbound<ParsedRequest<"tcp"> | ParsedRequest<"udp">>,
+  uplinkDecode: ((chunk: Uint8Array) => Promise<Uint8Array | null>) | null,
+  rest: Uint8Array,
+): Promise<Uint8Array> {
+  let firstPacket = inbound.takeInitialPayload() ?? rest;
+  if (uplinkDecode !== null) {
+    const drained = await uplinkDecode(EMPTY_BYTES);
+    if (drained !== null && drained.length > 0) firstPacket = concatBytes(firstPacket, drained);
+  }
+  return firstPacket;
+}
 
 function pickCredential(kind: TunnelKind, s: Settings): string {
   switch (kind) {
@@ -219,8 +232,6 @@ async function driveSession(
       activateBodyPath();
       const parsed = outcome.parsed;
       const rest = outcome.rest ?? EMPTY_BYTES;
-      const initialPayload = inbound.takeInitialPayload();
-      const firstPacket = initialPayload ?? rest;
       if (parsed.command === "udp") {
         if (!s.enableUdp53 || parsed.target.port !== 53) {
           rejectClose("udp is restricted to port 53 when enabled");
@@ -229,18 +240,17 @@ async function driveSession(
         phase = "udp";
         dnsRelay = createDnsPacketRelay(s.dohUpstream);
         if (headerBytes !== null && headerBytes.length > 0) sendRaw(headerBytes);
-        if (firstPacket.length > 0) {
-          let packet: Uint8Array | null = firstPacket;
-          if (uplinkDecode !== null) packet = await uplinkDecode(packet);
-          if (packet !== null && packet.length > 0) {
-            try {
-              const answer = await dnsRelay(packet);
-              if (answer !== null && answer.length > 0) sendServerData(answer);
-            } catch {}
-          }
+        let packet: Uint8Array | null = inbound.takeInitialPayload() ?? rest;
+        if (uplinkDecode !== null) packet = await uplinkDecode(packet);
+        if (packet !== null && packet.length > 0) {
+          try {
+            const answer = await dnsRelay(packet);
+            if (answer !== null && answer.length > 0) sendServerData(answer);
+          } catch {}
         }
         return;
       }
+      const firstPacket = await resolveTcpFirstPacket(inbound, uplinkDecode, rest);
       await startTcpSession(parsed.target, firstPacket);
       return;
     }

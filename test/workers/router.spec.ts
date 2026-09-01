@@ -69,10 +69,12 @@ async function waitForEdgeCache(url: string, ms = 4000): Promise<void> {
 async function waitForUsage(token: string, ms = 4000): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const key = `qproxy:user-usage:${today}`;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     const rows = JSON.parse(((await kv.get(key)) as string | null) ?? "[]") as Array<{ token: string }>;
-    if (rows.some((r) => r.token === token)) return;
+    if (rows.some((r) => r.token === token || r.token === hash)) return;
     await new Promise((r) => setTimeout(r, 20));
   }
   throw new Error(`usage row for ${token} never recorded`);
@@ -98,6 +100,64 @@ describe("router dispatch", () => {
       expect(res.status).toBe(405);
       expect((await body(res)).error.code).toBe("METHOD");
     }
+  });
+
+  it("serves /healthz for GET and rejects other methods", async () => {
+    await seed(kv, SP);
+    const res = await SELF.fetch("https://example.com/healthz");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/json");
+    const data = await body(res);
+    expect(data.ok).toBe(true);
+    expect(typeof data.version).toBe("string");
+
+    const rejected = await SELF.fetch("https://example.com/healthz", { method: "POST" });
+    expect(rejected.status).toBe(405);
+    expect((await body(rejected)).error.code).toBe("METHOD");
+  });
+
+  it("maps the auth alias routes to their canonical handlers", async () => {
+    await seed(kv, SP);
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "alias-pass-1" }));
+    expect(res.status).toBe(200);
+    const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: "wrong" }));
+    expect(res.status).toBe(401);
+
+    res = await SELF.fetch(`${BASE}/api/auth/password`, post({}, { Cookie: cookie }));
+    expect(res.status).toBe(403);
+
+    res = await SELF.fetch(`${BASE}/api/auth/logout`, { method: "POST", headers: { "X-Q-Panel": "1" } });
+    expect(res.status).toBe(200);
+
+    res = await SELF.fetch(`${BASE}/api/auth/nonsense`, post({}));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/html");
+  });
+
+  it("gates version-check behind auth", async () => {
+    await seed(kv, SP);
+    let res = await SELF.fetch(`${BASE}/api/version/check`);
+    expect(res.status).toBe(401);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(JSON.stringify({ tag_name: "v1.2.0" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+
+    const { cookie } = await setupAdmin();
+    res = await SELF.fetch(`${BASE}/api/version/check`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+    const data = await body(res);
+    expect(typeof data.data.current).toBe("string");
+    expect(data.data.latest).toBe("v1.2.0");
+    expect(typeof data.data.updateAvailable).toBe("boolean");
   });
 
   it("falls through non-upgrade tunnel hits and unknown paths to camouflage", async () => {

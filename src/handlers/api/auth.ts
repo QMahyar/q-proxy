@@ -10,14 +10,17 @@ import {
   getSessionFloor,
   issuedSessionCookie,
   issuedSessionCookieWithIat,
+  verifySession,
 } from "../../auth/session";
 import {
   assertLoginAllowed,
   clearLoginFailures,
   clientIp,
+  getSession,
   recordLoginFailure,
 } from "../../auth/guard";
 import { loadSettingsFresh, saveSettings } from "../../settings/store";
+import { validateSettings } from "../../settings/validate";
 
 async function upgradeLegacyHash(env: Env, password: string): Promise<void> {
   try {
@@ -26,7 +29,9 @@ async function upgradeLegacyHash(env: Env, password: string): Promise<void> {
     const verified = await verifyPassword(password, fresh.passwordHash, fresh.passwordSalt);
     if (verified.tier !== "legacy") return;
     const { hash, salt } = await hashPassword(password);
-    await saveSettings(env, { ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+    const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+    if (!v.ok) return;
+    await saveSettings(env, v.value);
   } catch (err) {
     log.debug("auth", "legacy hash upgrade failed", String(err));
   }
@@ -50,7 +55,13 @@ export const handleLogin: RouteHandler = async (req, env, s) => {
   return jsonOk({ hasPassword: true }, { "Set-Cookie": await issuedSessionCookie(s.sessionSecret) });
 };
 
-export const handleLogout: RouteHandler = async () => {
+export const handleLogout: RouteHandler = async (req, env, s) => {
+  const raw = getSession(req);
+  if (raw !== null) {
+    const floor = await getSessionFloor(env);
+    const session = await verifySession(raw, s.sessionSecret, floor);
+    if (session !== null) await bumpSessionFloor(env);
+  }
   return jsonOk({ loggedOut: true }, { "Set-Cookie": clearedSessionCookie() });
 };
 
@@ -68,7 +79,9 @@ export const handleSetup: RouteHandler = async (req, env, s) => {
     throw new ValidationError({ newPassword: "must be at least 8 characters" });
   }
   const { hash, salt } = await hashPassword(newPassword);
-  await saveSettings(env, { ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+  const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+  if (!v.ok) throw new ValidationError(v.fields);
+  await saveSettings(env, v.value);
   return jsonOk(
     { hasPassword: true },
     { "Set-Cookie": await issuedSessionCookie(fresh.sessionSecret) },
@@ -92,7 +105,9 @@ export const handlePasswordChange: RouteHandler = async (req, env, _s) => {
     throw new ValidationError({ newPassword: "must be at least 8 characters" });
   }
   const { hash, salt } = await hashPassword(newPassword);
-  await saveSettings(env, { ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+  const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+  if (!v.ok) throw new ValidationError(v.fields);
+  await saveSettings(env, v.value);
   await bumpSessionFloor(env);
   const floor = await getSessionFloor(env);
   return jsonOk(

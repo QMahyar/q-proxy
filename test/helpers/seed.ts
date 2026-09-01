@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { invalidateSettingsCache } from "../../src/settings/store";
-import { clearSessionFloorCache } from "../../src/auth/session";
+import { SESSION_FLOOR_KEY, clearSessionFloorCache } from "../../src/auth/session";
 import { clearLoginFailures, clientIp } from "../../src/auth/guard";
 import { clearRemoteSubCache } from "../../src/subscription/merge";
 import { clearSaltRegistry } from "../../src/protocols/shadowsocks";
@@ -18,6 +18,7 @@ export async function seed(
   overrides: Record<string, unknown> = {},
 ): Promise<void> {
   await kv.delete(SETTINGS_KEY);
+  await kv.delete(SESSION_FLOOR_KEY);
   await kv.put(
     SETTINGS_KEY,
     JSON.stringify({

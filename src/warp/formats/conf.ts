@@ -1,30 +1,12 @@
 import type { WarpEmitContext } from "../expand";
-import type { AmneziaParams } from "../../types/warp";
 import { zipStore } from "../zip";
 import { sanitizeFilename } from "../expand";
+import { amneziaEntries } from "./amnezia";
 
 const KEEPALIVE = 25;
 
-function amneziaLines(amnezia: AmneziaParams): string[] {
-  const lines: string[] = [];
-  const int = (key: keyof AmneziaParams, out: string) => {
-    const v = amnezia[key];
-    if (typeof v === "number" && v > 0) lines.push(`${out} = ${v}`);
-  };
-  int("Jc", "Jc");
-  int("Jmin", "Jmin");
-  int("Jmax", "Jmax");
-  int("S1", "S1");
-  int("S2", "S2");
-  int("S3", "S3");
-  int("S4", "S4");
-  for (const key of ["H1", "H2", "H3", "H4"] as const) {
-    const v = amnezia[key];
-    if (v === undefined || v === null || v === "" || v === 0) continue;
-    lines.push(`${key} = ${v}`);
-  }
-  if (typeof amnezia.I1 === "string" && amnezia.I1.length > 0) lines.push(`I1 = ${amnezia.I1}`);
-  return lines;
+function amneziaLines(amnezia: NonNullable<WarpEmitContext["amnezia"]>): string[] {
+  return amneziaEntries(amnezia).map(([key, value]) => `${key} = ${value}`);
 }
 
 function confFor(ctx: WarpEmitContext, index: number, withAmnezia: boolean): { name: string; content: string } {
@@ -81,17 +63,9 @@ export function emitThrone(ctx: WarpEmitContext, withAmnezia: boolean): string {
         if (r0 !== 0 || r1 !== 0 || r2 !== 0) parts.push(`reserved=${r0}-${r1}-${r2}`);
         if (withAmnezia && ctx.amnezia !== null) {
           parts.push("enable_amnezia=true");
-          for (const key of ["Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4"] as const) {
-            const v = ctx.amnezia[key];
-            if (typeof v === "number" && v > 0) parts.push(`${key.toLowerCase()}=${v}`);
-          }
-          for (const key of ["H1", "H2", "H3", "H4"] as const) {
-            const v = ctx.amnezia[key];
-            if (v === undefined || v === null || v === "" || v === 0) continue;
-            parts.push(`${key.toLowerCase()}=${v}`);
-          }
-          if (typeof ctx.amnezia.I1 === "string" && ctx.amnezia.I1.length > 0) {
-            parts.push(`i1=${encodeURIComponent(ctx.amnezia.I1)}`);
+          for (const [key, value] of amneziaEntries(ctx.amnezia)) {
+            if (key === "I1") parts.push(`i1=${encodeURIComponent(value)}`);
+            else parts.push(`${key.toLowerCase()}=${value}`);
           }
         }
         parts.push(`#${encodeURIComponent(row.tag)}`);

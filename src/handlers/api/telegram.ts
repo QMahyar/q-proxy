@@ -6,7 +6,8 @@ import { assertCsrf } from "../../auth/guard";
 import { constantTimeEqual } from "../../utils/random";
 import { bytesToHex, utf8Encode } from "../../utils/bytes";
 import { readUsage } from "../../core/counters";
-import { appVersion, saveSettings } from "../../settings/store";
+import { appVersion, loadSettingsFresh, saveSettings } from "../../settings/store";
+import { validateSettings } from "../../settings/validate";
 import { resolveHostname } from "../../core/routes";
 import { buildSubUrls } from "./status";
 
@@ -121,7 +122,10 @@ async function buildReply(env: Env, s: Settings, req: Request, text: string): Pr
     }
     case "/kill": {
       if (arg !== "on" && arg !== "off") return lang.help();
-      await saveSettings(env, { ...structuredClone(s), killSwitch: arg === "on" });
+      const fresh = await loadSettingsFresh(env);
+      const v = validateSettings({ ...structuredClone(fresh), killSwitch: arg === "on" });
+      if (!v.ok) return "error: kill switch update failed";
+      await saveSettings(env, v.value);
       return lang.kill(arg === "on");
     }
     default:
@@ -136,7 +140,9 @@ export const handleTelegramWebhook: RouteHandler = async (req, env, s) => {
   if (!secretOk || !s.telegram.enabled || s.telegram.botToken.length === 0) return silentOk();
   let update: TelegramUpdate;
   try {
-    update = (await req.json()) as TelegramUpdate;
+    const raw: unknown = await req.json();
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return silentOk();
+    update = raw as TelegramUpdate;
   } catch {
     return silentOk();
   }
@@ -161,10 +167,11 @@ async function tgAdminCall(token: string, method: string, payload: Record<string
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(ADMIN_TIMEOUT_MS),
     });
-    const data = (await res.json().catch(() => null)) as { ok?: unknown; description?: unknown } | null;
+    const data: unknown = await res.json().catch(() => null);
+    const record = data !== null && typeof data === "object" && !Array.isArray(data) ? (data as { ok?: unknown; description?: unknown }) : null;
     const description =
-      typeof data?.description === "string" ? stripTokenRefs(data.description) : "";
-    return { ok: data?.ok === true, description };
+      typeof record?.description === "string" ? stripTokenRefs(record.description) : "";
+    return { ok: record?.ok === true, description };
   } catch {
     return { ok: false, description: "network error" };
   }

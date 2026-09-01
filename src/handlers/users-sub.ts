@@ -62,10 +62,9 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
   if (cached !== undefined) return cached;
 
   const ctx = { settings: s, hostname: resolveHostname(s, url), request: req };
+  const allNodes = generateNodes(ctx);
   const scoped =
-    user.protocols === "all"
-      ? generateNodes(ctx)
-      : generateNodes(ctx).filter((n) => (user.protocols as string[]).includes(n.kind));
+    user.protocols === "all" ? allNodes : allNodes.filter((n) => user.protocols.includes(n.kind));
   const nodes = selectVariantNodes(scoped, isFragmentMode ? "fragment" : "normal");
   const subSettings = { ...s, remoteSubUrls: [] as string[] };
   const body = await renderSubscriptionBody({

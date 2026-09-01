@@ -1,3 +1,4 @@
+import { log } from "../core/log";
 import { decodeBase64 } from "../utils/base64";
 import { isLocalOrPrivateTarget } from "../utils/net";
 
@@ -56,18 +57,29 @@ async function fetchOne(url: string, budget: { left: number }): Promise<string[]
     try {
       parsed = new URL(url);
     } catch {
+      log.debug("merge", "remote sub skipped: invalid url", { url });
       return [];
     }
-    if (isLocalOrPrivateTarget(parsed.hostname)) return [];
+    if (isLocalOrPrivateTarget(parsed.hostname)) {
+      log.debug("merge", "remote sub skipped: blocked host", { url });
+      return [];
+    }
     const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "follow" });
     try {
       const finalUrl = new URL(res.url);
-      if (isLocalOrPrivateTarget(finalUrl.hostname)) return [];
+      if (isLocalOrPrivateTarget(finalUrl.hostname)) {
+        log.debug("merge", "remote sub skipped: redirected to blocked host", { url });
+        return [];
+      }
     } catch {}
-    if (!res.ok || budget.left <= 0) return [];
+    if (!res.ok || budget.left <= 0) {
+      log.debug("merge", "remote sub skipped: not ok or budget spent", { url, status: res.status });
+      return [];
+    }
     const text = await readCapped(res, budget);
     return extractLines(text);
-  } catch {
+  } catch (err) {
+    log.debug("merge", "remote sub fetch failed", { url, reason: String(err) });
     return [];
   }
 }

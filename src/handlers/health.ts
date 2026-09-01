@@ -1,7 +1,6 @@
-import type { RouteHandler } from "../types/context";
 import { appVersion } from "../settings/store";
 
-export const handleHealth: RouteHandler = async (req) => {
+export const handleHealth = async (req: Request): Promise<Response> => {
   const cf = req.cf as { colo?: string } | undefined;
   const colo = cf?.colo ?? null;
   const body = JSON.stringify({ ok: true, version: appVersion(), colo });

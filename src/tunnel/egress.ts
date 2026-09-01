@@ -150,42 +150,23 @@ export function createEgressOpener(
     const candidate = strategy.candidates[index];
     if (candidate === undefined) throw new Error(`no egress candidate at index ${index}`);
     const pending = dial(candidate, target, firstPacket);
-    const timeoutSignal = AbortSignal.timeout(timeoutMs);
     let fallback: ReturnType<typeof setTimeout> | undefined;
-    let raceSettled = false;
     const timeout = new Promise<never>((_, reject) => {
-      const doReject = (): void => {
-        if (raceSettled) return;
-        reject(new Error(`dial timed out after ${timeoutMs}ms`));
-      };
-      if (timeoutSignal.aborted) {
-        doReject();
-        return;
-      }
-      timeoutSignal.addEventListener("abort", doReject, { once: true });
-      fallback = setTimeout(doReject, timeoutMs);
-      timeoutSignal.addEventListener(
-        "abort",
-        () => {
-          if (fallback !== undefined) clearTimeout(fallback);
-        },
-        { once: true },
-      );
+      fallback = setTimeout(() => reject(new Error(`dial timed out after ${timeoutMs}ms`)), timeoutMs);
     });
+    let socket: Socket;
     try {
-      const socket = await Promise.race([pending, timeout]);
-      raceSettled = true;
-      if (fallback !== undefined) clearTimeout(fallback);
-      lastSuccessIndex = index;
-      return { socket, via: candidate.via, candidateIndex: index, strategy };
+      socket = await Promise.race([pending, timeout]);
     } catch (err) {
-      raceSettled = true;
       if (fallback !== undefined) clearTimeout(fallback);
       void pending
         .then((s) => s.close().catch(() => {}))
         .catch(() => {});
       throw err instanceof Error ? err : new Error(String(err));
     }
+    if (fallback !== undefined) clearTimeout(fallback);
+    lastSuccessIndex = index;
+    return { socket, via: candidate.via, candidateIndex: index, strategy };
   };
   return {
     open: async (target, firstPacket) => {

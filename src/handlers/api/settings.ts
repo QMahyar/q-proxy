@@ -65,7 +65,9 @@ export const handleResetSettings: RouteHandler = async (req, env, _s) => {
   for (const key of PRESERVED_FIELDS) {
     (fresh as unknown as Record<string, unknown>)[key] = (freshSrc as unknown as Record<string, unknown>)[key];
   }
-  await saveSettings(env, fresh);
+  const result = validateSettings(fresh);
+  if (!result.ok) throw new ValidationError(result.fields);
+  await saveSettings(env, result.value);
   return jsonOk({ saved: true });
 };
 

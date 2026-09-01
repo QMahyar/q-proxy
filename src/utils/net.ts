@@ -216,7 +216,7 @@ export function isCloudflareIp(ip: string): boolean {
 }
 
 const PRIVATE_V4 = ["0.0.0.0/8", "10.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16"];
-const PRIVATE_V6 = ["::1/128", "::/128", "fc00::/7", "fe80::/10"];
+const PRIVATE_V6 = ["::1/128", "::/128", "fc00::/7", "fe80::/10", "::ffff:0:0/96", "64:ff9b::/96"];
 
 export function isLocalOrPrivateTarget(host: string): boolean {
   const h = host.trim().toLowerCase().replace(/^\[|\]$/g, "");

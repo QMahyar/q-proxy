@@ -74,6 +74,73 @@ describe("warp store", () => {
     expect(kv.map.get("qproxy:warp:presets")).toBeDefined();
   });
 
+  it("drops corrupt preset entries and keeps the valid remainder", async () => {
+    kv.map.set(
+      "qproxy:warp:presets",
+      JSON.stringify([
+        { id: 5, name: "not-a-preset" },
+        { id: "keep", name: "Keep", dns: null, endpoints: [{ ip: "162.159.192.1", port: 2408 }] },
+        { id: "bad-port", name: "Bad", dns: null, endpoints: [{ ip: "162.159.192.1", port: 99999 }] },
+        { id: "no-endpoints", name: "Bad", dns: null, endpoints: [] },
+      ]),
+    );
+    const presets = await listPresets(kv.asEnv());
+    expect(presets.map((p) => p.id)).toEqual(["keep"]);
+  });
+
+  it("falls back to a copied default preset list when nothing in kv is valid", async () => {
+    kv.map.set("qproxy:warp:presets", JSON.stringify([{ junk: true }]));
+    const presets = await listPresets(kv.asEnv());
+    expect(presets.map((p) => p.id)).toEqual(["default", "iran", "china"]);
+    presets.push({ id: "mutated", name: "M", dns: null, endpoints: [] });
+    expect(DEFAULT_PRESETS).toHaveLength(3);
+    expect(DEFAULT_PRESETS.some((p) => p.id === "mutated")).toBe(false);
+  });
+
+  it("rejects malformed accounts instead of trusting kv shapes", async () => {
+    const a = mkAccount();
+    await storeAccount(kv.asEnv(), a);
+    expect(await getAccount(kv.asEnv(), a.id)).not.toBeNull();
+    const key = `qproxy:warp:account:${a.id}`;
+    kv.map.set(key, JSON.stringify({ id: a.id, token: a.token }));
+    expect(await getAccount(kv.asEnv(), a.id)).toBeNull();
+    kv.map.set(
+      key,
+      JSON.stringify({
+        id: a.id,
+        token: a.token,
+        name: "x",
+        created_at: "2026-08-24T00:00:00.000Z",
+        config: { private_key: "", public_key: "p", addresses: { ipv4: "", ipv6: "" } },
+        endpoint_list: { type: "preset", preset_id: "default" },
+      }),
+    );
+    expect(await getAccount(kv.asEnv(), a.id)).toBeNull();
+    kv.map.set(
+      key,
+      JSON.stringify({
+        id: a.id,
+        token: a.token,
+        name: "x",
+        created_at: "2026-08-24T00:00:00.000Z",
+        config: { private_key: "PRIV", public_key: "PUB", addresses: { ipv4: "10.0.0.1/32" } },
+        endpoint_list: { type: "bogus" },
+      }),
+    );
+    expect(await getAccount(kv.asEnv(), a.id)).toBeNull();
+  });
+
+  it("falls back to default amnezia when the stored global settings are corrupt", async () => {
+    kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: "pwn" }));
+    expect((await getGlobalSettings(kv.asEnv())).amnezia.Jc).toBe(5);
+    kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: { Jc: 9999 } }));
+    expect((await getGlobalSettings(kv.asEnv())).amnezia.Jc).toBe(5);
+    kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: { Jc: 7, junk: { nested: true } } }));
+    const global = await getGlobalSettings(kv.asEnv());
+    expect(global.amnezia.Jc).toBe(7);
+    expect((global.amnezia as Record<string, unknown>).junk).toBeUndefined();
+  });
+
   it("stores, lists, fetches by id and by token, sanitizes, deletes", async () => {
     const a = mkAccount();
     await storeAccount(kv.asEnv(), a);

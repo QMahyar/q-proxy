@@ -32,6 +32,17 @@ describe("getSession", () => {
   it("decodes url-encoded cookie values", () => {
     expect(getSession(reqWith({ Cookie: "q_session=a.b%21" }))).toBe("a.b!");
   });
+
+  it("takes the first q_session occurrence and tolerates malformed escapes", () => {
+    expect(getSession(reqWith({ Cookie: "q_session=first; q_session=second" }))).toBe("first");
+    expect(getSession(reqWith({ Cookie: "; q_session=leading" }))).toBe("leading");
+    expect(getSession(reqWith({ Cookie: "q_session=bad%zzescape" }))).toBe("bad%zzescape");
+  });
+
+  it("returns null for an empty cookie value", () => {
+    expect(getSession(reqWith({ Cookie: "q_session=" }))).toBeNull();
+    expect(getSession(reqWith({ Cookie: "q_session=; other=1" }))).toBeNull();
+  });
 });
 
 describe("assertCsrf", () => {

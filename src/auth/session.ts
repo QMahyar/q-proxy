@@ -7,7 +7,7 @@ import { unixNow } from "../utils/time";
 
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const SESSION_COOKIE_NAME = "q_session";
-const SESSION_FLOOR_KEY = "qproxy:min-iat";
+export const SESSION_FLOOR_KEY = "qproxy:min-iat";
 
 const SESSION_FLOOR_TTL_MS = 5_000;
 

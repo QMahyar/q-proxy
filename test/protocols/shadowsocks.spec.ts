@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { clearSaltRegistry, createSSInbound } from "../../src/protocols/shadowsocks";
 import { evpBytesToKey, hkdfSha1 } from "../../src/crypto/kdf";
+import { chacha20Poly1305Open, chacha20Poly1305Seal } from "../../src/crypto/chacha20";
 import { parseAddress } from "../../src/protocols/common";
 import {
   bytesToHex,
@@ -10,7 +11,8 @@ import {
   utf8Encode,
 } from "../../src/utils/bytes";
 
-type Method = "aes-128-gcm" | "aes-256-gcm";
+type Method = "aes-128-gcm" | "aes-256-gcm" | "chacha20-ietf-poly1305";
+const METHODS: Method[] = ["aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305"];
 
 function keyLenOf(method: Method): number {
   return method === "aes-128-gcm" ? 16 : 32;
@@ -23,10 +25,12 @@ function deterministicSalt(n: number, seed = 7): Uint8Array {
 }
 
 async function gcmSeal(
+  method: Method,
   key: Uint8Array,
   nonce: Uint8Array,
   plaintext: Uint8Array,
 ): Promise<Uint8Array> {
+  if (method === "chacha20-ietf-poly1305") return chacha20Poly1305Seal(key, nonce, plaintext, null);
   const ck = await crypto.subtle.importKey("raw", key as BufferSource, "AES-GCM", false, [
     "encrypt",
   ]);
@@ -57,8 +61,8 @@ async function ssFrame(
   const useSalt = salt ?? deterministicSalt(klen);
   const subkey = await hkdfSha1(master, useSalt, utf8Encode("ss-subkey"), klen);
   const firstPayload = concatBytes(target, payload);
-  const lenFrame = await gcmSeal(subkey, incrementingNonce(0n), u16be(firstPayload.length));
-  const payloadFrame = await gcmSeal(subkey, incrementingNonce(1n), firstPayload);
+  const lenFrame = await gcmSeal(method, subkey, incrementingNonce(0n), u16be(firstPayload.length));
+  const payloadFrame = await gcmSeal(method, subkey, incrementingNonce(1n), firstPayload);
   return concatBytes(useSalt, lenFrame, payloadFrame);
 }
 
@@ -91,7 +95,7 @@ describe("parseAddress (SOCKS5-style numbering shared by trojan/ss)", () => {
   });
 });
 
-describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("createSSInbound %s", (method) => {
+describe.each(METHODS)("createSSInbound %s", (method) => {
   beforeEach(() => clearSaltRegistry());
 
   const PASSWORD = "ss-password-test";
@@ -150,7 +154,7 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("createSSInbound %s", 
     const klen = keyLenOf(method);
     const master = evpBytesToKey(PASSWORD, klen);
     const subkey = await hkdfSha1(master, deterministicSalt(klen), utf8Encode("ss-subkey"), klen);
-    const badLenFrame = await gcmSeal(subkey, incrementingNonce(0n), u16be(0x4000));
+    const badLenFrame = await gcmSeal(method, subkey, incrementingNonce(0n), u16be(0x4000));
     const outcome = await createSSInbound(method, PASSWORD).push(concatBytes(deterministicSalt(klen), badLenFrame));
     expect(outcome).toMatchObject({ state: "reject", reason: expect.stringContaining("chunk length") });
   });
@@ -220,7 +224,7 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("createSSInbound %s", 
   });
 });
 
-describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (method) => {
+describe.each(METHODS)("ss body codecs %s", (method) => {
   beforeEach(() => clearSaltRegistry());
 
   const PASSWORD = "ss-password-test";
@@ -246,8 +250,8 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
     counter: number,
     payload: Uint8Array,
   ): Promise<Uint8Array> {
-    const lenFrame = await gcmSeal(sk, incrementingNonce(BigInt(counter)), u16be(payload.length));
-    const payloadFrame = await gcmSeal(sk, incrementingNonce(BigInt(counter + 1)), payload);
+    const lenFrame = await gcmSeal(method, sk, incrementingNonce(BigInt(counter)), u16be(payload.length));
+    const payloadFrame = await gcmSeal(method, sk, incrementingNonce(BigInt(counter + 1)), payload);
     return concatBytes(lenFrame, payloadFrame);
   }
 
@@ -259,11 +263,11 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
     let ctr = 0;
     let off = 0;
     while (off < wire.length) {
-      const lenPlain = await gcmOpen(sk, incrementingNonce(BigInt(ctr++)), wire.subarray(off, off + 18));
+      const lenPlain = await gcmOpen(method, sk, incrementingNonce(BigInt(ctr++)), wire.subarray(off, off + 18));
       expect(lenPlain).not.toBeNull();
       const n = ((lenPlain![0] ?? 0) << 8) | (lenPlain![1] ?? 0);
       off += 18;
-      const payload = await gcmOpen(sk, incrementingNonce(BigInt(ctr++)), wire.subarray(off, off + n + 16));
+      const payload = await gcmOpen(method, sk, incrementingNonce(BigInt(ctr++)), wire.subarray(off, off + n + 16));
       off += n + 16;
       out.push(payload!);
     }
@@ -271,10 +275,12 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
   }
 
   async function gcmOpen(
+    method: Method,
     sk: Uint8Array,
     nonce: Uint8Array,
     data: Uint8Array,
   ): Promise<Uint8Array | null> {
+    if (method === "chacha20-ietf-poly1305") return chacha20Poly1305Open(sk, nonce, data, null);
     try {
       const ck = await crypto.subtle.importKey("raw", sk as BufferSource, "AES-GCM", false, [
         "decrypt",
@@ -332,7 +338,7 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
     const codec = inbound.bodyCodec()!;
     const sk = await subkeyFor(salt);
 
-    const oversize = await gcmSeal(sk, incrementingNonce(2n), u16be(0x4000));
+    const oversize = await gcmSeal(method, sk, incrementingNonce(2n), u16be(0x4000));
     expect(await codec.decodeUp(concatBytes(oversize, new Uint8Array(40)))).toBeNull();
 
     const good = await framePair(sk, 2, utf8Encode("hello"));
@@ -351,10 +357,10 @@ describe.each(["aes-128-gcm", "aes-256-gcm"] as Method[])("ss body codecs %s", (
     const got = await codec.decodeUp(concatBytes(zeroPair, await framePair(sk, 4, data)));
     expect(new TextDecoder().decode(got!)).toBe("after-zero");
 
-    const loneZeroLenFrame = await gcmSeal(sk, incrementingNonce(6n), u16be(0));
+    const loneZeroLenFrame = await gcmSeal(method, sk, incrementingNonce(6n), u16be(0));
     expect(await codec.decodeUp(loneZeroLenFrame)).toEqual(new Uint8Array(0));
 
-    const zeroPayloadFrame = await gcmSeal(sk, incrementingNonce(7n), new Uint8Array(0));
+    const zeroPayloadFrame = await gcmSeal(method, sk, incrementingNonce(7n), new Uint8Array(0));
     expect(await codec.decodeUp(zeroPayloadFrame)).toEqual(new Uint8Array(0));
 
     const resumed = await codec.decodeUp(await framePair(sk, 8, utf8Encode("still-alive")));

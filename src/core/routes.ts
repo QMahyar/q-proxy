@@ -6,10 +6,6 @@ const TUNNEL_SUFFIX_RE = /^[A-Za-z0-9]{8,32}$/;
 
 export const HEALTHZ_PATH = "/healthz";
 
-export function isHealthzPath(pathname: string): boolean {
-  return pathname === HEALTHZ_PATH;
-}
-
 export function splitPath(pathname: string): string[] {
   return pathname.split("/").filter((seg) => seg.length > 0);
 }

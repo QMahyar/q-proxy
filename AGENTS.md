@@ -119,7 +119,8 @@ Protocol changes: validate against Xray-core fixtures first (`docs/research/04-p
 - sing-box emitter uses the legacy dns schema (forward-compat note — migration rejected for now, documented in DEVELOPER_GUIDE)
 - users-sub intentionally never merges remoteSubUrls (per-user scoping: protocol filters must hold)
 - Server-side validation messages are English-only even in the FA UI
-- cleanIps entries pinning ports outside the CF port families emit unreachable nodes (security inferred from `CF_TLS_PORTS` membership only) — documented behavior
+- cleanIps entries pinning ports outside the CF port families are silently dropped (zero nodes emitted for that address) — documented behavior
+- SSRF guards (`isLocalOrPrivateTarget` on dohUpstream/remoteDns/camouflage/remoteSubUrls/egress targets) are host-literal only: a DNS name resolving to a private address is not pre-resolved (Workers egress does not route RFC1918/link-local, and DoH pre-resolution would introduce a TOCTOU window)
 - Early-data oversize drops silently instead of closing 1009
 - Login throttle is per-isolate memory (best-effort)
 - Counters are estimates (`download = requestsTotal × 1 MiB`)

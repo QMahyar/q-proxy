@@ -44,6 +44,11 @@ function requireString(value: unknown, field: string, max = 100): string {
   return trimmed;
 }
 
+function asAmneziaParams(value: unknown): AmneziaParams | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as AmneziaParams;
+}
+
 function parseEndpoint(value: string): WarpEndpoint | null {
   let host = value.trim();
   let portStr = "";
@@ -120,7 +125,9 @@ async function buildAccount(env: Parameters<RouteHandler>[1], body: Record<strin
   }
   let amnezia_overrides: AmneziaParams | null = amnezia;
   if (body.amnezia_overrides !== undefined && body.amnezia_overrides !== null) {
-    const check = validateAmnezia(body.amnezia_overrides as AmneziaParams);
+    const shaped = asAmneziaParams(body.amnezia_overrides);
+    if (shaped === null) throw new ValidationError({ amnezia_overrides: "must be an object" });
+    const check = validateAmnezia(shaped);
     if (!check.ok) throw new ValidationError(check.fields);
     amnezia_overrides = check.value;
   }
@@ -138,7 +145,7 @@ async function buildAccount(env: Parameters<RouteHandler>[1], body: Record<strin
   };
 }
 
-export const handleWarpApi: RouteHandler = async (req, env, _s) => {
+export const handleWarpApi: RouteHandler = async (req, env, s) => {
   const url = new URL(req.url);
   const segs = url.pathname.split("/").filter((p) => p.length > 0);
   const warpIdx = segs.indexOf("warp", 1);
@@ -146,7 +153,7 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
   const method = req.method;
   await ensureWarpDefaults(env);
   const origin = url.origin;
-  const purgeAll = () => purgeAllWarpSubs(env, origin).catch(() => {});
+  const purgeAll = () => purgeAllWarpSubs(env, origin, s.securePath).catch(() => {});
 
   if (rest[0] === "account") {
     if (rest.length === 1 && method === "GET") {
@@ -209,25 +216,30 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
           if (body.amnezia_overrides === null) {
             account.amnezia_overrides = null;
           } else {
-            const check = validateAmnezia(body.amnezia_overrides as AmneziaParams);
+            const shaped = asAmneziaParams(body.amnezia_overrides);
+            if (shaped === null) throw new ValidationError({ amnezia_overrides: "must be an object" });
+            const check = validateAmnezia(shaped);
             if (!check.ok) throw new ValidationError(check.fields);
             account.amnezia_overrides = check.value;
           }
         }
         await storeAccount(env, account);
-        await purgeWarpSub(origin, account.token).catch(() => {});
+        await purgeWarpSub(origin, s.securePath, account.token).catch(() => {});
         return jsonOk({ account: sanitizeAccount(account) });
       }
       if (rest.length === 2 && method === "DELETE") {
         await deleteAccount(env, account);
         void removeWarpDevice(account.warp_id, account.warp_token).catch(() => {});
-        await purgeWarpSub(origin, account.token).catch(() => {});
+        await purgeWarpSub(origin, s.securePath, account.token).catch(() => {});
         return jsonOk({ deleted: true });
       }
       if (rest.length === 3 && rest[2] === "regenerate-token" && method === "POST") {
         const oldToken = account.token;
         const token = await regenerateToken(env, account);
-        await Promise.all([purgeWarpSub(origin, oldToken).catch(() => {}), purgeWarpSub(origin, token).catch(() => {})]);
+        await Promise.all([
+          purgeWarpSub(origin, s.securePath, oldToken).catch(() => {}),
+          purgeWarpSub(origin, s.securePath, token).catch(() => {}),
+        ]);
         return jsonOk({ token });
       }
     }
@@ -287,10 +299,9 @@ export const handleWarpApi: RouteHandler = async (req, env, _s) => {
     }
     if (rest.length === 2 && method === "PUT") {
       const body = await readJsonObject(req);
-      if (body.amnezia === undefined || body.amnezia === null || typeof body.amnezia !== "object") {
-        throw new ValidationError({ amnezia: "must be an object" });
-      }
-      const check = validateAmnezia(body.amnezia as AmneziaParams);
+      const shaped = asAmneziaParams(body.amnezia);
+      if (shaped === null) throw new ValidationError({ amnezia: "must be an object" });
+      const check = validateAmnezia(shaped);
       if (!check.ok) throw new ValidationError(check.fields);
       await setGlobalSettings(env, { amnezia: check.value });
       void purgeAll();

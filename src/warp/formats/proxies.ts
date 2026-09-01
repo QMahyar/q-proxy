@@ -1,4 +1,5 @@
 import type { WarpEmitContext } from "../expand";
+import { amneziaEntries } from "./amnezia";
 
 function yamlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
@@ -10,19 +11,12 @@ function yamlList(values: string[]): string {
 
 function amneziaOption(ctx: WarpEmitContext, indent: string): string[] {
   if (ctx.amnezia === null) return [];
-  const lines: string[] = [];
-  const entries: Array<[string, string | number]> = [];
-  for (const key of ["Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4"] as const) {
-    const v = ctx.amnezia[key];
-    if (typeof v === "number" && v > 0) entries.push([key.toLowerCase(), v]);
-  }
-  for (const key of ["H1", "H2", "H3", "H4"] as const) {
-    const v = ctx.amnezia[key];
-    if (v === undefined || v === null || v === "" || v === 0) continue;
-    entries.push([key.toLowerCase(), typeof v === "number" ? v : yamlString(v)]);
-  }
+  const entries: Array<[string, string | number]> = amneziaEntries(ctx.amnezia).map(([key, value]) => [
+    key === "I1" ? "i1" : key.toLowerCase(),
+    typeof value === "string" ? yamlString(value) : value,
+  ]);
   if (entries.length === 0) return [];
-  lines.push(`${indent}amnezia-wg-option:`);
+  const lines: string[] = [`${indent}amnezia-wg-option:`];
   for (const [k, v] of entries) lines.push(`${indent}  ${k}: ${v}`);
   return lines;
 }

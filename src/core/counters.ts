@@ -1,5 +1,6 @@
 import type { Env } from "../types/env";
 import type { UsageSnapshot } from "../types/context";
+import { log } from "./log";
 import { dayKeyUtc } from "../utils/time";
 
 const KV_KEY = "qproxy:counters";
@@ -84,7 +85,6 @@ export async function recordConnection(env: Env): Promise<void> {
   if (!stale && buffer.connectionsSinceFlush < FLUSH_EVERY_CONNECTIONS) return;
   if (flushing) return;
   flushing = true;
-  // Capture and reset deltas atomically before any await — increments during KV I/O buffer for next flush (per-isolate, eventually consistent).
   const capturedToday = buffer.todayDelta;
   const capturedTotal = buffer.totalDelta;
   buffer.todayDelta = 0;
@@ -105,7 +105,7 @@ export async function recordConnection(env: Env): Promise<void> {
       expiresAt: Date.now() + USAGE_MEMO_MS,
     };
     waitUntil(put.then(() => undefined));
-    await put.catch(() => {});
+    await put.catch((err: unknown) => log.error("counters", "flush failed", String(err)));
   } finally {
     flushing = false;
   }

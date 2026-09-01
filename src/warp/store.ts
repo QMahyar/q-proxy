@@ -1,4 +1,4 @@
-import type { AmneziaParams, SanitizedWarpAccount, WarpAccount, WarpGlobalSettings, WarpPreset } from "../types/warp";
+import type { AmneziaParams, AmneziaValue, SanitizedWarpAccount, WarpAccount, WarpEndpoint, WarpGlobalSettings, WarpPreset } from "../types/warp";
 
 export const WARP_ACCOUNT_PREFIX = "qproxy:warp:account:";
 export const WARP_TOKEN_PREFIX = "qproxy:warp:token:";
@@ -84,10 +84,58 @@ export async function ensureWarpDefaults(env: { QPROXY_KV: KvLike }): Promise<vo
   }
 }
 
+function isWarpEndpoint(raw: unknown): raw is WarpEndpoint {
+  if (raw === null || typeof raw !== "object") return false;
+  const r = raw as Record<string, unknown>;
+  return (
+    typeof r.ip === "string" &&
+    r.ip.length > 0 &&
+    typeof r.port === "number" &&
+    Number.isInteger(r.port) &&
+    r.port >= 1 &&
+    r.port <= 65535
+  );
+}
+
+function isWarpPreset(raw: unknown): raw is WarpPreset {
+  if (raw === null || typeof raw !== "object") return false;
+  const r = raw as Record<string, unknown>;
+  return (
+    typeof r.id === "string" &&
+    r.id.length > 0 &&
+    typeof r.name === "string" &&
+    (r.dns === null || typeof r.dns === "string") &&
+    Array.isArray(r.endpoints) &&
+    r.endpoints.length > 0 &&
+    r.endpoints.every(isWarpEndpoint)
+  );
+}
+
+const AMNEZIA_KEYS = ["Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4", "H1", "H2", "H3", "H4", "I1"] as const;
+
+function pickAmnezia(raw: unknown): AmneziaParams | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const check = validateAmnezia(raw as AmneziaParams);
+  if (!check.ok) return null;
+  const src = raw as Record<string, unknown>;
+  const out: AmneziaParams = {};
+  const sink = out as Record<string, AmneziaValue>;
+  for (const key of AMNEZIA_KEYS) {
+    const val = src[key];
+    if (typeof val === "number" || typeof val === "string") sink[key] = val;
+  }
+  return out;
+}
+
 export async function listPresets(env: { QPROXY_KV: KvLike }): Promise<WarpPreset[]> {
   const raw = (await env.QPROXY_KV.get(WARP_PRESETS_KEY, "json")) as unknown;
-  if (Array.isArray(raw)) return raw as WarpPreset[];
-  return DEFAULT_PRESETS;
+  if (Array.isArray(raw)) {
+    const valid = raw.filter(isWarpPreset);
+    if (valid.length > 0) {
+      return valid.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+    }
+  }
+  return DEFAULT_PRESETS.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
 }
 
 export async function savePresets(env: { QPROXY_KV: KvLike }, presets: WarpPreset[]): Promise<void> {
@@ -188,13 +236,30 @@ export function sanitizeAccount(account: WarpAccount): SanitizedWarpAccount {
 function isAccount(raw: unknown): raw is WarpAccount {
   if (raw === null || typeof raw !== "object") return false;
   const r = raw as Record<string, unknown>;
-  return typeof r.id === "string" && typeof r.token === "string" && typeof r.config === "object" && r.config !== null;
+  if (typeof r.id !== "string" || typeof r.token !== "string" || typeof r.name !== "string" || typeof r.created_at !== "string") {
+    return false;
+  }
+  if (r.config === null || typeof r.config !== "object") return false;
+  const cfg = r.config as Record<string, unknown>;
+  if (typeof cfg.private_key !== "string" || cfg.private_key.length === 0) return false;
+  if (typeof cfg.public_key !== "string" || cfg.public_key.length === 0) return false;
+  if (cfg.addresses === null || typeof cfg.addresses !== "object") return false;
+  const addr = cfg.addresses as Record<string, unknown>;
+  if (typeof addr.ipv4 !== "string" || typeof addr.ipv6 !== "string") return false;
+  if (typeof cfg.mtu !== "number" || !Array.isArray(cfg.reserved)) return false;
+  const el = r.endpoint_list;
+  if (el === null || typeof el !== "object") return false;
+  const e = el as Record<string, unknown>;
+  if (e.type === "preset") return typeof e.preset_id === "string";
+  if (e.type === "custom") return Array.isArray(e.custom_endpoints) && e.custom_endpoints.every(isWarpEndpoint);
+  return false;
 }
 
 export async function getGlobalSettings(env: { QPROXY_KV: KvLike }): Promise<WarpGlobalSettings> {
   const raw = (await env.QPROXY_KV.get(WARP_GLOBAL_KEY, "json")) as unknown;
-  if (raw !== null && typeof raw === "object" && typeof (raw as Record<string, unknown>).amnezia === "object") {
-    return raw as WarpGlobalSettings;
+  if (raw !== null && typeof raw === "object") {
+    const amnezia = pickAmnezia((raw as Record<string, unknown>).amnezia);
+    if (amnezia !== null) return { amnezia };
   }
   return { amnezia: { ...DEFAULT_AMNEZIA } };
 }

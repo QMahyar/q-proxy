@@ -130,5 +130,27 @@ describe("handleDoh", () => {
     const body = (await res.json()) as { ok: boolean; error: { code: string } };
     expect(body.ok).toBe(false);
     expect(body.error.code).toBe("METHOD_NOT_ALLOWED");
+    const res2 = await handleDoh(new Request("https://panel.example/doh", { method: "PUT" }), {} as never, settings);
+    expect(res2.status).toBe(405);
+  });
+
+  it("rejects local or private upstream targets before fetching", async () => {
+    const fetchMock = vi.fn(async () => dnsResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    for (const upstream of ["http://127.0.0.1:53/dns-query", "https://localhost/dns-query", "http://169.254.169.254/dns-query", "http://10.0.0.5/dns-query", "http://[::1]/dns-query", "http://[fc00::1]/dns-query", "http://0.0.0.0/dns-query"]) {
+      const privateSettings = makeTestSettings({ dohUpstream: upstream });
+      await expect(
+        handleDoh(new Request("https://panel.example/doh?dns=AAAA"), {} as never, privateSettings),
+      ).rejects.toMatchObject({ status: 400 });
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("forwards a GET without a dns parameter untouched", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => dnsResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await handleDoh(new Request("https://panel.example/doh"), {} as never, settings);
+    expect(String(fetchMock.mock.calls[0]![0])).toBe("https://cloudflare-dns.com/dns-query");
+    expect(res.status).toBe(200);
   });
 });

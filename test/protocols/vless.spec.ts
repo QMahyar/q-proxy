@@ -166,4 +166,67 @@ describe("createVlessInbound", () => {
     const again = await inbound.push(utf8Encode("more"));
     expect(again.state).toBe("reject");
   });
+
+  it("rejects invalid address types, port 0 and never throws on random input", async () => {
+    const badAtype = concatBytes(
+      new Uint8Array([0]),
+      UUID_BYTES,
+      new Uint8Array([0]),
+      new Uint8Array([1]),
+      u16be(443),
+      new Uint8Array([9, 4]),
+      new Uint8Array([1, 2, 3, 4]),
+    );
+    expect((await createVlessInbound(UUID).push(badAtype)).state).toBe("reject");
+
+    const port0 = domainFrame({ port: 0 });
+    expect((await createVlessInbound(UUID).push(port0)).state).toBe("reject");
+
+    const domainHeader = concatBytes(
+      new Uint8Array([0]),
+      UUID_BYTES,
+      new Uint8Array([0]),
+      new Uint8Array([1]),
+      u16be(443),
+      new Uint8Array([2, 0]),
+    );
+    expect((await createVlessInbound(UUID).push(domainHeader)).state).toBe("reject");
+
+    const emptyDomain = concatBytes(
+      new Uint8Array([0]),
+      UUID_BYTES,
+      new Uint8Array([0]),
+      new Uint8Array([1]),
+      u16be(443),
+      new Uint8Array([2, 0]),
+      new Uint8Array([0, 0]),
+    );
+    expect((await createVlessInbound(UUID).push(emptyDomain)).state).toBe("reject");
+  });
+
+  it("never throws on truncated or random-sliced input (fuzz)", async () => {
+    const frame = domainFrame({ payload: utf8Encode("Z".repeat(120)), host: "fuzz.example.org" });
+    for (let trial = 0; trial < 60; trial++) {
+      const inbound = createVlessInbound(UUID);
+      const corrupted = frame.slice();
+      const flips = 1 + (trial % 5);
+      for (let f = 0; f < flips; f++) {
+        const pos = (trial * 31 + f * 17) % corrupted.length;
+        corrupted[pos] = (corrupted[pos]! + trial + f) & 0xff;
+      }
+      let outcome = await inbound.push(corrupted.subarray(0, trial % 7));
+      let i = trial % 7;
+      let guard = 0;
+      while (outcome.state === "need-more" && i < corrupted.length && guard++ < 200) {
+        const step = Math.min(1 + (trial % 9), corrupted.length - i);
+        outcome = await inbound.push(corrupted.subarray(i, i + step));
+        i += step;
+      }
+      expect(["ready", "reject", "need-more"]).toContain(outcome.state);
+      if (outcome.state === "ready") {
+        expect(outcome.parsed.target.port).toBeGreaterThan(0);
+        expect(outcome.parsed.target.host.length).toBeGreaterThan(0);
+      }
+    }
+  });
 });

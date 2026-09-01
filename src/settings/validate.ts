@@ -10,7 +10,7 @@ import type {
 } from "../types/settings";
 import { CF_PLAIN_PORTS, CF_TLS_PORTS, DEFAULT_SETTINGS } from "../types/settings";
 import { isPlainObject } from "./migrate";
-import { isIpLiteral, normalizeCleanAddress } from "../utils/net";
+import { bracketIpv6, isIpLiteral, isLocalOrPrivateTarget, normalizeCleanAddress, parseHostPort } from "../utils/net";
 
 export type ValidationResult =
   | { ok: true; value: Settings }
@@ -465,13 +465,21 @@ export function validateSettings(input: unknown): ValidationResult {
   const enableUdp53 = boolField(patch, "enableUdp53", fields);
   if (enableUdp53 !== undefined) out.enableUdp53 = enableUdp53;
   v = strField(patch, "dohUpstream", fields, { maxLen: 253 });
-  if (v !== undefined && !isHttpUrl(v)) fail(fields, "dohUpstream", "must be a valid http(s) URL");
-  else if (v !== undefined) out.dohUpstream = v;
+  if (v !== undefined) {
+    if (!isHttpUrl(v)) fail(fields, "dohUpstream", "must be a valid http(s) URL");
+    else if (isLocalOrPrivateTarget(new URL(v).hostname)) fail(fields, "dohUpstream", "must not target a local or private address");
+    else out.dohUpstream = v;
+  }
   v = strField(patch, "remoteDns", fields, { maxLen: 253, minLen: 1 });
   if (v !== undefined) {
-    if (isHttpUrl(v)) out.remoteDns = v;
-    else if (HOST_TOKEN_RE.test(v)) out.remoteDns = `https://${v}/dns-query`;
-    else fail(fields, "remoteDns", "must be a URL or IP/hostname");
+    if (isHttpUrl(v)) {
+      if (isLocalOrPrivateTarget(new URL(v).hostname)) fail(fields, "remoteDns", "must not target a local or private address");
+      else out.remoteDns = v;
+    } else if (HOST_TOKEN_RE.test(v)) {
+      const hp = parseHostPort(v, 443);
+      if (hp === null || isLocalOrPrivateTarget(hp.host)) fail(fields, "remoteDns", "must not target a local or private address");
+      else out.remoteDns = `https://${bracketIpv6(hp.host)}/dns-query`;
+    } else fail(fields, "remoteDns", "must be a URL or IP/hostname");
   }
   v = strField(patch, "localDns", fields, { maxLen: 253, minLen: 1 });
   if (v !== undefined) {

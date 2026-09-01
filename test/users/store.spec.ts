@@ -4,12 +4,14 @@ import {
   USER_USAGE_PREFIX,
   USERS_KEY,
   findUserByToken,
+  consumeUserHit,
   getUserHits,
   getUserTotalHits,
   hashToken,
   listUsers,
   migrateUserUsage,
   newUserToken,
+  normalizeProtocols,
   recordUserHit,
   sanitizeUser,
   saveUsers,
@@ -78,6 +80,40 @@ beforeEach(() => {
 });
 
 describe("users store", () => {
+  it("normalizes protocols to known kinds and drops garbage", () => {
+    expect(normalizeProtocols("all")).toBe("all");
+    expect(normalizeProtocols(["vless", "vmess"])).toEqual(["vless", "vmess"]);
+    expect(normalizeProtocols(["vmess", "vmess", "vless"])).toEqual(["vmess", "vless"]);
+    expect(normalizeProtocols(["__proto__", "vless", "smtp", 7, null])).toEqual(["vless"]);
+    expect(normalizeProtocols([])).toEqual([]);
+    expect(normalizeProtocols(undefined)).toBe("all");
+    expect(normalizeProtocols({ hacked: true })).toBe("all");
+  });
+
+  it("sanitizes stored modern users with malformed fields", async () => {
+    const env = kv.asEnv();
+    const alice = await mkUser();
+    const raw = JSON.parse(JSON.stringify(alice));
+    raw.protocols = ["vless", "__proto__", "bogus"];
+    raw.enabled = "yes";
+    raw.expiresAt = "soon";
+    raw.dailyReqLimit = -5;
+    kv.map.set(USERS_KEY, JSON.stringify([raw]));
+    const users = await listUsers(env);
+    expect(users).toHaveLength(1);
+    expect(users[0]!.protocols).toEqual(["vless"]);
+    expect(users[0]!.enabled).toBe(true);
+    expect(users[0]!.expiresAt).toBeNull();
+  });
+
+  it("normalizes legacy user protocols on migration", async () => {
+    const env = kv.asEnv();
+    kv.map.set(USERS_KEY, JSON.stringify([mkLegacyRaw("22222222-2222-4222-8222-222222222222", { protocols: ["trojan", "nope"] })]));
+    const users = await listUsers(env);
+    expect(users).toHaveLength(1);
+    expect(users[0]!.protocols).toEqual(["trojan"]);
+  });
+
   it("returns an empty list when the key is missing or corrupt", async () => {
     expect(await listUsers(kv.asEnv())).toEqual([]);
     kv.map.set(USERS_KEY, "{not json");
@@ -137,6 +173,31 @@ describe("users store", () => {
     expect(await getUserHits(env, "22222222-2222-4222-8222-222222222222")).toBe(2);
     expect(await getUserHits(env, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")).toBe(1);
     expect(kv.map.has(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10))).toBe(true);
+  });
+
+  it("stores usage rows keyed by token hash, never the plaintext token", async () => {
+    const env = kv.asEnv();
+    const token = "77777777-7777-4777-8777-777777777777";
+    await recordUserHit(env, token);
+    await consumeUserHit(env, token, null);
+    const raw = kv.map.get(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10))!;
+    expect(raw).not.toContain(token);
+    expect(raw).toContain(await hashToken(token));
+    expect(await getUserHits(env, token)).toBe(2);
+    expect(await getUserTotalHits(env, token)).toBe(2);
+  });
+
+  it("rekeys legacy plaintext usage rows on the first write", async () => {
+    const env = kv.asEnv();
+    const token = "88888888-8888-4888-8888-888888888888";
+    const hash = await hashToken(token);
+    kv.map.set(
+      USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10),
+      JSON.stringify([{ token, count: 4 }]),
+    );
+    await recordUserHit(env, token);
+    const rows = JSON.parse(kv.map.get(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10))!) as Array<{ token: string; count: number }>;
+    expect(rows).toEqual([{ token: hash, count: 5 }]);
   });
 
   it("tolerates corrupt usage rows", async () => {
