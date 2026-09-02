@@ -28,7 +28,7 @@ Full deployment guide with all seven paths — including Workers and Pages, dash
 | 5 | Read your secret path from KV key `qproxy:settings`, field `data.securePath` (dashboard binding viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV`) |
 | 6 | Open `https://<worker>.workers.dev/<securePath>/panel` → first-run wizard |
 
-For the one-click Deploy Button, Wrangler CLI, `npm run setup`, and Pages paths, see [DEPLOYMENT.md](DEPLOYMENT.md).
+For the one-click Deploy Button, Wrangler CLI, `npm run deploy` (direct API), and Pages paths, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ### Path B — Wrangler CLI (repeatable, recommended, Workers)
 
@@ -47,9 +47,12 @@ Automated:
 
 ```bash
 npx wrangler login            # or export CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
-npm run setup                 # creates KV, patches wrangler.toml, builds
-npm run deploy                # = build + wrangler deploy
+npm run build                 # → dist/q-proxy.js
+npx wrangler kv namespace create QPROXY_KV   # replace id in wrangler.toml
+npx wrangler deploy
 ```
+
+Or skip wrangler entirely: `npm run deploy` uploads `dist/q-proxy.js` via the Cloudflare REST API and creates the KV namespace if missing.
 
 Manual:
 

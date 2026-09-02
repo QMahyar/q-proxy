@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Review sweep (5 rounds, ~70 findings): tunnel lifecycle (origin socket closed when client disconnects mid-dial; chain handshake deadline with proper timer cleanup), VLESS UDP/53 now length-framed per Xray `LengthPacketReader` (was forwarded raw, broken both directions), VMess rejects unknown security types (7-15) and plain+authenticated-length at handshake, fatal uplink corruption closes the tunnel (1011/1008) instead of hanging silently.
+- WARP `storeAccount` no longer deletes a pre-existing account record when the token-index write fails on update; `parseWgUri` no longer throws on malformed percent-encoding; S1-S4 cap raised to 65535.
+- Per-user daily quota moved to per-hash KV keys (`qproxy:user-usage:{day}:{hash}`) to bound the cross-isolate last-write-wins race; settings saves no longer shadowed by an isolate-local last-write dedupe.
+- Auth: `/api/auth/setup` requires the `X-Q-Panel: 1` CSRF header; login/setup cookies use `iat = floor+1` so logout no longer poisons same-second logins; Telegram `setWebhook` registers `secret_token` (webhook accepts the header credential too).
+
+### Changed
+- Subscription base64 output drops `ss://` and plain-security VLESS/Trojan URIs (Xray-family clients cannot run them); ss-only per-user scopes keep their nodes.
+- Clash emits mihomo's `query-server-name` ECH key (was the invalid `ech_server_name`); Loon emits official `tls-name=` (was `sni=`).
+- Removed dead code: `drainChunks`, AES-CFB helpers, `decodeUtf8Base64`, `TOKEN_HINT_SUFFIX`, `emitBase64List`/`base64-list.ts`, `recordUserHit`, `FailoverStrategy.hasNext`, `resolveAuthAlias` (matcher folded into `resolveSecureRoute`); shared `hmacSha256Hex` in `src/utils/hmac.ts`; `readJsonObject` streams bodies with the 64 KiB cap enforced mid-read.
+- ProxyIP domain expansion runs DoH lookups in parallel; resolver caches empty answers; users API path parsing fixed for `securePath="users"`.
+
 ## 1.2.0 - 2026-08-27
 
 ### Added

@@ -70,7 +70,6 @@ For private credentials/config that should not be committed:
 cp wrangler.toml wrangler.local.toml   # gitignored
 # edit wrangler.local.toml → set kv_namespaces id to your real KV id
 npx wrangler deploy --config wrangler.local.toml
-# scripts/deploy.mjs and deploy.sh prefer wrangler.local.toml when present
 ```
 
 If you see `KV namespace id is not valid` / `REPLACE_WITH_YOUR_KV_ID` error, the placeholder in `wrangler.toml` is still set — either run `npm run deploy` (creates KV automatically), create a KV via `npx wrangler kv namespace create QPROXY_KV` and replace the `id`, or use `wrangler.local.toml` as above. See `wrangler.toml` header comments for details.

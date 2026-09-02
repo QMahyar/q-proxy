@@ -16,3 +16,4 @@ wrangler.jsonc
 
 __pycache__/
 *.pyc
+.ruff_cache/
