@@ -141,7 +141,7 @@ function parseAmneziaInt(key: string, value: string): { ok: true; value: number 
   if (!Number.isInteger(n) || n < 0) return { ok: false };
   if (key === "Jc" && n > 128) return { ok: false };
   if ((key === "Jmin" || key === "Jmax") && n > 1280) return { ok: false };
-  if (key.startsWith("S") && n > 255) return { ok: false };
+  if (key.startsWith("S") && n > 65535) return { ok: false };
   return { ok: true, value: n };
 }
 
@@ -279,7 +279,15 @@ export function parseWgUri(uri: string): ParseResult {
   const userinfo = at >= 0 && at < authorityEnd ? rest.slice(0, at) : null;
   const query = queryStart >= 0 ? rest.slice(queryStart + 1, hash >= 0 && hash > queryStart ? hash : undefined) : "";
   const q = parseQuery(query);
-  const privateKey = q.get("private_key") ?? (userinfo !== null ? decodeURIComponent(userinfo) : null);
+  let userKey: string | null = null;
+  if (userinfo !== null) {
+    try {
+      userKey = decodeURIComponent(userinfo);
+    } catch {
+      return fail("invalid private_key encoding");
+    }
+  }
+  const privateKey = q.get("private_key") ?? userKey;
   if (privateKey === null || !isBase64Key32(privateKey)) return fail("missing or invalid private_key");
   const addressValue = (q.get("local_address") ?? q.get("address")) ?? null;
   if (addressValue === null || addressValue.length === 0) return fail("missing local_address");
@@ -327,6 +335,12 @@ export function parseWgUri(uri: string): ParseResult {
       const parsed = parseAmneziaInt(key, raw);
       if (!parsed.ok) return fail(`invalid amnezia value for ${key}`);
       amnezia[key] = parsed.value;
+      hasAmnezia = true;
+    }
+    const i1 = q.get("i1");
+    if (i1 !== undefined && i1.length > 0) {
+      if (!/^<([rb]) [^>]*>$/.test(i1)) return fail("invalid I1 notation");
+      amnezia.I1 = i1;
       hasAmnezia = true;
     }
   }

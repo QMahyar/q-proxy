@@ -72,15 +72,17 @@ describe("settings store", () => {
     expect(reloaded.profileTitle).toBe("Saved Title");
   });
 
-  it("skips the KV write when settings are unchanged", async () => {
+  it("writes every saveSettings call so cross-isolate writes are never shadowed", async () => {
     invalidateSettingsCache();
     const kv = new FakeKV();
     const s = await loadSettings(kv.asEnv() as never);
     kv.putCalls.set("qproxy:settings", 0);
     await saveSettings(kv.asEnv() as never, structuredClone(s));
-    expect(kv.putCalls.get("qproxy:settings")).toBe(0);
-    await saveSettings(kv.asEnv() as never, { ...structuredClone(s), profileTitle: "Changed" });
     expect(kv.putCalls.get("qproxy:settings")).toBe(1);
+    await saveSettings(kv.asEnv() as never, structuredClone(s));
+    expect(kv.putCalls.get("qproxy:settings")).toBe(2);
+    await saveSettings(kv.asEnv() as never, { ...structuredClone(s), profileTitle: "Changed" });
+    expect(kv.putCalls.get("qproxy:settings")).toBe(3);
   });
 
   it("ensureInitialized writes the meta row exactly once", async () => {

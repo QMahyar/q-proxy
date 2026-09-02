@@ -108,6 +108,7 @@ export async function expandProxyIps(
     seen.add(key);
     out.push({ host, port, label });
   };
+  const domainTasks: Array<Promise<void>> = [];
   for (const entry of entries) {
     for (const token of tokenizeEntry(entry)) {
       const classified = classifyToken(token);
@@ -115,10 +116,11 @@ export async function expandProxyIps(
       if (classified.kind === "addr") {
         push(classified.host, classified.port, `${classified.host}:${classified.port}`);
       } else {
-        await expandDomain(classified, resolver, push);
+        domainTasks.push(expandDomain(classified, resolver, push));
       }
     }
   }
+  await Promise.all(domainTasks);
   return out;
 }
 

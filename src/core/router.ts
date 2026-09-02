@@ -8,7 +8,6 @@ import {
   HEALTHZ_PATH,
   identifyTunnel,
   resolveSecureRoute,
-  splitPath,
   type ApiRouteName,
   type SecureRoute,
 } from "./routes";
@@ -16,6 +15,7 @@ import { loadSettings } from "../settings/store";
 import { assertCsrf, requireAuth } from "../auth/guard";
 import type { RouteHandler } from "../types/context";
 import { handleTunnel } from "../handlers/tunnel";
+import { isUpgradeRequest } from "../tunnel/websocket";
 import { handleDoh } from "../handlers/doh";
 import { handleSubscribe } from "../handlers/subscribe";
 import { handleMyIp } from "../handlers/myip";
@@ -47,10 +47,6 @@ function methodNotAllowed(): never {
 
 function expectMethods(req: Request, allowed: readonly string[]): void {
   if (!allowed.includes(req.method)) methodNotAllowed();
-}
-
-function isWebSocketUpgrade(req: Request): boolean {
-  return (req.headers.get("Upgrade") ?? "").toLowerCase() === "websocket";
 }
 
 function killSwitchResponse(): Response {
@@ -94,7 +90,6 @@ async function dispatchApi(
   env: Env,
   s: Settings,
 ): Promise<Response> {
-  if (req.method === "OPTIONS") methodNotAllowed();
   switch (api) {
     case "auth-login":
       expectMethods(req, ["POST"]);
@@ -104,7 +99,7 @@ async function dispatchApi(
       return csrfOnly(handleLogout)(req, env, s);
     case "auth-setup":
       expectMethods(req, ["POST"]);
-      return handleSetup(req, env, s);
+      return csrfOnly(handleSetup)(req, env, s);
     case "auth-password":
       expectMethods(req, ["POST"]);
       return authedCsrf(handlePasswordChange)(req, env, s);
@@ -191,25 +186,6 @@ async function dispatchSecureRoute(
   }
 }
 
-function resolveAuthAlias(url: URL, s: Settings): SecureRoute | null {
-  const segs = splitPath(url.pathname);
-  if (segs.length !== 4 || segs[0] !== s.securePath || segs[1] !== "api" || segs[2] !== "auth") {
-    return null;
-  }
-  switch (segs[3]) {
-    case "login":
-      return { kind: "api", api: "auth-login" };
-    case "logout":
-      return { kind: "api", api: "auth-logout" };
-    case "setup":
-      return { kind: "api", api: "auth-setup" };
-    case "password":
-      return { kind: "api", api: "auth-password" };
-    default:
-      return null;
-  }
-}
-
 export async function routeRequest(req: Request, env: Env): Promise<Response> {
   if (req.method === "OPTIONS") methodNotAllowed();
   const url = new URL(req.url);
@@ -228,13 +204,13 @@ export async function routeRequest(req: Request, env: Env): Promise<Response> {
   }
 
   if (identifyTunnel(url.pathname, s) !== null) {
-    if (!isWebSocketUpgrade(req)) return handleCamouflage(req, env, s);
+    if (!isUpgradeRequest(req)) return handleCamouflage(req, env, s);
     if (s.killSwitch) return killSwitchResponse();
     void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
     return handleTunnel(req, env, s);
   }
 
-  const route = resolveSecureRoute(url, s) ?? resolveAuthAlias(url, s);
+  const route = resolveSecureRoute(url, s);
   if (route !== null) return dispatchSecureRoute(route, req, env, s);
 
   return handleCamouflage(req, env, s);

@@ -4,7 +4,7 @@ import type { Settings } from "../../types/settings";
 import { jsonOk } from "../../core/respond";
 import { assertCsrf } from "../../auth/guard";
 import { constantTimeEqual } from "../../utils/random";
-import { bytesToHex, utf8Encode } from "../../utils/bytes";
+import { hmacSha256Hex } from "../../utils/hmac";
 import { readUsage } from "../../core/counters";
 import { appVersion, loadSettingsFresh, saveSettings } from "../../settings/store";
 import { validateSettings } from "../../settings/validate";
@@ -21,20 +21,8 @@ interface TgApiResult {
   description: string;
 }
 
-async function hmacHex(message: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    utf8Encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, utf8Encode(message));
-  return bytesToHex(new Uint8Array(sig));
-}
-
 export async function telegramWebhookSecret(sessionSecret: string): Promise<string> {
-  return (await hmacHex(WEBHOOK_SECRET_MESSAGE, sessionSecret)).slice(0, 16);
+  return (await hmacSha256Hex(WEBHOOK_SECRET_MESSAGE, sessionSecret)).slice(0, 16);
 }
 
 function silentOk(): Response {
@@ -136,8 +124,11 @@ async function buildReply(env: Env, s: Settings, req: Request, text: string): Pr
 export const handleTelegramWebhook: RouteHandler = async (req, env, s) => {
   const segs = new URL(req.url).pathname.split("/").filter((p) => p.length > 0);
   const given = segs.length === 4 ? segs[3]! : "";
-  const secretOk = given.length === 16 && constantTimeEqual(await telegramWebhookSecret(s.sessionSecret), given.toLowerCase());
-  if (!secretOk || !s.telegram.enabled || s.telegram.botToken.length === 0) return silentOk();
+  const expected = await telegramWebhookSecret(s.sessionSecret);
+  const pathOk = given.length === 16 && constantTimeEqual(expected, given.toLowerCase());
+  const headerToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
+  const headerOk = headerToken.length === 16 && constantTimeEqual(expected, headerToken);
+  if ((!pathOk && !headerOk) || !s.telegram.enabled || s.telegram.botToken.length === 0) return silentOk();
   let update: TelegramUpdate;
   try {
     const raw: unknown = await req.json();
@@ -185,6 +176,7 @@ export const handleTelegramSetup: RouteHandler = async (req, _env, s) => {
   const result = await tgAdminCall(s.telegram.botToken, "setWebhook", {
     url: hookUrl,
     allowed_updates: ["message"],
+    secret_token: secret,
   });
   return jsonOk(result);
 };

@@ -40,23 +40,6 @@ export function appendChunk(buffer: Uint8Array[], data: Uint8Array): boolean {
   return true;
 }
 
-export function drainChunks(buffer: Uint8Array[], length?: number): Uint8Array {
-  let total = 0;
-  for (const c of buffer) total += c.length;
-  const take = length === undefined ? total : Math.min(total, length);
-  const out = new Uint8Array(take);
-  let off = 0;
-  while (off < take && buffer.length > 0) {
-    const c = buffer[0]!;
-    const n = Math.min(c.length, take - off);
-    out.set(c.subarray(0, n), off);
-    off += n;
-    if (n < c.length) buffer[0] = c.subarray(n);
-    else buffer.shift();
-  }
-  return out;
-}
-
 export function peekFlat(buffer: Uint8Array[], length: number): Uint8Array | null {
   let total = 0;
   for (const c of buffer) total += c.length;

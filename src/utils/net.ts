@@ -19,40 +19,37 @@ function expandIpv6Groups(s: string): number[] | null {
     head = bare.slice(0, idx);
     tail = bare.slice(idx + 2);
   }
-  const parts = [...(head === "" ? [] : head.split(":")), ...(tail === "" ? [] : tail.split(":"))];
-  if (parts.some((p) => p === "")) return null;
-  const groups: number[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]!;
-    if (part.includes(".")) {
-      if (!isIPv4(part)) return null;
-      const octets = part.split(".").map(Number);
-      groups.push((octets[0]! << 8) | octets[1]!);
-      groups.push((octets[2]! << 8) | octets[3]!);
-      continue;
+  const parseGroups = (parts: string[], quadAllowed: boolean): number[] | null => {
+    const out: number[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!;
+      if (part.includes(".")) {
+        if (!quadAllowed || i !== parts.length - 1 || !isIPv4(part)) return null;
+        const octets = part.split(".").map(Number);
+        out.push((octets[0]! << 8) | octets[1]!);
+        out.push((octets[2]! << 8) | octets[3]!);
+        continue;
+      }
+      if (/^[0-9a-fA-F]{1,4}$/.test(part)) {
+        out.push(parseInt(part, 16));
+      } else {
+        return null;
+      }
     }
-    if (/^[0-9a-fA-F]{1,4}$/.test(part)) {
-      groups.push(parseInt(part, 16));
-    } else {
-      return null;
-    }
+    return out;
+  };
+  const headGroups = parseGroups(head === "" ? [] : head.split(":"), doubleColonCount === 0);
+  if (headGroups === null) return null;
+  const tailGroups = parseGroups(tail === "" ? [] : tail.split(":"), true);
+  if (tailGroups === null) return null;
+  const total = headGroups.length + tailGroups.length;
+  if (total > 8) return null;
+  if (doubleColonCount === 0) {
+    return total === 8 ? [...headGroups, ...tailGroups] : null;
   }
-  if (groups.length > 8) return null;
-  if (doubleColonCount === 0 && groups.length !== 8) return null;
-  if (doubleColonCount === 1) {
-    const missing = 8 - groups.length;
-    if (missing <= 0) return null;
-    const headLen =
-      head.split(":").filter((p) => p !== "").length -
-      (head.split(":").some((p) => p.includes(".")) ? 1 : 0);
-    const expanded = new Array<number>(8).fill(0);
-    let gi = 0;
-    for (let i = 0; i < headLen; i++) expanded[gi++] = groups[i]!;
-    gi += missing;
-    for (let i = headLen; i < groups.length; i++) expanded[gi++] = groups[i]!;
-    return expanded;
-  }
-  return groups;
+  const missing = 8 - total;
+  if (missing <= 0) return null;
+  return [...headGroups, ...new Array<number>(missing).fill(0), ...tailGroups];
 }
 
 export function isIPv6(s: string): boolean {

@@ -12,7 +12,6 @@ import {
   migrateUserUsage,
   newUserToken,
   normalizeProtocols,
-  recordUserHit,
   sanitizeUser,
   saveUsers,
   tokenHintFor,
@@ -167,27 +166,30 @@ describe("users store", () => {
   it("records and reads per-token daily hits via hashed keys", async () => {
     const env = kv.asEnv();
     expect(await getUserHits(env, "22222222-2222-4222-8222-222222222222")).toBe(0);
-    await recordUserHit(env, "22222222-2222-4222-8222-222222222222");
-    await recordUserHit(env, "22222222-2222-4222-8222-222222222222");
-    await recordUserHit(env, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    await consumeUserHit(env, "22222222-2222-4222-8222-222222222222", null);
+    await consumeUserHit(env, "22222222-2222-4222-8222-222222222222", null);
+    await consumeUserHit(env, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", null);
     expect(await getUserHits(env, "22222222-2222-4222-8222-222222222222")).toBe(2);
     expect(await getUserHits(env, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")).toBe(1);
-    expect(kv.map.has(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10))).toBe(true);
+    expect(kv.map.has(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10))).toBe(false);
   });
 
-  it("stores usage rows keyed by token hash, never the plaintext token", async () => {
+  it("stores usage in per-hash keys, never the plaintext token", async () => {
     const env = kv.asEnv();
     const token = "77777777-7777-4777-8777-777777777777";
-    await recordUserHit(env, token);
     await consumeUserHit(env, token, null);
-    const raw = kv.map.get(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10))!;
-    expect(raw).not.toContain(token);
-    expect(raw).toContain(await hashToken(token));
+    await consumeUserHit(env, token, null);
+    const hash = await hashToken(token);
+    const raw = kv.map.get(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10) + ":" + hash)!;
+    expect(raw).toBe("2");
+    for (const key of kv.map.keys()) {
+      expect(key).not.toContain(token);
+    }
     expect(await getUserHits(env, token)).toBe(2);
     expect(await getUserTotalHits(env, token)).toBe(2);
   });
 
-  it("rekeys legacy plaintext usage rows on the first write", async () => {
+  it("rekeys legacy plaintext usage rows on the first read", async () => {
     const env = kv.asEnv();
     const token = "88888888-8888-4888-8888-888888888888";
     const hash = await hashToken(token);
@@ -195,17 +197,27 @@ describe("users store", () => {
       USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10),
       JSON.stringify([{ token, count: 4 }]),
     );
-    await recordUserHit(env, token);
-    const rows = JSON.parse(kv.map.get(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10))!) as Array<{ token: string; count: number }>;
-    expect(rows).toEqual([{ token: hash, count: 5 }]);
+    expect(await getUserHits(env, token)).toBe(4);
+    expect(kv.map.get(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10) + ":" + hash)).toBe("4");
+    await consumeUserHit(env, token, null);
+    expect(await getUserHits(env, token)).toBe(5);
   });
 
   it("tolerates corrupt usage rows", async () => {
     const env = kv.asEnv();
     kv.map.set(USER_USAGE_PREFIX + "2026-08-25", JSON.stringify([{ token: "x", count: "bad" }, 7]));
     expect(await getUserHits(env, "22222222-2222-4222-8222-222222222222")).toBe(0);
-    await recordUserHit(env, "22222222-2222-4222-8222-222222222222");
+    await consumeUserHit(env, "22222222-2222-4222-8222-222222222222", null);
     expect(await getUserHits(env, "22222222-2222-4222-8222-222222222222")).toBe(1);
+  });
+
+  it("consumeUserHit enforces the daily limit and reports hits", async () => {
+    const env = kv.asEnv();
+    const token = "99999999-9999-4999-8999-999999999999";
+    expect(await consumeUserHit(env, token, 2)).toEqual({ allowed: true, hits: 1 });
+    expect(await consumeUserHit(env, token, 2)).toEqual({ allowed: true, hits: 2 });
+    expect(await consumeUserHit(env, token, 2)).toEqual({ allowed: false, hits: 2 });
+    expect(await getUserHits(env, token)).toBe(2);
   });
 
   it("caps the directory at 50 users", () => {
@@ -266,9 +278,9 @@ describe("users store", () => {
     const oldPlain = "55555555-5555-4555-8555-555555555555";
     const newPlain = "66666666-6666-4666-8666-666666666666";
     const oldHash = await hashToken(oldPlain);
-    await recordUserHit(env, oldPlain);
-    await recordUserHit(env, oldPlain);
-    await recordUserHit(env, oldPlain);
+    await consumeUserHit(env, oldPlain, null);
+    await consumeUserHit(env, oldPlain, null);
+    await consumeUserHit(env, oldPlain, null);
     expect(await getUserHits(env, oldPlain)).toBe(3);
     expect(await getUserTotalHits(env, oldPlain)).toBe(3);
     await migrateUserUsage(env, oldHash, newPlain);
@@ -276,6 +288,22 @@ describe("users store", () => {
     expect(await getUserHits(env, newPlain)).toBe(3);
     expect(await getUserTotalHits(env, oldPlain)).toBe(0);
     expect(await getUserTotalHits(env, newPlain)).toBe(3);
+  });
+
+  it("migrates legacy same-day plaintext rows on token regeneration", async () => {
+    const env = kv.asEnv();
+    const oldPlain = "55555555-5555-4555-8555-555555555555";
+    const newPlain = "66666666-6666-4666-8666-666666666666";
+    const oldHash = await hashToken(oldPlain);
+    kv.map.set(
+      USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10),
+      JSON.stringify([{ token: oldPlain, count: 3 }]),
+    );
+    await migrateUserUsage(env, oldHash, newPlain);
+    expect(await getUserHits(env, oldPlain)).toBe(0);
+    expect(await getUserHits(env, newPlain)).toBe(3);
+    const legacy = JSON.parse(kv.map.get(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10))!) as Array<{ token: string }>;
+    expect(legacy.find((r) => r.token === oldPlain || r.token === oldHash)).toBeUndefined();
   });
 
   it("sanitizeUser never exposes tokenHash", async () => {

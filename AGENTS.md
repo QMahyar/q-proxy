@@ -25,8 +25,7 @@ npx vitest run --project workers  # full fetch through src/worker.ts
 npm run dev          # wrangler dev → http://127.0.0.1:8787 (local miniflare KV; use `--remote` for prod KV)
 npm run dev:pages    # wrangler pages dev dist → same at http://127.0.0.1:8787 (Pages mode)
 npm run build        # → dist/q-proxy.js + dist/_worker.js (~380 KB)
-npm run setup        # create KV namespace, patch wrangler.toml, build
-npm run deploy       # build + wrangler deploy (prefers wrangler.local.toml)
+npm run deploy       # deploy via scripts/deploy-direct.mjs (CF REST API; creates KV if missing)
 npm run deploy:pages # build + wrangler pages deploy dist --project-name=q-proxy
 node scripts/version.mjs        # print version (from git tag)
 node scripts/release.mjs <version> [--dry]  # tag + changelog check + build
@@ -36,7 +35,7 @@ CI: `.github/workflows/ci.yml` runs `npm ci` + `npm run typecheck` + `npm test` 
 
 If a local `wrangler dev` wedges (workerd accepts connections but never responds): kill the stray workerd process on the port, then relaunch on another port (`npx wrangler dev --port 8788`). **Gotcha:** `wrangler dev` serves `dist/q-proxy.js` (per `wrangler.toml main=`) — `npm run dev` rebuilds first, but a bare `npx wrangler dev` shows only what was last built; if a change "doesn't take effect", rebuild before debugging the code.
 
-Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY` (Global Key, cfk_-style) + `$env:CLOUDFLARE_EMAIL` + `$env:CLOUDFLARE_ACCOUNT_ID`. Using `CLOUDFLARE_API_TOKEN` with a Global Key fails `[code: 9109]`. Private deploy targets live in `wrangler.local.toml` (gitignored, same shape as `wrangler.toml`) — `npm run deploy` picks it up when present via `scripts/deploy.mjs`. Full matrix (Workers, Pages, Deploy Button, `npm run setup`) is in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY` (Global Key, cfk_-style) + `$env:CLOUDFLARE_EMAIL` + `$env:CLOUDFLARE_ACCOUNT_ID`. Using `CLOUDFLARE_API_TOKEN` with a Global Key fails `[code: 9109]`. Private deploy targets live in `wrangler.local.toml` (gitignored, same shape as `wrangler.toml`) — use it with `npx wrangler deploy --config wrangler.local.toml`. Full matrix (Workers, Pages, Deploy Button, KV setup) is in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Code Conventions
 
@@ -60,7 +59,7 @@ src/protocols/*.ts       vless, vmess(+vmess-crypto), trojan(+UDP codec), shadow
 src/tunnel/egress.ts     makeFailoverStrategy [chain→direct→proxyIp×8|nat64], createEgressOpener(dialImpl?)
 src/tunnel/relay.ts      WS↔TCP pump, zero-byte retry hook, header written once
 src/nodes/generate.ts    ProxyNode[] builder — port↔security pairing invariant, fragment⇒TLS∧¬CDN, SS earlyData=0
-src/nodes/emitters/*     base64-list, clash-yaml, singbox-json, surge-conf, loon-conf (+registry)
+src/nodes/emitters/*     clash-yaml, singbox-json, surge-conf, loon-conf (+registry; base64 renders in subscription/render.ts)
 src/subscription/        negotiate (?target= > UA > base64), headers, merge (remote subs)
 src/users/store.ts       per-user directory (≤50): token subs, protocol filter, daily quota, expiry
 src/auth/                password tiers (PBKDF2 100k current, 15k legacy auto-upgraded on login), session (HMAC q_session {exp,iat} + revocation floor qproxy:min-iat), guard (CSRF X-Q-Panel)
@@ -115,7 +114,7 @@ Protocol changes: validate against Xray-core fixtures first (`docs/research/04-p
 ## Known Gaps
 
 - Post-handshake WS backpressure is platform-limited — the Workers WS API exposes no send-buffer signal; relay relies on uplink coalescing + hard caps
-- Trojan UDP merges pipelined datagrams into one DoH query (uplink decode concatenates frames before relaying)
+- Trojan/VLESS UDP merge pipelined datagrams into one DoH query (uplink decode concatenates frames before relaying)
 - sing-box emitter uses the legacy dns schema (forward-compat note — migration rejected for now, documented in DEVELOPER_GUIDE)
 - users-sub intentionally never merges remoteSubUrls (per-user scoping: protocol filters must hold)
 - Server-side validation messages are English-only even in the FA UI
@@ -127,3 +126,7 @@ Protocol changes: validate against Xray-core fixtures first (`docs/research/04-p
 - SS salt-replay registry bounded to 2048 entries/isolate; VMess replay registry bounded to 1024 (`src/utils/bounded.ts`)
 - `settings.language` is saved but the UI reads only the `qp_lang` cookie
 - Stale-cache read-modify-write: `handleKillSwitch`/`handleSaveSettings` merge from the 60s cached settings — concurrent edits in another isolate can be reverted within the TTL window
+- User quota and MAX_USERS are KV read-modify-write and therefore approximate across isolates: daily hits now live in per-user keys (`qproxy:user-usage:<day>:<hash>`) so a race loses at most one increment per concurrent request instead of the whole row
+- KV colo edge cache (60s, not bypassable via `cacheTtl`) means `loadSettingsFresh` setup-race re-check and the session revocation floor can lag up to ~60s; a losing concurrent setup may briefly retain a valid session
+- Telegram webhook authenticates on the 16-hex URL secret OR the `X-Telegram-Bot-Api-Secret-Token` header (setWebhook now registers `secret_token`); chat identity for `@username` chatIds is still client-asserted
+- `readJsonObject` caps bodies at 64 KiB while streaming (chunked bodies rejected mid-read, not fully buffered)

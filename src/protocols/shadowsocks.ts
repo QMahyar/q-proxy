@@ -178,13 +178,10 @@ function createSsBodyCodec(
   pending: Uint8Array[],
   isChacha: boolean,
 ): BodyCodec {
-  let upAlive = true;
   return {
     async decodeUp(chunk: Uint8Array): Promise<Uint8Array | null> {
-      if (!upAlive) return null;
       if (chunk.length > 0 && !appendChunk(pending, chunk)) {
-        upAlive = false;
-        return null;
+        throw new Error("ss uplink frame buffer exceeded 64 KiB cap");
       }
       const parts: Uint8Array[] = [];
       while (true) {
@@ -192,13 +189,11 @@ function createSsBodyCodec(
         if (lenFrameBytes === null) break;
         const lenFrame = await openFrame(upSubkey, upState.counter, lenFrameBytes, isChacha);
         if (lenFrame === null || lenFrame.length !== 2) {
-          upAlive = false;
-          return null;
+          throw new Error("ss uplink length frame failed to decrypt");
         }
         const chunkLen = readU16BE(lenFrame, 0);
         if (chunkLen > MAX_CHUNK_LEN) {
-          upAlive = false;
-          return null;
+          throw new Error("ss uplink length frame exceeds chunk cap");
         }
         const frameLen = LEN_FRAME_LEN + chunkLen + TAG_LEN;
         const wholeFrame = peekFlat(pending, frameLen);
@@ -210,8 +205,7 @@ function createSsBodyCodec(
           isChacha,
         );
         if (payload === null || payload.length !== chunkLen) {
-          upAlive = false;
-          return null;
+          throw new Error("ss uplink payload frame failed to decrypt");
         }
         dropChunks(pending, frameLen);
         upState.counter += 2;

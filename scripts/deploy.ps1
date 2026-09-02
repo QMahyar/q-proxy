@@ -293,7 +293,7 @@ switch ($Action) {
     $sp = Get-SecurePath $kv.id
     if (-not $sp) { Write-Host "Could not read securePath. Seed first." -ForegroundColor Red; exit 1 }
     try {
-      $setup = Invoke-RestMethod -Uri "$url/$sp/api/auth/setup" -Method Post -ContentType "application/json" -Body (@{newPassword=$Password} | ConvertTo-Json)
+      $setup = Invoke-RestMethod -Uri "$url/$sp/api/auth/setup" -Method Post -ContentType "application/json" -Headers @{ "X-Q-Panel" = "1" } -Body (@{newPassword=$Password} | ConvertTo-Json)
       if ($setup.ok) { Write-Host "Password set" -ForegroundColor Green }
     } catch { Write-Host "Failed: $_" -ForegroundColor Red }
     exit 0
@@ -329,7 +329,7 @@ switch ($Action) {
     $sp = Get-SecurePath $kvId
     if ($sp -and $Password) {
       try {
-        $setup = Invoke-RestMethod -Uri "$workerUrl/$sp/api/auth/setup" -Method Post -ContentType "application/json" -Body (@{newPassword=$Password} | ConvertTo-Json)
+        $setup = Invoke-RestMethod -Uri "$workerUrl/$sp/api/auth/setup" -Method Post -ContentType "application/json" -Headers @{ "X-Q-Panel" = "1" } -Body (@{newPassword=$Password} | ConvertTo-Json)
         if ($setup.ok) { Write-Host "Password set" -ForegroundColor Green }
       } catch { Write-Host "Password setup failed (set manually in panel)" -ForegroundColor Yellow }
     }

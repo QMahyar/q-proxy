@@ -38,7 +38,7 @@ function put(json: unknown, extra: Record<string, string> = {}): RequestInit {
 }
 
 async function setupAdmin(): Promise<{ cookie: string; csrfHeaders: Record<string, string> }> {
-  const res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+  const res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
   expect(res.status).toBe(200);
   const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
   return { cookie, csrfHeaders: { Cookie: cookie, "X-Q-Panel": "1" } };
@@ -68,12 +68,14 @@ async function waitForEdgeCache(url: string, ms = 4000): Promise<void> {
 
 async function waitForUsage(token: string, ms = 4000): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  const key = `qproxy:user-usage:${today}`;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const perUserKey = `qproxy:user-usage:${today}:${hash}`;
+  const legacyKey = `qproxy:user-usage:${today}`;
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
-    const rows = JSON.parse(((await kv.get(key)) as string | null) ?? "[]") as Array<{ token: string }>;
+    if ((await kv.get(perUserKey)) !== null) return;
+    const rows = JSON.parse(((await kv.get(legacyKey)) as string | null) ?? "[]") as Array<{ token: string }>;
     if (rows.some((r) => r.token === token || r.token === hash)) return;
     await new Promise((r) => setTimeout(r, 20));
   }
@@ -118,7 +120,7 @@ describe("router dispatch", () => {
 
   it("maps the auth alias routes to their canonical handlers", async () => {
     await seed(kv, SP);
-    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "alias-pass-1" }));
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "alias-pass-1" }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
 
@@ -306,7 +308,7 @@ describe("router dispatch", () => {
     let res = await SELF.fetch(`${BASE}/api/bootstrap`);
     expect(res.status).toBe(401);
 
-    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const headers = { Cookie: cookie, "X-Q-Panel": "1" };
@@ -386,7 +388,7 @@ describe("router dispatch", () => {
     let res = await SELF.fetch(`${BASE}/api/warp/account`);
     expect(res.status).toBe(401);
 
-    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
 
@@ -559,7 +561,7 @@ describe("router dispatch", () => {
 
   it("serves warp subscriptions publicly by token across formats", async () => {
     await seed(kv, SP);
-    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
     const priv = btoa(String.fromCharCode(...Array.from({ length: 32 }, (_, i) => (i * 7 + 3) % 256)));
@@ -614,7 +616,7 @@ describe("router dispatch", () => {
     let res = await SELF.fetch(`${BASE}/api/users`);
     expect(res.status).toBe(401);
 
-    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
 
@@ -709,7 +711,9 @@ describe("router dispatch", () => {
     res = await SELF.fetch(`${BASE}/api/users/${user.id}`, put({ dailyReqLimit: 2 }, csrfHeaders));
     expect(res.status).toBe(200);
     const today = new Date().toISOString().slice(0, 10);
-    await kv.put(`qproxy:user-usage:${today}`, JSON.stringify([{ token: user.token, count: 2 }]));
+    const usageDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(user.token));
+    const usageHash = [...new Uint8Array(usageDigest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    await kv.put(`qproxy:user-usage:${today}:${usageHash}`, "2");
     res = await SELF.fetch(`${BASE}/sub/u/${user.token}?target=surge`);
     expect(res.status).toBe(429);
     expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);

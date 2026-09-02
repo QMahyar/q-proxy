@@ -44,8 +44,6 @@ describe("makeFailoverStrategy", () => {
     expect(strategy.candidates.map((c) => c.via)).toEqual(["chain", "direct", "proxyip", "proxyip"]);
     expect(strategy.candidates[0]).toMatchObject({ host: "chain.example", port: 1080 });
     expect(strategy.candidates[1]).toMatchObject({ host: TARGET.host, port: TARGET.port });
-    expect(strategy.hasNext(strategy.candidates.length - 1)).toBe(false);
-    expect(strategy.hasNext(0)).toBe(true);
   });
 
   it("omits direct for Cloudflare IP targets", async () => {
@@ -153,12 +151,7 @@ describe("makeFailoverStrategy", () => {
 
 describe("createEgressOpener", () => {
   function strategyOf(candidates: EgressCandidate[]) {
-    const target = TARGET;
-    return {
-      target,
-      candidates,
-      hasNext: (i: number) => i + 1 < candidates.length,
-    };
+    return { target: TARGET, candidates };
   }
 
   it("walks candidates sequentially until one dials", async () => {

@@ -77,20 +77,40 @@ function asDuplex(socket: Socket): DuplexIO & { close(): Promise<void> } {
   };
 }
 
+const CHAIN_HANDSHAKE_TIMEOUT_MS = 10_000;
+
 export function createChainConnector(desc: ChainDescriptor): ChainConnector {
   return async (target: DialTarget, firstPacket: Uint8Array | null): Promise<Socket> => {
     const raw = await dialTcp(desc.host, desc.port);
     const creds: ProxyCredentials = { username: desc.username, password: desc.password };
-    try {
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+    let timerFired = false;
+    const handshake = (async () => {
       const io =
         desc.kind === "socks5"
           ? await connectOverSocks5(asDuplex(raw), creds, target, firstPacket)
           : await connectOverHttpConnect(asDuplex(raw), creds, target, firstPacket);
       return io as unknown as Socket;
+    })();
+    const deadline = new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => {
+        timerFired = true;
+        void raw.close().catch(() => {});
+        reject(new Error(`chain handshake timed out after ${CHAIN_HANDSHAKE_TIMEOUT_MS}ms`));
+      }, CHAIN_HANDSHAKE_TIMEOUT_MS);
+    });
+    try {
+      const io = await Promise.race([handshake, deadline]);
+      clearTimeout(timerId ?? null);
+      return io;
     } catch (err) {
-      try {
-        await raw.close();
-      } catch {}
+      clearTimeout(timerId ?? null);
+      void handshake.catch(() => {});
+      if (!timerFired) {
+        try {
+          await raw.close();
+        } catch {}
+      }
       throw err instanceof Error ? err : new Error(String(err));
     }
   };

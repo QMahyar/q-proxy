@@ -1,6 +1,5 @@
 import type { SubFormat } from "../../core/ua";
 import type { ProxyNode } from "../../types/node";
-import { emitBase64List } from "./base64-list";
 import { emitClashYaml } from "./clash-yaml";
 import { emitLoonConf } from "./loon-conf";
 import { emitSingBoxJson } from "./singbox-json";
@@ -40,8 +39,9 @@ export function tlsRequiredNodes(nodes: readonly ProxyNode[], isFragment: boolea
 
 export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;
 
-export const EMITTERS: Record<SubFormat, NodeEmitter> = {
-  base64: emitBase64List,
+export type SyncSubFormat = Exclude<SubFormat, "base64">;
+
+export const EMITTERS: Record<SyncSubFormat, NodeEmitter> = {
   clash: emitClashYaml,
   singbox: emitSingBoxJson,
   surge: emitSurgeConf,

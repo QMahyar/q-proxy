@@ -33,11 +33,11 @@ describe("panel auth lifecycle", () => {
     expect(res.status).toBe(401);
     expect((await body(res)).error.code).toBe("UNAUTHORIZED");
 
-    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "short" }));
+    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "short" }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(422);
     expect((await body(res)).fields.newPassword).toBeTruthy();
 
-    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     const setupBody = await body(res);
     expect(setupBody.ok).toBe(true);
@@ -50,7 +50,7 @@ describe("panel auth lifecycle", () => {
     expect(setCookie).toContain("Max-Age=604800");
     const cookie = setCookie.split(";")[0]!;
 
-    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "another-pass-99" }));
+    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "another-pass-99" }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(409);
     expect((await body(res)).error.code).toBe("ALREADY_SET");
 
@@ -168,7 +168,7 @@ describe("panel auth lifecycle", () => {
   it("revokes the presented session server-side on logout", async () => {
     resetThrottle();
     await seed(kv, SP);
-    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
 
@@ -188,7 +188,7 @@ describe("panel auth lifecycle", () => {
   it("does not revoke sessions when logout is called without a valid cookie", async () => {
     resetThrottle();
     await seed(kv, SP);
-    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
 
@@ -206,7 +206,7 @@ describe("panel auth lifecycle", () => {
 
   it("rate limits repeated failed logins", async () => {
     await seed(kv, SP);
-    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
 
     let saw429 = false;
@@ -228,7 +228,7 @@ describe("change password", () => {
   it("rejects unauthenticated, csrf-less and wrong-current attempts", async () => {
     resetThrottle();
     await seed(kv, SP);
-    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
 
@@ -266,7 +266,7 @@ describe("change password", () => {
   it("rotates the password, kills old sessions and issues a fresh cookie", async () => {
     resetThrottle();
     await seed(kv, SP);
-    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }));
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     const setupCookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     await new Promise((resolve) => setTimeout(resolve, 1100));

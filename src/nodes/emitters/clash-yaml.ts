@@ -4,7 +4,7 @@ import type { EmitOptions } from "./registry";
 import type { YamlObject } from "./yaml-writer";
 import { writeYaml } from "./yaml-writer";
 
-const echOpts = (node: ProxyNode): YamlObject => ({ enable: true, ech_server_name: node.ech });
+const echOpts = (node: ProxyNode): YamlObject => ({ enable: true, "query-server-name": node.ech });
 
 function wsOpts(node: ProxyNode): YamlObject {
   const o: YamlObject = { path: node.path, headers: { Host: node.host } };

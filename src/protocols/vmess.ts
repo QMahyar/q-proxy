@@ -37,7 +37,6 @@ const AUTH_ID_LEN = 16;
 const CMD_TCP = 1;
 const CMD_UDP = 2;
 const DNS_PORT = 53;
-const SECURITY_UNKNOWN = 0;
 const SECURITY_LEGACY = 1;
 const SECURITY_AUTO = 2;
 const SECURITY_AES_128_GCM = 3;
@@ -242,8 +241,11 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
     if (security === SECURITY_LEGACY) {
       return { state: "reject", reason: "legacy security requires aes-cfb which is disabled" };
     }
-    if (security === SECURITY_UNKNOWN) {
+    if (resolveMode(security) === null) {
       return { state: "reject", reason: `unsupported security type ${security}` };
+    }
+    if (resolveMode(security) === "plain" && (option & OPT_AUTHENTICATED_LENGTH) !== 0) {
+      return { state: "reject", reason: "authenticated length requires an aead security" };
     }
     if (command !== CMD_TCP && command !== CMD_UDP) {
       return { state: "reject", reason: `unsupported command ${command}` };
@@ -294,7 +296,6 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
       plan.padded || plan.masked ? createShakeDrawer(s.requestBodyIv) : null;
     const tagLen = plan.mode === "plain" ? 0 : TAG_LEN;
 
-    let upAlive = true;
     let upEof = false;
     let upPayloadCtr = 0;
     let upSizeCtr = 0;
@@ -306,7 +307,6 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
     let pendingEmitted = false;
 
     async function decodeUp(chunk: Uint8Array): Promise<Uint8Array | null> {
-      if (!upAlive) return null;
       if (!plan.framed) {
         if (!pendingEmitted) {
           pendingEmitted = true;
@@ -320,8 +320,7 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
       }
       if (upEof) return null;
       if (chunk.length > 0 && !appendChunk(pending, chunk)) {
-        upAlive = false;
-        return null;
+        throw new Error("vmess uplink frame buffer exceeded 64 KiB cap");
       }
       const parts: Uint8Array[] = [];
       while (true) {
@@ -336,8 +335,7 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
             const lenKeys = await upLenKeys;
             const plain = await aesGcmDecrypt(lenKeys.key, buildChunkNonce(lenKeys.base, upSizeCtr), head, null);
             if (plain === null) {
-              upAlive = false;
-              return null;
+              throw new Error("vmess uplink length frame failed to decrypt");
             }
             sizeVal = readU16BE(plain, 0) + TAG_LEN;
           } else {
@@ -352,8 +350,7 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
           return concatBytes(...parts);
         }
         if (sizeVal < tagLen + padding || sizeVal > MAX_FRAME_LEN) {
-          upAlive = false;
-          return null;
+          throw new Error("vmess uplink size frame out of range");
         }
         const frameTotal = sizeFrameLen + sizeVal;
         const whole = peekFlat(pending, frameTotal);
@@ -375,8 +372,7 @@ export function createVmessInbound(expectedUuid: string): ProtocolInbound<VmessR
           data = ct.slice();
         }
         if (data === null) {
-          upAlive = false;
-          return null;
+          throw new Error("vmess uplink payload frame failed to decrypt");
         }
         upPayloadCtr++;
         dropChunks(pending, frameTotal);

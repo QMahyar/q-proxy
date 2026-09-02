@@ -34,7 +34,7 @@ function domainFrame(opts: {
   );
 }
 
-function ipv4Frame(cmd = 1, port = 443): Uint8Array {
+function ipv4Frame(cmd = 1, port = 443, payload = utf8Encode("hello")): Uint8Array {
   return concatBytes(
     new Uint8Array([0]),
     UUID_BYTES,
@@ -42,7 +42,7 @@ function ipv4Frame(cmd = 1, port = 443): Uint8Array {
     new Uint8Array([cmd]),
     u16be(port),
     new Uint8Array([1, 8, 8, 8, 8]),
-    utf8Encode("hello"),
+    payload,
   );
 }
 
@@ -112,6 +112,29 @@ describe("createVlessInbound", () => {
 
     const other = await createVlessInbound(UUID).push(ipv4Frame(2, 8_8_8));
     expect(other).toMatchObject({ state: "reject", reason: expect.stringContaining("53") });
+  });
+
+  it("udp sessions get a length-framed body codec; tcp sessions get none", async () => {
+    const dnsInbound = createVlessInbound(UUID);
+    const dnsOutcome = await dnsInbound.push(ipv4Frame(2, 53, utf8Encode("query")));
+    if (dnsOutcome.state !== "ready") throw new Error("expected ready");
+    const codec = dnsInbound.bodyCodec()!;
+    expect(codec).not.toBeNull();
+
+    const datagram = concatBytes(u16be(5), utf8Encode("qdata"));
+    expect(new TextDecoder().decode((await codec.decodeUp(datagram))!)).toBe("qdata");
+    expect(await codec.decodeUp(u16be(3))).toEqual(new Uint8Array(0));
+    expect(new TextDecoder().decode((await codec.decodeUp(utf8Encode("ab!")))!)).toBe("ab!");
+
+    const downlink = codec.beginDownlink();
+    expect(downlink.header()).toBeNull();
+    const framed = await downlink.encode(utf8Encode("answer"));
+    expect(framed.subarray(0, 2)).toEqual(u16be(6));
+    expect(new TextDecoder().decode(framed.subarray(2))).toBe("answer");
+
+    const tcpInbound = createVlessInbound(UUID);
+    await tcpInbound.push(ipv4Frame(1, 443));
+    expect(tcpInbound.bodyCodec()).toBeNull();
   });
 
   it("rejects unsupported commands like mux", async () => {

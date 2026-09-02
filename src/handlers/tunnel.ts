@@ -19,7 +19,7 @@ import { createRelay } from "../tunnel/relay";
 import { createDnsPacketRelay } from "../tunnel/resolver";
 import { matchesSpeedtestHost, speedtestResponseBytes } from "../tunnel/speedtest";
 import { getCounterContext } from "../core/counters";
-import { acceptTunnelSocket, isUpgradeRequest } from "../tunnel/websocket";
+import { acceptTunnelSocket } from "../tunnel/websocket";
 import { concatBytes, utf8Encode } from "../utils/bytes";
 
 type TunnelParsed = ParsedRequest<"tcp"> | ParsedRequest<"udp">;
@@ -71,7 +71,6 @@ function createInbound(kind: TunnelKind, s: Settings): ProtocolInbound<TunnelPar
 export const handleTunnel: RouteHandler = async (req, _env, s) => {
   const kind = identifyTunnel(new URL(req.url).pathname, s);
   if (kind === null) throw new NotFoundError("unknown tunnel path");
-  if (!isUpgradeRequest(req)) throw new NotFoundError("websocket upgrade required");
   const accepted = acceptTunnelSocket(req, {
     earlyDataEnabled: kind === "ss" ? false : s.earlyDataEnabled,
     earlyDataMaxBytes: s.earlyDataMaxBytes,
@@ -103,6 +102,7 @@ async function driveSession(
   let downlinkEncoder: DownlinkEncoder | null = null;
   let uplinkDecode: ((chunk: Uint8Array) => Promise<Uint8Array | null>) | null = null;
   let headerBytes: Uint8Array | null = null;
+  let clientGone = false;
 
   const safeClose = (code: number): void => {
     try {
@@ -179,6 +179,10 @@ async function driveSession(
       const opener = createEgressOpener(strategy);
       const packet = firstPacket.length > 0 ? firstPacket : null;
       const established = await opener.open(target, packet);
+      if (clientGone) {
+        void established.socket.close().catch(() => {});
+        return;
+      }
       phase = "tcp";
       cleanupHandshake();
       const encoder = downlinkEncoder;
@@ -241,7 +245,15 @@ async function driveSession(
         dnsRelay = createDnsPacketRelay(s.dohUpstream);
         if (headerBytes !== null && headerBytes.length > 0) sendRaw(headerBytes);
         let packet: Uint8Array | null = inbound.takeInitialPayload() ?? rest;
-        if (uplinkDecode !== null) packet = await uplinkDecode(packet);
+        if (uplinkDecode !== null && packet !== null) {
+          try {
+            packet = await uplinkDecode(packet);
+          } catch (err) {
+            log.debug("tunnel", "udp uplink decode failed", { kind, reason: String(err) });
+            safeClose(1008);
+            return;
+          }
+        }
         if (packet !== null && packet.length > 0) {
           try {
             const answer = await dnsRelay(packet);
@@ -256,7 +268,15 @@ async function driveSession(
     }
     if (phase === "udp" && dnsRelay !== null) {
       let packet: Uint8Array | null = bytes;
-      if (uplinkDecode !== null) packet = await uplinkDecode(bytes);
+      if (uplinkDecode !== null) {
+        try {
+          packet = await uplinkDecode(bytes);
+        } catch (err) {
+          log.debug("tunnel", "udp uplink decode failed", { kind, reason: String(err) });
+          safeClose(1008);
+          return;
+        }
+      }
       if (packet === null || packet.length === 0) return;
       try {
         const answer = await dnsRelay(packet);
@@ -284,10 +304,12 @@ async function driveSession(
 
   ws.addEventListener("message", onMessage);
   ws.addEventListener("error", () => {
+    clientGone = true;
     cleanupHandshake();
     safeClose(1011);
   });
   ws.addEventListener("close", () => {
+    clientGone = true;
     cleanupHandshake();
     relayHandle?.clientClosed();
   });

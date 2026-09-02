@@ -301,7 +301,7 @@ describe("trojan udp body codec", () => {
     expect(ok.subarray(0, 1)).toEqual(new Uint8Array([1]));
   });
 
-  it("kills the codec on a datagram with a wrong CR LF", async () => {
+  it("throws fatally on a datagram with a wrong CR LF", async () => {
     const codec = await udpCodec();
     const bad = concatBytes(
       new Uint8Array([1]),
@@ -311,10 +311,7 @@ describe("trojan udp body codec", () => {
       new Uint8Array([0x0a, 0x0d]),
       utf8Encode("junk"),
     );
-    expect(await codec.decodeUp(bad)).toBeNull();
-    expect(
-      await codec.decodeUp(udpDatagram({ atype: 1, addrBytes: hexToBytes("01010101")!, payload: utf8Encode("ok") })),
-    ).toBeNull();
+    await expect(codec.decodeUp(bad)).rejects.toThrow("trojan udp frame missing CR LF");
   });
 
   it("buffers a truncated datagram until its CR LF arrives", async () => {

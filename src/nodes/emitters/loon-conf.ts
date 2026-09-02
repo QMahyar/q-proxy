@@ -32,7 +32,7 @@ function vmessLine(node: Extract<ProxyNode, { kind: "vmess" }>): string {
     "udp=true",
     node.security === "tls" ? "over-tls=true" : "over-tls=false",
   ];
-  if (node.security === "tls" && node.sni !== null) parts.push(`sni=${node.sni}`);
+  if (node.security === "tls" && node.sni !== null) parts.push(`tls-name=${node.sni}`);
   parts.push("transport=ws", `path=${node.path}`, `host=${node.host}`);
   return parts.join(", ");
 }
@@ -45,7 +45,7 @@ function trojanLine(node: Extract<ProxyNode, { kind: "trojan" }>): string {
     `"${q(node.password)}"`,
     "udp=true",
   ];
-  if (node.sni !== null) parts.push(`sni=${node.sni}`);
+  if (node.sni !== null) parts.push(`tls-name=${node.sni}`);
   if (node.security === "tls") parts.push("over-tls=true");
   parts.push("transport=ws", `path=${node.path}`, `host=${node.host}`);
   return parts.join(", ");
@@ -61,7 +61,7 @@ function vlessLine(node: Extract<ProxyNode, { kind: "vless" }>): string {
   ];
   if (node.security === "tls") {
     parts.push("over-tls=true");
-    if (node.sni !== null) parts.push(`sni=${node.sni}`);
+    if (node.sni !== null) parts.push(`tls-name=${node.sni}`);
   }
   parts.push("transport=ws", `path=${node.path}`, `host=${node.host}`);
   return parts.join(", ");

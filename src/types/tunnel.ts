@@ -21,7 +21,6 @@ export interface EgressCandidate {
 export interface FailoverStrategy {
   readonly target: DialTarget;
   readonly candidates: readonly EgressCandidate[];
-  hasNext(i: number): boolean;
 }
 
 export interface EstablishedEgress {

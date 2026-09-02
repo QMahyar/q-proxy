@@ -88,6 +88,14 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
     case "api": {
       if (rest.length < 2) return null;
       const sub = rest[1]!;
+      if (sub === "auth" && rest.length === 3) {
+        const action = rest[2]!;
+        if (action === "login") return { kind: "api", api: "auth-login" };
+        if (action === "logout") return { kind: "api", api: "auth-logout" };
+        if (action === "setup") return { kind: "api", api: "auth-setup" };
+        if (action === "password") return { kind: "api", api: "auth-password" };
+        return null;
+      }
       if (sub === "login" && rest.length === 2) return { kind: "api", api: "auth-login" };
       if (sub === "logout" && rest.length === 2) return { kind: "api", api: "auth-logout" };
       if (sub === "setup" && rest.length === 2) return { kind: "api", api: "auth-setup" };

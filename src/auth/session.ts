@@ -1,7 +1,6 @@
 import type { Env } from "../types/env";
 import { decodeBase64Url, encodeBase64Url } from "../utils/base64";
-import { bytesToHex } from "../utils/bytes";
-import { utf8Encode } from "../utils/bytes";
+import { hmacSha256Hex } from "../utils/hmac";
 import { constantTimeEqual } from "../utils/random";
 import { unixNow } from "../utils/time";
 
@@ -41,39 +40,23 @@ export async function bumpSessionFloor(env: Env): Promise<void> {
   floorCache = { value: at, expiresAt: Date.now() + SESSION_FLOOR_TTL_MS };
 }
 
-async function hmacHex(payload: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    utf8Encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, utf8Encode(payload));
-  return bytesToHex(new Uint8Array(sig));
-}
-
 export async function issueSession(secret: string): Promise<string> {
   const now = unixNow();
   const jti = crypto.randomUUID();
   const payload = encodeBase64Url(JSON.stringify({ exp: now + SESSION_TTL_SECONDS, iat: now, jti }));
-  const sig = await hmacHex(payload, secret);
+  const sig = await hmacSha256Hex(payload, secret);
   return `${payload}.${sig}`;
 }
 
 export async function issueSessionWithIat(secret: string, iat: number): Promise<string> {
   const jti = crypto.randomUUID();
   const payload = encodeBase64Url(JSON.stringify({ exp: iat + SESSION_TTL_SECONDS, iat, jti }));
-  const sig = await hmacHex(payload, secret);
+  const sig = await hmacSha256Hex(payload, secret);
   return `${payload}.${sig}`;
 }
 
 function sessionCookie(token: string, maxAge: number): string {
   return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
-}
-
-export function issuedSessionCookie(secret: string): Promise<string> {
-  return issueSession(secret).then((token) => sessionCookie(token, SESSION_TTL_SECONDS));
 }
 
 export function issuedSessionCookieWithIat(secret: string, iat: number): Promise<string> {
@@ -93,7 +76,7 @@ export async function verifySession(
   if (dot <= 0 || dot === cookieValue.length - 1) return null;
   const payload = cookieValue.slice(0, dot);
   const sig = cookieValue.slice(dot + 1);
-  const expected = await hmacHex(payload, secret);
+  const expected = await hmacSha256Hex(payload, secret);
   if (!constantTimeEqual(expected, sig.toLowerCase())) return null;
   const decoded = decodeBase64Url(payload);
   if (!decoded.ok) return null;

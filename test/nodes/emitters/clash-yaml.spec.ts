@@ -208,7 +208,7 @@ describe("emitClashYaml golden", () => {
   it("adds ech-opts to the trojan branch and sets udp true on ss plugin entries", () => {
     const echTrojan: TrojanNode = { ...trojan(), name: "TROJAN ECH", ech: "crypto.example.com" };
     const out = emitClashYaml([echTrojan, ss()], OPTS);
-    expect(out).toContain("    password: secretpass123\n    sni: example.com\n    ech-opts:\n      enable: true\n      ech_server_name: crypto.example.com");
+    expect(out).toContain("    password: secretpass123\n    sni: example.com\n    ech-opts:\n      enable: true\n      query-server-name: crypto.example.com");
     expect(out).toContain("    type: ss\n    server: example.com\n    port: 443\n    udp: true");
   });
 

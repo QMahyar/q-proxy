@@ -603,8 +603,12 @@ describe("vmess body codecs", () => {
     const m3 = draw();
     const oversizeLen = u16be(0xffff ^ m3);
     const badPay = await aesSeal(p.reqKey, chunkNonce(p.reqIv, 1), utf8Encode("replayed"));
-    expect(await codec.decodeUp(concatBytes(oversizeLen, badPay))).toBeNull();
-    expect(await codec.decodeUp(utf8Encode("anything after poison"))).toBeNull();
+    await expect(codec.decodeUp(concatBytes(oversizeLen, badPay))).rejects.toThrow(
+      "vmess uplink size frame out of range",
+    );
+    await expect(codec.decodeUp(utf8Encode("anything after poison"))).rejects.toThrow(
+      "vmess uplink size frame out of range",
+    );
   });
 
   it("treats the zero-length chunk as end-of-stream after yielding prior data", async () => {
@@ -673,9 +677,26 @@ describe("vmess body codecs", () => {
     expect(new TextDecoder().decode(got!)).toBe("padded-onepadded-two");
   });
 
-  it("returns no body codec for unknown security 7 but keeps the handshake", async () => {
-    const { inbound } = await readyInbound(7, 0x05);
-    expect(inbound.bodyCodec()).toBeNull();
+  it("rejects unknown security 7 instead of relaying the body raw", async () => {
+    const inbound = createVmessInbound(UUID);
+    const outcome = await inbound.push(
+      await sealVmessAeadHeader(CMD_KEY, legacyHeader({ requestIv: randomBytes(16), requestKey: randomBytes(16), security: 7, option: 0x05 }), Math.floor(Date.now() / 1000)),
+    );
+    expect(outcome.state).toBe("reject");
+    if (outcome.state === "reject") expect(outcome.reason).toBe("unsupported security type 7");
+  });
+
+  it("rejects plain security combined with the authenticated-length option", async () => {
+    for (const security of [5, 6]) {
+      const inbound = createVmessInbound(UUID);
+      const outcome = await inbound.push(
+        await sealVmessAeadHeader(CMD_KEY, legacyHeader({ requestIv: randomBytes(16), requestKey: randomBytes(16), security, option: 0x10 }), Math.floor(Date.now() / 1000)),
+      );
+      expect(outcome.state, `security ${security}`).toBe("reject");
+      if (outcome.state === "reject") {
+        expect(outcome.reason).toBe("authenticated length requires an aead security");
+      }
+    }
   });
 
   it("hands out the body codec exactly once per connection", async () => {

@@ -52,7 +52,12 @@ export function afterResponse(p: Promise<unknown>): void {
 }
 
 function waitUntil(promise: Promise<void>): void {
-  if (buffer.ctx) buffer.ctx.waitUntil(promise);
+  if (buffer.ctx === null) return;
+  try {
+    buffer.ctx.waitUntil(promise);
+  } catch {
+    void promise;
+  }
 }
 
 async function readStored(env: Env): Promise<StoredUsage> {

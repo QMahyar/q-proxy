@@ -101,7 +101,7 @@ flowchart TD
     GEN --> EMI[emitters/registry.ts<br/>EMITTERS format]
 ```
 
-Route precedence is top-down, first match wins — 28 entries defined in `ARCHITECTURE.md §3`, implemented by `routeRequest` in `src/core/router.ts`, with tunnel dispatch via `identifyTunnel` and secure dispatch via `resolveSecureRoute` + `resolveAuthAlias`. Kill switch is checked before any WebSocket upgrade.
+Route precedence is top-down, first match wins — 28 entries defined in `ARCHITECTURE.md §3`, implemented by `routeRequest` in `src/core/router.ts`, with tunnel dispatch via `identifyTunnel` and secure dispatch via `resolveSecureRoute`. Kill switch is checked before any WebSocket upgrade.
 
 Auth: `q_session` HMAC cookie (`src/auth/session.ts`) + `X-Q-Panel: 1` CSRF header on mutating APIs (`src/auth/guard.ts`). Non-panel failures return camouflage, never 404.
 
@@ -144,7 +144,7 @@ flowchart TD
     MERG -- no --> EMI
     REM --> EMI
 
-    EMI[registry: base64-list · clash-yaml · singbox-json · surge-conf · loon-conf] --> H[subscriptionHeaders<br/>Profile-Title · Subscription-Userinfo · Content-Disposition]
+    EMI[registry: clash-yaml · singbox-json · surge-conf · loon-conf<br/>base64 renders in subscription/render.ts] --> H[subscriptionHeaders<br/>Profile-Title · Subscription-Userinfo · Content-Disposition]
     H --> RESP[Response<br/>edge Cache API 60s keyed format+mode]
 ```
 
@@ -164,7 +164,7 @@ Namespace binding `QPROXY_KV`.
 | `qproxy:meta` | `{createdAt, installedVersion}` | `store.ts:ensureInitialized` (once) | — |
 | `qproxy:counters` | `{day, requestsToday, requestsTotal, updatedAt}` | `src/core/counters.ts:recordConnection` | Buffered per-isolate; flush >60 s or every 32 conns |
 | `qproxy:users` | JSON array of ≤50 user records (token, protocols, quota, expiry) | `src/users/store.ts` | Read per admin request / sub hit |
-| `qproxy:user-usage:{yyyy-mm-dd}` | per-user daily hit counts | `src/users/store.ts` | Day-keyed |
+| `qproxy:user-usage:{yyyy-mm-dd}:{hash}` | per-user daily hit counter (per-hash key; legacy `qproxy:user-usage:{yyyy-mm-dd}` array still read for same-day migration) | `src/users/store.ts` | Day-keyed |
 | `qproxy:warp:account:{id}` / `qproxy:warp:token:{token}` / `qproxy:warp:presets` / `qproxy:warp:global` | WARP device + preset state | `src/warp/store.ts` | Two-key write with rollback |
 
 Sessions are stateless HMAC cookies — no session records in KV. Sensitive paths `passwordHash`, `passwordSalt`, `sessionSecret` (plus write-only `telegram.botToken`) never leave authenticated views.

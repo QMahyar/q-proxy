@@ -8,10 +8,10 @@ import {
   bumpSessionFloor,
   clearedSessionCookie,
   getSessionFloor,
-  issuedSessionCookie,
   issuedSessionCookieWithIat,
   verifySession,
 } from "../../auth/session";
+import { unixNow } from "../../utils/time";
 import {
   assertLoginAllowed,
   clearLoginFailures,
@@ -52,7 +52,11 @@ export const handleLogin: RouteHandler = async (req, env, s) => {
   }
   clearLoginFailures(clientIp(req));
   if (verified.tier === "legacy") await upgradeLegacyHash(env, password);
-  return jsonOk({ hasPassword: true }, { "Set-Cookie": await issuedSessionCookie(s.sessionSecret) });
+  const floor = await getSessionFloor(env);
+  return jsonOk(
+    { hasPassword: true },
+    { "Set-Cookie": await issuedSessionCookieWithIat(s.sessionSecret, Math.max(unixNow(), floor + 1)) },
+  );
 };
 
 export const handleLogout: RouteHandler = async (req, env, s) => {
@@ -84,7 +88,7 @@ export const handleSetup: RouteHandler = async (req, env, s) => {
   await saveSettings(env, v.value);
   return jsonOk(
     { hasPassword: true },
-    { "Set-Cookie": await issuedSessionCookie(fresh.sessionSecret) },
+    { "Set-Cookie": await issuedSessionCookieWithIat(fresh.sessionSecret, unixNow() + 1) },
   );
 };
 

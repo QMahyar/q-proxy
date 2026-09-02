@@ -198,9 +198,8 @@ export function createResolver(dohUrl: string): DohResolver {
     const query = buildDnsQuery(trimmed, qtype);
     if (query === null) return [];
     const resp = await dohPost(dohUrl, query);
-    if (resp === null) return [];
-    const values = parseDnsAnswers(resp, qtype);
-    if (values.length > 0) cachePut(key, values);
+    const values = resp === null ? [] : parseDnsAnswers(resp, qtype);
+    cachePut(key, values);
     return values;
   };
   return {

@@ -333,18 +333,22 @@ describe.each(METHODS)("ss body codecs %s", (method) => {
     expect(new TextDecoder().decode(rest!)).toBe("third-chunk");
   });
 
-  it("rejects-by-null on oversize and corrupted body frames", async () => {
+  it("throws fatally on oversize and corrupted body frames", async () => {
     const { inbound, salt } = await handshakenInbound();
     const codec = inbound.bodyCodec()!;
     const sk = await subkeyFor(salt);
 
     const oversize = await gcmSeal(method, sk, incrementingNonce(2n), u16be(0x4000));
-    expect(await codec.decodeUp(concatBytes(oversize, new Uint8Array(40)))).toBeNull();
+    await expect(codec.decodeUp(concatBytes(oversize, new Uint8Array(40)))).rejects.toThrow(
+      "ss uplink length frame exceeds chunk cap",
+    );
 
     const good = await framePair(sk, 2, utf8Encode("hello"));
     good[good.length - 1]! ^= 0xff;
     const corrupted = await handshakenInbound();
-    expect(await corrupted.inbound.bodyCodec()!.decodeUp(good)).toBeNull();
+    await expect(corrupted.inbound.bodyCodec()!.decodeUp(good)).rejects.toThrow(
+      "ss uplink length frame failed to decrypt",
+    );
   });
 
   it("consumes mid-stream zero-length chunks without ending the stream (SIP004)", async () => {

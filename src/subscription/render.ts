@@ -1,5 +1,6 @@
 import type { SubFormat } from "../core/ua";
 import type { EmitOptions } from "../nodes/emitters/registry";
+import { tlsRequiredNodes } from "../nodes/emitters/registry";
 import type { NodeVariant, ProxyNode } from "../types/node";
 import type { Settings } from "../types/settings";
 import { encodeUtf8Base64 } from "../utils/base64";
@@ -51,13 +52,20 @@ export function emitterOptions(input: RenderSubInput): EmitOptions {
 export async function renderSubscriptionBody(input: RenderSubInput): Promise<string> {
   const opts = emitterOptions(input);
   if (input.format === "base64") {
+    const visible = base64VisibleNodes(input.nodes, input.isFragmentMode);
     const [ownLines, remoteLines] = await Promise.all([
-      Promise.resolve(buildShareUris(input.nodes)),
+      Promise.resolve(buildShareUris(visible)),
       fetchRemoteSubLines(input.settings.remoteSubUrls, input.settings.subUpdateIntervalHours * 3600),
     ]);
     return encodeUtf8Base64([...ownLines, ...remoteLines].join("\n"));
   }
   return EMITTERS[input.format](input.nodes, opts);
+}
+
+function base64VisibleNodes(nodes: readonly ProxyNode[], isFragmentMode: boolean): ProxyNode[] {
+  const visible = tlsRequiredNodes(nodes, isFragmentMode);
+  const nonSs = visible.filter((n) => n.kind !== "ss");
+  return nonSs.length > 0 || visible.length === 0 ? nonSs : visible;
 }
 
 export function makeEdgeCacheKey(req: Request, format: SubFormat, isFragmentMode: boolean, token?: string): Request {

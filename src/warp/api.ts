@@ -148,7 +148,6 @@ export async function registerWarpDevice(): Promise<WarpRegistration> {
   const account = asRecord(inner?.result) ?? inner;
   const warpToken = firstString(account?.token) ?? "";
   if (warpToken.length === 0) {
-    await deleteReg(extracted.warpId, "");
     throw new WarpApiError("warp api returned no device token", 502);
   }
   return {

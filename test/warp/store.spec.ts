@@ -187,6 +187,28 @@ describe("warp store", () => {
     expect(kv.map.has(`qproxy:warp:token:${old}`)).toBe(true);
   });
 
+  it("storeAccount rolls back a failed create but preserves a pre-existing record on failed update", async () => {
+    const a = mkAccount();
+    const failing = {
+      QPROXY_KV: {
+        get: kv.get.bind(kv),
+        put: async (key: string, value: string) => {
+          if (key.startsWith("qproxy:warp:token:")) throw new Error("kv put failed");
+          await kv.put(key, value);
+        },
+        delete: kv.delete.bind(kv),
+        list: kv.list.bind(kv),
+      },
+    };
+    await expect(storeAccount(failing as never, a)).rejects.toThrow("kv put failed");
+    expect(await getAccount(kv.asEnv(), a.id)).toBeNull();
+
+    await storeAccount(kv.asEnv(), a);
+    const renamed = { ...a, name: "Renamed" };
+    await expect(storeAccount(failing as never, renamed)).rejects.toThrow("kv put failed");
+    expect((await getAccount(kv.asEnv(), a.id))?.name).toBe("Renamed");
+  });
+
   it("validates amnezia ranges and overlap", () => {
     expect(validateAmnezia({ Jc: 4, Jmin: 40, Jmax: 70 }).ok).toBe(true);
     expect(validateAmnezia({ Jc: 999 }).ok).toBe(false);

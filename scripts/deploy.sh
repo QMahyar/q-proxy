@@ -200,7 +200,7 @@ set-password)
   URL="https://$WORKER.$SUB.workers.dev"
   SP=$(get_secure_path "$KV_ID")
   [[ -z "$SP" ]] && die "Could not read securePath. Seed first."
-  SETUP=$(printf '{"newPassword":"%s"}' "$PASSWORD" | curl -s -X POST "$URL/$SP/api/auth/setup" -H "Content-Type: application/json" -d @-)
+  SETUP=$(printf '{"newPassword":"%s"}' "$PASSWORD" | curl -s -X POST "$URL/$SP/api/auth/setup" -H "Content-Type: application/json" -H "X-Q-Panel: 1" -d @-)
   ok "$SETUP" && echo "Password set" || echo "Failed"
   ;;
 
@@ -236,7 +236,7 @@ deploy)
 
   SP=$(get_secure_path "$KV_ID")
   if [[ -n "$SP" && -n "$PASSWORD" ]]; then
-    SETUP=$(printf '{"newPassword":"%s"}' "$PASSWORD" | curl -s -X POST "$WORKER_URL/$SP/api/auth/setup" -H "Content-Type: application/json" -d @-)
+    SETUP=$(printf '{"newPassword":"%s"}' "$PASSWORD" | curl -s -X POST "$WORKER_URL/$SP/api/auth/setup" -H "Content-Type: application/json" -H "X-Q-Panel: 1" -d @-)
     ok "$SETUP" && echo "Password set" || echo "Password setup failed (set manually)"
   fi
 

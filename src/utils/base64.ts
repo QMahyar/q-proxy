@@ -55,12 +55,6 @@ export function encodeUtf8Base64(text: string): string {
   return encodeBase64(new TextEncoder().encode(text));
 }
 
-export function decodeUtf8Base64(text: string): Base64Result {
-  const r = decodeBase64(text);
-  if (!r.ok) return r;
-  return { ok: true, value: r.value };
-}
-
 export function utf8FromBase64(input: string): Base64Result & { text?: string } {
   const r = decodeBase64(input);
   if (!r.ok) return r;

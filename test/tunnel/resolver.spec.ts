@@ -190,7 +190,7 @@ describe("createResolver", () => {
     expect(await resolver.resolveTXT("gone.example")).toEqual([]);
   });
 
-  it("does not cache empty answers so a transient failure re-fetches", async () => {
+  it("caches empty answers with a short TTL so a dead upstream is not re-queried per dial", async () => {
     clearResolverCache();
     const fetchMock = vi.fn(async () =>
       new Response(buildDnsResponse("flaky.example", [])),
@@ -199,7 +199,7 @@ describe("createResolver", () => {
     const resolver = createResolver("https://dns.example/dns-query");
     expect(await resolver.resolveA("flaky.example")).toEqual([]);
     expect(await resolver.resolveA("flaky.example")).toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

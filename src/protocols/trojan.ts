@@ -110,16 +110,13 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
 
   function createTrojanUdpCodec(): BodyCodec {
     let buf: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
-    let alive = true;
     const srcQueue: UdpSource[] = [];
     let currentSrc: UdpSource = DEFAULT_UDP_SOURCE;
     return {
       async decodeUp(chunk: Uint8Array): Promise<Uint8Array | null> {
-        if (!alive) return null;
         if (chunk.length > 0) {
           if (buf.length + chunk.length > 65536) {
-            alive = false;
-            return null;
+            throw new Error("trojan udp frame buffer exceeded 64 KiB cap");
           }
           buf = concatBytes(buf as Uint8Array, chunk as Uint8Array) as Uint8Array<ArrayBufferLike>;
         }
@@ -130,15 +127,13 @@ export function createTrojanInbound(password: string): ProtocolInbound<TrojanReq
           const addr = parseAddress(atype, buf, off + 1);
           if (!addr.ok) {
             if (addr.reason.startsWith("truncated")) break;
-            alive = false;
-            return null;
+            throw new Error(`trojan udp frame has invalid address: ${addr.reason}`);
           }
           const afterAddr = addr.value.nextOffset;
           if (buf.length - afterAddr < 4) break;
           const len = (buf[afterAddr]! << 8) | buf[afterAddr + 1]!;
           if (buf[afterAddr + 2] !== 0x0d || buf[afterAddr + 3] !== 0x0a) {
-            alive = false;
-            return null;
+            throw new Error("trojan udp frame missing CR LF delimiter");
           }
           const total = afterAddr + 4 + len;
           if (buf.length < total) break;

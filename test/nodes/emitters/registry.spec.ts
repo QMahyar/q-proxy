@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { EMITTERS } from "../../../src/nodes/emitters/registry";
-import { emitBase64List } from "../../../src/nodes/emitters/base64-list";
+import { renderSubscriptionBody } from "../../../src/subscription/render";
+import { DEFAULT_SETTINGS } from "../../../src/types/settings";
 import type { ProxyNode } from "../../../src/types/node";
 import { decodeBase64 } from "../../../src/utils/base64";
-
-const OPTS = { remoteDns: "https://8.8.8.8/dns-query", urlTestIntervalSec: 300, isFragment: false };
 
 function vless(): ProxyNode {
   return {
@@ -26,66 +25,78 @@ function vless(): ProxyNode {
   };
 }
 
-describe("EMITTERS registry", () => {
-  it("covers exactly the five SubFormats", () => {
-    expect(Object.keys(EMITTERS).sort()).toEqual(["base64", "clash", "loon", "singbox", "surge"]);
+async function base64Body(nodes: ProxyNode[], isFragmentMode = false): Promise<string> {
+  return renderSubscriptionBody({
+    settings: { ...structuredClone(DEFAULT_SETTINGS), remoteSubUrls: [] },
+    nodes,
+    format: "base64",
+    isFragmentMode,
+    subscriptionUrl: "https://w.test/sub?target=base64",
   });
+}
 
-  it("each emitter returns a string for the same input", () => {
-    const nodes = [vless()];
-    for (const emitter of Object.values(EMITTERS)) {
-      expect(typeof emitter(nodes, OPTS)).toBe("string");
-    }
+function decodeBody(body: string): string {
+  const decoded = decodeBase64(body);
+  return new TextDecoder().decode(decoded.ok ? decoded.value : new Uint8Array());
+}
+
+describe("EMITTERS registry", () => {
+  it("covers exactly the four sync SubFormats (base64 renders async via renderSubscriptionBody)", () => {
+    expect(Object.keys(EMITTERS).sort()).toEqual(["clash", "loon", "singbox", "surge"]);
   });
 });
 
-describe("emitBase64List", () => {
-  it("produces padded standard base64 of newline-joined URIs", () => {
-    const out = emitBase64List([vless()], OPTS);
+describe("base64 subscription body", () => {
+  it("produces padded standard base64 of newline-joined URIs", async () => {
+    const out = await base64Body([vless()]);
     expect(out.endsWith("=")).toBe(true);
     expect(out.includes("-")).toBe(false);
     expect(out.includes("_")).toBe(false);
-    const r = decodeBase64(out);
-    expect(r.ok).toBe(true);
-    const text = new TextDecoder().decode(r.ok ? r.value : new Uint8Array());
-    expect(text.split("\n")).toEqual([
+    const lines = decodeBody(out).split("\n");
+    expect(lines).toEqual([
       "vless://d342d11e-d424-4583-b36e-524ab1f0afa4@example.com:443?encryption=none&security=tls&sni=example.com&type=ws&host=example.com&path=%2Fvl%2Fabcd1234%3Fed%3D2048#V",
     ]);
   });
 
-  it("drops fragment nodes unless opts.isFragment", () => {
+  it("drops fragment nodes unless isFragmentMode", async () => {
     const frag: ProxyNode = { ...vless(), variant: "fragment", tags: ["fragment"] };
-    const rOff = decodeBase64(emitBase64List([frag], OPTS));
-    expect(new TextDecoder().decode(rOff.ok ? rOff.value : new Uint8Array())).toBe("");
-    const rOn = decodeBase64(emitBase64List([frag], { ...OPTS, isFragment: true }));
-    expect(new TextDecoder().decode(rOn.ok ? rOn.value : new Uint8Array()).startsWith("vless://")).toBe(true);
+    expect(decodeBody(await base64Body([frag]))).toBe("");
+    expect(decodeBody(await base64Body([frag], true)).startsWith("vless://")).toBe(true);
   });
 
-  it("drops ss and plain-security vless/trojan nodes for base64 clients", () => {
-    const ss: ProxyNode = {
-      kind: "ss",
-      name: "SS",
-      address: "203.0.113.10",
-      port: 8388,
-      security: "tls",
-      sni: null,
-      host: "example.com",
-      path: "/ss/abc",
-      earlyData: 0,
-      fingerprint: null,
-      alpn: [],
-      ech: null,
-      variant: "normal",
-      tags: [],
-      method: "aes-128-gcm",
-      password: "p",
-    };
+  it("drops ss and plain-security vless/trojan nodes for base64 clients", async () => {
+    const ss = ssNode();
     const plainVless: ProxyNode = { ...vless(), name: "PV", port: 80, security: "none", sni: null, fingerprint: null, alpn: [], path: "/vl/a" };
-    const r = decodeBase64(emitBase64List([vless(), ss, plainVless], OPTS));
-    const text = new TextDecoder().decode(r.ok ? r.value : new Uint8Array());
+    const text = decodeBody(await base64Body([vless(), ss, plainVless]));
     const lines = text.split("\n");
     expect(lines.some((l) => l.startsWith("ss://"))).toBe(false);
     expect(lines.some((l) => l.includes("security=none"))).toBe(false);
     expect(lines.some((l) => l.startsWith("vless://"))).toBe(true);
   });
+
+  it("keeps ss nodes when the scope has no other kinds (per-user ss-only subscriptions)", async () => {
+    const text = decodeBody(await base64Body([ssNode()]));
+    expect(text.startsWith("ss://")).toBe(true);
+  });
 });
+
+function ssNode(): ProxyNode {
+  return {
+    kind: "ss",
+    name: "SS",
+    address: "203.0.113.10",
+    port: 8388,
+    security: "tls",
+    sni: null,
+    host: "example.com",
+    path: "/ss/abc",
+    earlyData: 0,
+    fingerprint: null,
+    alpn: [],
+    ech: null,
+    variant: "normal",
+    tags: [],
+    method: "aes-128-gcm",
+    password: "p",
+  };
+}

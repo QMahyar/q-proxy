@@ -3,7 +3,6 @@ import type { PublicSettings, Settings } from "../../types/settings";
 import { DEFAULT_SETTINGS, SENSITIVE_SETTING_PATHS, SETTINGS_VERSION } from "../../types/settings";
 import { ValidationError } from "../../core/errors";
 import { jsonOk, readJsonObject } from "../../core/respond";
-import { assertCsrf } from "../../auth/guard";
 import { deepMergeDefaults } from "../../settings/migrate";
 import { validateSettings } from "../../settings/validate";
 import { loadSettingsFresh, saveSettings, settingsEtag } from "../../settings/store";
@@ -45,7 +44,6 @@ export const handleGetSettings: RouteHandler = async (req, _env, s) => {
 };
 
 export const handleSaveSettings: RouteHandler = async (req, _env, s) => {
-  assertCsrf(req);
   const body = await readJsonObject(req);
   for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath"]) delete (body as Record<string, unknown>)[k];
   const fresh = await loadSettingsFresh(_env);
@@ -57,8 +55,7 @@ export const handleSaveSettings: RouteHandler = async (req, _env, s) => {
   return jsonOk({ saved: true });
 };
 
-export const handleResetSettings: RouteHandler = async (req, env, _s) => {
-  assertCsrf(req);
+export const handleResetSettings: RouteHandler = async (_req, env, _s) => {
   const freshSrc = await loadSettingsFresh(env);
   void _s;
   const fresh = structuredClone(DEFAULT_SETTINGS);
@@ -89,7 +86,6 @@ export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
 };
 
 export const handleImportSettings: RouteHandler = async (req, env, s) => {
-  assertCsrf(req);
   const body = await readJsonObject(req);
   const incoming = (body as Record<string, unknown>).settings;
   if (incoming === null || typeof incoming !== "object" || Array.isArray(incoming)) {

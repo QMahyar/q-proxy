@@ -15,7 +15,6 @@ const KDF_SALT_RESP_HEADER_PAYLOAD_KEY = "AEAD Resp Header Key";
 const KDF_SALT_RESP_HEADER_PAYLOAD_IV = "AEAD Resp Header IV";
 
 export const AUTH_ID_EPOCH_WINDOW_SECONDS = 120;
-const AUTH_TIME_DRAIN_BYTES = 16 + 38;
 
 const CRC32_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -143,11 +142,9 @@ export function checkAuthId(
   return { ok: true, epochSeconds: seconds };
 }
 
-export interface OpenAeadHeaderResult {
-  header: Uint8Array | null;
-  failReason: string | null;
-  consumedBytes: number;
-}
+export type OpenAeadHeaderResult =
+  | { header: Uint8Array; failReason: null; consumedBytes: number }
+  | { header: null; failReason: string };
 
 export async function openVmessAeadHeader(
   cmdKey: Uint8Array,
@@ -155,7 +152,7 @@ export async function openVmessAeadHeader(
   data: Uint8Array,
 ): Promise<OpenAeadHeaderResult> {
   if (data.length < 18 + 8) {
-    return { header: null, failReason: "need-more", consumedBytes: data.length };
+    return { header: null, failReason: "need-more" };
   }
   const sealedLengthFrame = data.subarray(0, 18);
   const nonce = data.subarray(18, 26);
@@ -169,14 +166,14 @@ export async function openVmessAeadHeader(
   const lenIv = (await vmessKdf(cmdKey, KDF_SALT_HEADER_PAYLOAD_LEN_AEAD_IV, authId, nonce)).subarray(0, 12).slice();
   const decryptedLen = await aesGcmDecrypt(lenKey, lenIv, sealedLengthFrame, authId);
   if (decryptedLen === null || decryptedLen.length !== 2) {
-    return { header: null, failReason: "AEAD header length decrypt failed", consumedBytes: Math.min(data.length, AUTH_TIME_DRAIN_BYTES) };
+    return { header: null, failReason: "AEAD header length decrypt failed" };
   }
   const payloadLength = readU16BE(decryptedLen, 0);
 
   const payloadFrameSize = payloadLength + 16;
   const totalNeeded = 26 + payloadFrameSize;
   if (data.length < totalNeeded) {
-    return { header: null, failReason: "need-more", consumedBytes: data.length };
+    return { header: null, failReason: "need-more" };
   }
 
   const payloadKey = await vmessKdf16(cmdKey, KDF_SALT_HEADER_PAYLOAD_AEAD_KEY, authId, nonce);
@@ -184,7 +181,7 @@ export async function openVmessAeadHeader(
   const sealedPayload = data.subarray(26, totalNeeded);
   const payload = await aesGcmDecrypt(payloadKey, payloadIv, sealedPayload, authId);
   if (payload === null) {
-    return { header: null, failReason: "AEAD header payload decrypt failed", consumedBytes: totalNeeded };
+    return { header: null, failReason: "AEAD header payload decrypt failed" };
   }
   return { header: payload, failReason: null, consumedBytes: totalNeeded };
 }

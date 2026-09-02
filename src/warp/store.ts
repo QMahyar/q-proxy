@@ -66,7 +66,7 @@ type KvListOptions = { prefix: string; cursor?: string; limit?: number };
 type KvListResult = { keys: Array<{ name: string }>; list_complete?: boolean; cursor?: string };
 
 type KvLike = {
-  get(key: string, type: "json"): Promise<unknown>;
+  get(key: string, type?: "json"): Promise<unknown>;
   put(key: string, value: string): Promise<void>;
   delete(key: string): Promise<void>;
   list?(options: KvListOptions): Promise<KvListResult>;
@@ -151,11 +151,15 @@ export function newSubToken(): string {
 }
 
 export async function storeAccount(env: { QPROXY_KV: KvLike }, account: WarpAccount): Promise<void> {
+  const existing = await env.QPROXY_KV.get(WARP_ACCOUNT_PREFIX + account.id);
+  const isNew = existing === null;
   await env.QPROXY_KV.put(WARP_ACCOUNT_PREFIX + account.id, JSON.stringify(account));
   try {
     await env.QPROXY_KV.put(WARP_TOKEN_PREFIX + account.token, JSON.stringify(account.id));
   } catch (err) {
-    await env.QPROXY_KV.delete(WARP_ACCOUNT_PREFIX + account.id).catch(() => {});
+    if (isNew) {
+      await env.QPROXY_KV.delete(WARP_ACCOUNT_PREFIX + account.id).catch(() => {});
+    }
     throw err;
   }
 }

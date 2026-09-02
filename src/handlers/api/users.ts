@@ -87,7 +87,7 @@ async function withHits(env: Parameters<RouteHandler>[1], users: UserAccount[]):
 export const handleUsersApi: RouteHandler = async (req, env, _s) => {
   const url = new URL(req.url);
   const segs = url.pathname.split("/").filter((p) => p.length > 0);
-  const rest = segs.slice(segs.indexOf("users") + 1);
+  const rest = segs.slice(segs.indexOf("users", 1) + 1);
   const method = req.method;
 
   if (rest.length === 0 && method === "GET") {

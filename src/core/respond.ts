@@ -60,18 +60,37 @@ export function htmlResponse(html: string, status = 200, headers?: Record<string
 }
 
 export async function readJsonObject(req: Request): Promise<Record<string, unknown>> {
+  const MAX_BODY_BYTES = 64 * 1024;
   const lenRaw = req.headers.get("content-length");
   if (lenRaw !== null) {
     const n = Number(lenRaw.trim());
-    if (!Number.isInteger(n) || n < 0 || n > 64 * 1024) throw new BadRequestError("body too large");
+    if (!Number.isInteger(n) || n < 0 || n > MAX_BODY_BYTES) throw new BadRequestError("body too large");
   }
+  const reader = req.body?.getReader() ?? null;
   let text: string;
   try {
-    text = await req.text();
-  } catch {
+    if (reader === null) {
+      text = "";
+    } else {
+      const decoder = new TextDecoder();
+      let received = 0;
+      let out = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += value.byteLength;
+        if (received > MAX_BODY_BYTES) {
+          void reader.cancel().catch(() => {});
+          throw new BadRequestError("body too large");
+        }
+        out += decoder.decode(value, { stream: true });
+      }
+      text = out + decoder.decode();
+    }
+  } catch (err) {
+    if (err instanceof BadRequestError) throw err;
     throw new BadRequestError("invalid json body");
   }
-  if (new TextEncoder().encode(text).byteLength > 64 * 1024) throw new BadRequestError("body too large");
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

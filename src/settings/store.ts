@@ -33,7 +33,6 @@ interface StoredBlob {
 
 let cache: CacheEntry | null = null;
 let loadedDebug = false;
-let lastWrittenJson: string | null = null;
 
 export function currentDebugEnabled(): boolean {
   return loadedDebug;
@@ -61,7 +60,6 @@ async function persist(env: Env, value: Settings, updatedAt: number): Promise<vo
   };
   const json = JSON.stringify(blob);
   await env.QPROXY_KV.put(SETTINGS_KEY, json);
-  lastWrittenJson = json;
 }
 
 function blobUpdatedAt(raw: unknown): number {
@@ -111,18 +109,8 @@ export async function saveSettings(env: Env, next: Settings): Promise<void> {
   const stamped: Settings = cloneSettings(next);
   stamped.version = SETTINGS_VERSION;
   const updatedAt = Date.now();
-  const blob: StoredBlob = { version: SETTINGS_VERSION, updatedAt, data: stamped };
-  const json = JSON.stringify(blob);
-  if (lastWrittenJson !== null && stripTimestamp(json) === stripTimestamp(lastWrittenJson)) {
-    if (cache === null || cache.expiresAt <= Date.now()) remember(stamped, updatedAt);
-    return;
-  }
   await persist(env, stamped, updatedAt);
   remember(stamped, updatedAt);
-}
-
-function stripTimestamp(json: string): string {
-  return json.replace(/"updatedAt":\d+,/, "");
 }
 
 let initPromise: Promise<void> | null = null;

@@ -133,10 +133,11 @@ describe("session revocation floor kv cache", () => {
   });
 
   it("reads the floor from kv and memoizes it for subsequent calls", async () => {
-    stored = String(unixNow() - 60);
+    const now = unixNow();
+    stored = String(now - 60);
     const env = makeEnv();
-    expect(await getSessionFloor(env)).toBe(unixNow() - 60);
-    expect(await getSessionFloor(env)).toBe(unixNow() - 60);
+    expect(await getSessionFloor(env)).toBe(now - 60);
+    expect(await getSessionFloor(env)).toBe(now - 60);
     expect(reads).toBe(1);
   });
 

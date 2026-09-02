@@ -104,7 +104,7 @@ export async function makeFailoverStrategy(
     seen.add(key);
     return true;
   });
-  return { target, candidates: deduped, hasNext: (i) => i + 1 < deduped.length };
+  return { target, candidates: deduped };
 }
 
 async function defaultDialImpl(

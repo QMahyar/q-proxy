@@ -171,30 +171,4 @@ export class Aes128 {
     }
     return s;
   }
-
-  cfbEncrypt(iv: Uint8Array, data: Uint8Array): Uint8Array {
-    return Aes128.cfb(this, iv, data, true);
-  }
-
-  cfbDecrypt(iv: Uint8Array, data: Uint8Array): Uint8Array {
-    return Aes128.cfb(this, iv, data, false);
-  }
-
-  private static cfb(cipher: Aes128, iv: Uint8Array, data: Uint8Array, enc: boolean): Uint8Array {
-    const out = new Uint8Array(data.length);
-    const reg = new Uint8Array(iv.subarray(0, 16));
-    for (let off = 0; off < data.length; off += 16) {
-      const ks = cipher.encryptBlock(reg);
-      const n = Math.min(16, data.length - off);
-      reg.copyWithin(0, n, 16);
-      for (let i = 0; i < n; i++) {
-        const ct = data[off + i]!;
-        const pt = ct ^ ks[i]!;
-        const fb = enc ? pt : ct;
-        reg[16 - n + i] = fb;
-        out[off + i] = pt;
-      }
-    }
-    return out;
-  }
 }

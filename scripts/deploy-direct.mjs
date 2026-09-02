@@ -181,7 +181,7 @@ function isValidWorkerSource(source) {
     new vm.Script(source, { filename: "q-proxy.js" });
     return true;
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -428,7 +428,7 @@ What it does:
     try {
       const res = await fetch(`${workerUrl}/${securePath}/api/auth/setup`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Q-Panel": "1" },
         body: JSON.stringify({ newPassword: password }),
       });
       const txt = await res.text();
