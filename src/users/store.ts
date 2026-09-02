@@ -265,7 +265,11 @@ export async function migrateUserUsage(env: { QPROXY_KV: KvLike }, oldTokenOrHas
     }
     if (rh !== oldHash) remaining.push(r);
   }
-  await env.QPROXY_KV.put(legacyUsageKey(), JSON.stringify(remaining));
+  if (remaining.length > 0) {
+    await env.QPROXY_KV.put(legacyUsageKey(), JSON.stringify(remaining));
+  } else {
+    await env.QPROXY_KV.delete(legacyUsageKey()).catch(() => {});
+  }
   if (oldCount > 0) {
     const newCount = await readUsageCount(env, newHash);
     await env.QPROXY_KV.put(usageKey(newHash), JSON.stringify(newCount + oldCount));

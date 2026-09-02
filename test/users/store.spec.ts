@@ -295,15 +295,12 @@ describe("users store", () => {
     const oldPlain = "55555555-5555-4555-8555-555555555555";
     const newPlain = "66666666-6666-4666-8666-666666666666";
     const oldHash = await hashToken(oldPlain);
-    kv.map.set(
-      USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10),
-      JSON.stringify([{ token: oldPlain, count: 3 }]),
-    );
+    const legacyKey = USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10);
+    kv.map.set(legacyKey, JSON.stringify([{ token: oldPlain, count: 3 }]));
     await migrateUserUsage(env, oldHash, newPlain);
     expect(await getUserHits(env, oldPlain)).toBe(0);
     expect(await getUserHits(env, newPlain)).toBe(3);
-    const legacy = JSON.parse(kv.map.get(USER_USAGE_PREFIX + new Date().toISOString().slice(0, 10))!) as Array<{ token: string }>;
-    expect(legacy.find((r) => r.token === oldPlain || r.token === oldHash)).toBeUndefined();
+    expect(kv.map.has(legacyKey)).toBe(false);
   });
 
   it("sanitizeUser never exposes tokenHash", async () => {
