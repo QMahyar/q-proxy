@@ -1,0 +1,129 @@
+import { describe, expect, it } from "vitest";
+import panelHtml from "../../src/ui/panel.html";
+import { DEFAULT_SETTINGS } from "../../src/types/settings";
+import { SETTING_FIELD_DESCRIPTORS } from "../../src/settings/fields";
+
+interface FlField {
+  path: string | string[];
+  label: string | null;
+  hint: string | null;
+  [key: string]: unknown;
+}
+
+interface FlCard {
+  title?: string | null;
+  fields?: FlField[];
+}
+
+interface FlSection {
+  key: string;
+  cards: FlCard[];
+}
+
+interface Dict {
+  en: Record<string, string>;
+  fa: Record<string, string>;
+}
+
+const VERSION_PATH = "version";
+const PSEUDO_UI_PATHS = ["__privateDoh"];
+const NON_REGISTRY_UI_PATHS = ["sourceUrls"];
+const API_MANAGED_PATHS = ["passwordHash", "passwordSalt", "sessionSecret"];
+
+function settingLeafPaths(value: unknown, prefix = ""): string[] {
+  if (prefix.length > 0 && (value === null || typeof value !== "object" || Array.isArray(value))) {
+    return [prefix];
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.entries(value).flatMap(([k, v]) => settingLeafPaths(v, prefix ? `${prefix}.${k}` : k));
+}
+
+function buildPanelRegistry(): { dict: Dict; fields: FlField[] } {
+  const dictStart = panelHtml.indexOf("const DICT={");
+  const dictEnd = panelHtml.indexOf("const getLangCookie");
+  const flStart = panelHtml.indexOf("const FL=");
+  const flEnd = panelHtml.indexOf("function helpTrigger");
+  expect(dictStart).toBeGreaterThan(-1);
+  expect(dictEnd).toBeGreaterThan(dictStart);
+  expect(flStart).toBeGreaterThan(dictEnd);
+  expect(flEnd).toBeGreaterThan(flStart);
+  const factory = new Function(
+    "SS_METHODS",
+    "FPS",
+    "PACKETS",
+    "getPath",
+    `${panelHtml.slice(dictStart, dictEnd)}\n${panelHtml.slice(flStart, flEnd)}\nreturn { DICT, SECTIONS };`,
+  ) as (...args: unknown[]) => { DICT: Dict; SECTIONS: FlSection[] };
+  const ssMethods = ["aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305"];
+  const fingerprints = ["chrome", "firefox", "safari", "ios", "android", "edge", "360", "qq", "random", "randomized"];
+  const packets = ["tlshello", "1-1", "1-2", "1-3", "1-5"];
+  const getPath = (obj: unknown, path: string): unknown =>
+    path.split(".").reduce<unknown>(
+      (acc, k) => (acc !== null && typeof acc === "object" ? (acc as Record<string, unknown>)[k] : undefined),
+      obj,
+    );
+  const { DICT, SECTIONS } = factory(ssMethods, fingerprints, packets, getPath);
+  const fields: FlField[] = [];
+  for (const section of SECTIONS) {
+    for (const card of section.cards ?? []) {
+      for (const f of card.fields ?? []) fields.push(f);
+    }
+  }
+  return { dict: DICT, fields };
+}
+
+function flPathsOf(fields: FlField[]): string[] {
+  const paths: string[] = [];
+  for (const f of fields) {
+    for (const p of Array.isArray(f.path) ? f.path : [f.path]) paths.push(String(p));
+  }
+  return paths;
+}
+
+describe("settings single source of truth drift", () => {
+  const tablePaths = SETTING_FIELD_DESCRIPTORS.map((d) => d.path);
+
+  it("descriptor table has no duplicate paths", () => {
+    expect(new Set(tablePaths).size).toBe(tablePaths.length);
+  });
+
+  it("descriptor table covers every DEFAULT_SETTINGS settable leaf exactly", () => {
+    const leaves = settingLeafPaths(DEFAULT_SETTINGS).filter((p) => p !== VERSION_PATH);
+    expect(tablePaths.slice().sort()).toEqual(leaves.slice().sort());
+  });
+
+  it("every panel FL() path is a known setting field (or the documented pseudo-field)", () => {
+    const { fields } = buildPanelRegistry();
+    const tableSet = new Set(tablePaths);
+    const extras = flPathsOf(fields).filter((p) => !tableSet.has(p));
+    expect(extras.sort()).toEqual(PSEUDO_UI_PATHS.slice().sort());
+  });
+
+  it("every setting field missing from FL() is exactly the documented exception set", () => {
+    const { fields } = buildPanelRegistry();
+    const flSet = new Set(flPathsOf(fields));
+    const unbound = tablePaths.filter((p) => !flSet.has(p));
+    expect(unbound.sort()).toEqual([...NON_REGISTRY_UI_PATHS, ...API_MANAGED_PATHS].sort());
+    for (const p of NON_REGISTRY_UI_PATHS) {
+      expect(panelHtml).toContain(`data-bind="${p}"`);
+    }
+  });
+
+  it("every i18n key referenced by the FL() registry exists in both dictionaries", () => {
+    const { dict, fields } = buildPanelRegistry();
+    const refs: string[] = [];
+    for (const f of fields) {
+      for (const key of [f.label, f.hint, f.help, f.protoLabelKey]) {
+        if (typeof key === "string" && key.length > 0) refs.push(key);
+      }
+    }
+    expect(refs.length).toBeGreaterThan(50);
+    const missing = refs.filter((k) => !(k in dict.en) || !(k in dict.fa));
+    expect(missing).toEqual([]);
+  });
+
+  it("en and fa dictionaries define the same key set", () => {
+    const { dict } = buildPanelRegistry();
+    expect(Object.keys(dict.en).sort()).toEqual(Object.keys(dict.fa).sort());
+  });
+});

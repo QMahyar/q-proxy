@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS } from "../../src/types/settings";
-import type { Settings } from "../../src/types/settings";
-import { invalidateSettingsCache } from "../../src/settings/store";
+import { DEFAULT_SETTINGS } from "../../../src/types/settings";
+import type { Settings } from "../../../src/types/settings";
+import { invalidateSettingsCache } from "../../../src/settings/store";
 import {
   handleTelegramRemove,
   handleTelegramSetup,
   handleTelegramWebhook,
   telegramWebhookSecret,
-} from "../../src/handlers/api/telegram";
+} from "../../../src/handlers/api/telegram";
 
 const BOT_TOKEN = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const CHAT_ID = "424242";
