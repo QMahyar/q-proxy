@@ -66,7 +66,9 @@ export function parseChainUri(uri: string): ChainDescriptor | null {
 export async function dialTcp(host: string, port: number): Promise<Socket> {
   const { connect } = await import("cloudflare:sockets");
   const address = host.includes(":") ? `[${host}]:${port}` : `${host}:${port}`;
-  return connect(address, { allowHalfOpen: true }) as unknown as Socket;
+  const socket = connect(address, { allowHalfOpen: true });
+  await socket.opened;
+  return socket as unknown as Socket;
 }
 
 function asDuplex(socket: Socket): DuplexIO & { close(): Promise<void> } {
