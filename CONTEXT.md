@@ -59,7 +59,7 @@ npm run typecheck && npm test
 
 | Task | Touch these, in order |
 |------|----------------------|
-| Setting field | `src/types/settings.ts` → `src/settings/validate.ts` → field registry + en/fa dicts in `src/ui/panel.html` → `test/settings/validate.spec.ts` |
+| Setting field | `src/types/settings.ts` → descriptor row in `src/settings/fields.ts` (consumed by `src/settings/validate.ts`) → field registry + en/fa dicts in `src/ui/panel.html` → `test/settings/validate.spec.ts` + drift test `test/settings/fields.spec.ts` |
 | API route | `SecureRoute`/`ApiRouteName` in `src/core/routes.ts` → `dispatchApi` in `src/core/router.ts` → handler in `src/handlers/api/` → ARCHITECTURE §3 row → `test/workers/router.spec.ts` |
 | Sub emitter | `SubFormat` in `src/core/ua.ts` → `src/nodes/emitters/<name>.ts` → `registry.ts` → `SUB_FORMATS` in `src/subscription/negotiate.ts` (single source — subscribe + users-sub both consume it; see DEVELOPER_GUIDE §6) |
 | WARP format | `WARP_FORMATS` + `WARP_EMITTERS` + type/extension maps in `src/warp/formats/registry.ts` |

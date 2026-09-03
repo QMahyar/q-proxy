@@ -32,6 +32,8 @@ node scripts/release.mjs <version> [--dry]  # tag + changelog check + build
 
 CI: `.github/workflows/ci.yml` runs `npm ci` + `npm run typecheck` + `npm test` on every push/PR (node 22).
 
+No eslint by design (decided wayfinder ticket 05): `typescript-eslint` peer-depends on `typescript <6.1.0` while this repo runs TypeScript 7.0.2 native; strict `tsc --noEmit` (incl. `noUnusedLocals`/`noUnusedParameters`) is the lint gate, and the esbuild single-file build rejects bare imports. Revisit when typescript-eslint supports TS 7.
+
 If a local `wrangler dev` wedges (workerd accepts connections but never responds): kill the stray workerd process on the port, then relaunch on another port (`npx wrangler dev --port 8788`). **Gotcha:** `wrangler dev` serves `dist/q-proxy.js` (per `wrangler.toml main=`) — `npm run dev` rebuilds first, but a bare `npx wrangler dev` shows only what was last built; if a change "doesn't take effect", rebuild before debugging the code.
 
 Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY` (Global Key, cfk_-style) + `$env:CLOUDFLARE_EMAIL` + `$env:CLOUDFLARE_ACCOUNT_ID`. Using `CLOUDFLARE_API_TOKEN` with a Global Key fails `[code: 9109]`. Private deploy targets live in `wrangler.local.toml` (gitignored, same shape as `wrangler.toml`) — use it with `npx wrangler deploy --config wrangler.local.toml`. Full matrix (Workers, Pages, Deploy Button, KV setup) is in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
@@ -62,7 +64,7 @@ src/nodes/emitters/*     clash-yaml, singbox-json, surge-conf, loon-conf (+regis
 src/subscription/        negotiate (?target= > UA > base64), headers, merge (remote subs)
 src/users/store.ts       per-user directory (≤50): token subs, protocol filter, daily quota, expiry
 src/auth/                password tiers (PBKDF2 100k current, 15k legacy auto-upgraded on login), session (HMAC q_session {exp,iat} + revocation floor qproxy:min-iat), guard (CSRF X-Q-Panel)
-src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, validate (72 leaf fields)
+src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, fields (descriptor table), validate (66 leaf fields)
 src/handlers/            tunnel, subscribe, warp-sub, users-sub, doh, myip(requireAuth), robots, camouflage,
                          api/* (auth, settings+bootstrap/export/import/reset, status+suburls, killswitch,
                          warp, users, telegram setup/remove/webhook, version/check)
@@ -98,9 +100,9 @@ src/ui/assets.ts         panel.html, login.html, camo.html as strings
 
 Adding a setting field:
 1. Add to `Settings` interface + `DEFAULT_SETTINGS` in `src/types/settings.ts`
-2. Validate in `src/settings/validate.ts` (use existing helpers: boolField/intField/strField/strArrayField)
+2. Add a descriptor row in `src/settings/fields.ts` (`SETTING_FIELD_DESCRIPTORS` — single source of truth; `validate.ts` consumes it)
 3. Bind in `src/ui/panel.html` (field registry + dictionaries en/fa)
-4. Test in `test/settings/validate.spec.ts`
+4. Test in `test/settings/validate.spec.ts`; the drift test `test/settings/fields.spec.ts` enforces table/interface/registry/dict agreement
 
 Adding an emitter:
 1. Extend `SubFormat` in `src/core/ua.ts` + sniff tokens
