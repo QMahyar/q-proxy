@@ -152,15 +152,72 @@ describe("users store", () => {
     expect(a).not.toBe(b);
   });
 
-  it("sanitizes to the exact public field set, exposing tokenHint not tokenHash", async () => {
+  it("sanitizes to the exact public field set, exposing tokenHint and token not tokenHash", async () => {
     const u = await mkUser({ dailyReqLimit: 100, expiresAt: 1893456000000 });
     const view = sanitizeUser(u);
     expect(Object.keys(view).sort()).toEqual(
-      ["createdAt", "dailyReqLimit", "enabled", "expiresAt", "id", "name", "protocols", "tokenHint"].sort(),
+      ["addressOverride", "createdAt", "dailyReqLimit", "enabled", "expiresAt", "id", "name", "protocols", "token", "tokenHint"].sort(),
     );
-    expect((view as Record<string, unknown>).token).toBeUndefined();
+    expect(typeof (view as Record<string, unknown>).token).toBe("string");
     expect((view as Record<string, unknown>).tokenHash).toBeUndefined();
     expect(view.tokenHint).toBe(u.tokenHint);
+    expect(view.addressOverride).toBeNull();
+  });
+
+  it("persists addressOverride through save and list round-trip", async () => {
+    const env = kv.asEnv();
+    const alice = await mkUser({
+      addressOverride: { address: "1.2.3.4", port: 2053, host: "cdn.example.com", sni: "sni.example.com", label: "Pinned" },
+    });
+    await saveUsers(env, [alice]);
+    const raw = JSON.parse(kv.map.get(USERS_KEY)!) as Record<string, unknown>[];
+    expect(raw[0]!.addressOverride).toEqual(alice.addressOverride);
+    const users = await listUsers(env);
+    expect(users).toHaveLength(1);
+    expect(users[0]!.addressOverride).toEqual({
+      address: "1.2.3.4",
+      port: 2053,
+      host: "cdn.example.com",
+      sni: "sni.example.com",
+      label: "Pinned",
+    });
+  });
+
+  it("normalizes malformed stored overrides to null and drops unknown keys", async () => {
+    const env = kv.asEnv();
+    const alice = await mkUser();
+    const garbage = JSON.parse(JSON.stringify(alice));
+    garbage.addressOverride = "not-an-object";
+    const missingAddress = JSON.parse(JSON.stringify(alice));
+    missingAddress.id = "44444444-4444-4444-8444-444444444444";
+    missingAddress.addressOverride = { port: 443 };
+    const messy = JSON.parse(JSON.stringify(alice));
+    messy.id = "55555555-5555-4555-8555-555555555555";
+    messy.addressOverride = {
+      address: " 1.2.3.4 ",
+      port: 2053,
+      host: " host.example.com ",
+      sneaky: true,
+      __proto__: { hacked: true },
+    };
+    kv.map.set(USERS_KEY, JSON.stringify([garbage, missingAddress, messy]));
+    const users = await listUsers(env);
+    expect(users[0]!.addressOverride).toBeNull();
+    expect(users[1]!.addressOverride).toBeNull();
+    expect(users[2]!.addressOverride).toEqual({
+      address: "1.2.3.4",
+      port: 2053,
+      host: "host.example.com",
+    });
+    expect((users[2]!.addressOverride as unknown as Record<string, unknown>).sneaky).toBeUndefined();
+  });
+
+  it("sanitizeUser exposes addressOverride when set", async () => {
+    const u = await mkUser({ addressOverride: { address: "5.6.7.8", port: 443 } });
+    const view = sanitizeUser(u) as Record<string, unknown>;
+    expect(view.addressOverride).toEqual({ address: "5.6.7.8", port: 443 });
+    expect(view.tokenHash).toBeUndefined();
+    expect(typeof view.token).toBe("string");
   });
 
   it("records and reads per-token daily hits via hashed keys", async () => {
@@ -259,12 +316,12 @@ describe("users store", () => {
     expect(users.length).toBe(1);
     expect(users[0]!.tokenHash).toBe(await hashToken(legacyToken));
     expect(users[0]!.tokenHint).toBe(legacyToken.slice(0, 8) + "…");
-    expect((users[0] as unknown as Record<string, unknown>).token).toBeUndefined();
+    expect((users[0] as unknown as Record<string, unknown>).token).toBe(legacyToken);
     expect(await findUserByToken(env, legacyToken)).not.toBeNull();
     await saveUsers(env, users);
     const persisted = JSON.parse(kv.map.get(USERS_KEY)!) as unknown[];
     const rec = persisted[0] as Record<string, unknown>;
-    expect(rec.token).toBeUndefined();
+    expect(rec.token).toBe(legacyToken);
     expect(rec.tokenHash).toBe(await hashToken(legacyToken));
   });
 
@@ -307,7 +364,7 @@ describe("users store", () => {
     const u = await mkUser();
     const sanitized = sanitizeUser(u) as Record<string, unknown>;
     expect(sanitized.tokenHash).toBeUndefined();
-    expect(sanitized.token).toBeUndefined();
+    expect(typeof sanitized.token).toBe("string");
     expect(typeof sanitized.tokenHint).toBe("string");
   });
 });

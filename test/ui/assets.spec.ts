@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ASSETS } from "../../src/ui/assets";
 import { buildSubUrls } from "../../src/handlers/api/status";
 
-const TOTAL_BUDGET_BYTES = 224 * 1024;
+const TOTAL_BUDGET_BYTES = 256 * 1024;
 
 describe("ui/assets", () => {
   it("exports exactly panel, login and camo as non-empty strings", () => {
@@ -40,15 +40,13 @@ describe("panel html", () => {
     expect(html).not.toContain("@import");
   });
 
-  it("hash-routes the three views with aria tab semantics", () => {
+  it("hash-routes the two views with aria tab semantics", () => {
     expect(html).toContain('id="view-home"');
     expect(html).toContain('id="view-settings"');
-    expect(html).toContain('id="view-checker"');
     expect(html).toContain('role="tablist"');
     expect(html).toContain("role='tabpanel'");
     expect(html).toContain("'sp-'+s.key");
     expect(html).toContain("#/settings/");
-    expect(html).toContain("#/checker");
   });
 
   it("embeds the bilingual dictionary with Persian content", () => {
@@ -89,8 +87,8 @@ describe("panel html", () => {
     expect(html).toContain("qr-canvas");
   });
 
-  it("covers settings controls grouped into seven sections", () => {
-    for (const section of ["general", "protocols", "ports", "proxyip", "fragment", "chain", "advanced"]) {
+  it("covers settings controls grouped into sections", () => {
+    for (const section of ["general", "protocols", "addresses", "egress", "fragment", "chain", "advanced", "users", "warp", "sources"]) {
       expect(html).toContain(`'${section}'`);
       expect(html).toContain(`key:'${section}'`);
     }
@@ -106,16 +104,13 @@ describe("panel html", () => {
       "earlyDataMaxBytes",
       "fingerprint",
       "randomizeSniCase",
-      "customDomains",
-      "hostnameOverride",
-      "tlsPorts",
-      "plainPorts",
-      "plainPortPolicy",
-      "cleanIps",
+      "addresses",
+      "defaultPort",
+      "nameTemplate",
       "remoteSubUrls",
-      "cdn.enabled",
-      "cdn.sni",
       "proxyIpMode",
+      "proxyIps",
+      "proxyIpPoolUrl",
       "nat64Prefixes",
       "fragment.mode",
       "fragment.packets",
@@ -150,15 +145,6 @@ describe("panel html", () => {
     expect(html).toContain("confirmDialog(");
     expect(html).toContain("beforeunload");
     expect(html).toContain("fields");
-  });
-
-  it("runs the proxy-ip checker client-side against cdn-cgi trace", () => {
-    expect(html).toContain("cdn-cgi/trace");
-    expect(html).toContain("mode:'no-cors'");
-    expect(html).toContain("run-test");
-    expect(html).toContain("stop-test");
-    expect(html).toContain('role="progressbar"');
-    expect(html).toContain("ck-targets");
   });
 
   it("renders subscriptions from api/suburls with copy fields and a QR modal", () => {
@@ -229,7 +215,7 @@ describe("panel ui p08", () => {
     expect(html).toContain("confirm.securepath_title");
     expect(html).toContain("confirm.securepath_body");
     expect(html).toMatch(/patch\.securePath!==undefined&&!\(await confirmDialog/);
-    expect(html).toMatch(/sec==='general'\|\|sec==='ports'/);
+    expect(html).toMatch(/sec==='general'\|\|sec==='addresses'/);
   });
 
   it("navigates to the new base after a securePath change instead of refreshing under the old one", () => {
@@ -237,7 +223,7 @@ describe("panel ui p08", () => {
     expect(html).toMatch(guard);
     const guardIdx = html.search(guard);
     expect(guardIdx).toBeGreaterThan(html.indexOf("t('toast.settingsSaved')"));
-    expect(guardIdx).toBeLessThan(html.indexOf("sec==='general'||sec==='ports')await"));
+    expect(guardIdx).toBeLessThan(html.indexOf("sec==='general'||sec==='addresses')await"));
   });
 
   it("keeps language toggle labels present in both dictionaries", () => {
@@ -261,13 +247,6 @@ describe("panel ui p08", () => {
     expect(html).toContain("data-action=\"users-reload\"");
     expect(html).toContain("'users.load_failed'");
     expect(html).toContain("'common.retry'");
-  });
-
-  it("rejects non-TLS checker ports up front and cancels runs on navigation", () => {
-    expect(html).toContain("function targetPort(");
-    expect(html).toContain("checker.unsupported_port");
-    expect(html).toContain("unsupported:true");
-    expect(html).toMatch(/view!=='checker'&&CK\.running\)stopTest\(\)/);
   });
 
   it("keeps accent swatches visible on mobile and offers QR PNG download", () => {

@@ -27,10 +27,20 @@ const EXTENSIONS: Record<SubFormat, string> = {
   loon: "conf",
 };
 
+export const SUB_THROTTLE_SECONDS = 60;
+
 function filenameFor(format: SubFormat, title: string): string {
   const ext = EXTENSIONS[format];
   const enc = encodeURIComponent(title).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
   return `${enc}.${ext}`;
+}
+
+export function throttleHeaders(now: number = Date.now()): Record<string, string> {
+  return {
+    "Cache-Control": `public, max-age=${SUB_THROTTLE_SECONDS}, s-maxage=${SUB_THROTTLE_SECONDS}`,
+    Expires: new Date(now + SUB_THROTTLE_SECONDS * 1000).toUTCString(),
+    "Profile-Update-Interval": "60",
+  };
 }
 
 export function subscriptionHeaders(
@@ -45,9 +55,8 @@ export function subscriptionHeaders(
   const h: Record<string, string> = {
     "Profile-Title": `base64:${encodeUtf8Base64(title)}`,
     "Subscription-Userinfo": userinfo,
-    "Profile-Update-Interval": String(Math.max(1, Math.floor(meta.updateIntervalHours))),
     "Content-Disposition": `attachment; filename*=UTF-8''${filenameFor(format, title)}`,
-    "Cache-Control": "public, max-age=60",
+    ...throttleHeaders(),
   };
   if (meta.webPageUrl.length > 0) h["profile-web-page-url"] = meta.webPageUrl;
   return h;

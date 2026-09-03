@@ -72,9 +72,10 @@ describe("handleSubscribe", () => {
     expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     expect(res.headers.get("profile-title")).toBe("base64:USBQcm94eQ==");
     expect(res.headers.get("subscription-userinfo")).toBe("upload=0; download=0");
-    expect(res.headers.get("profile-update-interval")).toBe("12");
+    expect(res.headers.get("profile-update-interval")).toBe("60");
     expect(res.headers.get("profile-web-page-url")).toBe("https://w.test/sp12345678/panel");
-    expect(res.headers.get("cache-control")).toBe("public, max-age=60");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
+    expect(res.headers.get("expires")).toBeTypeOf("string");
     expect(res.headers.get("content-disposition")).toBe("attachment; filename*=UTF-8''Q%20Proxy.txt");
     const raw = await res.text();
     const r = decodeBase64(raw);

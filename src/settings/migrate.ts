@@ -1,11 +1,58 @@
 import type { Settings } from "../types/settings";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../types/settings";
+import { bracketIpv6, parseHostPort } from "../utils/net";
 import { log } from "../core/log";
 
 type PlainObject = Record<string, unknown>;
 type MigrationStep = (data: unknown) => unknown;
 
-export const MIGRATIONS: Record<number, MigrationStep> = {};
+export const MIGRATIONS: Record<number, MigrationStep> = {
+  1: (data) => {
+    if (!isPlainObject(data)) return data;
+    const out: PlainObject = { ...data };
+    const addresses: PlainObject[] = [];
+    if (typeof data.hostnameOverride === "string" && data.hostnameOverride.trim().length > 0) {
+      addresses.push({ address: data.hostnameOverride.trim() });
+    }
+    if (Array.isArray(data.customDomains)) {
+      for (const d of data.customDomains) {
+        if (typeof d === "string" && d.trim().length > 0) addresses.push({ address: d.trim() });
+      }
+    }
+    if (Array.isArray(data.cleanIps)) {
+      for (const raw of data.cleanIps) {
+        if (typeof raw !== "string") continue;
+        const hp = parseHostPort(raw.trim(), 0);
+        if (hp === null || hp.host.length === 0) continue;
+        const entry: PlainObject = { address: bracketIpv6(hp.host) };
+        if (hp.port > 0) entry.port = hp.port;
+        addresses.push(entry);
+      }
+    }
+    const cdn = isPlainObject(data.cdn) ? data.cdn : null;
+    if (cdn && cdn.enabled === true && Array.isArray(cdn.addresses)) {
+      for (const a of cdn.addresses) {
+        if (typeof a !== "string" || a.trim().length === 0) continue;
+        const entry: PlainObject = { address: a.trim() };
+        if (typeof cdn.host === "string" && cdn.host.trim().length > 0) entry.host = cdn.host.trim();
+        if (typeof cdn.sni === "string" && cdn.sni.trim().length > 0) entry.sni = cdn.sni.trim();
+        addresses.push(entry);
+      }
+    }
+    if (addresses.length > 0) out.addresses = addresses;
+    if (Array.isArray(data.tlsPorts) && data.tlsPorts.length > 0 && typeof data.tlsPorts[0] === "number") {
+      out.defaultPort = data.tlsPorts[0];
+    }
+    delete out.hostnameOverride;
+    delete out.customDomains;
+    delete out.cleanIps;
+    delete out.tlsPorts;
+    delete out.plainPorts;
+    delete out.plainPortPolicy;
+    delete out.cdn;
+    return out;
+  },
+};
 
 export function isPlainObject(value: unknown): value is PlainObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);

@@ -1,28 +1,27 @@
 import type {
+  AddressSetting,
   RoutingRules,
   CamouflageMode,
   Fingerprint,
   FragmentMode,
   Language,
-  PlainPortPolicy,
   SsMethod,
   Settings,
 } from "../types/settings";
 import { CF_PLAIN_PORTS, CF_TLS_PORTS, DEFAULT_SETTINGS } from "../types/settings";
 import { isPlainObject } from "./migrate";
-import { bracketIpv6, isIpLiteral, isLocalOrPrivateTarget, normalizeCleanAddress, parseHostPort } from "../utils/net";
+import { bracketIpv6, isIpLiteral, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
 
 export type ValidationResult =
   | { ok: true; value: Settings }
   | { ok: false; fields: Record<string, string> };
 
-const CF_TLS_PORT_LIST: readonly number[] = CF_TLS_PORTS;
-const CF_PLAIN_PORT_LIST: readonly number[] = CF_PLAIN_PORTS;
+const CF_PORT_SET = new Set<number>([...CF_TLS_PORTS, ...CF_PLAIN_PORTS]);
+const CF_TLS_PORT_SET = new Set<number>(CF_TLS_PORTS);
 const KNOWN_ALPN = ["h2", "http/1.1", "h3"];
 
 const LANGUAGES: readonly Language[] = ["en", "fa"];
 const SS_METHODS: readonly SsMethod[] = ["aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305"];
-const PLAIN_PORT_POLICIES: readonly PlainPortPolicy[] = ["always", "workers-dev", "never"];
 const PROXY_IP_MODES = ["proxyip", "nat64"] as const;
 const CAMOUFLAGE_MODES: readonly CamouflageMode[] = ["off", "static", "proxy"];
 const FRAGMENT_MODES: readonly FragmentMode[] = ["off", "low", "medium", "high", "severe", "custom"];
@@ -64,16 +63,6 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function validHostnameOrEmpty(value: string): boolean {
-  return value.length === 0 || (HOSTNAME_RE.test(value) && value.length <= 253);
-}
-
-function validCdnAddress(value: string): boolean {
-  if (isIpLiteral(value)) return true;
-  if (value.includes(":")) return false;
-  return HOSTNAME_RE.test(value) && value.length <= 253;
 }
 
 function boolField(
@@ -208,31 +197,90 @@ function strArrayField(
   setField(out, key, sanitizeStrArray(v, opts));
 }
 
-function portListField(
+function addressListField(
   patch: Record<string, unknown>,
+  out: Settings,
   key: string,
-  allowed: readonly number[],
   fields: Record<string, string>,
-): number[] | undefined {
+  maxItems: number,
+): void {
   const v = patch[key];
-  if (v === undefined) return undefined;
-  if (!Array.isArray(v) || v.length > allowed.length) {
-    fail(fields, key, `must be an array with at most ${allowed.length} ports`);
-    return undefined;
+  if (v === undefined) return;
+  if (!Array.isArray(v)) {
+    fail(fields, key, "must be an array of address entries");
+    return;
   }
-  const seen = new Set<number>();
-  for (const entry of v) {
-    if (typeof entry !== "number" || !Number.isInteger(entry)) {
-      fail(fields, key, "ports must be integers");
-      return undefined;
+  const seen = new Set<string>();
+  const result: AddressSetting[] = [];
+  for (let i = 0; i < v.length; i++) {
+    const item = v[i];
+    if (!isPlainObject(item)) {
+      fail(fields, key, `entry ${i + 1} must be an object`);
+      continue;
     }
-    if (!allowed.includes(entry)) {
-      fail(fields, key, `port ${entry} is not a Cloudflare-proxied port`);
-      return undefined;
+    const rec = item as Record<string, unknown>;
+    const addrRaw = typeof rec.address === "string" ? rec.address.trim() : "";
+    if (addrRaw.length === 0) {
+      fail(fields, key, `entry ${i + 1} is missing an address`);
+      continue;
     }
-    seen.add(entry);
+    const hp = parseHostPort(addrRaw, 0);
+    if (hp === null || hp.host.length === 0) {
+      fail(fields, key, `entry ${i + 1} has an invalid address`);
+      continue;
+    }
+    const hostValid = isIpLiteral(hp.host) || (HOSTNAME_RE.test(hp.host) && hp.host.length <= 253 && !hp.host.includes(":"));
+    if (!hostValid) {
+      fail(fields, key, `entry ${i + 1} address must be an IP or hostname`);
+      continue;
+    }
+    let port = typeof rec.port === "number" ? rec.port : hp.port > 0 ? hp.port : undefined;
+    if (port !== undefined) {
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        fail(fields, key, `entry ${i + 1} port must be 1-65535`);
+        continue;
+      }
+      if (!CF_PORT_SET.has(port)) {
+        fail(fields, key, `entry ${i + 1} port ${port} is not a Cloudflare-proxied port`);
+        continue;
+      }
+    }
+    const label = typeof rec.label === "string" ? rec.label.trim() : "";
+    if (label.length > 64) {
+      fail(fields, key, `entry ${i + 1} label is too long`);
+      continue;
+    }
+    const entry: AddressSetting = { address: bracketIpv6(hp.host) };
+    if (port !== undefined) entry.port = port;
+    if (label.length > 0) entry.label = label;
+    if (rec.enabled === false) entry.enabled = false;
+    const hostField = typeof rec.host === "string" ? rec.host.trim() : "";
+    if (hostField.length > 0) {
+      if (!HOSTNAME_RE.test(hostField) || hostField.length > 253) {
+        fail(fields, key, `entry ${i + 1} host must be a hostname`);
+        continue;
+      }
+      entry.host = hostField;
+    }
+    const sniField = typeof rec.sni === "string" ? rec.sni.trim() : "";
+    if (sniField.length > 0) {
+      if (!HOSTNAME_RE.test(sniField) || sniField.length > 253) {
+        fail(fields, key, `entry ${i + 1} sni must be a hostname`);
+        continue;
+      }
+      entry.sni = sniField;
+    }
+    const dedupeKey = `${entry.address}:${entry.port ?? "auto"}`.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    result.push(entry);
+    if (result.length >= maxItems) break;
   }
-  return [...seen];
+  if (result.length > maxItems) {
+    fail(fields, key, `too many entries (max ${maxItems})`);
+    return;
+  }
+  setField(out, key as keyof Settings & string, result);
 }
 
 function urlListField(
@@ -262,30 +310,6 @@ function urlListField(
     }
   }
   setField(out, key as keyof Settings & string, cleaned);
-}
-
-function cleanAddrListField(
-  patch: Record<string, unknown>,
-  out: Settings,
-  key: string,
-  fields: Record<string, string>,
-  maxItems: number,
-): void {
-  const v = patch[key];
-  if (v === undefined) return;
-  if (!Array.isArray(v)) {
-    fail(fields, key, "must be an array of strings");
-    return;
-  }
-  const seen = new Set<string>();
-  for (const raw of v) {
-    if (typeof raw !== "string") continue;
-    const norm = normalizeCleanAddress(raw);
-    if (norm === null || seen.has(norm)) continue;
-    seen.add(norm);
-    if (seen.size >= maxItems) break;
-  }
-  setField(out, key as keyof Settings & string, [...seen]);
 }
 
 function validateNested(
@@ -353,25 +377,14 @@ export function validateSettings(input: unknown): ValidationResult {
   if (earlyDataEnabled !== undefined) out.earlyDataEnabled = earlyDataEnabled;
   const earlyDataMaxBytes = intField(patch, "earlyDataMaxBytes", fields, 0, 8192);
   if (earlyDataMaxBytes !== undefined) out.earlyDataMaxBytes = earlyDataMaxBytes;
-  v = strField(patch, "hostnameOverride", fields, { maxLen: 253 });
-  if (v !== undefined && !validHostnameOrEmpty(v)) fail(fields, "hostnameOverride", "must be a hostname");
-  else if (v !== undefined) out.hostnameOverride = v;
-  strArrayField(patch, out, "customDomains", fields, { maxItems: 16, pattern: HOSTNAME_RE });
-  cleanAddrListField(patch, out, "cleanIps", fields, 64);
-  const tlsPorts = portListField(patch, "tlsPorts", CF_TLS_PORT_LIST, fields);
-  if (tlsPorts !== undefined) out.tlsPorts = tlsPorts;
-  const plainPorts = portListField(patch, "plainPorts", CF_PLAIN_PORT_LIST, fields);
-  if (plainPorts !== undefined) out.plainPorts = plainPorts;
-  const overlap = out.tlsPorts.filter((p) => out.plainPorts.includes(p));
-  if (overlap.length > 0) {
-    fail(fields, "tlsPorts", `ports overlap plainPorts: ${overlap.join(", ")}`);
-    fail(fields, "plainPorts", `ports overlap tlsPorts: ${overlap.join(", ")}`);
+  const defaultPort = intField(patch, "defaultPort", fields, 1, 65535);
+  if (defaultPort !== undefined) {
+    if (!CF_TLS_PORT_SET.has(defaultPort)) fail(fields, "defaultPort", "must be a Cloudflare-proxied TLS port");
+    else out.defaultPort = defaultPort;
   }
-  if (out.tlsPorts.length === 0) {
-    fail(fields, "tlsPorts", "select at least one TLS port — otherwise no configurations can be generated");
-  }
-  const plainPortPolicy = enumField(patch, "plainPortPolicy", fields, PLAIN_PORT_POLICIES);
-  if (plainPortPolicy !== undefined) out.plainPortPolicy = plainPortPolicy;
+  addressListField(patch, out, "addresses", fields, 64);
+  const nameTemplate = strField(patch, "nameTemplate", fields, { maxLen: 512 });
+  if (nameTemplate !== undefined) out.nameTemplate = nameTemplate;
   const fingerprint = enumField(patch, "fingerprint", fields, FINGERPRINTS);
   if (fingerprint !== undefined) out.fingerprint = fingerprint;
   const randomizeSniCase = boolField(patch, "randomizeSniCase", fields);
@@ -394,30 +407,6 @@ export function validateSettings(input: unknown): ValidationResult {
       else out.alpn = cleaned;
     }
   }
-  validateNested(patch, "cdn", fields, (sub, f) => {
-    const enabled = boolField(sub, "enabled", f);
-    if (enabled !== undefined) out.cdn.enabled = enabled;
-    const addresses = sub["addresses"];
-    if (addresses !== undefined) {
-      if (!Array.isArray(addresses)) {
-        fail(f, "addresses", "must be an array of strings");
-      } else {
-        const cleaned = sanitizeStrArray(addresses, { maxItems: 16 });
-        if (cleaned.some((a) => !validCdnAddress(a))) {
-          fail(f, "addresses", "each address must be a hostname or IP literal");
-        } else {
-          out.cdn.addresses = cleaned;
-        }
-      }
-    }
-    const host = strField(sub, "host", f, { maxLen: 253 });
-    if (host !== undefined && !validHostnameOrEmpty(host)) fail(f, "host", "must be a hostname");
-    else if (host !== undefined) out.cdn.host = host;
-    const sni = strField(sub, "sni", f, { maxLen: 253 });
-    if (sni !== undefined && !validHostnameOrEmpty(sni)) fail(f, "sni", "must be a hostname");
-    else if (sni !== undefined) out.cdn.sni = sni;
-  });
-
   validateNested(patch, "fragment", fields, (sub, f) => {
     const mode = enumField(sub, "mode", f, FRAGMENT_MODES);
     if (mode !== undefined) out.fragment.mode = mode;
@@ -439,6 +428,14 @@ export function validateSettings(input: unknown): ValidationResult {
   const proxyIpMode = enumField(patch, "proxyIpMode", fields, PROXY_IP_MODES);
   if (proxyIpMode !== undefined) out.proxyIpMode = proxyIpMode;
   strArrayField(patch, out, "proxyIps", fields, { maxItems: 64, pattern: HOST_TOKEN_RE });
+  v = strField(patch, "proxyIpPoolUrl", fields, { maxLen: 2048 });
+  if (v !== undefined) {
+    const trimmed = v.trim();
+    if (trimmed.length === 0) out.proxyIpPoolUrl = "";
+    else if (!isHttpUrl(trimmed)) fail(fields, "proxyIpPoolUrl", "must be a valid http(s) URL");
+    else if (isLocalOrPrivateTarget(new URL(trimmed).hostname)) fail(fields, "proxyIpPoolUrl", "must not target a local or private address");
+    else out.proxyIpPoolUrl = trimmed;
+  }
   strArrayField(patch, out, "nat64Prefixes", fields, {
     maxItems: 8,
     itemMaxLen: 50,
@@ -495,6 +492,7 @@ export function validateSettings(input: unknown): ValidationResult {
   const maxNodesPerFormat = intField(patch, "maxNodesPerFormat", fields, 1, 2000);
   if (maxNodesPerFormat !== undefined) out.maxNodesPerFormat = maxNodesPerFormat;
   urlListField(patch, out, "remoteSubUrls", fields, 16);
+  urlListField(patch, out, "sourceUrls", fields, 16);
   const killSwitch = boolField(patch, "killSwitch", fields);
   if (killSwitch !== undefined) out.killSwitch = killSwitch;
   const speedtestIntercept = boolField(patch, "speedtestIntercept", fields);

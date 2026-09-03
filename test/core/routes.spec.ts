@@ -93,13 +93,10 @@ describe("resolveSecureRoute", () => {
 });
 
 describe("resolveHostname", () => {
-  it("prefers override then custom domain then request host", () => {
+  it("returns the request host", () => {
     const url = new URL("https://worker.example.com/sub");
-    expect(resolveHostname(makeTestSettings({ hostnameOverride: "override.io" }), url)).toBe("override.io");
-    expect(
-      resolveHostname(makeTestSettings({ customDomains: ["custom.one", "custom.two"] }), url),
-    ).toBe("custom.one");
     expect(resolveHostname(makeTestSettings(), url)).toBe("worker.example.com");
+    expect(resolveHostname(makeTestSettings({}), new URL("https://alt.example.net/sub"))).toBe("alt.example.net");
   });
 });
 

@@ -1,10 +1,12 @@
-import type { AmneziaParams, WarpAddresses, WarpConfig } from "../types/warp";
+import type { AmneziaParams, WarpAddresses, WarpConfig, WarpEndpoint } from "../types/warp";
 import { isBase64Key32, publicKeyFromPrivate } from "../crypto/x25519";
+import { isIPv6 } from "../utils/net";
 
 export interface ParseOk {
   ok: true;
   config: WarpConfig;
   amnezia_overrides: AmneziaParams | null;
+  endpoints?: WarpEndpoint[];
 }
 
 export interface ParseFail {
@@ -47,6 +49,7 @@ const PEER_KEYS = new Set([
 ]);
 
 const DEFAULT_PEER_PUBLIC_KEY = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=";
+const DEFAULT_WARP_IPV4 = "172.16.0.2/32";
 
 function fail(reason: string): ParseFail {
   return { ok: false, reason };
@@ -158,6 +161,7 @@ export function parseWireGuardConf(text: string): ParseResult {
   let mtu = 1280;
   let peerPublicKey: string | null = null;
   let reserved: [number, number, number] | null = null;
+  const endpoints: WarpEndpoint[] = [];
   const amnezia: AmneziaParams = {};
   let hasAmnezia = false;
   for (const line of lines) {
@@ -207,6 +211,9 @@ export function parseWireGuardConf(text: string): ParseResult {
         const parsed = decodeReservedBytes(value);
         if (parsed === null) return fail("invalid reserved");
         reserved = parsed;
+      } else if (key === "endpoint") {
+        const ep = parseEndpointHostPort(value);
+        if (ep !== null) endpoints.push(ep);
       }
     }
   }
@@ -232,7 +239,9 @@ export function parseWireGuardConf(text: string): ParseResult {
     mtu,
     reserved: reserved ?? [0, 0, 0],
   };
-  return { ok: true, config, amnezia_overrides: hasAmnezia ? amnezia : null };
+  const result: ParseOk = { ok: true, config, amnezia_overrides: hasAmnezia ? amnezia : null };
+  if (endpoints.length > 0) result.endpoints = dedupeEndpoints(endpoints);
+  return result;
 }
 
 function splitAddresses(value: string): WarpAddresses | null {
@@ -248,6 +257,47 @@ function splitAddresses(value: string): WarpAddresses | null {
   }
   if (ipv4 === null && ipv6 === null) return null;
   return { ipv4: ipv4 ?? "", ipv6: ipv6 ?? "" };
+}
+
+export function parseEndpointHostPort(value: string): WarpEndpoint | null {
+  let host = value.trim();
+  let portStr = "";
+  const bracket = /^\[([^\]]+)\]:(\d+)$/.exec(host);
+  if (bracket) {
+    host = bracket[1]!;
+    portStr = bracket[2]!;
+  } else {
+    const colon = host.lastIndexOf(":");
+    if (colon >= 0 && host.indexOf(":") === colon) {
+      portStr = host.slice(colon + 1);
+      host = host.slice(0, colon);
+    }
+  }
+  const port = Number(portStr);
+  if (portStr === "" || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  host = host.replace(/^\[|\]$/g, "");
+  if (host.includes(":")) {
+    if (!isIPv6(host) || host.startsWith("-") || host.endsWith("-")) return null;
+    return { ip: host, port };
+  }
+  if (!/^[A-Za-z0-9.-]+$/.test(host) || host.length === 0 || host.startsWith("-") || host.endsWith("-")) return null;
+  if (host.includes(".")) {
+    const labels = host.split(".");
+    if (labels.some((l) => l.length === 0 || l.length > 63)) return null;
+  }
+  return { ip: host, port };
+}
+
+function dedupeEndpoints(list: WarpEndpoint[]): WarpEndpoint[] {
+  const seen = new Set<string>();
+  const out: WarpEndpoint[] = [];
+  for (const e of list) {
+    const key = `${e.ip.toLowerCase()}:${e.port}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+  }
+  return out;
 }
 
 function parseQuery(query: string): Map<string, string> {
@@ -358,11 +408,139 @@ export function parseWgUri(uri: string): ParseResult {
     mtu,
     reserved,
   };
-  return { ok: true, config, amnezia_overrides: hasAmnezia ? amnezia : null };
+  const result: ParseOk = { ok: true, config, amnezia_overrides: hasAmnezia ? amnezia : null };
+  const endpoints: WarpEndpoint[] = [];
+  const authorityHost = userinfo !== null ? rest.slice(at + 1, authorityEnd) : rest.slice(0, authorityEnd);
+  const authorityEndpoint = parseEndpointHostPort(authorityHost);
+  if (authorityEndpoint !== null) endpoints.push(authorityEndpoint);
+  const endpointParam = q.get("endpoint");
+  if (endpointParam !== undefined && endpointParam.length > 0) {
+    const ep = parseEndpointHostPort(endpointParam);
+    if (ep !== null) endpoints.push(ep);
+  }
+  if (endpoints.length > 0) result.endpoints = dedupeEndpoints(endpoints);
+  return result;
 }
 
 export function parseWarpConfig(text: string): ParseResult {
   const trimmed = text.trim();
   if (/^(?:wg|wireguard):\/\//i.test(trimmed)) return parseWgUri(trimmed);
+  if (trimmed.startsWith("{")) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return fail("invalid JSON config");
+    }
+    return parseWarpJson(parsed);
+  }
   return parseWireGuardConf(trimmed);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function jsonAddress(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return isValidAddressValue(trimmed) ? trimmed : null;
+}
+
+export function parseWarpJson(root: unknown): ParseResult {
+  let source = asRecord(root);
+  if (source === null) return fail("JSON config must be an object");
+  const inner = asRecord(source.config);
+  if (inner !== null) source = inner;
+  const privateKey = typeof source.private_key === "string" ? source.private_key.trim() : "";
+  if (!isBase64Key32(privateKey)) return fail("missing or invalid private_key");
+  let publicKey: string;
+  try {
+    publicKey = publicKeyFromPrivate(privateKey);
+  } catch {
+    return fail("invalid private_key (weak key)");
+  }
+  const addressesRaw = asRecord(source.addresses);
+  let ipv4 = "";
+  let ipv6 = "";
+  if (addressesRaw !== null) {
+    const v4 = jsonAddress(addressesRaw.ipv4);
+    const v6 = jsonAddress(addressesRaw.ipv6);
+    if (addressesRaw.ipv4 !== undefined && v4 === null) return fail("invalid addresses.ipv4");
+    if (addressesRaw.ipv6 !== undefined && v6 === null) return fail("invalid addresses.ipv6");
+    ipv4 = v4 ?? "";
+    ipv6 = v6 ?? "";
+  }
+  if (ipv4.length === 0 && ipv6.length === 0) ipv4 = DEFAULT_WARP_IPV4;
+  const peerKeyRaw = typeof source.peer_public_key === "string" ? source.peer_public_key.trim() : "";
+  if (peerKeyRaw.length > 0 && !isBase64Key32(peerKeyRaw)) return fail("invalid peer_public_key");
+  const peerPublicKey = peerKeyRaw.length > 0 ? peerKeyRaw : DEFAULT_PEER_PUBLIC_KEY;
+  let mtu = 1280;
+  if (source.mtu !== undefined && source.mtu !== null) {
+    const n = Number(source.mtu);
+    if (!Number.isInteger(n) || n < 576 || n > 65535) return fail("invalid mtu");
+    mtu = n;
+  }
+  let reserved: [number, number, number] = [0, 0, 0];
+  const reservedRaw = source.reserved;
+  if (reservedRaw !== undefined && reservedRaw !== null) {
+    if (typeof reservedRaw === "string") {
+      const parsed = decodeReservedBytes(reservedRaw);
+      if (parsed === null) return fail("invalid reserved");
+      reserved = parsed;
+    } else if (Array.isArray(reservedRaw)) {
+      if (reservedRaw.length !== 3) return fail("invalid reserved");
+      const nums = reservedRaw.map((p) => Number(p));
+      if (!nums.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) return fail("invalid reserved");
+      reserved = [nums[0]!, nums[1]!, nums[2]!];
+    } else {
+      return fail("invalid reserved");
+    }
+  }
+  const amnezia: AmneziaParams = {};
+  let hasAmnezia = false;
+  const amneziaRaw = asRecord(source.amnezia);
+  if (amneziaRaw !== null) {
+    for (const key of AMNEZIA_INT_KEYS) {
+      const raw = amneziaRaw[key];
+      if (raw === undefined || raw === null) continue;
+      const parsed = parseAmneziaInt(key, String(raw));
+      if (!parsed.ok) return fail(`invalid amnezia value for ${key}`);
+      amnezia[key] = parsed.value;
+      hasAmnezia = true;
+    }
+    const i1 = amneziaRaw.I1 ?? amneziaRaw.i1;
+    if (typeof i1 === "string" && i1.length > 0) {
+      if (!/^<([rb]) [^>]*>$/.test(i1)) return fail("invalid I1 notation");
+      amnezia.I1 = i1;
+      hasAmnezia = true;
+    }
+  }
+  const endpoints: WarpEndpoint[] = [];
+  if (typeof source.endpoint === "string" && source.endpoint.trim().length > 0) {
+    const ep = parseEndpointHostPort(source.endpoint);
+    if (ep === null) return fail("invalid endpoint");
+    endpoints.push(ep);
+  }
+  const endpointsRaw = source.endpoints;
+  if (endpointsRaw !== undefined && endpointsRaw !== null) {
+    if (!Array.isArray(endpointsRaw)) return fail("endpoints must be an array");
+    for (const item of endpointsRaw) {
+      if (typeof item !== "string") return fail("invalid endpoint");
+      const ep = parseEndpointHostPort(item);
+      if (ep === null) return fail(`invalid endpoint: ${item.slice(0, 60)}`);
+      endpoints.push(ep);
+    }
+  }
+  const config: WarpConfig = {
+    private_key: privateKey,
+    public_key: publicKey,
+    addresses: { ipv4, ipv6 },
+    peer_public_key: peerPublicKey,
+    mtu,
+    reserved,
+  };
+  const result: ParseOk = { ok: true, config, amnezia_overrides: hasAmnezia ? amnezia : null };
+  if (endpoints.length > 0) result.endpoints = dedupeEndpoints(endpoints);
+  return result;
 }

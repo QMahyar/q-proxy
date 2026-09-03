@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { subscriptionHeaders } from "../../src/subscription/headers";
+import { describe, expect, it, vi } from "vitest";
+import { subscriptionHeaders, throttleHeaders } from "../../src/subscription/headers";
 import type { ProxyNode } from "../../src/types/node";
 import type { UsageSnapshot } from "../../src/types/context";
 
@@ -9,19 +9,26 @@ const nodes: ProxyNode[] = [];
 
 describe("subscriptionHeaders", () => {
   it("emits the exact header set with base64 title and byte-accurate userinfo", () => {
-    expect(
-      subscriptionHeaders("clash", "Q Proxy", nodes, usage, {
-        updateIntervalHours: 12,
-        webPageUrl: "https://w.test/sp/panel",
-      }),
-    ).toEqual({
-      "Profile-Title": "base64:USBQcm94eQ==",
-      "Subscription-Userinfo": "upload=0; download=5242880",
-      "Profile-Update-Interval": "12",
-      "Content-Disposition": "attachment; filename*=UTF-8''Q%20Proxy.yaml",
-      "Cache-Control": "public, max-age=60",
-      "profile-web-page-url": "https://w.test/sp/panel",
-    });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-02T00:00:00.000Z"));
+    try {
+      expect(
+        subscriptionHeaders("clash", "Q Proxy", nodes, usage, {
+          updateIntervalHours: 12,
+          webPageUrl: "https://w.test/sp/panel",
+        }),
+      ).toEqual({
+        "Profile-Title": "base64:USBQcm94eQ==",
+        "Subscription-Userinfo": "upload=0; download=5242880",
+        "Content-Disposition": "attachment; filename*=UTF-8''Q%20Proxy.yaml",
+        "Cache-Control": "public, max-age=60, s-maxage=60",
+        Expires: "Wed, 02 Sep 2026 00:01:00 GMT",
+        "Profile-Update-Interval": "60",
+        "profile-web-page-url": "https://w.test/sp/panel",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("picks the extension per format", () => {
@@ -34,10 +41,10 @@ describe("subscriptionHeaders", () => {
     expect(mk("clash")["Content-Disposition"]).toContain("T.yaml");
   });
 
-  it("omits profile-web-page-url when empty and clamps interval to >=1", () => {
+  it("omits profile-web-page-url when empty and pins the update interval to the fixed throttle", () => {
     const h = subscriptionHeaders("base64", "T", nodes, usage, { updateIntervalHours: 0, webPageUrl: "" });
     expect("profile-web-page-url" in h).toBe(false);
-    expect(h["Profile-Update-Interval"]).toBe("1");
+    expect(h["Profile-Update-Interval"]).toBe("60");
   });
 
   it("scales download estimate by requestsTotal * 1 MiB", () => {
@@ -79,6 +86,22 @@ describe("subscriptionHeaders", () => {
         expireAt,
       });
       expect(h["Subscription-Userinfo"]).toBe("upload=0; download=5242880");
+    }
+  });
+});
+
+describe("throttleHeaders", () => {
+  it("emits the fixed 60s cache-throttle triple derived from now", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-02T00:00:00.000Z"));
+    try {
+      expect(throttleHeaders()).toEqual({
+        "Cache-Control": "public, max-age=60, s-maxage=60",
+        Expires: "Wed, 02 Sep 2026 00:01:00 GMT",
+        "Profile-Update-Interval": "60",
+      });
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

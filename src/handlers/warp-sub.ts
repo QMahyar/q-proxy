@@ -6,7 +6,7 @@ import { resolveSecureRoute } from "../core/routes";
 import { appVersion } from "../settings/store";
 import { afterResponse, readUsage } from "../core/counters";
 import { encodeUtf8Base64 } from "../utils/base64";
-import { subscriptionUserinfo } from "../subscription/headers";
+import { subscriptionUserinfo, throttleHeaders } from "../subscription/headers";
 
 function notFound(): Response {
   return new Response("not found\n", {
@@ -45,19 +45,14 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
   const headers: Record<string, string> = {
     "Content-Type": WARP_CONTENT_TYPES[formatName],
     "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`${sanitizeFilename(account.name)}-${formatName}.${WARP_EXTENSIONS[formatName]}`)}`,
-    "Profile-Update-Interval": String(Math.max(1, Math.floor(s.subUpdateIntervalHours))),
+    ...throttleHeaders(),
     "Profile-Title": `base64:${encodeUtf8Base64(account.name)}`,
     "Subscription-Userinfo": subscriptionUserinfo(usage),
     "profile-web-page-url": `${origin}/${s.securePath}/panel`,
     "X-WG-Version": appVersion(),
-    "Cache-Control": "private, max-age=60",
   };
   const body: BodyInit = typeof result === "string" ? result : new Uint8Array(result);
   const res = new Response(body as BodyInit, { status: 200, headers });
-  if (edgeCache !== null) {
-    const cacheHeaders = { ...headers, "Cache-Control": "public, max-age=60" };
-    const cacheRes = new Response(body as BodyInit, { status: 200, headers: cacheHeaders });
-    afterResponse(edgeCache.put(cacheKey, cacheRes).catch(() => {}));
-  }
+  if (edgeCache !== null) afterResponse(edgeCache.put(cacheKey, res.clone()));
   return res;
 };

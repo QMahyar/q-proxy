@@ -1,4 +1,4 @@
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
 export const CF_TLS_PORTS = [443, 2053, 2083, 2087, 2096, 8443] as const;
 export const CF_PLAIN_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095] as const;
@@ -47,6 +47,15 @@ export interface TelegramSettings {
   chatId: string;
 }
 
+export interface AddressSetting {
+  address: string;
+  port?: number;
+  label?: string;
+  host?: string;
+  sni?: string;
+  enabled?: boolean;
+}
+
 export interface Settings {
   version: number;
   securePath: string;
@@ -70,21 +79,18 @@ export interface Settings {
   ssPath: string;
   earlyDataEnabled: boolean;
   earlyDataMaxBytes: number;
-  hostnameOverride: string;
-  customDomains: string[];
-  cleanIps: string[];
-  tlsPorts: number[];
-  plainPorts: number[];
-  plainPortPolicy: PlainPortPolicy;
+  addresses: AddressSetting[];
+  defaultPort: number;
+  nameTemplate: string;
   fingerprint: Fingerprint;
   randomizeSniCase: boolean;
   alpn: string[];
   echEnabled: boolean;
   echServerName: string;
-  cdn: { enabled: boolean; addresses: string[]; host: string; sni: string };
   fragment: FragmentSettings;
   proxyIpMode: "proxyip" | "nat64";
   proxyIps: string[];
+  proxyIpPoolUrl: string;
   nat64Prefixes: string[];
   chainProxy: ChainProxySettings;
   enableUdp53: boolean;
@@ -96,6 +102,7 @@ export interface Settings {
   subUpdateIntervalHours: number;
   maxNodesPerFormat: number;
   remoteSubUrls: string[];
+  sourceUrls: string[];
   killSwitch: boolean;
   speedtestIntercept: boolean;
   camouflage: CamouflageSettings;
@@ -126,18 +133,14 @@ export const DEFAULT_SETTINGS: Settings = {
   ssPath: "ss",
   earlyDataEnabled: true,
   earlyDataMaxBytes: 2048,
-  hostnameOverride: "",
-  customDomains: [],
-  cleanIps: [],
-  tlsPorts: [443, 2053, 2083, 2087, 2096, 8443],
-  plainPorts: [80, 8080, 8880, 2052, 2082, 2086, 2095],
-  plainPortPolicy: "workers-dev",
+  addresses: [],
+  defaultPort: 443,
+  nameTemplate: "",
   fingerprint: "chrome",
   randomizeSniCase: true,
   alpn: ["http/1.1"],
   echEnabled: false,
   echServerName: "",
-  cdn: { enabled: false, addresses: [], host: "", sni: "" },
   fragment: {
     mode: "off",
     packets: "tlshello",
@@ -150,6 +153,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   proxyIpMode: "proxyip",
   proxyIps: [],
+  proxyIpPoolUrl: "",
   nat64Prefixes: ["[2a02:898:146:64::]", "[2602:fc59:b0:64::]", "[2602:fc59:11:64::]"],
   chainProxy: { enabled: false, uri: "" },
   enableUdp53: true,
@@ -161,6 +165,7 @@ export const DEFAULT_SETTINGS: Settings = {
   subUpdateIntervalHours: 12,
   maxNodesPerFormat: 500,
   remoteSubUrls: [],
+  sourceUrls: [],
   killSwitch: false,
   speedtestIntercept: true,
   camouflage: { mode: "static", url: "" },

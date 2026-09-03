@@ -94,7 +94,7 @@ describe("users api handler", () => {
     expect(listed.length).toBe(50);
   });
 
-  it("create returns full token, list returns only tokenHint", async () => {
+  it("create and list expose the full token for the sub URL", async () => {
     const r = jsonReq("/api/users", "POST", { name: "Alice" });
     const res = (await handleUsersApi(r, env as never, {} as never)) as Response;
     const j = (await res.json()) as { data: { user: Record<string, unknown> } };
@@ -109,14 +109,15 @@ describe("users api handler", () => {
     const listJ = (await listRes.json()) as { data: { users: Record<string, unknown>[] } };
     expect(listJ.data.users.length).toBe(1);
     const listedUser = listJ.data.users[0]!;
-    expect(listedUser.token).toBeUndefined();
+    expect(typeof listedUser.token).toBe("string");
+    expect(listedUser.token).toBe(j.data.user.token);
     expect(listedUser.tokenHash).toBeUndefined();
     expect(typeof listedUser.tokenHint).toBe("string");
     expect((listedUser.tokenHint as string).endsWith("…")).toBe(true);
     expect(listedUser.tokenHint).toBe((j.data.user.token as string).slice(0, 8) + "…");
   });
 
-  it("PUT does not expose token, regenerate returns new token with hint rotation", async () => {
+  it("PUT preserves token, regenerate returns new token with hint rotation", async () => {
     const create = jsonReq("/api/users", "POST", { name: "Bob" });
     const createRes = (await handleUsersApi(create, env as never, {} as never)) as Response;
     const createJ = (await createRes.json()) as { data: { user: { id: string; token: string; tokenHint: string } } };
@@ -126,7 +127,7 @@ describe("users api handler", () => {
     const putReq = jsonReq(`/api/users/${id}`, "PUT", { name: "Bobby" });
     const putRes = (await handleUsersApi(putReq, env as never, {} as never)) as Response;
     const putJ = (await putRes.json()) as { data: { user: Record<string, unknown> } };
-    expect(putJ.data.user.token).toBeUndefined();
+    expect(putJ.data.user.token).toBe(oldToken);
     expect(typeof putJ.data.user.tokenHint).toBe("string");
     expect(putJ.data.user.tokenHint).toBe(oldHint);
 
@@ -139,6 +140,7 @@ describe("users api handler", () => {
 
     const listAfter = await listUsers(env as never);
     expect(listAfter[0]!.tokenHint).toBe(regenJ.data.token.slice(0, 8) + "…");
+    expect(listAfter[0]!.token).toBe(regenJ.data.token);
   });
 
   it("tokenHint format is first 8 chars plus ellipsis", async () => {
@@ -146,5 +148,110 @@ describe("users api handler", () => {
     const res = (await handleUsersApi(r, env as never, {} as never)) as Response;
     const j = (await res.json()) as { data: { user: { token: string; tokenHint: string } } };
     expect(j.data.user.tokenHint).toBe(j.data.user.token.slice(0, 8) + "…");
+  });
+
+  it("create accepts addressOverride and returns it in sanitized output", async () => {
+    const r = jsonReq("/api/users", "POST", {
+      name: "Pinned",
+      addressOverride: { address: "1.2.3.4", port: 2053, host: "cdn.example.com", sni: "sni.example.com", label: "Clean" },
+    });
+    const res = (await handleUsersApi(r, env as never, {} as never)) as Response;
+    const j = (await res.json()) as { data: { user: Record<string, unknown> } };
+    expect(j.data.user.addressOverride).toEqual({
+      address: "1.2.3.4",
+      port: 2053,
+      host: "cdn.example.com",
+      sni: "sni.example.com",
+      label: "Clean",
+    });
+    const stored = (await listUsers(env as never))[0]!;
+    expect(stored.addressOverride).toEqual(j.data.user.addressOverride);
+  });
+
+  it("create defaults addressOverride to null when omitted", async () => {
+    const r = jsonReq("/api/users", "POST", { name: "NoPin" });
+    const res = (await handleUsersApi(r, env as never, {} as never)) as Response;
+    const j = (await res.json()) as { data: { user: Record<string, unknown> } };
+    expect(j.data.user.addressOverride).toBeNull();
+  });
+
+  it("create rejects invalid overrides", async () => {
+    for (const bad of [
+      { address: "" },
+      { address: "not a host!" },
+      { address: "1.2.3.4", port: 22 },
+      { address: "1.2.3.4", port: 70000 },
+      { address: "1.2.3.4", host: "bad_host" },
+      { address: "1.2.3.4", sni: "-bad-" },
+      { address: "1.2.3.4", label: "x".repeat(65) },
+      "nope",
+    ]) {
+      const r = jsonReq("/api/users", "POST", { name: "Bad", addressOverride: bad });
+      await expect(handleUsersApi(r, env as never, {} as never)).rejects.toMatchObject({
+        fields: expect.objectContaining({ addressOverride: expect.any(String) }),
+      });
+    }
+    const listed = await listUsers(env as never);
+    expect(listed).toHaveLength(0);
+  });
+
+  it("PUT sets, replaces and clears addressOverride (null clears)", async () => {
+    const create = jsonReq("/api/users", "POST", { name: "Pin" });
+    const createRes = (await handleUsersApi(create, env as never, {} as never)) as Response;
+    const createJ = (await createRes.json()) as { data: { user: { id: string } } };
+    const id = createJ.data.user.id;
+
+    const set = jsonReq(`/api/users/${id}`, "PUT", {
+      addressOverride: { address: "[2606:4700::6810:85e5]", port: 8443 },
+    });
+    const setRes = (await handleUsersApi(set, env as never, {} as never)) as Response;
+    const setJ = (await setRes.json()) as { data: { user: Record<string, unknown> } };
+    expect(setJ.data.user.addressOverride).toEqual({ address: "[2606:4700::6810:85e5]", port: 8443 });
+
+    const replace = jsonReq(`/api/users/${id}`, "PUT", {
+      addressOverride: { address: "5.6.7.8", label: "Replaced" },
+    });
+    const replaceRes = (await handleUsersApi(replace, env as never, {} as never)) as Response;
+    const replaceJ = (await replaceRes.json()) as { data: { user: Record<string, unknown> } };
+    expect(replaceJ.data.user.addressOverride).toEqual({ address: "5.6.7.8", label: "Replaced" });
+
+    const clear = jsonReq(`/api/users/${id}`, "PUT", { addressOverride: null });
+    const clearRes = (await handleUsersApi(clear, env as never, {} as never)) as Response;
+    const clearJ = (await clearRes.json()) as { data: { user: Record<string, unknown> } };
+    expect(clearJ.data.user.addressOverride).toBeNull();
+
+    const stored = (await listUsers(env as never))[0]!;
+    expect(stored.addressOverride).toBeNull();
+  });
+
+  it("PUT with invalid addressOverride rejects and leaves stored value untouched", async () => {
+    const create = jsonReq("/api/users", "POST", {
+      name: "Keep",
+      addressOverride: { address: "1.2.3.4", port: 2053 },
+    });
+    const createRes = (await handleUsersApi(create, env as never, {} as never)) as Response;
+    const createJ = (await createRes.json()) as { data: { user: { id: string } } };
+    const id = createJ.data.user.id;
+
+    const bad = jsonReq(`/api/users/${id}`, "PUT", { addressOverride: { address: "1.2.3.4", port: 1234 } });
+    await expect(handleUsersApi(bad, env as never, {} as never)).rejects.toMatchObject({
+      fields: expect.objectContaining({ addressOverride: expect.stringContaining("Cloudflare") }),
+    });
+    const stored = (await listUsers(env as never))[0]!;
+    expect(stored.addressOverride).toEqual({ address: "1.2.3.4", port: 2053 });
+  });
+
+  it("PUT without addressOverride key preserves the existing override", async () => {
+    const create = jsonReq("/api/users", "POST", {
+      name: "Keep2",
+      addressOverride: { address: "9.9.9.9" },
+    });
+    const createRes = (await handleUsersApi(create, env as never, {} as never)) as Response;
+    const createJ = (await createRes.json()) as { data: { user: { id: string } } };
+    const id = createJ.data.user.id;
+    const rename = jsonReq(`/api/users/${id}`, "PUT", { name: "Renamed" });
+    const renameRes = (await handleUsersApi(rename, env as never, {} as never)) as Response;
+    const renameJ = (await renameRes.json()) as { data: { user: Record<string, unknown> } };
+    expect(renameJ.data.user.addressOverride).toEqual({ address: "9.9.9.9" });
   });
 });

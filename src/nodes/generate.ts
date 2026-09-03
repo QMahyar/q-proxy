@@ -1,16 +1,18 @@
 import type { NodeBuilderContext } from "../types/context";
 import type { NodeTag, ProxyNode, SSNode, TrojanNode, VMessNode, VlessNode } from "../types/node";
+import type { AddressSetting } from "../types/settings";
 import { CF_PLAIN_PORTS, CF_TLS_PORTS, type Settings } from "../types/settings";
 import { fragmentQuery } from "./fragments";
 import { renderName } from "./naming";
-import { isIPv6, normalizeCleanAddress, parseHostPort } from "../utils/net";
+import { bracketIpv6, isIpLiteral, parseHostPort } from "../utils/net";
 
 interface AddressEntry {
   address: string;
   host: string;
   sni: string;
   tags: NodeTag[];
-  pinnedPort?: number;
+  port: number;
+  label?: string;
 }
 
 interface ProtoSpec {
@@ -19,31 +21,53 @@ interface ProtoSpec {
   cred: string;
 }
 
+function classifyPort(port: number): "tls" | "none" | null {
+  const tls = CF_TLS_PORTS.some((p) => p === port);
+  if (tls) return "tls";
+  const plain = CF_PLAIN_PORTS.some((p) => p === port);
+  if (plain) return "none";
+  return null;
+}
+
 function collectAddresses(s: Settings, hostname: string): AddressEntry[] {
   const out: AddressEntry[] = [];
   const seen = new Set<string>();
-  const push = (raw: string, host: string, sni: string, tags: NodeTag[], pinnedPort?: number): void => {
-    const address = raw.trim();
-    if (address.length === 0) return;
-    const key = address.toLowerCase();
-    if (seen.has(key)) return;
+  const list: AddressSetting[] = s.addresses.length > 0 ? s.addresses : [{ address: hostname }];
+  for (const a of list) {
+    if (a.enabled === false) continue;
+    const raw = typeof a.address === "string" ? a.address.trim() : "";
+    if (raw.length === 0) continue;
+    const hp = parseHostPort(raw, typeof a.port === "number" && a.port > 0 ? a.port : s.defaultPort);
+    if (hp === null || hp.host.length === 0) continue;
+    const port = hp.port;
+    const isIp = isIpLiteral(hp.host);
+    const connectHost = isIp ? hp.host : hp.host.toLowerCase();
+    const key = connectHost.toLowerCase();
+    if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ address, host, sni, tags, pinnedPort });
-  };
-  push(hostname, hostname, hostname, []);
-  for (const d of s.customDomains) push(d, d.trim(), d.trim(), ["custom-domain"]);
-  for (const raw of s.cleanIps) {
-    const norm = normalizeCleanAddress(raw);
-    if (norm === null) continue;
-    const hp = parseHostPort(norm, 0);
-    if (hp === null) continue;
-    const display = isIPv6(hp.host) ? `[${hp.host}]` : hp.host;
-    push(display, hostname, hostname, ["clean-ip"], hp.port > 0 ? hp.port : undefined);
-  }
-  if (s.cdn.enabled) {
-    const cdnHost = s.cdn.host.trim().length > 0 ? s.cdn.host.trim() : hostname;
-    const cdnSni = s.cdn.sni.trim().length > 0 ? s.cdn.sni.trim() : cdnHost;
-    for (const a of s.cdn.addresses) push(a, cdnHost, cdnSni, ["cdn"]);
+    const isBase = connectHost.toLowerCase() === hostname.toLowerCase();
+    let host: string;
+    let sni: string;
+    let tags: NodeTag[];
+    if (a.host && a.host.trim().length > 0) {
+      host = a.host.trim();
+      sni = a.sni && a.sni.trim().length > 0 ? a.sni.trim() : host;
+      tags = isIp ? ["clean-ip"] : isBase ? [] : ["custom-domain"];
+    } else if (isBase) {
+      host = connectHost;
+      sni = connectHost;
+      tags = [];
+    } else if (isIp) {
+      host = hostname;
+      sni = hostname;
+      tags = ["clean-ip"];
+    } else {
+      host = connectHost;
+      sni = connectHost;
+      tags = ["custom-domain"];
+    }
+    const label = a.label && a.label.trim().length > 0 ? a.label.trim() : undefined;
+    out.push({ address: bracketIpv6(connectHost), host, sni, tags, port, label });
   }
   return out;
 }
@@ -72,8 +96,6 @@ function scrambleSni(sni: string, seedKey: string): string {
 }
 
 const ALNUM_RE = /[A-Za-z0-9]/;
-const CF_TLS_PORT_SET: ReadonlySet<number> = new Set(CF_TLS_PORTS as readonly number[]);
-const CF_PLAIN_PORT_SET: ReadonlySet<number> = new Set(CF_PLAIN_PORTS as readonly number[]);
 
 function tunnelSuffix(cred: string, securePath: string): string {
   const cleanChars: string[] = [];
@@ -90,13 +112,7 @@ function tunnelSuffix(cred: string, securePath: string): string {
   return suffix;
 }
 
-function buildPath(
-  prefix: string,
-  cred: string,
-  securePath: string,
-  earlyData: number,
-  fragQ: string,
-): string {
+function buildPath(prefix: string, cred: string, securePath: string, earlyData: number, fragQ: string): string {
   let path = `/${prefix}/${tunnelSuffix(cred, securePath)}`;
   if (earlyData > 0) path += `?ed=${earlyData}`;
   if (fragQ.length > 0) path += `${path.includes("?") ? "&" : "?"}${fragQ}`;
@@ -107,9 +123,6 @@ interface KindBuildInput {
   settings: Settings;
   hostname: string;
   addresses: AddressEntry[];
-  tlsPorts: number[];
-  plainPorts: number[];
-  allowPlain: boolean;
   fragOn: boolean;
   fragQ: string;
   country: string | null;
@@ -127,80 +140,61 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
           : s.ssPath;
   const list: ProxyNode[] = [];
   for (const entry of input.addresses) {
-    const familySets: Array<{ ports: number[]; security: "tls" | "none" }> =
-      entry.pinnedPort !== undefined
-        ? CF_TLS_PORT_SET.has(entry.pinnedPort) || CF_PLAIN_PORT_SET.has(entry.pinnedPort)
-          ? [
-              {
-                ports: [entry.pinnedPort],
-                security: CF_TLS_PORT_SET.has(entry.pinnedPort) ? "tls" : "none",
-              },
-            ]
-          : []
-        : [
-            { ports: input.tlsPorts, security: "tls" },
-            ...(input.allowPlain ? [{ ports: input.plainPorts, security: "none" as const }] : []),
-          ];
-    for (const family of familySets) {
-      for (const port of family.ports) {
-        const variants: Array<"normal" | "fragment"> = ["normal"];
-        if (input.fragOn && family.security === "tls" && !entry.tags.includes("cdn")) {
-          variants.push("fragment");
-        }
-        for (const variant of variants) {
-          const earlyData =
-            proto.kind === "ss" ? 0 : s.earlyDataEnabled ? Math.max(0, s.earlyDataMaxBytes) : 0;
-          const path = buildPath(prefix, proto.cred, s.securePath, earlyData, variant === "fragment" ? input.fragQ : "");
-          const tags: NodeTag[] = [...entry.tags];
-          if (input.hostname.endsWith(".workers.dev")) tags.push("workers-dev");
-          if (family.security === "none") tags.push("no-tls");
-          if (variant === "fragment") tags.push("fragment");
-          const sni =
-            family.security === "tls"
-              ? s.randomizeSniCase
-                ? scrambleSni(entry.sni, `${entry.address}:${port}:${variant}`)
-                : entry.sni
-              : null;
-          const base = {
-            name: "",
-            address: entry.address,
-            port,
-            security: family.security,
-            sni,
-            host: entry.host,
-            path,
-            earlyData,
-            fingerprint: family.security === "tls" ? s.fingerprint : null,
-            alpn: family.security === "tls" ? [...s.alpn] : [],
-            ech: family.security === "tls" && s.echEnabled ? (s.echServerName.length > 0 ? s.echServerName : sni) : null,
-            variant,
-            tags,
-          };
-          let node: ProxyNode;
-          if (proto.kind === "vless") {
-            node = { ...base, kind: "vless", uuid: proto.cred } satisfies VlessNode;
-          } else if (proto.kind === "vmess") {
-            node = {
-              ...base,
-              kind: "vmess",
-              uuid: proto.cred,
-              cipher: "auto",
-              alterId: 0,
-            } satisfies VMessNode;
-          } else if (proto.kind === "trojan") {
-            node = { ...base, kind: "trojan", password: proto.cred } satisfies TrojanNode;
-          } else {
-            node = {
-              ...base,
-              kind: "ss",
-              method: s.ssMethod,
-              password: proto.cred,
-            } satisfies SSNode;
-          }
-          node.name = renderName(node, input.country);
-          list.push(node);
-        }
+    const security = classifyPort(entry.port);
+    if (security === null) continue;
+    const variants: Array<"normal" | "fragment"> = ["normal"];
+    if (input.fragOn && security === "tls") variants.push("fragment");
+    for (const variant of variants) {
+      const earlyData = proto.kind === "ss" ? 0 : s.earlyDataEnabled ? Math.max(0, s.earlyDataMaxBytes) : 0;
+      const path = buildPath(prefix, proto.cred, s.securePath, earlyData, variant === "fragment" ? input.fragQ : "");
+      const tags: NodeTag[] = [...entry.tags];
+      if (input.hostname.endsWith(".workers.dev")) tags.push("workers-dev");
+      if (security === "none") tags.push("no-tls");
+      if (variant === "fragment") tags.push("fragment");
+      const sni =
+        security === "tls"
+          ? s.randomizeSniCase
+            ? scrambleSni(entry.sni, `${entry.address}:${entry.port}:${variant}`)
+            : entry.sni
+          : null;
+      const base = {
+        name: "",
+        address: entry.address,
+        port: entry.port,
+        security,
+        sni,
+        host: entry.host,
+        path,
+        earlyData,
+        fingerprint: security === "tls" ? s.fingerprint : null,
+        alpn: security === "tls" ? [...s.alpn] : [],
+        ech: security === "tls" && s.echEnabled ? (s.echServerName.length > 0 ? s.echServerName : sni) : null,
+        variant,
+        tags,
+      };
+      let node: ProxyNode;
+      if (proto.kind === "vless") {
+        node = { ...base, kind: "vless", uuid: proto.cred } satisfies VlessNode;
+      } else if (proto.kind === "vmess") {
+        node = {
+          ...base,
+          kind: "vmess",
+          uuid: proto.cred,
+          cipher: "auto",
+          alterId: 0,
+        } satisfies VMessNode;
+      } else if (proto.kind === "trojan") {
+        node = { ...base, kind: "trojan", password: proto.cred } satisfies TrojanNode;
+      } else {
+        node = {
+          ...base,
+          kind: "ss",
+          method: s.ssMethod,
+          password: proto.cred,
+        } satisfies SSNode;
       }
+      node.name = renderName(node, input.country, entry.label, s.nameTemplate, entry.host);
+      list.push(node);
     }
   }
   return list;
@@ -212,13 +206,8 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
   if (limit === 0) return [];
   const cf = ctx.request.cf as { country?: string } | undefined;
   const country = typeof cf?.country === "string" ? cf.country : null;
-  const allowPlain =
-    s.plainPortPolicy === "always" ||
-    (s.plainPortPolicy === "workers-dev" && ctx.hostname.endsWith(".workers.dev"));
   const fragOn = s.fragment.mode !== "off";
   const fragQ = fragOn ? fragmentQuery(s.fragment) : "";
-  const tlsPorts = [...new Set(s.tlsPorts)].filter((p) => CF_TLS_PORT_SET.has(p));
-  const plainPorts = [...new Set(s.plainPorts)].filter((p) => CF_PLAIN_PORT_SET.has(p));
   const addresses = collectAddresses(s, ctx.hostname);
 
   const protos: ProtoSpec[] = [
@@ -232,9 +221,6 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
     settings: s,
     hostname: ctx.hostname,
     addresses,
-    tlsPorts,
-    plainPorts,
-    allowPlain,
     fragOn,
     fragQ,
     country,

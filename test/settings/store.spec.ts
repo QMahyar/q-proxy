@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { SETTINGS_VERSION } from "../../src/types/settings";
 import {
   ensureInitialized,
   invalidateSettingsCache,
@@ -40,7 +41,7 @@ describe("settings store", () => {
     expect(s.sessionSecret).toMatch(/^[0-9a-f]{128}$/);
     expect(s.vlessUuid).toMatch(/^[0-9a-f-]{36}$/);
     const blob = JSON.parse(kv.map.get("qproxy:settings")!);
-    expect(blob.version).toBe(1);
+    expect(blob.version).toBe(SETTINGS_VERSION);
     expect(typeof blob.updatedAt).toBe("number");
     expect(blob.data.securePath).toBe(s.securePath);
   });
@@ -66,7 +67,7 @@ describe("settings store", () => {
     await saveSettings(kv.asEnv() as never, s);
     const blob = JSON.parse(kv.map.get("qproxy:settings")!);
     expect(blob.data.profileTitle).toBe("Saved Title");
-    expect(blob.version).toBe(1);
+    expect(blob.version).toBe(SETTINGS_VERSION);
     expect(blob.updatedAt).toBeGreaterThanOrEqual(0);
     const reloaded = await loadSettings(kv.asEnv() as never);
     expect(reloaded.profileTitle).toBe("Saved Title");

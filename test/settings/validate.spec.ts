@@ -96,45 +96,34 @@ describe("validateSettings", () => {
     expect(validateSettings({ urlTestIntervalSec: 60 }).ok).toBe(true);
   });
 
-  it("enforces Cloudflare port sets and keeps tls/plain disjoint", () => {
-    expect(fieldsOf({ tlsPorts: [80] })["tlsPorts"]).toBeTruthy();
-    expect(fieldsOf({ plainPorts: [443] })["plainPorts"]).toBeTruthy();
-    expect(fieldsOf({ tlsPorts: [2053, 2053.5] })["tlsPorts"]).toBeTruthy();
-    expect(fieldsOf({ tlsPorts: "443" })["tlsPorts"]).toBeTruthy();
-    const result = validateSettings({ tlsPorts: [2053], plainPorts: [80, 8080] });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      for (const p of result.value.tlsPorts) expect(result.value.plainPorts).not.toContain(p);
-    }
+  it("enforces Cloudflare-proxied default ports and address ports", () => {
+    expect(fieldsOf({ defaultPort: 9999 }).defaultPort).toBeTruthy();
+    expect(fieldsOf({ defaultPort: 80 }).defaultPort).toBeTruthy();
+    expect(validateSettings({ defaultPort: 443 }).ok).toBe(true);
+    expect(validateSettings({ defaultPort: 2053 }).ok).toBe(true);
+    expect(fieldsOf({ addresses: [{ address: "1.2.3.4", port: 9999 }] }).addresses).toBeTruthy();
   });
 
-  it("sanitizes string arrays: trim, dedupe, drop empties, cap counts", () => {
+  it("sanitizes arrays: trim, dedupe, drop empties, cap counts", () => {
     const result = validateSettings({
-      customDomains: [" a.com ", "", "b.com", "a.com"],
-    });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.customDomains).toEqual(["a.com", "b.com"]);
-
-    const many = validateSettings({
-      customDomains: Array.from({ length: 25 }, (_, i) => `d${i}.example.com`),
-      cleanIps: Array.from({ length: 70 }, (_, i) => `10.0.0.${i % 256}`),
+      addresses: [{ address: "1.2.3.4" }, { address: " 1.2.3.4 " }, { address: "5.6.7.8" }],
       proxyIps: Array.from({ length: 70 }, (_, i) => `10.1.0.${i % 256}`),
       nat64Prefixes: Array.from({ length: 12 }, () => "[2a02:898:146:64::]"),
     });
-    expect(many.ok).toBe(true);
-    if (many.ok) {
-      expect(many.value.customDomains.length).toBe(16);
-      expect(many.value.cleanIps.length).toBeLessThanOrEqual(64);
-      expect(many.value.proxyIps.length).toBeLessThanOrEqual(64);
-      expect(many.value.nat64Prefixes.length).toBeLessThanOrEqual(8);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.addresses.length).toBe(2);
+      expect(result.value.proxyIps.length).toBeLessThanOrEqual(64);
+      expect(result.value.nat64Prefixes.length).toBeLessThanOrEqual(8);
     }
   });
 
-  it("drops invalid array items silently and rejects non-array input", () => {
+  it("drops invalid nat64 prefixes silently and rejects non-array address input", () => {
     const result = validateSettings({ nat64Prefixes: ["[2a02::]", "not valid!!"] });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.nat64Prefixes).toEqual(["[2a02::]"]);
-    expect(fieldsOf({ cleanIps: "nope" })["cleanIps"]).toBeTruthy();
+    expect(fieldsOf({ addresses: "nope" })["addresses"]).toBeTruthy();
+    expect(fieldsOf({ addresses: [{ address: "1.2.3.4:99999" }] })["addresses"]).toBeTruthy();
     expect(fieldsOf({ remoteSubUrls: [123] })["remoteSubUrls"]).toBeTruthy();
   });
 
@@ -150,7 +139,6 @@ describe("validateSettings", () => {
     expect(fieldsOf({ language: "fr" })["language"]).toBeTruthy();
     expect(fieldsOf({ ssMethod: "chacha20-poly1305" })["ssMethod"]).toBeTruthy();
     expect(fieldsOf({ fingerprint: "nope" })["fingerprint"]).toBeTruthy();
-    expect(fieldsOf({ plainPortPolicy: "sometimes" })["plainPortPolicy"]).toBeTruthy();
     expect(fieldsOf({ proxyIpMode: "warp" })["proxyIpMode"]).toBeTruthy();
     expect(fieldsOf({ camouflage: { mode: "mirror" } })["camouflage.mode"]).toBeTruthy();
     expect(fieldsOf({ fragment: { mode: "ultra" } })["fragment.mode"]).toBeTruthy();
@@ -161,7 +149,6 @@ describe("validateSettings", () => {
   it("requires exact boolean types", () => {
     expect(fieldsOf({ killSwitch: "yes" })["killSwitch"]).toBeTruthy();
     expect(fieldsOf({ debugLogging: 1 })["debugLogging"]).toBeTruthy();
-    expect(fieldsOf({ cdn: { enabled: null } })["cdn.enabled"]).toBeTruthy();
   });
 
   it("validates chainProxy uri only when enabled", () => {
@@ -196,8 +183,8 @@ describe("validateSettings", () => {
     expect(fieldsOf({ securePath: "" })["securePath"]).toBeTruthy();
     expect(validateSettings({ securePath: "abc-DEF_123" }).ok).toBe(true);
     expect(fieldsOf({ vlessPath: "x!" })["vlessPath"]).toBeTruthy();
-    expect(fieldsOf({ hostnameOverride: "bad host" })["hostnameOverride"]).toBeTruthy();
-    expect(validateSettings({ hostnameOverride: "" }).ok).toBe(true);
+    expect(fieldsOf({ addresses: [{ address: "bad host" }] })["addresses"]).toBeTruthy();
+    expect(fieldsOf({ nameTemplate: "a".repeat(513) })["nameTemplate"]).toBeTruthy();
     expect(fieldsOf({ passwordHash: 7 })["passwordHash"]).toBeTruthy();
     expect(validateSettings({ passwordHash: null, passwordSalt: null }).ok).toBe(true);
   });
@@ -207,7 +194,8 @@ describe("validateSettings", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.profileTitle).toBe("Trimmed");
-      expect(result.value.tlsPorts).toEqual(DEFAULT_SETTINGS.tlsPorts);
+      expect(result.value.defaultPort).toBe(DEFAULT_SETTINGS.defaultPort);
+      expect(result.value.addresses).toEqual([]);
       expect(result.value.fragment.packets).toBe("tlshello");
       expect(Object.keys(result.value).sort()).toEqual(
         Object.keys(DEFAULT_SETTINGS)
@@ -218,62 +206,50 @@ describe("validateSettings", () => {
   });
 });
 
-describe("empty tlsPorts guard", () => {
-  it("rejects an empty tlsPorts list with a clear message", () => {
-    const result = validateSettings({ tlsPorts: [] });
+describe("defaultPort guard", () => {
+  it("rejects a non-Cloudflare default port with a clear message", () => {
+    const result = validateSettings({ defaultPort: 8081 });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.fields.tlsPorts).toContain("at least one TLS port");
+      expect(result.fields.defaultPort).toContain("Cloudflare-proxied");
     }
   });
 
-  it("allows empty plainPorts (never policy)", () => {
-    const result = validateSettings({ plainPorts: [] });
-    expect(result.ok).toBe(true);
+  it("allows empty addresses (falls back to the worker hostname)", () => {
+    expect(validateSettings({ addresses: [] }).ok).toBe(true);
   });
 });
 
-describe("cleanIps with pinned ports", () => {
-  it("normalizes ip:port entries and drops invalid lines", () => {
+describe("addresses with pinned ports", () => {
+  it("normalizes ip:port entries and drops inline ports into a port field", () => {
     const result = validateSettings({
-      cleanIps: [
-        "1.2.3.4:2053",
-        " 5.6.7.8 ",
-        "[2606:4700::1]:8443",
-        "2606:4700::99",
-        "edge.example.com",
-        "edge.example.com:2096",
-        "ijasdijkabd",
-        "1.2.3.4:99999",
-        "1.2.3.4:abc",
-        ":8080",
-        "",
+      addresses: [
+        { address: "1.2.3.4:2053" },
+        { address: " 5.6.7.8 " },
+        { address: "[2606:4700::1]:8443" },
+        { address: "2606:4700::99" },
+        { address: "edge.example.com" },
+        { address: "edge.example.com:2096" },
       ],
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.cleanIps).toEqual([
-        "1.2.3.4:2053",
-        "5.6.7.8",
-        "[2606:4700::1]:8443",
-        "[2606:4700::99]",
-        "edge.example.com",
-        "edge.example.com:2096",
+      expect(result.value.addresses).toEqual([
+        { address: "1.2.3.4", port: 2053 },
+        { address: "5.6.7.8" },
+        { address: "[2606:4700::1]", port: 8443 },
+        { address: "[2606:4700::99]" },
+        { address: "edge.example.com" },
+        { address: "edge.example.com", port: 2096 },
       ]);
     }
   });
 
-  it("dedupes entries after normalization", () => {
-    const result = validateSettings({ cleanIps: ["1.2.3.4:443", "1.2.3.4:443", "  1.2.3.4:443 "] });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.cleanIps).toEqual(["1.2.3.4:443"]);
-  });
-
   it("caps the list at 64 normalized entries", () => {
-    const list = Array.from({ length: 80 }, (_, i) => `10.0.0.${i + 1}:443`);
-    const result = validateSettings({ cleanIps: list });
+    const list = Array.from({ length: 80 }, (_, i) => ({ address: `10.0.0.${i + 1}`, port: 443 }));
+    const result = validateSettings({ addresses: list });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.cleanIps.length).toBe(64);
+    if (result.ok) expect(result.value.addresses.length).toBe(64);
   });
 });
 

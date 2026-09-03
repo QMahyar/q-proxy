@@ -1,9 +1,9 @@
 import type { RouteHandler } from "../../types/context";
+import type { AppError } from "../../core/errors";
 import type { AmneziaParams, WarpAccount, WarpConfig, WarpEndpoint, WarpPreset } from "../../types/warp";
-import { ValidationError, NotFoundError, UpstreamError } from "../../core/errors";
+import { ValidationError, NotFoundError, RateLimitedError } from "../../core/errors";
 import { jsonOk, readJsonObject } from "../../core/respond";
-import { parseWarpConfig } from "../../warp/config";
-import { isIPv6 } from "../../utils/net";
+import { parseWarpConfig, parseWarpJson, parseEndpointHostPort } from "../../warp/config";
 import { registerWarpDevice, removeWarpDevice, WarpApiError } from "../../warp/api";
 import { purgeAllWarpSubs, purgeWarpSub } from "../../warp/cache";
 import {
@@ -49,33 +49,21 @@ function asAmneziaParams(value: unknown): AmneziaParams | null {
   return value as AmneziaParams;
 }
 
-function parseEndpoint(value: string): WarpEndpoint | null {
-  let host = value.trim();
-  let portStr = "";
-  const bracket = /^\[([^\]]+)\]:(\d+)$/.exec(host);
-  if (bracket) {
-    host = bracket[1]!;
-    portStr = bracket[2]!;
-  } else {
-    const colon = host.lastIndexOf(":");
-    if (colon >= 0 && host.indexOf(":") === colon) {
-      portStr = host.slice(colon + 1);
-      host = host.slice(0, colon);
-    }
+function warpApiValidationError(err: WarpApiError): AppError {
+  if (err.status === 429) {
+    const retryAfter = err.retryAfterHeader !== null ? Number(err.retryAfterHeader) : undefined;
+    return new RateLimitedError(
+      retryAfter !== undefined && Number.isFinite(retryAfter) ? Math.ceil(retryAfter) : undefined,
+      "Cloudflare WARP registration is rate-limited; retry later",
+    );
   }
-  const port = Number(portStr);
-  if (portStr === "" || !Number.isInteger(port) || port < 1 || port > 65535) return null;
-  host = host.replace(/^\[|\]$/g, "");
-  if (host.includes(":")) {
-    if (!isIPv6(host) || host.startsWith("-") || host.endsWith("-")) return null;
-    return { ip: host, port };
+  if (err.status === 0) {
+    return new ValidationError({ warp_api: "WARP registration timed out or the network was unreachable" });
   }
-  if (!/^[A-Za-z0-9.-]+$/.test(host) || host.length === 0 || host.startsWith("-") || host.endsWith("-")) return null;
-  if (host.includes(".")) {
-    const labels = host.split(".");
-    if (labels.some((l) => l.length === 0 || l.length > 63)) return null;
+  if (err.status >= 400 && err.status < 500) {
+    return new ValidationError({ warp_api: err.message });
   }
-  return { ip: host, port };
+  return new ValidationError({ warp_api: err.message || "WARP API returned an unreadable registration response" });
 }
 
 function parseEndpoints(value: unknown, field: string): WarpEndpoint[] {
@@ -86,7 +74,7 @@ function parseEndpoints(value: unknown, field: string): WarpEndpoint[] {
   const out: WarpEndpoint[] = [];
   const seen = new Set<string>();
   for (const item of value) {
-    const endpoint = typeof item === "string" ? parseEndpoint(item) : null;
+    const endpoint = typeof item === "string" ? parseEndpointHostPort(item) : null;
     if (endpoint === null) throw new ValidationError({ [field]: `invalid endpoint: ${String(item).slice(0, 60)}` });
     const key = `${endpoint.ip}:${endpoint.port}`;
     if (seen.has(key)) continue;
@@ -116,9 +104,18 @@ async function resolveEndpointList(
   throw new ValidationError({ endpoint_list: "must be {type:'preset',preset_id} or {type:'custom',custom_endpoints}" });
 }
 
-async function buildAccount(env: Parameters<RouteHandler>[1], body: Record<string, unknown>, config: WarpAccount["config"], amnezia: AmneziaParams | null): Promise<WarpAccount> {
+async function buildAccount(
+  env: Parameters<RouteHandler>[1],
+  body: Record<string, unknown>,
+  config: WarpAccount["config"],
+  amnezia: AmneziaParams | null,
+  defaultEndpointList?: WarpAccount["endpoint_list"],
+): Promise<WarpAccount> {
   const name = typeof body.name === "string" && body.name.trim().length > 0 ? body.name.trim().slice(0, 100) : `Account ${Date.now()}`;
-  const endpoint_list = body.endpoint_list === undefined ? ({ type: "preset", preset_id: "default" } as const) : await resolveEndpointList(env, body.endpoint_list);
+  const endpoint_list =
+    body.endpoint_list === undefined
+      ? defaultEndpointList ?? ({ type: "preset", preset_id: "default" } as const)
+      : await resolveEndpointList(env, body.endpoint_list);
   let dns: string | null = null;
   if (typeof body.dns === "string" && body.dns.trim().length > 0) {
     dns = body.dns.trim().slice(0, 253);
@@ -168,7 +165,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
       try {
         reg = await registerWarpDevice();
       } catch (err) {
-        if (err instanceof WarpApiError) throw new UpstreamError("warp api unavailable");
+        if (err instanceof WarpApiError) throw warpApiValidationError(err);
         throw err;
       }
       account.config = reg.config;
@@ -185,16 +182,21 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
     if (rest[1] === "import" && rest.length === 2 && method === "POST") {
       if ((await listAccounts(env)).length >= 100) throw new ValidationError({ account: "too many warp accounts (max 100)" });
       const body = await readJsonObject(req);
-      if (typeof body.config !== "string" || body.config.trim().length === 0) {
-        throw new ValidationError({ config: "must be a WireGuard .conf or wg:// URI" });
-      }
-      const parsed = parseWarpConfig(body.config);
+      const rawConfig = body.config;
+      const parsed =
+        typeof rawConfig === "string" && rawConfig.trim().length > 0
+          ? parseWarpConfig(rawConfig)
+          : parseWarpJson(rawConfig);
       if (!parsed.ok) throw new ValidationError({ config: parsed.reason });
       if (parsed.amnezia_overrides !== null) {
         const check = validateAmnezia(parsed.amnezia_overrides);
         if (!check.ok) throw new ValidationError(check.fields);
       }
-      const account = await buildAccount(env, body, parsed.config, parsed.amnezia_overrides);
+      const defaultEndpointList: WarpAccount["endpoint_list"] | undefined =
+        parsed.endpoints !== undefined && parsed.endpoints.length > 0
+          ? { type: "custom", custom_endpoints: parsed.endpoints }
+          : undefined;
+      const account = await buildAccount(env, body, parsed.config, parsed.amnezia_overrides, defaultEndpointList);
       await storeAccount(env, account);
       return jsonOk({ account: sanitizeAccount(account) });
     }

@@ -39,6 +39,8 @@ export type ApiRouteName =
   | "suburls"
   | "warp"
   | "users"
+  | "proxy-pool"
+  | "address-probe"
   | "telegram-webhook"
   | "telegram-setup"
   | "telegram-remove";
@@ -105,6 +107,8 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
       if (sub === "suburls" && rest.length === 2) return { kind: "api", api: "suburls" };
       if (sub === "warp" && rest.length >= 2) return { kind: "api", api: "warp" };
       if (sub === "users" && rest.length >= 2) return { kind: "api", api: "users" };
+      if (sub === "proxy-pool" && rest.length === 2) return { kind: "api", api: "proxy-pool" };
+      if (sub === "address-probe" && rest.length === 2) return { kind: "api", api: "address-probe" };
       if (sub === "version" && rest.length === 3 && rest[2] === "check") return { kind: "api", api: "version-check" };
       if (sub === "settings") {
         if (rest.length === 2) return { kind: "api", api: "settings-get" };
@@ -122,7 +126,6 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
 }
 
 export function resolveHostname(s: Settings, url: URL): string {
-  if (s.hostnameOverride.length > 0) return s.hostnameOverride;
-  if (s.customDomains.length > 0) return s.customDomains[0]!;
+  void s;
   return url.hostname;
 }

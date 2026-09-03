@@ -38,6 +38,8 @@ import { handleKillSwitch, handleStatus, handleSubUrls } from "../handlers/api/s
 import { handleBootstrap } from "../handlers/api/bootstrap";
 import { handleWarpApi } from "../handlers/api/warp";
 import { handleUsersApi } from "../handlers/api/users";
+import { handleProxyPoolApi } from "../handlers/api/proxy-pool";
+import { handleAddressProbeApi } from "../handlers/api/address-probe";
 import { handleTelegramRemove, handleTelegramSetup, handleTelegramWebhook } from "../handlers/api/telegram";
 import { handleVersionCheck } from "../handlers/api/version";
 
@@ -140,6 +142,12 @@ async function dispatchApi(
     case "users":
       if (req.method === "GET") return authed(handleUsersApi)(req, env, s);
       return authedCsrf(handleUsersApi)(req, env, s);
+    case "proxy-pool":
+      if (req.method === "GET") return authed(handleProxyPoolApi)(req, env, s);
+      return authedCsrf(handleProxyPoolApi)(req, env, s);
+    case "address-probe":
+      if (req.method === "GET") return authed(handleAddressProbeApi)(req, env, s);
+      return authedCsrf(handleAddressProbeApi)(req, env, s);
     case "telegram-webhook":
       expectMethods(req, ["POST"]);
       return handleTelegramWebhook(req, env, s);

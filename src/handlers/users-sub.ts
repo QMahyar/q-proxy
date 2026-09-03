@@ -1,4 +1,5 @@
 import type { RouteHandler } from "../types/context";
+import type { Settings } from "../types/settings";
 import { afterResponse } from "../core/counters";
 import { resolveHostname, resolveSecureRoute } from "../core/routes";
 import { htmlResponse } from "../core/respond";
@@ -61,7 +62,10 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
   const cached = await matchEdgeCache(cacheKey);
   if (cached !== undefined) return cached;
 
-  const ctx = { settings: s, hostname: resolveHostname(s, url), request: req };
+  const override = user.addressOverride ?? null;
+  const nodeSettings: Settings =
+    override === null ? s : { ...s, addresses: [override], defaultPort: override.port ?? s.defaultPort };
+  const ctx = { settings: nodeSettings, hostname: resolveHostname(s, url), request: req };
   const allNodes = generateNodes(ctx);
   const scoped =
     user.protocols === "all" ? allNodes : allNodes.filter((n) => user.protocols.includes(n.kind));
@@ -87,11 +91,7 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
     },
   );
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
-  headers["Cache-Control"] = "private, max-age=60";
   const res = new Response(body, { status: 200, headers });
-  if (typeof caches !== "undefined") {
-    const cacheHeaders = { ...headers, "Cache-Control": "public, max-age=60" };
-    afterResponse(caches.default.put(cacheKey, new Response(body, { status: 200, headers: cacheHeaders })));
-  }
+  if (typeof caches !== "undefined") afterResponse(caches.default.put(cacheKey, res.clone()));
   return res;
 };

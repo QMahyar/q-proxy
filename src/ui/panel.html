@@ -55,10 +55,10 @@ header.topbar,main{z-index:1}
 .logo-tile::before{content:'';position:absolute;inset:-4px;border-radius:1rem;background:conic-gradient(from 0deg,transparent 0deg,rgba(var(--accent-bright-rgb),.6) 70deg,transparent 140deg);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));animation:spinring 8s linear infinite;opacity:.65}
 @keyframes spinring{to{rotate:360deg}}
 .brand{font-weight:700;font-size:var(--fs-lg);white-space:nowrap;display:flex;align-items:center;gap:10px}
-.tabs{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:4px;border-radius:.75rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05);width:fit-content}
+.tabs{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:8px 4px;margin-block:-4px;border-radius:.75rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05);width:fit-content}
 .tabs::-webkit-scrollbar{display:none}
 .tab{display:inline-flex;align-items:center;height:34px;padding-inline:12px;color:var(--text-dim);text-decoration:none;font-weight:600;border-radius:.6rem;white-space:nowrap;transition:color .2s var(--ease),background-color .2s var(--ease),box-shadow .2s var(--ease),transform .12s var(--ease-out)}
-.tab:hover{color:var(--text-mid);background:rgba(255,255,255,.06);transform:translateY(-1px)}
+.tab:hover{color:var(--text-mid);background:rgba(255,255,255,.06)}
 .tab[aria-selected=true]{color:var(--cyan-pale);background:var(--accent-bg);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.22),0 0 12px -4px rgba(var(--accent-rgb),.35)}
 .topbar__end{display:flex;align-items:center;gap:8px;margin-inline-start:auto}
 .swatches{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-inline-end:6px}
@@ -72,7 +72,7 @@ header.topbar,main{z-index:1}
 main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
 @media(min-width:1024px){main{padding-inline:32px}}
 .view-title{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-block:20px 16px;background:linear-gradient(180deg,#ffffff 25%,rgba(var(--accent-pale-rgb),.95) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;line-height:1.3}
-.card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:16px;min-width:0;overflow:hidden;box-shadow:var(--shadow-pop);transition:transform .22s var(--ease-out),border-color .22s var(--ease),box-shadow .22s var(--ease)}
+.card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:16px;min-width:0;box-shadow:var(--shadow-pop);transition:transform .22s var(--ease-out),border-color .22s var(--ease),box-shadow .22s var(--ease)}
 @media(min-width:768px){.card{padding:24px}}
 .card+.card,.home-grid .card+.card{margin-block-start:16px}
 .home-grid>.card{transition:transform .18s var(--ease),border-color .18s var(--ease),box-shadow .18s var(--ease)}
@@ -84,7 +84,7 @@ main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
 .grid2{display:grid;gap:16px}
 @media(min-width:768px){.grid2{grid-template-columns:1fr 1fr}}
 .home-grid{display:grid;gap:16px;min-width:0}
-.home-grid > *{min-width:0;contain:layout paint}
+.home-grid > *{min-width:0;contain:layout}
 @media(min-width:1024px){.home-grid{grid-template-columns:3fr 2fr;align-items:start}}
 .chips-row{display:flex;gap:8px;flex-wrap:wrap;margin-block-end:12px;grid-column:1/-1}
 .stat-chip{display:inline-flex;align-items:center;gap:.375rem;padding:.25rem .625rem;border-radius:.5rem;background:var(--surface);border:1px solid rgba(255,255,255,.05);font-family:var(--font-mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--text-dim)}
@@ -178,11 +178,36 @@ main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
 .line-editor .meta{display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-xs);margin-block-start:4px}
 .line-editor .cnt{color:var(--text-faint)}
 .line-editor .bad{color:var(--danger);text-align:end;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%}
-.subtabs{display:flex;gap:6px;overflow-x:auto;padding-block:8px 12px;scrollbar-width:none}
+.addr-list{display:flex;flex-direction:column;gap:10px}
+.addr-empty{font-size:var(--fs-sm);color:var(--text-faint);margin-block-end:8px}
+.addr-card{display:grid;grid-template-columns:1fr auto;gap:8px;border:1px solid var(--border-strong);border-radius:var(--r-md);padding:10px}
+.addr-card__main{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;min-width:0}
+.addr-card__field label{display:block;font-size:var(--fs-xs);color:var(--text-ghost);margin-block-end:3px}
+.addr-card .btn--icon{height:34px;width:34px}
+.addr-card__side{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.addr-card--off{opacity:.5}
+.addr-card--off .addr-card__main input{opacity:.6}
+.addr-dot{width:10px;height:10px;border-radius:50%;flex:none;border:1px solid var(--border-strong)}
+.addr-dot.dot--ok{background:var(--success);border-color:var(--success)}
+.addr-dot.dot--bad{background:var(--danger-strong);border-color:var(--danger-strong)}
+.addr-badge{font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--cyan-pale);background:rgba(var(--accent-rgb),.12);border:1px solid rgba(var(--accent-rgb),.3);border-radius:.375rem;padding:2px 6px;flex:none}
+.addr-preview{font-family:var(--font-mono);font-size:11px;color:var(--text-ghost);flex:none;direction:ltr}
+.addr-switch .switch__track{width:34px;height:20px}
+.addr-switch .switch__thumb{width:14px;height:14px;top:2px}
+[dir=rtl] .addr-switch input:checked~.switch__track .switch__thumb{translate:-16px 0}
+[dir=ltr] .addr-switch input:checked~.switch__track .switch__thumb{translate:16px 0}
+.pool-meta{display:flex;gap:12px;margin-block-end:8px;flex-wrap:wrap}
+.pool-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-block:6px;border-block-end:1px solid var(--border);font-family:var(--font-mono);font-size:var(--fs-sm)}
+.pool-row:last-child{border-block-end:0}
+.pool-status{font-size:var(--fs-xs);color:var(--text-ghost)}
+.pool-cell{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.subtabs{display:flex;gap:6px;overflow-x:auto;padding-block:12px;margin-block:-4px;scrollbar-width:none}
 .subtabs::-webkit-scrollbar{display:none}
 .subtab{flex:none;display:inline-flex;align-items:center;height:32px;padding-inline:14px;border-radius:.65rem;border:1px solid transparent;background:rgba(255,255,255,.04);color:var(--text-dim);text-decoration:none;font-size:var(--fs-md);font-weight:500;cursor:pointer;transition:color .2s,background-color .2s,box-shadow .2s}
 .subtab:hover{color:var(--text-mid)}
 .subtab[aria-selected=true]{color:var(--cyan-pale);background:var(--accent-bg);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.18)}
+.section-actions{display:flex;align-items:center;gap:10px;margin-block-end:12px}
+.section-actions__hint{font-size:var(--fs-sm);color:var(--warning)}
 table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 .tbl th{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.08em;color:var(--text-ghost);text-align:start;font-weight:600;padding:6px 8px;border-block-end:1px solid var(--border)}
 .tbl td{padding:8px;border-block-end:1px solid var(--border);vertical-align:middle;font-variant-numeric:tabular-nums}
@@ -303,6 +328,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
 <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></symbol>
 <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
 <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
 <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
 <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
@@ -312,7 +338,6 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 <nav class="tabs" role="tablist" aria-label="" id="nav">
 <a class="tab" role="tab" id="tab-home" href="#/home" data-view="home"></a>
 <a class="tab" role="tab" id="tab-settings" href="#/settings/general" data-view="settings"></a>
-<a class="tab" role="tab" id="tab-checker" href="#/checker" data-view="checker"></a>
 </nav>
 <div class="topbar__end">
 <div class="swatches" role="group" aria-label="">
@@ -336,28 +361,41 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 <div class="subtabs" role="tablist" aria-label="Settings sections" id="subtabs"></div>
 <div id="settings-panels"></div>
 </section>
-<section id="view-checker" hidden>
-<h1 class="view-title" id="checker-h1"></h1>
-<div id="checker-body"></div>
-<span class="visually-hidden" id="ck-live" aria-live="polite"></span>
-</section>
 </main>
 <div class="applybar" id="applybar" hidden><div class="applybar__inner"><span class="applybar__label"><span class="dot dot--warn"></span><span id="dirty-label"></span></span><button type="button" class="btn btn--ghost btn--sm" id="discard-btn" data-action="discard"></button><button type="button" class="btn btn--primary btn--sm" id="apply-btn" data-action="apply"></button></div></div>
 <div class="modal" id="m-qr" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="qr-title"><div class="modal__title" id="qr-title"></div><div class="qr-wrap"><canvas id="qr-canvas" width="560" height="560" style="width:280px;height:280px;display:block;max-width:64vw;max-height:64vw"></canvas></div><p class="field__hint" id="qr-hint" style="margin-block-end:12px"></p><div id="qr-caption"></div><div class="modal__actions" style="margin-block-start:16px"><button type="button" class="btn btn--ghost" id="qr-download" data-action="download-qr"></button><button type="button" class="btn btn--ghost" id="qr-close" data-action="close-modal"></button></div></div></div>
 <div class="modal" id="m-confirm" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="cf-title"><div class="modal__title" id="cf-title"></div><div class="modal__body" id="cf-body"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="cf-cancel"></button><button type="button" class="btn btn--primary" id="cf-ok"></button></div></div></div>
 <div class="modal" id="m-warp-generate" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wg-title"><div class="modal__title" id="wg-title"></div><p class="field__hint" id="wg-desc" style="margin-block-end:12px"></p><div class="field"><label class="field__label" for="wg-name" id="wg-name-label"></label><input class="input" type="text" id="wg-name" maxlength="100" autocomplete="off"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wg-cancel" data-action="close-warp-modal" data-modal="m-warp-generate"></button><button type="button" class="btn btn--primary" id="wg-go"></button></div></div></div>
 <div class="modal" id="m-warp-import" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wi-title"><div class="modal__title" id="wi-title"></div><p class="field__hint" id="wi-desc" style="margin-block-end:12px"></p><div class="field"><label class="field__label" for="wi-name" id="wi-name-label"></label><input class="input" type="text" id="wi-name" maxlength="100" autocomplete="off"></div><div class="field"><label class="field__label" for="wi-config" id="wi-config-label"></label><textarea class="input textarea textarea--mono" id="wi-config" rows="7" spellcheck="false" dir="ltr"></textarea><p class="field__error" id="wi-error"></p></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wi-cancel" data-action="close-warp-modal" data-modal="m-warp-import"></button><button type="button" class="btn btn--primary" id="wi-go"></button></div></div></div>
-<div class="modal" id="m-warp-preset" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wp-title"><div class="modal__title" id="wp-title"></div><div class="field"><label class="field__label" for="wp-name" id="wp-name-label"></label><input class="input" type="text" id="wp-name" maxlength="100" autocomplete="off"></div><div class="field"><label class="field__label" for="wp-endpoints" id="wp-endpoints-label"></label><textarea class="input textarea textarea--mono" id="wp-endpoints" rows="6" spellcheck="false" dir="ltr" placeholder="162.159.192.1:2408"></textarea><p class="field__hint" id="wp-hint"></p><p class="field__error" id="wp-error"></p></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wp-cancel" data-action="close-warp-modal" data-modal="m-warp-preset"></button><button type="button" class="btn btn--primary" id="wp-go"></button></div></div></div>
-<div class="modal" id="m-user" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="mu-title"><div class="modal__title" id="mu-title"></div><div class="field"><label class="field__label" for="mu-name" id="mu-name-label"></label><input class="input" type="text" id="mu-name" maxlength="100" autocomplete="off"></div><div class="field"><span class="field__label" id="mu-protocols-label"></span><div class="port-cells" id="mu-protocols"><label class="port-cell"><input type="checkbox" value="all" data-user-proto-all><span id="mu-proto-all-label"></span></label><label class="port-cell"><input type="checkbox" value="vless" data-user-proto><span>VLESS</span></label><label class="port-cell"><input type="checkbox" value="vmess" data-user-proto><span>VMess</span></label><label class="port-cell"><input type="checkbox" value="trojan" data-user-proto><span>Trojan</span></label><label class="port-cell"><input type="checkbox" value="ss" data-user-proto><span>SS</span></label></div></div><div class="field"><label class="field__label" for="mu-limit" id="mu-limit-label"></label><input class="input" type="number" id="mu-limit" min="1" step="1" autocomplete="off"><p class="field__hint" id="mu-limit-hint"></p></div><div class="field"><label class="field__label" for="mu-expiry" id="mu-expiry-label"></label><input class="input" type="datetime-local" id="mu-expiry" autocomplete="off"><p class="field__hint" id="mu-expiry-hint"></p></div><p class="field__error" id="mu-error" style="display:none;margin-block-end:12px"></p><div class="modal__actions"><button type="button" class="btn btn--ghost" id="mu-cancel" data-action="close-user-modal" data-modal="m-user"></button><button type="button" class="btn btn--primary" id="mu-go"></button></div></div></div>
+<div class="modal" id="m-warp-preset" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wp-title"><div class="modal__title" id="wp-title"></div><div class="field"><label class="field__label" for="wp-name" id="wp-name-label"></label><input class="input" type="text" id="wp-name" maxlength="100" autocomplete="off"></div><div class="field"><label class="field__label" for="wp-endpoints" id="wp-endpoints-label"></label><textarea class="input textarea textarea--mono" id="wp-endpoints" rows="6" spellcheck="false" dir="ltr" placeholder="162.159.192.1:2408"></textarea><p class="field__hint" id="wp-hint"></p><p class="field__error" id="wp-error"></p></div><div class="field"><label class="field__label" for="wp-dns" id="wp-dns-label"></label><input class="input" type="text" id="wp-dns" maxlength="253" autocomplete="off" dir="ltr"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wp-cancel" data-action="close-warp-modal" data-modal="m-warp-preset"></button><button type="button" class="btn btn--primary" id="wp-go"></button></div></div></div>
+<div class="modal" id="m-user" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="mu-title"><div class="modal__title" id="mu-title"></div><div class="field"><label class="field__label" for="mu-name" id="mu-name-label"></label><input class="input" type="text" id="mu-name" maxlength="100" autocomplete="off"></div><div class="field"><span class="field__label" id="mu-protocols-label"></span><div class="port-cells" id="mu-protocols"><label class="port-cell"><input type="checkbox" value="all" data-user-proto-all><span id="mu-proto-all-label"></span></label><label class="port-cell"><input type="checkbox" value="vless" data-user-proto><span>VLESS</span></label><label class="port-cell"><input type="checkbox" value="vmess" data-user-proto><span>VMess</span></label><label class="port-cell"><input type="checkbox" value="trojan" data-user-proto><span>Trojan</span></label><label class="port-cell"><input type="checkbox" value="ss" data-user-proto><span>SS</span></label></div></div><div class="field"><label class="field__label" for="mu-limit" id="mu-limit-label"></label><input class="input" type="number" id="mu-limit" min="1" step="1" autocomplete="off"><p class="field__hint" id="mu-limit-hint"></p></div><div class="field"><label class="field__label" for="mu-expiry" id="mu-expiry-label"></label><input class="input" type="datetime-local" id="mu-expiry" autocomplete="off"><p class="field__hint" id="mu-expiry-hint"></p></div><div class="field"><span class="field__label" id="mu-ov-label"></span><div class="addr-card" style="grid-template-columns:1fr"><div class="addr-card__main"><div class="addr-card__field"><label id="mu-ov-address-label"></label><input class="input input--mono" type="text" id="mu-ov-address" dir="ltr" spellcheck="false" placeholder="1.2.3.4" list="mu-ov-options"></div><div class="addr-card__field"><label id="mu-ov-port-label"></label><input class="input input--mono" type="text" id="mu-ov-port" dir="ltr" spellcheck="false" placeholder="443"></div><div class="addr-card__field"><label id="mu-ov-label-label"></label><input class="input input--mono" type="text" id="mu-ov-label2" dir="ltr" spellcheck="false" placeholder="US-Blue"></div></div></div><p class="field__hint" id="mu-ov-hint"></p></div><datalist id="mu-ov-options"></datalist><p class="field__error" id="mu-error" style="display:none;margin-block-end:12px"></p><div class="modal__actions"><button type="button" class="btn btn--ghost" id="mu-cancel" data-action="close-user-modal" data-modal="m-user"></button><button type="button" class="btn btn--primary" id="mu-go"></button></div></div></div>
 <div class="modal" id="m-wizard" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wiz-title"><div class="modal__title" id="wiz-title"></div><div id="wiz-body"></div><div class="modal__actions" style="margin-block-start:16px"><button type="button" class="btn btn--ghost" id="wiz-skip"></button><button type="button" class="btn btn--primary" id="wiz-next"></button></div></div></div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <noscript><p style="padding:24px;text-align:center">JavaScript is required.</p></noscript>
 <script>
 (()=>{'use strict';
 const DICT={
-en:{'app.name':'Q Proxy','nav.home':'Home','nav.settings':'Settings','nav.warp':'WARP','nav.checker':'IP Checker','nav.logout':'Log out','nav.views':'Views','lang.en':'English','lang.fa':'فارسی','accent.cyan':'Cyan','accent.violet':'Violet','accent.green':'Green','accent.amber':'Amber','accent.label':'Accent','common.apply':'Apply changes','common.applying':'Applying…','common.save':'Save','common.saved':'Saved','common.discard':'Discard','common.cancel':'Cancel','common.close':'Close','common.confirm':'Confirm','common.copy':'Copy','common.copied':'Copied','common.generate':'Generate','common.generated':'Generated — Apply to save.','common.reveal':'Reveal','common.hide':'Hide','common.add':'Add','common.remove':'Remove','common.resetDefaults':'Reset to defaults','common.unsaved':'Unsaved changes','common.error':'Something went wrong','common.loading':'Loading…','common.yes':'Yes','common.no':'No','common.qr':'QR code','common.theme':'Theme','common.theme_light':'Light','common.theme_dark':'Dark','common.theme_toggle':'Toggle theme','common.edit':'Edit','common.delete':'Delete','common.retry':'Retry','common.fixErrors':'Fix {count} error(s)','security.title':'Security','security.current':'Current passphrase','security.new':'New passphrase','security.confirm':'Confirm new passphrase','security.hint':'Changing it signs out all other devices','security.change':'Change passphrase','security.changed':'Passphrase changed — other devices signed out','security.wrong_current':'Current passphrase is incorrect','security.mismatch':'Passphrases do not match','security.rule':'Use at least 8 characters.','home.subs.title':'Subscriptions','home.subs.desc':'Import these URLs into your proxy client.','home.subs.mode.normal':'Normal','home.subs.mode.fragment':'Fragment','home.chips.protocols':'{n} protocols on','home.chips.formats':'{n} formats','home.subs.empty_title':'No subscriptions yet','home.subs.empty_msg':'Enable a protocol in Settings to generate your first subscription URL.','home.subs.empty_cta':'Enable a protocol','home.subs.warp':'WARP subscriptions','home.stats.title':'My IP & egress','home.stats.refresh':'Refresh','home.stats.via_cf':'Via Cloudflare targets','home.stats.via_other':'Via other targets','home.stats.country':'Country','home.stats.city':'City','home.stats.asn':'ASN','home.stats.colo':'CF colo','home.stats.idle':'Hit Refresh to fetch IP info.','home.stats.failed':'Could not fetch IP info.','home.stats.link':'Open summary','home.kill.title':'Kill switch','home.kill.paused':'Traffic paused','home.kill.active':'Traffic serving','home.kill.desc_paused':'Clients receive HTTP 503; this panel stays reachable.','home.kill.desc_active':'Proxy traffic is being served normally.','home.status.title':'Worker status','home.status.version':'Version','home.status.colo':'Colo','home.status.today':'Requests today','home.status.total':'Requests total','tabs.settings.general':'General','tabs.settings.protocols':'Protocols','tabs.settings.ports':'Ports & Domains','tabs.settings.proxyip':'Proxy IP','tabs.settings.fragment':'Fragment','tabs.settings.chain':'Chain proxy','tabs.settings.advanced':'Advanced','general.securePath.label':'Secure path','general.killSwitch.label':'Kill switch','general.killSwitch.hint':'Instantly pause all proxy traffic (clients get 503).','general.language.label':'Panel language','general.profileTitle.label':'Profile title','general.profileTitle.hint':'Name shown in proxy clients.','general.debugLogging.label':'Debug logging','general.debugLogging.hint':'Write verbose diagnostics to worker logs.','general.danger.title':'Danger zone','general.backup.title':'Backup & restore','general.backup.export':'Export settings','general.backup.import':'Import settings','general.backup.import_hint':'Paste an exported settings JSON (secrets and URLs are never included).','general.backup.imported':'Settings imported','general.backup.badfile':'Not a valid settings export','home.status.checkUpdate':'Check for updates','home.status.updateAvailable':'Update available: {v}','home.status.upToDate':'Up to date','home.status.updateCheckFailed':'Could not reach GitHub','wizard.title':'Welcome to Q Proxy','wizard.s1_title':'Enable protocols','wizard.s1_body':'Pick at least one protocol in Settings → Protocols. VLESS over TLS is the usual starting point.','wizard.s1_cta':'Open Protocols','wizard.s2_title':'Import your subscription','wizard.s2_body':'Copy the Base64 URL below into your proxy client (v2rayNG, Hiddify, Clash…).','wizard.s3_title':'You are set','wizard.s3_body':'Generate WARP accounts from Settings → WARP any time. This wizard will not show again.','wizard.done':'Finish','wizard.skip':'Skip','protocols.ech.label':'ECH (Encrypted ClientHello)','protocols.ech.server':'ECH server name (optional)','protocols.ech.server_hint':'Defaults to the node SNI when empty.','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.disabled_hint':'Disabled — no configs are generated for this protocol.','protocols.uuid':'UUID','protocols.password':'Password','protocols.cipher':'Cipher method','protocols.common.title':'Common options','protocols.path.label':'WebSocket path','protocols.path.hint':'URL prefix of this protocol tunnel.','protocols.earlyData.label':'Early data (0-RTT)','protocols.earlyData.hint':'Allows clients to send the first payload inside the handshake path parameter.','protocols.earlyData.max':'Max early data (bytes)','protocols.fingerprint.label':'TLS fingerprint','protocols.sniCase.label':'Randomize SNI case','protocols.sniCase.hint':'Randomizes letter case of the SNI hostname.','protocols.alpn.label':'ALPN protocols','protocols.alpn.hint':'One protocol per line, e.g. http/1.1 or h2.','ports.domains.label':'Custom domains','ports.domains.hint':'Hostnames orange-clouded to this Worker; every enabled port serves them.','ports.hostnameOverride.label':'Hostname override','ports.hostnameOverride.hint':'Force this hostname in generated configs instead of the request host.','ports.matrix.legend_tls':'TLS ports','ports.matrix.legend_plain':'Plaintext ports','ports.matrix.hint':'Plaintext ports apply only to workers.dev hostnames without custom domains.','ports.policy.label':'Plaintext port policy','ports.policy.always':'Always','ports.policy.workersdev':'Only workers.dev','ports.policy.never':'Never','ports.cleanAddrs.label':'Clean addresses','ports.remoteSubs.label':'Remote subscriptions to merge','ports.remoteSubs.hint':'One https:// URL per line; fetched at subscription time and merged into the raw list.','ports.cdn.title':'CDN fronting','ports.cdn.enabled.label':'Route through CDN','ports.cdn.addresses.label':'CDN addresses','ports.cdn.host.label':'CDN host','ports.cdn.sni.label':'CDN SNI','proxyip.mode.label':'Mode','proxyip.mode.list':'Static list','proxyip.mode.nat64':'NAT64 prefixes','proxyip.list.label':'Proxy IP list','proxyip.nat64.label':'NAT64 prefixes','checker.title':'Proxy IP checker','checker.desc':'Tests reachability and latency of each target against the Cloudflare trace endpoint from your browser.','checker.targets.label':'Targets','checker.targets.hint':'One IP or host:port per line — TLS ports only, up to 100.','checker.run':'Run test','checker.stop':'Stop','checker.running':'Testing…','checker.results':'Results','checker.empty':'No results yet.','checker.unsupported_port':'Unsupported port — TLS only','checker.col.target':'Target','checker.col.latency':'Avg latency','checker.col.rate':'Success','checker.col.status':'Status','checker.status.ok':'Healthy','checker.status.partial':'Partial','checker.status.failed':'Failed','checker.summary':'{ok} healthy of {total}.','checker.tooMany':'Maximum 100 targets.','warp.chips.accounts':'{n} accounts','warp.chips.presets':'{n} presets','warp.generate':'Generate Account','warp.import':'Import Config','warp.settings':'WARP Settings','warp.accounts':'Accounts','warp.back':'Back','warp.empty_title':'No WARP accounts yet','warp.empty_msg':'Generate a fresh Cloudflare WARP device or import an existing WireGuard config to get started.','warp.detail.token':'Subscription token','warp.detail.regen':'Regenerate','warp.detail.name':'Account name','warp.detail.preset':'Endpoint preset','warp.detail.custom_eps':'{n} custom endpoints','warp.detail.dns':'DNS (optional)','warp.detail.subs':'Subscription URLs','warp.detail.subs_desc':'One URL per client app. Amnezia variants embed the obfuscation parameters. These serve WireGuard configs directly — tunnel traffic never passes through the Worker.','warp.detail.amnezia_on':'Custom Amnezia overrides active','warp.detail.amnezia_off':'Using global Amnezia defaults','warp.detail.amnezia_reset':'Reset to global defaults','warp.detail.delete':'Delete account','warp.confirm.delete_title':'Delete this account?','warp.confirm.delete_body':'The account and its subscription token stop working immediately. The WARP device is removed from Cloudflare.','warp.confirm.regen_title':'Regenerate token?','warp.confirm.regen_body':'Old subscription URLs stop working. Clients must import the new token.','warp.gen.title':'Generate WARP account','warp.gen.desc':'Creates a real Cloudflare WARP device via the official API. Name is optional.','warp.imp.title':'Import WARP config','warp.imp.desc':'Paste a WireGuard .conf file or a wg:// / wireguard:// URI.','warp.imp.config':'Config','warp.toast.generated':'Account created','warp.toast.imported':'Account imported','warp.toast.deleted':'Account deleted','warp.toast.presetDeleted':'Preset deleted','warp.presets.title':'Endpoint presets','warp.presets.add':'Add Preset','warp.presets.edit':'Edit Preset','warp.presets.count':'{n} endpoints','warp.presets.inuse':'In use','warp.amnezia.title':'Amnezia defaults','warp.amnezia.desc':'Applied to Amnezia subscriptions unless an account overrides them. Zeros mean the parameter is omitted.','warp.amnezia.save':'Save Amnezia Defaults','warp.amnezia.i1':'I1 (init packet)','warp.view.accounts':'Accounts','warp.view.settings':'Settings','fragment.enable':'Enable fragmentation','fragment.preset.label':'Preset','fragment.preset.off':'Off','fragment.preset.low':'Low','fragment.preset.medium':'Medium','fragment.preset.high':'High','fragment.preset.severe':'Severe','fragment.preset.custom':'Custom','fragment.length':'Length min–max (bytes)','fragment.delay':'Delay min–max (ms)','fragment.split':'Max split min–max','fragment.packets':'Packets pattern','chain.enable':'Enable chain proxy','chain.uri.label':'Upstream URI','chain.uri.hint':'socks5://user:pass@host:port or http://host:port','advanced.doh.label':'DoH upstream','advanced.doh.private':'Your private DoH endpoint','advanced.tg.title':'Telegram bot','advanced.tg.enabled':'Enable bot','advanced.tg.token':'Bot token','advanced.tg.chat_id':'Chat ID','advanced.tg.setup':'Set webhook','advanced.tg.remove':'Remove webhook','advanced.tg.hint':'Create a bot with @BotFather, paste its token here, save, then press Set webhook. Only messages from your chat ID are served — they can query status and flip the kill switch.','tg.setup_ok':'Webhook set','tg.setup_fail':'Webhook setup failed','tg.remove_ok':'Webhook removed','tg.remove_fail':'Webhook removal failed','advanced.remoteDns.label':'Remote DNS','advanced.localDns.label':'Local DNS fallback','advanced.udp53.label':'Enable UDP 53 relay','advanced.udp53.hint':'Answers client DNS queries over UDP by relaying through DoH.','advanced.behavior.title':'Subscriptions & behavior','advanced.subInterval.label':'Sub update interval (hours)','advanced.maxNodes.label':'Max nodes per format','advanced.urlTest.label':'URL test interval (seconds)','advanced.camouflage.label':'Camouflage page','advanced.camouflage.none':'None (plain 404)','advanced.camouflage.static':'Static landing page','advanced.camouflage.proxy':'Reverse proxy URL','advanced.camouflage.url':'Camouflage URL','advanced.speedtest.label':'Intercept speed tests','routing.title':'Routing rules','routing.bypassLan.label':'Bypass LAN','routing.bypassLan.hint':'Direct local/private ranges instead of the proxy (Clash and sing-box).','routing.blockQuic.label':'Block QUIC (UDP 443)','routing.blockQuic.hint':'Forces clients onto TCP/TLS where proxying is more reliable.','routing.blockAds.label':'Block ad domains','routing.blockAds.hint':'Adds ad-domain reject rules to Clash and sing-box configs.','routing.blockMalware.label':'Block malware domains','routing.blockMalware.hint':'Adds malware-domain reject rules to Clash and sing-box configs.','routing.customBypass.label':'Custom bypass domains','routing.customBlock.label':'Custom block domains','tabs.settings.users':'Users','tabs.settings.warp':'WARP','users.title':'Users','users.desc':'Share scoped subscription links with per-user protocol filters, limits and expiry.','users.add':'Add User','users.edit':'Edit User','users.name':'Name','users.protocols':'Protocols','users.all':'All','users.limit':'Daily request limit','users.limit_none':'Empty means no daily limit','users.expiry':'Expires','users.expiry_none':'Empty means never expires','users.delete':'Delete user','users.confirm_delete_title':'Delete this user?','users.confirm_delete_body':'Their subscription links stop working immediately.','users.confirm_regen_title':'Regenerate token?','users.confirm_regen_body':'Current subscription URLs for this user stop working.','users.toast.created':'User created','users.toast.saved':'Saved','users.toast.deleted':'User deleted','users.toast.regen':'New token ready','users.status.active':'Active','users.status.expired':'Expired','users.status.limited':'Limit reached','users.status.disabled':'Disabled','users.empty':'No users yet','users.load_failed':'Could not load users.','users.col.name':'Name','users.col.token':'Subscription URL','users.col.status':'Status','users.col.enabled':'Enabled','users.col.actions':'Actions','qr.title':'Scan to import','qr.download':'Download PNG','qr.hint':'Open your proxy client and scan, or copy the link.','confirm.logout_title':'Log out?','confirm.logout_body':'Your session cookie is cleared on this device.','confirm.securepath_title':'Change secure path?','confirm.securepath_body':'Every subscription and panel link changes immediately. Re-import the new URLs into all clients.','confirm.reset_title':'Reset to defaults?','confirm.reset_body':'All sections revert to factory values immediately. This cannot be undone.','confirm.killswitch_title':'Pause all traffic?','confirm.killswitch_body':'All clients lose connectivity immediately. The panel stays reachable so you can undo this.','confirm.yes':'Yes, continue','toast.settingsSaved':'Settings saved','toast.saveFailed':'Save failed','toast.killOn':'Traffic paused','toast.killOff':'Traffic resumed','toast.langChanged':'Language updated','toast.networkError':'Network error — check your connection.','toast.tooLong':'URL too long for a QR code.','err.required':'Required field','err.url':'Enter a valid https:// URL','err.domain':'Invalid domain name','err.ip_or_host':'Not a valid IP or hostname','err.ipv6_prefix':'Invalid IPv6 prefix','err.port':'Port must be 1–65535','err.uuid':'Invalid UUID','err.number':'Enter a valid number','err.duplicate':'Duplicate entry: {value}','err.invalid_line':'Invalid line: {line}','common.help':'Help','home.subs.quota':'Subscriptions tunnel through this Worker and count toward its 100k/day request budget.','warp.chips.direct':'direct · no Worker traffic','protocols.ech.short':'Encrypts the TLS ClientHello.','protocols.ech.help':'Encrypts the TLS ClientHello for supported clients. Emitted as ech= on TLS nodes.','ports.cdn.addresses.short':'One address per line.','ports.cdn.addresses.help':'One address per line; used as connect address when CDN fronting is on.','ports.cleanAddrs.short':'One entry per line: IP or hostname, optionally with a pinned port.','ports.cleanAddrs.help':'One entry per line: IP or hostname, optionally with a pinned port (ip:port or [ipv6]:port). Pinned entries emit only that port; bare entries use the TLS/plain ports below. Invalid lines are dropped on save.','proxyip.list.short':'One entry per line; host:port allowed.','proxyip.list.help':'One entry per line; host:port allowed. Used when the direct connection fails.','proxyip.nat64.short':'One IPv6 prefix per line.','proxyip.nat64.help':'One IPv6 prefix per line (e.g. 2a02:898:146:64::).','advanced.doh.short':'DoH resolver behind the private endpoint below.','advanced.doh.help':'DNS-over-HTTPS resolver used behind your private endpoint below.','advanced.speedtest.short':'Answers speedtest providers synthetically.','advanced.speedtest.help':'Answer speedtest providers with synthetic throughput instead of proxying them.','routing.customBypass.short':'One domain per line; matched suffixes go DIRECT.','routing.customBypass.help':'One domain per line; matched suffixes go DIRECT (Clash and sing-box).','routing.customBlock.short':'One domain per line; matched suffixes are rejected.','routing.customBlock.help':'One domain per line; matched suffixes are rejected (Clash and sing-box).','fragment.preset.short':'Applies fixed length/delay values.','fragment.preset.help':'Low/Medium/High/Severe apply fixed length, delay and split values tuned to censorship severity. Custom unlocks the fields below for manual tuning.','general.securePath.short':'Secret prefix for panel and subscription URLs.','general.securePath.help':'Secret prefix for this panel and all subscription URLs. Changing it invalidates every URL.'},
+en:{'app.name':'Q Proxy','nav.home':'Home','nav.settings':'Settings','nav.warp':'WARP','nav.checker':'IP Checker','nav.logout':'Log out','nav.views':'Views','lang.en':'English','lang.fa':'فارسی','accent.cyan':'Cyan','accent.violet':'Violet','accent.green':'Green','accent.amber':'Amber','accent.label':'Accent','common.apply':'Apply changes','common.applying':'Applying…','common.save':'Save','common.saved':'Saved','common.discard':'Discard','common.cancel':'Cancel','common.close':'Close','common.confirm':'Confirm','common.copy':'Copy','common.copied':'Copied','common.generate':'Generate','common.generated':'Generated — Apply to save.','common.reveal':'Reveal','common.hide':'Hide','common.add':'Add','common.remove':'Remove','common.resetDefaults':'Reset to defaults','common.unsaved':'Unsaved changes','common.error':'Something went wrong','common.loading':'Loading…','common.yes':'Yes','common.no':'No','common.qr':'QR code','common.theme':'Theme','common.theme_light':'Light','common.theme_dark':'Dark','common.theme_toggle':'Toggle theme','common.edit':'Edit','common.delete':'Delete','common.retry':'Retry','common.fixErrors':'Fix {count} error(s)','security.title':'Security','security.current':'Current passphrase','security.new':'New passphrase','security.confirm':'Confirm new passphrase','security.hint':'Changing it signs out all other devices','security.change':'Change passphrase','security.changed':'Passphrase changed — other devices signed out','security.wrong_current':'Current passphrase is incorrect','security.mismatch':'Passphrases do not match','security.rule':'Use at least 8 characters.','home.subs.title':'Subscriptions','home.subs.desc':'Import these URLs into your proxy client.','home.subs.mode.normal':'Normal','home.subs.mode.fragment':'Fragment','home.chips.protocols':'{n} protocols on','home.chips.formats':'{n} formats','home.subs.empty_title':'No subscriptions yet','home.subs.empty_msg':'Enable a protocol in Settings to generate your first subscription URL.','home.subs.empty_cta':'Enable a protocol','home.subs.warp':'WARP subscriptions','home.stats.title':'My IP & egress','home.stats.refresh':'Refresh','home.stats.via_cf':'Via Cloudflare targets','home.stats.via_other':'Via other targets','home.stats.country':'Country','home.stats.city':'City','home.stats.asn':'ASN','home.stats.colo':'CF colo','home.stats.idle':'Hit Refresh to fetch IP info.','home.stats.failed':'Could not fetch IP info.','home.stats.link':'Open summary','home.kill.title':'Kill switch','home.kill.paused':'Traffic paused','home.kill.active':'Traffic serving','home.kill.desc_paused':'Clients receive HTTP 503; this panel stays reachable.','home.kill.desc_active':'Proxy traffic is being served normally.','home.status.title':'Worker status','home.status.version':'Version','home.status.colo':'Colo','home.status.today':'Requests today','home.status.total':'Requests total','tabs.settings.general':'General','tabs.settings.protocols':'Protocols','tabs.settings.ports':'Ports & Domains','tabs.settings.proxyip':'Proxy IP','tabs.settings.fragment':'Fragment','tabs.settings.chain':'Chain proxy','tabs.settings.advanced':'Advanced','general.securePath.label':'Secure path','general.killSwitch.label':'Kill switch','general.killSwitch.hint':'Instantly pause all proxy traffic (clients get 503).','general.language.label':'Panel language','general.profileTitle.label':'Profile title','general.profileTitle.hint':'Name shown in proxy clients.','general.debugLogging.label':'Debug logging','general.debugLogging.hint':'Write verbose diagnostics to worker logs.','general.danger.title':'Danger zone','general.backup.title':'Backup & restore','general.backup.export':'Export settings','general.backup.import':'Import settings','general.backup.import_hint':'Paste an exported settings JSON (secrets and URLs are never included).','general.backup.imported':'Settings imported','general.backup.badfile':'Not a valid settings export','home.status.checkUpdate':'Check for updates','home.status.updateAvailable':'Update available: {v}','home.status.upToDate':'Up to date','home.status.updateCheckFailed':'Could not reach GitHub','wizard.title':'Welcome to Q Proxy','wizard.s1_title':'Enable protocols','wizard.s1_body':'Pick at least one protocol in Settings → Protocols. VLESS over TLS is the usual starting point.','wizard.s1_cta':'Open Protocols','wizard.s2_title':'Import your subscription','wizard.s2_body':'Copy the Base64 URL below into your proxy client (v2rayNG, Hiddify, Clash…).','wizard.s3_title':'You are set','wizard.s3_body':'Generate WARP accounts from Settings → WARP any time. This wizard will not show again.','wizard.done':'Finish','wizard.skip':'Skip','protocols.ech.label':'ECH (Encrypted ClientHello)','protocols.ech.server':'ECH server name (optional)','protocols.ech.server_hint':'Defaults to the node SNI when empty.','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.disabled_hint':'Disabled — no configs are generated for this protocol.','protocols.uuid':'UUID','protocols.password':'Password','protocols.cipher':'Cipher method','protocols.common.title':'Common options','protocols.path.label':'WebSocket path','protocols.path.hint':'URL prefix of this protocol tunnel.','protocols.earlyData.label':'Early data (0-RTT)','protocols.earlyData.hint':'Allows clients to send the first payload inside the handshake path parameter.','protocols.earlyData.max':'Max early data (bytes)','protocols.fingerprint.label':'TLS fingerprint','protocols.sniCase.label':'Randomize SNI case','protocols.sniCase.hint':'Randomizes letter case of the SNI hostname.','protocols.alpn.label':'ALPN protocols','protocols.alpn.hint':'One protocol per line, e.g. http/1.1 or h2.','ports.domains.label':'Custom domains','ports.domains.hint':'Hostnames orange-clouded to this Worker; every enabled port serves them.','ports.hostnameOverride.label':'Hostname override','ports.hostnameOverride.hint':'Force this hostname in generated configs instead of the request host.','ports.matrix.legend_tls':'TLS ports','ports.matrix.legend_plain':'Plaintext ports','ports.matrix.hint':'Plaintext ports apply only to workers.dev hostnames without custom domains.','ports.policy.label':'Plaintext port policy','ports.policy.always':'Always','ports.policy.workersdev':'Only workers.dev','ports.policy.never':'Never','ports.cleanAddrs.label':'Clean addresses','ports.remoteSubs.label':'Remote subscriptions to merge','ports.remoteSubs.hint':'One https:// URL per line; fetched at subscription time and merged into the raw list.','ports.cdn.title':'CDN fronting','ports.cdn.enabled.label':'Route through CDN','ports.cdn.addresses.label':'CDN addresses','ports.cdn.host.label':'CDN host','ports.cdn.sni.label':'CDN SNI','proxyip.mode.label':'Mode','proxyip.mode.list':'Static list','proxyip.mode.nat64':'NAT64 prefixes','proxyip.list.label':'Proxy IP list','proxyip.nat64.label':'NAT64 prefixes','checker.title':'Proxy IP checker','checker.desc':'Tests reachability and latency of each target against the Cloudflare trace endpoint from your browser.','checker.targets.label':'Targets','checker.targets.hint':'One IP or host:port per line — TLS ports only, up to 100.','checker.run':'Run test','checker.stop':'Stop','checker.running':'Testing…','checker.results':'Results','checker.empty':'No results yet.','checker.unsupported_port':'Unsupported port — TLS only','checker.col.target':'Target','checker.col.latency':'Avg latency','checker.col.rate':'Success','checker.col.status':'Status','checker.status.ok':'Healthy','checker.status.partial':'Partial','checker.status.failed':'Failed','checker.summary':'{ok} healthy of {total}.','checker.tooMany':'Maximum 100 targets.','warp.chips.accounts':'{n} accounts','warp.chips.presets':'{n} presets','warp.generate':'Generate Account','warp.import':'Import Config','warp.settings':'WARP Settings','warp.accounts':'Accounts','warp.back':'Back','warp.empty_title':'No WARP accounts yet','warp.empty_msg':'Generate a fresh Cloudflare WARP device or import an existing WireGuard config to get started.','warp.detail.token':'Subscription token','warp.detail.regen':'Regenerate','warp.detail.name':'Account name','warp.detail.preset':'Endpoint preset','warp.detail.custom_eps':'{n} custom endpoints','warp.detail.dns':'DNS (optional)','warp.detail.subs':'Subscription URLs','warp.detail.subs_desc':'One URL per client app. Amnezia variants embed the obfuscation parameters. These serve WireGuard configs directly — tunnel traffic never passes through the Worker.','warp.detail.amnezia_on':'Custom Amnezia overrides active','warp.detail.amnezia_off':'Using global Amnezia defaults','warp.detail.amnezia_reset':'Reset to global defaults','warp.detail.delete':'Delete account','warp.confirm.delete_title':'Delete this account?','warp.confirm.delete_body':'The account and its subscription token stop working immediately. The WARP device is removed from Cloudflare.','warp.confirm.regen_title':'Regenerate token?','warp.confirm.regen_body':'Old subscription URLs stop working. Clients must import the new token.','warp.gen.title':'Generate WARP account','warp.gen.desc':'Creates a real Cloudflare WARP device via the official API. Name is optional.','warp.imp.title':'Import WARP config','warp.imp.desc':'Paste a WireGuard .conf file or a wg:// / wireguard:// URI.','warp.imp.config':'Config','warp.toast.generated':'Account created','warp.toast.imported':'Account imported','warp.toast.deleted':'Account deleted','warp.toast.presetDeleted':'Preset deleted','warp.presets.title':'Endpoint presets','warp.presets.add':'Add Preset','warp.presets.edit':'Edit Preset','warp.presets.count':'{n} endpoints','warp.presets.inuse':'In use','warp.amnezia.title':'Amnezia defaults','warp.amnezia.desc':'Applied to Amnezia subscriptions unless an account overrides them. Zeros mean the parameter is omitted.','warp.amnezia.save':'Save Amnezia Defaults','warp.amnezia.i1':'I1 (init packet)','warp.view.accounts':'Accounts','warp.view.settings':'Settings','fragment.enable':'Enable fragmentation','fragment.preset.label':'Preset','fragment.preset.off':'Off','fragment.preset.low':'Low','fragment.preset.medium':'Medium','fragment.preset.high':'High','fragment.preset.severe':'Severe','fragment.preset.custom':'Custom','fragment.length':'Length min–max (bytes)','fragment.delay':'Delay min–max (ms)','fragment.split':'Max split min–max','fragment.packets':'Packets pattern','chain.enable':'Enable chain proxy','chain.uri.label':'Upstream URI','chain.uri.hint':'socks5://user:pass@host:port or http://host:port','advanced.doh.label':'DoH upstream','advanced.doh.private':'Your private DoH endpoint','advanced.tg.title':'Telegram bot','advanced.tg.enabled':'Enable bot','advanced.tg.token':'Bot token','advanced.tg.chat_id':'Chat ID','advanced.tg.setup':'Set webhook','advanced.tg.remove':'Remove webhook','advanced.tg.hint':'Create a bot with @BotFather, paste its token here, save, then press Set webhook. Only messages from your chat ID are served — they can query status and flip the kill switch.','tg.setup_ok':'Webhook set','tg.setup_fail':'Webhook setup failed','tg.remove_ok':'Webhook removed','tg.remove_fail':'Webhook removal failed','advanced.remoteDns.label':'Remote DNS','advanced.localDns.label':'Local DNS fallback','advanced.udp53.label':'Enable UDP 53 relay','advanced.udp53.hint':'Answers client DNS queries over UDP by relaying through DoH.','advanced.behavior.title':'Subscriptions & behavior','advanced.subInterval.label':'Sub update interval (hours)','advanced.maxNodes.label':'Max nodes per format','advanced.urlTest.label':'URL test interval (seconds)','advanced.camouflage.label':'Camouflage page','advanced.camouflage.none':'None (plain 404)','advanced.camouflage.static':'Static landing page','advanced.camouflage.proxy':'Reverse proxy URL','advanced.camouflage.url':'Camouflage URL','advanced.speedtest.label':'Intercept speed tests','routing.title':'Routing rules','routing.bypassLan.label':'Bypass LAN','routing.bypassLan.hint':'Direct local/private ranges instead of the proxy (Clash and sing-box).','routing.blockQuic.label':'Block QUIC (UDP 443)','routing.blockQuic.hint':'Forces clients onto TCP/TLS where proxying is more reliable.','routing.blockAds.label':'Block ad domains','routing.blockAds.hint':'Adds ad-domain reject rules to Clash and sing-box configs.','routing.blockMalware.label':'Block malware domains','routing.blockMalware.hint':'Adds malware-domain reject rules to Clash and sing-box configs.','routing.customBypass.label':'Custom bypass domains','routing.customBlock.label':'Custom block domains','tabs.settings.users':'Users','tabs.settings.warp':'WARP','users.title':'Users','users.desc':'Share scoped subscription links with per-user protocol filters, limits and expiry.','users.add':'Add User','users.edit':'Edit User','users.name':'Name','users.protocols':'Protocols','users.all':'All','users.limit':'Daily request limit','users.limit_none':'Empty means no daily limit','users.expiry':'Expires','users.expiry_none':'Empty means never expires','users.delete':'Delete user','users.confirm_delete_title':'Delete this user?','users.confirm_delete_body':'Their subscription links stop working immediately.','users.confirm_regen_title':'Regenerate token?','users.confirm_regen_body':'Current subscription URLs for this user stop working.','users.toast.created':'User created','users.toast.saved':'Saved','users.toast.deleted':'User deleted','users.toast.regen':'New token ready','users.status.active':'Active','users.status.expired':'Expired','users.status.limited':'Limit reached','users.status.disabled':'Disabled','users.empty':'No users yet','users.load_failed':'Could not load users.','users.col.name':'Name','users.col.token':'Subscription URL','users.col.status':'Status','users.col.enabled':'Enabled','users.col.actions':'Actions','qr.title':'Scan to import','qr.download':'Download PNG','qr.hint':'Open your proxy client and scan, or copy the link.','confirm.logout_title':'Log out?','confirm.logout_body':'Your session cookie is cleared on this device.','confirm.securepath_title':'Change secure path?','confirm.securepath_body':'Every subscription and panel link changes immediately. Re-import the new URLs into all clients.','confirm.reset_title':'Reset to defaults?','confirm.reset_body':'All sections revert to factory values immediately. This cannot be undone.','confirm.killswitch_title':'Pause all traffic?','confirm.killswitch_body':'All clients lose connectivity immediately. The panel stays reachable so you can undo this.','confirm.yes':'Yes, continue','toast.settingsSaved':'Settings saved','toast.saveFailed':'Save failed','toast.killOn':'Traffic paused','toast.killOff':'Traffic resumed','toast.langChanged':'Language updated','toast.networkError':'Network error — check your connection.','toast.tooLong':'URL too long for a QR code.','err.required':'Required field','err.url':'Enter a valid https:// URL','err.domain':'Invalid domain name','err.ip_or_host':'Not a valid IP or hostname','err.ipv6_prefix':'Invalid IPv6 prefix','err.port':'Port must be 1–65535','err.uuid':'Invalid UUID','err.number':'Enter a valid number','err.duplicate':'Duplicate entry: {value}','err.invalid_line':'Invalid line: {line}','common.help':'Help','home.subs.quota':'Subscriptions tunnel through this Worker and count toward its 100k/day request budget.','warp.chips.direct':'direct · no Worker traffic','protocols.ech.short':'Encrypts the TLS ClientHello.','protocols.ech.help':'Encrypts the TLS ClientHello for supported clients. Emitted as ech= on TLS nodes.','ports.cdn.addresses.short':'One address per line.','ports.cdn.addresses.help':'One address per line; used as connect address when CDN fronting is on.','ports.cleanAddrs.short':'One entry per line: IP or hostname, optionally with a pinned port.','ports.cleanAddrs.help':'One entry per line: IP or hostname, optionally with a pinned port (ip:port or [ipv6]:port). Pinned entries emit only that port; bare entries use the TLS/plain ports below. Invalid lines are dropped on save.','proxyip.list.short':'One entry per line; host:port allowed.','proxyip.list.help':'One entry per line; host:port allowed. Used when the direct connection fails.','proxyip.nat64.short':'One IPv6 prefix per line.','proxyip.nat64.help':'One IPv6 prefix per line (e.g. 2a02:898:146:64::).','advanced.doh.short':'DoH resolver behind the private endpoint below.','advanced.doh.help':'DNS-over-HTTPS resolver used behind your private endpoint below.','advanced.speedtest.short':'Answers speedtest providers synthetically.','advanced.speedtest.help':'Answer speedtest providers with synthetic throughput instead of proxying them.','routing.customBypass.short':'One domain per line; matched suffixes go DIRECT.','routing.customBypass.help':'One domain per line; matched suffixes go DIRECT (Clash and sing-box).','routing.customBlock.short':'One domain per line; matched suffixes are rejected.','routing.customBlock.help':'One domain per line; matched suffixes are rejected (Clash and sing-box).','fragment.preset.short':'Applies fixed length/delay values.','fragment.preset.help':'Low/Medium/High/Severe apply fixed length, delay and split values tuned to censorship severity. Custom unlocks the fields below for manual tuning.','general.securePath.short':'Secret prefix for panel and subscription URLs.','general.securePath.help':'Secret prefix for this panel and all subscription URLs. Changing it invalidates every URL.'
+,'tabs.settings.addresses':'Addresses & Ports','tabs.settings.egress':'Egress','tabs.settings.sources':'Sources'
+,'addresses.card.title':'Addresses','addresses.card.label':'Proxy endpoints','addresses.card.hint':'One entry per line; use your worker hostname, custom domains or clean Cloudflare IPs. An ip:port pins that port; a bare entry uses the default port.','addresses.card.help':'Connect addresses for this panel. Bare entries use the Default port below; an explicit ip:port pins that exact port. A label overrides the generated node name.','addresses.empty_hint':'No addresses yet - nodes use your worker hostname on the default port.','addresses.add':'Add address','addresses.use_hostname':'Use my hostname','addresses.field.address':'Address','addresses.field.port':'Port','addresses.field.label':'Label','addresses.field.host':'Host header','addresses.field.sni':'SNI','addresses.defaultPort.label':'Default port','addresses.defaultPort.hint':'Used by bare addresses (no explicit port). TLS by default.','addresses.nameTemplate.label':'Node name template','addresses.nameTemplate.hint':'Optional. Placeholders: {IP} {PORT} {PROTOCOL} {PROTOCOL_LABEL} {IP_NAME} {LABEL} {HOST} {FLAG} {COUNTRY} {WORKER}. Empty = auto names.','addresses.remoteSubs.label':'Remote subscriptions to merge','addresses.remoteSubs.hint':'One https:// URL per line; fetched at subscription time and merged into the raw list.'
+,'egress.mode.title':'Egress fallback','egress.mode.label':'Mode','egress.mode.list':'Proxy IP list','egress.mode.nat64':'NAT64 prefixes','egress.list.label':'Proxy IP list','egress.list.short':'One host or host:port per line.','egress.list.help':'Used when the direct/tunneled connection fails. One host or host:port per line.','egress.nat64.label':'NAT64 prefixes','egress.nat64.short':'One IPv6 prefix per line.','egress.nat64.help':'One IPv6 prefix per line (e.g. 2a02:898:146:64::).','egress.poolUrl.label':'Proxy pool URL','egress.poolUrl.hint':'Optional public URL the worker fetches for extra relay IPs.','egress.pool.title':'Source pool','egress.pool.desc':'Resolve relay IPs from your list, the pool URL, or the built-in relay DNS pool.','egress.pool.fetch':'Fetch pool','egress.pool.test':'Test','egress.pool.idle':'Press Fetch to load the relay pool.','egress.pool.empty':'No relay IPs found.','egress.pool.untested':'not tested','egress.pool.failed':'Could not load the pool.'
+,'sources.title':'Sources','sources.desc':'Where to find working proxy IPs and relays.','sources.links.label':'Source links','sources.links.hint':'One https:// URL per line to your own scanners / lists.','sources.tools.title':'Helpers','sources.tools.doh':'DoH resolve','sources.tools.hint':'Resolves relay IPs from the built-in DNS pool (edgetunnel-style).'
+,'users.override.label':'Address override','users.override.hint':'Optional: pin this user to a specific endpoint (address, port). Empty = use the panel defaults.'
+,'home.users.desc':'Share scoped subscriptions with per-user filters and limits.','home.users.manage':'Manage','home.users.active':'Active'
+,'warp.detail.custom_eps_title':'Custom endpoints','warp.detail.custom_eps_desc':'Set per-account endpoints (one ip:port per line). Leave empty to use the selected preset.','warp.detail.amnezia_save':'Save account overrides'
+,'addresses.hostname_badge':'My hostname','addresses.enabled.toggle':'Include this address','addresses.port_preview':'Port','addresses.test':'Test addresses'
+,'egress.pool.source':'Source','egress.pool.updated':'Updated'},
 
-fa:{'app.name':'Q Proxy','nav.home':'خانه','nav.settings':'تنظیمات','nav.warp':'WARP','nav.checker':'بررسی آی‌پی','nav.logout':'خروج','nav.views':'بخش‌ها','lang.en':'English','lang.fa':'فارسی','accent.cyan':'فیروزه‌ای','accent.violet':'بنفش','accent.green':'سبز','accent.amber':'کهربایی','accent.label':'رنگ تأکید','common.apply':'اعمال تغییرات','common.applying':'در حال اعمال…','common.save':'ذخیره','common.saved':'ذخیره شد','common.discard':'نادیده گرفتن','common.cancel':'انصراف','common.close':'بستن','common.confirm':'تأیید','common.copy':'کپی','common.copied':'کپی شد','common.generate':'تولید','common.generated':'تولید شد؛ برای ذخیره «اعمال تغییرات» را بزنید.','common.reveal':'نمایش','common.hide':'پنهان','common.add':'افزودن','common.remove':'حذف','common.resetDefaults':'بازگشت به پیش‌فرض‌ها','common.unsaved':'تغییرات ذخیره‌نشده','common.error':'خطایی رخ داد','common.loading':'در حال بارگذاری…','common.yes':'بله','common.no':'خیر','common.qr':'کد QR','common.theme':'تم','common.theme_light':'روشن','common.theme_dark':'تاریک','common.theme_toggle':'تغییر تم','common.edit':'ویرایش','common.delete':'حذف','common.retry':'تلاش دوباره','common.fixErrors':'{count} خطا را برطرف کنید','security.title':'امنیت','security.current':'گذرواژهٔ کنونی','security.new':'گذرواژهٔ جدید','security.confirm':'تکرار گذرواژهٔ جدید','security.hint':'با تغییر گذرواژه، همهٔ دستگاه‌های دیگر خارج می‌شوند','security.change':'تغییر گذرواژه','security.changed':'گذرواژه تغییر کرد؛ سایر دستگاه‌ها خارج شدند','security.wrong_current':'گذرواژهٔ کنونی نادرست است','security.mismatch':'دو گذرواژه یکسان نیستند','security.rule':'حداقل ۸ نویسه وارد کنید.','home.subs.title':'اشتراک‌ها','home.subs.desc':'این نشانی‌ها را در کلاینت خود وارد کنید.','home.subs.mode.normal':'عادی','home.subs.mode.fragment':'فرگمنت','home.chips.protocols':'{n} پروتکل فعال','home.chips.formats':'{n} قالب','home.subs.empty_title':'هنوز اشتراکی نیست','home.subs.empty_msg':'برای ساخت نخستین نشانی اشتراک، یک پروتکل را در تنظیمات فعال کنید.','home.subs.empty_cta':'فعال‌سازی پروتکل','home.subs.warp':'اشتراک‌های WARP','home.stats.title':'آی‌پی من و مسیر خروجی','home.stats.refresh':'بازخوانی','home.stats.via_cf':'از طریق مقصدهای کلادفلر','home.stats.via_other':'از طریق مقصدهای دیگر','home.stats.country':'کشور','home.stats.city':'شهر','home.stats.asn':'ASN','home.stats.colo':'دیتاسنتر کلادفلر','home.stats.idle':'برای دریافت اطلاعات آی‌پی «بازخوانی» را بزنید.','home.stats.failed':'دریافت اطلاعات آی‌پی ممکن نشد.','home.stats.link':'مشاهدهٔ خلاصه','home.kill.title':'کیل سوییچ','home.kill.paused':'ترافیک متوقف است','home.kill.active':'ترافیک فعال است','home.kill.desc_paused':'کلاینت‌ها پاسخ ۵۰۳ می‌گیرند؛ این پنل در دسترس می‌ماند.','home.kill.desc_active':'ترافیک پراکسی به‌طور عادی سرویس می‌شود.','home.status.title':'وضعیت ورکر','home.status.version':'نسخه','home.status.colo':'دیتاسنتر','home.status.today':'درخواست‌های امروز','home.status.total':'مجموع درخواست‌ها','tabs.settings.general':'عمومی','tabs.settings.protocols':'پروتکل‌ها','tabs.settings.ports':'پورت‌ها و دامنه‌ها','tabs.settings.proxyip':'آی‌پی پراکسی','tabs.settings.fragment':'فرگمنت','tabs.settings.chain':'زنجیرهٔ پراکسی','tabs.settings.advanced':'پیشرفته','general.securePath.label':'مسیر امن','general.killSwitch.label':'کیل سوییچ','general.killSwitch.hint':'توقف فوری همهٔ ترافیک پراکسی (کلاینت‌ها ۵۰۳ می‌گیرند).','general.language.label':'زبان پنل','general.profileTitle.label':'عنوان پروفایل','general.profileTitle.hint':'نامی که در کلاینت‌های پراکسی نمایش داده می‌شود.','general.debugLogging.label':'ثبت خطایابی','general.debugLogging.hint':'نوشتن تشخیص‌های مفصل در لاگ ورکر.','general.danger.title':'بخش خطرناک','general.backup.title':'پشتیبان‌گیری و بازیابی','general.backup.export':'برون‌بری تنظیمات','general.backup.import':'درون‌ریزی تنظیمات','general.backup.import_hint':'JSON خروجی تنظیمات را بچسبانید (رمزها و نشانی‌ها هرگز شامل نمی‌شوند).','general.backup.imported':'تنظیمات درون‌ریزی شد','general.backup.badfile':'خروجی معتبر تنظیمات نیست','home.status.checkUpdate':'بررسی به‌روزرسانی','home.status.updateAvailable':'به‌روزرسانی موجود: {v}','home.status.upToDate':'به‌روز است','home.status.updateCheckFailed':'دسترسی به گیت‌هاب ممکن نشد','wizard.title':'به Q Proxy خوش آمدید','wizard.s1_title':'پروتکل‌ها را فعال کنید','wizard.s1_body':'در تنظیمات ← پروتکل‌ها دست‌کم یک پروتکل انتخاب کنید. VLESS روی TLS نقطهٔ شروع معمول است.','wizard.s1_cta':'رفتن به پروتکل‌ها','wizard.s2_title':'اشتراک را وارد کلاینت کنید','wizard.s2_body':'نشانی Base64 زیر را در برنامهٔ پراکسی خود (v2rayNG، Hiddify، Clash…) وارد کنید.','wizard.s3_title':'همه‌چیز آماده است','wizard.s3_body':'هر زمان خواستید از تنظیمات ← WARP حساب بسازید. این راهنما دوباره نمایش داده نمی‌شود.','wizard.done':'پایان','wizard.skip':'رد شدن','protocols.ech.label':'ECH (کلاینت‌هلوی رمزنگاری‌شده)','protocols.ech.server':'نام سرور ECH (اختیاری)','protocols.ech.server_hint':'خالی باشد SNI نود استفاده می‌شود.','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.disabled_hint':'غیرفعال است؛ برای این پروتکل کانفیگی ساخته نمی‌شود.','protocols.uuid':'UUID','protocols.password':'گذرواژه','protocols.cipher':'روش رمزنگاری','protocols.common.title':'گزینه‌های مشترک','protocols.path.label':'مسیر وب‌سوکت','protocols.path.hint':'پیشوند نشانی تونل این پروتکل.','protocols.earlyData.label':'دادهٔ زودهنگام (0-RTT)','protocols.earlyData.hint':'به کلاینت اجازه می‌دهد اولین داده را در پارامتر مسیر دست‌دهی بفرستد.','protocols.earlyData.max':'بیشنهٔ دادهٔ زودهنگام (بایت)','protocols.fingerprint.label':'اثر انگشت TLS','protocols.sniCase.label':'تصادفی‌سازی حروف SNI','protocols.sniCase.hint':'حالت حروف نام میزبان SNI را تصادفی می‌کند.','protocols.alpn.label':'پروتکل‌های ALPN','protocols.alpn.hint':'هر خط یک پروتکل، مثل http/1.1 یا h2.','ports.domains.label':'دامنه‌های سفارشی','ports.domains.hint':'دامنه‌هایی که با رکورد ابری به این ورکر متصل‌اند؛ همهٔ پورت‌های فعال روی آن‌ها سرویس می‌شود.','ports.hostnameOverride.label':'بازنویسی نام میزبان','ports.hostnameOverride.hint':'این نام میزبان به‌جای میزبان درخواست در کانفیگ‌ها گذاشته می‌شود.','ports.matrix.legend_tls':'پورت‌های TLS','ports.matrix.legend_plain':'پورت‌های بدون رمز','ports.matrix.hint':'پورت‌های بدون رمز فقط برای نشانی workers.dev بدون دامنهٔ سفارشی اعمال می‌شوند.','ports.policy.label':'سیاست پورت‌های بدون رمز','ports.policy.always':'همیشه','ports.policy.workersdev':'فقط workers.dev','ports.policy.never':'هرگز','ports.cleanAddrs.label':'آدرس‌های تمیز','ports.remoteSubs.label':'اشتراک‌های خارجی برای ادغام','ports.remoteSubs.hint':'هر خط یک نشانی https؛ هنگام ساخت اشتراک دریافت و به فهرست خام اضافه می‌شود.','ports.cdn.title':'پوشش CDN','ports.cdn.enabled.label':'عبور از CDN','ports.cdn.addresses.label':'نشانی‌های CDN','ports.cdn.host.label':'میزبان CDN','ports.cdn.sni.label':'SNI کلادفلر','proxyip.mode.label':'حالت','proxyip.mode.list':'فهرست ثابت','proxyip.mode.nat64':'پیشوندهای NAT64','proxyip.list.label':'فهرست آی‌پی پراکسی','proxyip.nat64.label':'پیشوندهای NAT64','checker.title':'بررسی آی‌پی پراکسی','checker.desc':'دسترس‌پذیری و تأخیر هر مقصد را از مرورگر شما مقابل نقطهٔ trace کلادفلر می‌سنجد.','checker.targets.label':'مقصدها','checker.targets.hint':'هر خط یک IP یا host:port — فقط پورت‌های TLS، حداکثر ۱۰۰ مورد.','checker.run':'اجرای تست','checker.stop':'توقف','checker.running':'در حال تست…','checker.results':'نتایج','checker.empty':'هنوز نتیجه‌ای نیست.','checker.unsupported_port':'پورت پشتیبانی نمی‌شود — فقط TLS','checker.col.target':'مقصد','checker.col.latency':'میانگین تأخیر','checker.col.rate':'موفقیت','checker.col.status':'وضعیت','checker.status.ok':'سالم','checker.status.partial':'نیمه‌سالم','checker.status.failed':'ناموفق','checker.summary':'{ok} مورد سالم از {total}.','checker.tooMany':'حداکثر ۱۰۰ مقصد.','warp.chips.accounts':'{n} حساب','warp.chips.presets':'{n} پیش‌فرض','warp.generate':'ساخت حساب','warp.import':'درون‌ریزی کانفیگ','warp.settings':'تنظیمات WARP','warp.accounts':'حساب‌ها','warp.back':'بازگشت','warp.empty_title':'هنوز حساب WARP ندارید','warp.empty_msg':'یک دستگاه واقعی WARP کلادفلر بسازید یا یک کانفیگ WireGuard موجود را درون‌ریزی کنید.','warp.detail.token':'توکن اشتراک','warp.detail.regen':'بازتولید','warp.detail.name':'نام حساب','warp.detail.preset':'پیش‌فرض نقاط پایانی','warp.detail.custom_eps':'{n} نقطهٔ پایانی سفارشی','warp.detail.dns':'DNS (اختیاری)','warp.detail.subs':'نشانی‌های اشتراک','warp.detail.subs_desc':'هر نشانی برای یک برنامهٔ کلاینت. نسخه‌های آمنزیا پارامترهای مبهم‌سازی را دارند. این‌ها کانفیگ‌های WireGuard را مستقیم سرو می‌کنند؛ ترافیک تونل هرگز از ورکر عبور نمی‌کند.','warp.detail.amnezia_on':'بازنویسی سفارشی آمنزیا فعال است','warp.detail.amnezia_off':'با پیش‌فرض‌های سراسری آمنزیا','warp.detail.amnezia_reset':'بازگشت به پیش‌فرض سراسری','warp.detail.delete':'حذف حساب','warp.confirm.delete_title':'این حساب حذف شود؟','warp.confirm.delete_body':'حساب و توکن اشتراکش بلافاصله از کار می‌افتد. دستگاه WARP از کلادفلر حذف می‌شود.','warp.confirm.regen_title':'توکن دوباره ساخته شود؟','warp.confirm.regen_body':'نشانی‌های اشتراک قبلی از کار می‌افتند. کلاینت‌ها باید توکن جدید را وارد کنند.','warp.gen.title':'ساخت حساب WARP','warp.gen.desc':'یک دستگاه واقعی WARP کلادفلر از طریق API رسمی می‌سازد. نام اختیاری است.','warp.imp.title':'درون‌ریزی کانفیگ WARP','warp.imp.desc':'یک فایل WireGuard .conf یا نشانی wg:// / wireguard:// بچسبانید.','warp.imp.config':'کانفیگ','warp.toast.generated':'حساب ساخته شد','warp.toast.imported':'حساب درون‌ریزی شد','warp.toast.deleted':'حساب حذف شد','warp.toast.presetDeleted':'پیش‌فرض حذف شد','warp.presets.title':'پیش‌فرض‌های نقاط پایانی','warp.presets.add':'افزودن پیش‌فرض','warp.presets.edit':'ویرایش پیش‌فرض','warp.presets.count':'{n} نقطهٔ پایانی','warp.presets.inuse':'در حال استفاده','warp.amnezia.title':'پیش‌فرض‌های آمنزیا','warp.amnezia.desc':'روی اشتراک‌های آمنزیا اعمال می‌شود مگر آنکه حسابی بازنویسی خاص داشته باشد. صفر یعنی پارامتر حذف می‌شود.','warp.amnezia.save':'ذخیرهٔ پیش‌فرض‌های آمنزیا','warp.amnezia.i1':'I1 (بستهٔ آغازین)','warp.view.accounts':'حساب‌ها','warp.view.settings':'تنظیمات','fragment.enable':'فعال‌سازی فرگمنت','fragment.preset.label':'حالت آماده','fragment.preset.off':'خاموش','fragment.preset.low':'کم','fragment.preset.medium':'متوسط','fragment.preset.high':'زیاد','fragment.preset.severe':'شدید','fragment.preset.custom':'سفارشی','fragment.length':'طول کمینه–بیشنه (بایت)','fragment.delay':'تأخیر کمینه–بیشنه (میلی‌ثانیه)','fragment.split':'بیشینهٔ شکست کمینه–بیشنه','fragment.packets':'الگوی بسته‌ها','chain.enable':'فعال‌سازی زنجیرهٔ پراکسی','chain.uri.label':'نشانی بالادست','chain.uri.hint':'‏socks5://user:pass@host:port یا http://host:port','advanced.doh.label':'بالادست DoH','advanced.doh.private':'نقطهٔ خصوصی DoH شما','advanced.tg.title':'ربات تلگرام','advanced.tg.enabled':'فعال‌سازی ربات','advanced.tg.token':'توکن ربات','advanced.tg.chat_id':'شناسه گفتگو','advanced.tg.setup':'تنظیم وبهوک','advanced.tg.remove':'حذف وبهوک','advanced.tg.hint':'با @BotFather یک ربات بسازید، توکن آن را اینجا وارد و ذخیره کنید، سپس «تنظیم وبهوک» را بزنید. تنها پیام‌های شناسه گفتگوی شما پاسخ می‌گیرند و می‌توانند کلید قطع را تغییر دهند.','tg.setup_ok':'وبهوک تنظیم شد','tg.setup_fail':'تنظیم وبهوک ناموفق بود','tg.remove_ok':'وبهوک حذف شد','tg.remove_fail':'حذف وبهوک ناموفق بود','advanced.remoteDns.label':'DNS از راه دور','advanced.localDns.label':'DNS محلی جایگزین','advanced.udp53.label':'فعال‌سازی رلهٔ UDP 53','advanced.udp53.hint':'پرس‌وجوهای DNS کلاینت را روی UDP با DoH پاسخ می‌دهد.','advanced.behavior.title':'اشتراک‌ها و رفتار','advanced.subInterval.label':'فاصلهٔ به‌روزرسانی اشتراک (ساعت)','advanced.maxNodes.label':'بیشینهٔ نود در هر قالب','advanced.urlTest.label':'فاصلهٔ تست نشانی (ثانیه)','advanced.camouflage.label':'صفحهٔ استتار','advanced.camouflage.none':'بدون استتار (۴۰۴ ساده)','advanced.camouflage.static':'صفحهٔ فرود ثابت','advanced.camouflage.proxy':'پراکسی معکوس نشانی','advanced.camouflage.url':'نشانی صفحهٔ استتار','advanced.speedtest.label':'رهگیری تست سرعت','routing.title':'قواعد مسیریابی','routing.bypassLan.label':'دورزنی شبکهٔ محلی','routing.bypassLan.hint':'محدوده‌های محلی/خصوصی مستقیم و بدون پراکسی (Clash و sing-box).','routing.blockQuic.label':'مسدودسازی QUIC (UDP 443)','routing.blockQuic.hint':'کلاینت‌ها را به TCP/TLS پایدارتر می‌برد.','routing.blockAds.label':'مسدودسازی دامنه‌های تبلیغاتی','routing.blockAds.hint':'قواعد رد دامنه‌های تبلیغاتی به کانفیگ‌های Clash و sing-box اضافه می‌کند.','routing.blockMalware.label':'مسدودسازی دامنه‌های مخرب','routing.blockMalware.hint':'قواعد رد دامنه‌های بدافزاری به کانفیگ‌های Clash و sing-box اضافه می‌کند.','routing.customBypass.label':'دامنه‌های دورزنی سفارشی','routing.customBlock.label':'دامنه‌های مسدودسازی سفارشی','tabs.settings.users':'کاربران','tabs.settings.warp':'WARP','users.title':'کاربران','users.desc':'نشانی‌های اشتراک با فیلتر پروتکل، سقف مصرف و تاریخ انقضا برای هر کاربر.','users.add':'افزودن کاربر','users.edit':'ویرایش کاربر','users.name':'نام','users.protocols':'پروتکل‌ها','users.all':'همه','users.limit':'سقف روزانهٔ درخواست','users.limit_none':'خالی یعنی بدون سقف روزانه','users.expiry':'تاریخ انقضا','users.expiry_none':'خالی یعنی بدون انقضا','users.delete':'حذف کاربر','users.confirm_delete_title':'این کاربر حذف شود؟','users.confirm_delete_body':'نشانی‌های اشتراک او بلافاصله از کار می‌افتند.','users.confirm_regen_title':'توکن دوباره ساخته شود؟','users.confirm_regen_body':'نشانی‌های فعلی این کاربر از کار می‌افتند.','users.toast.created':'کاربر ساخته شد','users.toast.saved':'ذخیره شد','users.toast.deleted':'کاربر حذف شد','users.toast.regen':'توکن جدید آماده شد','users.status.active':'فعال','users.status.expired':'منقضی','users.status.limited':'به سقف رسید','users.status.disabled':'غیرفعال','users.empty':'هنوز کاربری نیست','users.load_failed':'بارگذاری کاربران ممکن نشد.','users.col.name':'نام','users.col.token':'نشانی اشتراک','users.col.status':'وضعیت','users.col.enabled':'فعال','users.col.actions':'عملیات','qr.title':'برای افزودن اسکن کنید','qr.download':'دانلود PNG','qr.hint':'کلاینت خود را باز کنید و اسکن کنید یا لینک را کپی کنید.','confirm.logout_title':'خارج می‌شوید؟','confirm.logout_body':'کوکی نشست این دستگاه پاک می‌شود.','confirm.securepath_title':'مسیر امن تغییر کند؟','confirm.securepath_body':'همهٔ نشانی‌های اشتراک و پنل بلافاصله عوض می‌شوند. نشانی‌های جدید را دوباره در همهٔ کلاینت‌ها وارد کنید.','confirm.reset_title':'بازگشت به پیش‌فرض‌ها؟','confirm.reset_body':'همهٔ بخش‌ها بلافاصله به مقادیر کارخانه‌ای برمی‌گردند. قابل بازگشت نیست.','confirm.killswitch_title':'توقف همهٔ ترافیک؟','confirm.killswitch_body':'همهٔ کلاینت‌ها بلافاصله قطع می‌شوند. پنل در دسترس می‌ماند تا بتوانید این را برگردانید.','confirm.yes':'بله، ادامه','toast.settingsSaved':'تنظیمات ذخیره شد','toast.saveFailed':'ذخیره ناموفق بود','toast.killOn':'ترافیک متوقف شد','toast.killOff':'ترافیک از سر گرفته شد','toast.langChanged':'زبان تغییر کرد','toast.networkError':'خطای شبکه — اتصال خود را بررسی کنید.','toast.tooLong':'نشانی برای کد QR بیش از حد طولانی است.','err.required':'این فیلد الزامی است','err.url':'یک نشانی معتبر https:// وارد کنید','err.domain':'نام دامنه نامعتبر است','err.ip_or_host':'IP یا نام میزبان معتبر نیست','err.ipv6_prefix':'پیشوند IPv6 نامعتبر است','err.port':'پورت باید بین ۱ تا ۶۵۵۳۵ باشد','err.uuid':'UUID نامعتبر است','err.number':'عدد معتبر وارد کنید','err.duplicate':'مورد تکراری: {value}','err.invalid_line':'خط نامعتبر: {line}','common.help':'راهنما','home.subs.quota':'این اشتراک‌ها از طریق همین ورکر تونل می‌شوند و از سهمیهٔ ۱۰۰ هزار درخواست روزانهٔ آن مصرف می‌کنند.','warp.chips.direct':'مستقیم · بدون ترافیک ورکر','protocols.ech.short':'کلاینت‌هلوی TLS را رمز می‌کند.','protocols.ech.help':'کلاینت‌هلوی TLS را برای کلاینت‌های پشتیبان رمز می‌کند؛ به‌صورت ech= روی نودهای TLS صادر می‌شود.','ports.cdn.addresses.short':'هر خط یک نشانی.','ports.cdn.addresses.help':'هر خط یک نشانی؛ وقتی عبور از CDN روشن است به‌عنوان نشانی اتصال استفاده می‌شود.','ports.cleanAddrs.short':'هر خط یک مورد: IP یا نام میزبان، با پورت اختیاری.','ports.cleanAddrs.help':'هر خط یک مورد: IP یا نام میزبان، با پورت اختیاری (ip:port یا [ipv6]:port). موارد دارای پورت فقط همان پورت را می‌سازند؛ موارد بدون پورت از پورت‌های TLS/بدون رمز زیر پیروی می‌کنند. خط‌های نامعتبر هنگام ذخیره حذف می‌شوند.','proxyip.list.short':'هر خط یک مورد؛ host:port مجاز است.','proxyip.list.help':'هر خط یک مورد؛ host:port مجاز است. زمانی که اتصال مستقیم شکست بخورد استفاده می‌شود.','proxyip.nat64.short':'هر خط یک پیشوند IPv6.','proxyip.nat64.help':'هر خط یک پیشوند IPv6 (مثلاً 2a02:898:146:64::).','advanced.doh.short':'مبدل DoH پشت نقطهٔ خصوصی زیر.','advanced.doh.help':'مبدل DoH که پشت نقطهٔ خصوصی زیر استفاده می‌شود.','advanced.speedtest.short':'به سرویس‌های تست سرعت پاسخ ساختگی می‌دهد.','advanced.speedtest.help':'به سرویس‌های تست سرعت پاسخ ساختگی بدهید تا از پراکسی عبور نکنند.','routing.customBypass.short':'هر خط یک دامنه؛ پسوندهای منطبق مستقیم می‌روند.','routing.customBypass.help':'هر خط یک دامنه؛ پسوندهای منطبق مستقیم می‌روند (Clash و sing-box).','routing.customBlock.short':'هر خط یک دامنه؛ پسوندهای منطبق رد می‌شوند.','routing.customBlock.help':'هر خط یک دامنه؛ پسوندهای منطبق رد می‌شوند (Clash و sing-box).','fragment.preset.short':'مقادیر ثابت طول/تأخیر را اعمال می‌کند.','fragment.preset.help':'کم/متوسط/زیاد/شدید مقادیر ثابت طول، تأخیر و شکستن متناسب با شدت سانسور را اعمال می‌کنند. «سفارشی» فیلدهای زیر را برای تنظیم دستی آزاد می‌کند.','general.securePath.short':'پیشوند محرمانهٔ پنل و نشانی‌های اشتراک.','general.securePath.help':'پیشوند محرمانهٔ این پنل و همهٔ نشانی‌های اشتراک. تغییر آن همهٔ نشانی‌ها را باطل می‌کند.'}
+fa:{'app.name':'Q Proxy','nav.home':'خانه','nav.settings':'تنظیمات','nav.warp':'WARP','nav.checker':'بررسی آی‌پی','nav.logout':'خروج','nav.views':'بخش‌ها','lang.en':'English','lang.fa':'فارسی','accent.cyan':'فیروزه‌ای','accent.violet':'بنفش','accent.green':'سبز','accent.amber':'کهربایی','accent.label':'رنگ تأکید','common.apply':'اعمال تغییرات','common.applying':'در حال اعمال…','common.save':'ذخیره','common.saved':'ذخیره شد','common.discard':'نادیده گرفتن','common.cancel':'انصراف','common.close':'بستن','common.confirm':'تأیید','common.copy':'کپی','common.copied':'کپی شد','common.generate':'تولید','common.generated':'تولید شد؛ برای ذخیره «اعمال تغییرات» را بزنید.','common.reveal':'نمایش','common.hide':'پنهان','common.add':'افزودن','common.remove':'حذف','common.resetDefaults':'بازگشت به پیش‌فرض‌ها','common.unsaved':'تغییرات ذخیره‌نشده','common.error':'خطایی رخ داد','common.loading':'در حال بارگذاری…','common.yes':'بله','common.no':'خیر','common.qr':'کد QR','common.theme':'تم','common.theme_light':'روشن','common.theme_dark':'تاریک','common.theme_toggle':'تغییر تم','common.edit':'ویرایش','common.delete':'حذف','common.retry':'تلاش دوباره','common.fixErrors':'{count} خطا را برطرف کنید','security.title':'امنیت','security.current':'گذرواژهٔ کنونی','security.new':'گذرواژهٔ جدید','security.confirm':'تکرار گذرواژهٔ جدید','security.hint':'با تغییر گذرواژه، همهٔ دستگاه‌های دیگر خارج می‌شوند','security.change':'تغییر گذرواژه','security.changed':'گذرواژه تغییر کرد؛ سایر دستگاه‌ها خارج شدند','security.wrong_current':'گذرواژهٔ کنونی نادرست است','security.mismatch':'دو گذرواژه یکسان نیستند','security.rule':'حداقل ۸ نویسه وارد کنید.','home.subs.title':'اشتراک‌ها','home.subs.desc':'این نشانی‌ها را در کلاینت خود وارد کنید.','home.subs.mode.normal':'عادی','home.subs.mode.fragment':'فرگمنت','home.chips.protocols':'{n} پروتکل فعال','home.chips.formats':'{n} قالب','home.subs.empty_title':'هنوز اشتراکی نیست','home.subs.empty_msg':'برای ساخت نخستین نشانی اشتراک، یک پروتکل را در تنظیمات فعال کنید.','home.subs.empty_cta':'فعال‌سازی پروتکل','home.subs.warp':'اشتراک‌های WARP','home.stats.title':'آی‌پی من و مسیر خروجی','home.stats.refresh':'بازخوانی','home.stats.via_cf':'از طریق مقصدهای کلادفلر','home.stats.via_other':'از طریق مقصدهای دیگر','home.stats.country':'کشور','home.stats.city':'شهر','home.stats.asn':'ASN','home.stats.colo':'دیتاسنتر کلادفلر','home.stats.idle':'برای دریافت اطلاعات آی‌پی «بازخوانی» را بزنید.','home.stats.failed':'دریافت اطلاعات آی‌پی ممکن نشد.','home.stats.link':'مشاهدهٔ خلاصه','home.kill.title':'کیل سوییچ','home.kill.paused':'ترافیک متوقف است','home.kill.active':'ترافیک فعال است','home.kill.desc_paused':'کلاینت‌ها پاسخ ۵۰۳ می‌گیرند؛ این پنل در دسترس می‌ماند.','home.kill.desc_active':'ترافیک پراکسی به‌طور عادی سرویس می‌شود.','home.status.title':'وضعیت ورکر','home.status.version':'نسخه','home.status.colo':'دیتاسنتر','home.status.today':'درخواست‌های امروز','home.status.total':'مجموع درخواست‌ها','tabs.settings.general':'عمومی','tabs.settings.protocols':'پروتکل‌ها','tabs.settings.ports':'پورت‌ها و دامنه‌ها','tabs.settings.proxyip':'آی‌پی پراکسی','tabs.settings.fragment':'فرگمنت','tabs.settings.chain':'زنجیرهٔ پراکسی','tabs.settings.advanced':'پیشرفته','general.securePath.label':'مسیر امن','general.killSwitch.label':'کیل سوییچ','general.killSwitch.hint':'توقف فوری همهٔ ترافیک پراکسی (کلاینت‌ها ۵۰۳ می‌گیرند).','general.language.label':'زبان پنل','general.profileTitle.label':'عنوان پروفایل','general.profileTitle.hint':'نامی که در کلاینت‌های پراکسی نمایش داده می‌شود.','general.debugLogging.label':'ثبت خطایابی','general.debugLogging.hint':'نوشتن تشخیص‌های مفصل در لاگ ورکر.','general.danger.title':'بخش خطرناک','general.backup.title':'پشتیبان‌گیری و بازیابی','general.backup.export':'برون‌بری تنظیمات','general.backup.import':'درون‌ریزی تنظیمات','general.backup.import_hint':'JSON خروجی تنظیمات را بچسبانید (رمزها و نشانی‌ها هرگز شامل نمی‌شوند).','general.backup.imported':'تنظیمات درون‌ریزی شد','general.backup.badfile':'خروجی معتبر تنظیمات نیست','home.status.checkUpdate':'بررسی به‌روزرسانی','home.status.updateAvailable':'به‌روزرسانی موجود: {v}','home.status.upToDate':'به‌روز است','home.status.updateCheckFailed':'دسترسی به گیت‌هاب ممکن نشد','wizard.title':'به Q Proxy خوش آمدید','wizard.s1_title':'پروتکل‌ها را فعال کنید','wizard.s1_body':'در تنظیمات ← پروتکل‌ها دست‌کم یک پروتکل انتخاب کنید. VLESS روی TLS نقطهٔ شروع معمول است.','wizard.s1_cta':'رفتن به پروتکل‌ها','wizard.s2_title':'اشتراک را وارد کلاینت کنید','wizard.s2_body':'نشانی Base64 زیر را در برنامهٔ پراکسی خود (v2rayNG، Hiddify، Clash…) وارد کنید.','wizard.s3_title':'همه‌چیز آماده است','wizard.s3_body':'هر زمان خواستید از تنظیمات ← WARP حساب بسازید. این راهنما دوباره نمایش داده نمی‌شود.','wizard.done':'پایان','wizard.skip':'رد شدن','protocols.ech.label':'ECH (کلاینت‌هلوی رمزنگاری‌شده)','protocols.ech.server':'نام سرور ECH (اختیاری)','protocols.ech.server_hint':'خالی باشد SNI نود استفاده می‌شود.','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.disabled_hint':'غیرفعال است؛ برای این پروتکل کانفیگی ساخته نمی‌شود.','protocols.uuid':'UUID','protocols.password':'گذرواژه','protocols.cipher':'روش رمزنگاری','protocols.common.title':'گزینه‌های مشترک','protocols.path.label':'مسیر وب‌سوکت','protocols.path.hint':'پیشوند نشانی تونل این پروتکل.','protocols.earlyData.label':'دادهٔ زودهنگام (0-RTT)','protocols.earlyData.hint':'به کلاینت اجازه می‌دهد اولین داده را در پارامتر مسیر دست‌دهی بفرستد.','protocols.earlyData.max':'بیشنهٔ دادهٔ زودهنگام (بایت)','protocols.fingerprint.label':'اثر انگشت TLS','protocols.sniCase.label':'تصادفی‌سازی حروف SNI','protocols.sniCase.hint':'حالت حروف نام میزبان SNI را تصادفی می‌کند.','protocols.alpn.label':'پروتکل‌های ALPN','protocols.alpn.hint':'هر خط یک پروتکل، مثل http/1.1 یا h2.','ports.domains.label':'دامنه‌های سفارشی','ports.domains.hint':'دامنه‌هایی که با رکورد ابری به این ورکر متصل‌اند؛ همهٔ پورت‌های فعال روی آن‌ها سرویس می‌شود.','ports.hostnameOverride.label':'بازنویسی نام میزبان','ports.hostnameOverride.hint':'این نام میزبان به‌جای میزبان درخواست در کانفیگ‌ها گذاشته می‌شود.','ports.matrix.legend_tls':'پورت‌های TLS','ports.matrix.legend_plain':'پورت‌های بدون رمز','ports.matrix.hint':'پورت‌های بدون رمز فقط برای نشانی workers.dev بدون دامنهٔ سفارشی اعمال می‌شوند.','ports.policy.label':'سیاست پورت‌های بدون رمز','ports.policy.always':'همیشه','ports.policy.workersdev':'فقط workers.dev','ports.policy.never':'هرگز','ports.cleanAddrs.label':'آدرس‌های تمیز','ports.remoteSubs.label':'اشتراک‌های خارجی برای ادغام','ports.remoteSubs.hint':'هر خط یک نشانی https؛ هنگام ساخت اشتراک دریافت و به فهرست خام اضافه می‌شود.','ports.cdn.title':'پوشش CDN','ports.cdn.enabled.label':'عبور از CDN','ports.cdn.addresses.label':'نشانی‌های CDN','ports.cdn.host.label':'میزبان CDN','ports.cdn.sni.label':'SNI کلادفلر','proxyip.mode.label':'حالت','proxyip.mode.list':'فهرست ثابت','proxyip.mode.nat64':'پیشوندهای NAT64','proxyip.list.label':'فهرست آی‌پی پراکسی','proxyip.nat64.label':'پیشوندهای NAT64','checker.title':'بررسی آی‌پی پراکسی','checker.desc':'دسترس‌پذیری و تأخیر هر مقصد را از مرورگر شما مقابل نقطهٔ trace کلادفلر می‌سنجد.','checker.targets.label':'مقصدها','checker.targets.hint':'هر خط یک IP یا host:port — فقط پورت‌های TLS، حداکثر ۱۰۰ مورد.','checker.run':'اجرای تست','checker.stop':'توقف','checker.running':'در حال تست…','checker.results':'نتایج','checker.empty':'هنوز نتیجه‌ای نیست.','checker.unsupported_port':'پورت پشتیبانی نمی‌شود — فقط TLS','checker.col.target':'مقصد','checker.col.latency':'میانگین تأخیر','checker.col.rate':'موفقیت','checker.col.status':'وضعیت','checker.status.ok':'سالم','checker.status.partial':'نیمه‌سالم','checker.status.failed':'ناموفق','checker.summary':'{ok} مورد سالم از {total}.','checker.tooMany':'حداکثر ۱۰۰ مقصد.','warp.chips.accounts':'{n} حساب','warp.chips.presets':'{n} پیش‌فرض','warp.generate':'ساخت حساب','warp.import':'درون‌ریزی کانفیگ','warp.settings':'تنظیمات WARP','warp.accounts':'حساب‌ها','warp.back':'بازگشت','warp.empty_title':'هنوز حساب WARP ندارید','warp.empty_msg':'یک دستگاه واقعی WARP کلادفلر بسازید یا یک کانفیگ WireGuard موجود را درون‌ریزی کنید.','warp.detail.token':'توکن اشتراک','warp.detail.regen':'بازتولید','warp.detail.name':'نام حساب','warp.detail.preset':'پیش‌فرض نقاط پایانی','warp.detail.custom_eps':'{n} نقطهٔ پایانی سفارشی','warp.detail.dns':'DNS (اختیاری)','warp.detail.subs':'نشانی‌های اشتراک','warp.detail.subs_desc':'هر نشانی برای یک برنامهٔ کلاینت. نسخه‌های آمنزیا پارامترهای مبهم‌سازی را دارند. این‌ها کانفیگ‌های WireGuard را مستقیم سرو می‌کنند؛ ترافیک تونل هرگز از ورکر عبور نمی‌کند.','warp.detail.amnezia_on':'بازنویسی سفارشی آمنزیا فعال است','warp.detail.amnezia_off':'با پیش‌فرض‌های سراسری آمنزیا','warp.detail.amnezia_reset':'بازگشت به پیش‌فرض سراسری','warp.detail.delete':'حذف حساب','warp.confirm.delete_title':'این حساب حذف شود؟','warp.confirm.delete_body':'حساب و توکن اشتراکش بلافاصله از کار می‌افتد. دستگاه WARP از کلادفلر حذف می‌شود.','warp.confirm.regen_title':'توکن دوباره ساخته شود؟','warp.confirm.regen_body':'نشانی‌های اشتراک قبلی از کار می‌افتند. کلاینت‌ها باید توکن جدید را وارد کنند.','warp.gen.title':'ساخت حساب WARP','warp.gen.desc':'یک دستگاه واقعی WARP کلادفلر از طریق API رسمی می‌سازد. نام اختیاری است.','warp.imp.title':'درون‌ریزی کانفیگ WARP','warp.imp.desc':'یک فایل WireGuard .conf یا نشانی wg:// / wireguard:// بچسبانید.','warp.imp.config':'کانفیگ','warp.toast.generated':'حساب ساخته شد','warp.toast.imported':'حساب درون‌ریزی شد','warp.toast.deleted':'حساب حذف شد','warp.toast.presetDeleted':'پیش‌فرض حذف شد','warp.presets.title':'پیش‌فرض‌های نقاط پایانی','warp.presets.add':'افزودن پیش‌فرض','warp.presets.edit':'ویرایش پیش‌فرض','warp.presets.count':'{n} نقطهٔ پایانی','warp.presets.inuse':'در حال استفاده','warp.amnezia.title':'پیش‌فرض‌های آمنزیا','warp.amnezia.desc':'روی اشتراک‌های آمنزیا اعمال می‌شود مگر آنکه حسابی بازنویسی خاص داشته باشد. صفر یعنی پارامتر حذف می‌شود.','warp.amnezia.save':'ذخیرهٔ پیش‌فرض‌های آمنزیا','warp.amnezia.i1':'I1 (بستهٔ آغازین)','warp.view.accounts':'حساب‌ها','warp.view.settings':'تنظیمات','fragment.enable':'فعال‌سازی فرگمنت','fragment.preset.label':'حالت آماده','fragment.preset.off':'خاموش','fragment.preset.low':'کم','fragment.preset.medium':'متوسط','fragment.preset.high':'زیاد','fragment.preset.severe':'شدید','fragment.preset.custom':'سفارشی','fragment.length':'طول کمینه–بیشنه (بایت)','fragment.delay':'تأخیر کمینه–بیشنه (میلی‌ثانیه)','fragment.split':'بیشینهٔ شکست کمینه–بیشنه','fragment.packets':'الگوی بسته‌ها','chain.enable':'فعال‌سازی زنجیرهٔ پراکسی','chain.uri.label':'نشانی بالادست','chain.uri.hint':'‏socks5://user:pass@host:port یا http://host:port','advanced.doh.label':'بالادست DoH','advanced.doh.private':'نقطهٔ خصوصی DoH شما','advanced.tg.title':'ربات تلگرام','advanced.tg.enabled':'فعال‌سازی ربات','advanced.tg.token':'توکن ربات','advanced.tg.chat_id':'شناسه گفتگو','advanced.tg.setup':'تنظیم وبهوک','advanced.tg.remove':'حذف وبهوک','advanced.tg.hint':'با @BotFather یک ربات بسازید، توکن آن را اینجا وارد و ذخیره کنید، سپس «تنظیم وبهوک» را بزنید. تنها پیام‌های شناسه گفتگوی شما پاسخ می‌گیرند و می‌توانند کلید قطع را تغییر دهند.','tg.setup_ok':'وبهوک تنظیم شد','tg.setup_fail':'تنظیم وبهوک ناموفق بود','tg.remove_ok':'وبهوک حذف شد','tg.remove_fail':'حذف وبهوک ناموفق بود','advanced.remoteDns.label':'DNS از راه دور','advanced.localDns.label':'DNS محلی جایگزین','advanced.udp53.label':'فعال‌سازی رلهٔ UDP 53','advanced.udp53.hint':'پرس‌وجوهای DNS کلاینت را روی UDP با DoH پاسخ می‌دهد.','advanced.behavior.title':'اشتراک‌ها و رفتار','advanced.subInterval.label':'فاصلهٔ به‌روزرسانی اشتراک (ساعت)','advanced.maxNodes.label':'بیشینهٔ نود در هر قالب','advanced.urlTest.label':'فاصلهٔ تست نشانی (ثانیه)','advanced.camouflage.label':'صفحهٔ استتار','advanced.camouflage.none':'بدون استتار (۴۰۴ ساده)','advanced.camouflage.static':'صفحهٔ فرود ثابت','advanced.camouflage.proxy':'پراکسی معکوس نشانی','advanced.camouflage.url':'نشانی صفحهٔ استتار','advanced.speedtest.label':'رهگیری تست سرعت','routing.title':'قواعد مسیریابی','routing.bypassLan.label':'دورزنی شبکهٔ محلی','routing.bypassLan.hint':'محدوده‌های محلی/خصوصی مستقیم و بدون پراکسی (Clash و sing-box).','routing.blockQuic.label':'مسدودسازی QUIC (UDP 443)','routing.blockQuic.hint':'کلاینت‌ها را به TCP/TLS پایدارتر می‌برد.','routing.blockAds.label':'مسدودسازی دامنه‌های تبلیغاتی','routing.blockAds.hint':'قواعد رد دامنه‌های تبلیغاتی به کانفیگ‌های Clash و sing-box اضافه می‌کند.','routing.blockMalware.label':'مسدودسازی دامنه‌های مخرب','routing.blockMalware.hint':'قواعد رد دامنه‌های بدافزاری به کانفیگ‌های Clash و sing-box اضافه می‌کند.','routing.customBypass.label':'دامنه‌های دورزنی سفارشی','routing.customBlock.label':'دامنه‌های مسدودسازی سفارشی','tabs.settings.users':'کاربران','tabs.settings.warp':'WARP','users.title':'کاربران','users.desc':'نشانی‌های اشتراک با فیلتر پروتکل، سقف مصرف و تاریخ انقضا برای هر کاربر.','users.add':'افزودن کاربر','users.edit':'ویرایش کاربر','users.name':'نام','users.protocols':'پروتکل‌ها','users.all':'همه','users.limit':'سقف روزانهٔ درخواست','users.limit_none':'خالی یعنی بدون سقف روزانه','users.expiry':'تاریخ انقضا','users.expiry_none':'خالی یعنی بدون انقضا','users.delete':'حذف کاربر','users.confirm_delete_title':'این کاربر حذف شود؟','users.confirm_delete_body':'نشانی‌های اشتراک او بلافاصله از کار می‌افتند.','users.confirm_regen_title':'توکن دوباره ساخته شود؟','users.confirm_regen_body':'نشانی‌های فعلی این کاربر از کار می‌افتند.','users.toast.created':'کاربر ساخته شد','users.toast.saved':'ذخیره شد','users.toast.deleted':'کاربر حذف شد','users.toast.regen':'توکن جدید آماده شد','users.status.active':'فعال','users.status.expired':'منقضی','users.status.limited':'به سقف رسید','users.status.disabled':'غیرفعال','users.empty':'هنوز کاربری نیست','users.load_failed':'بارگذاری کاربران ممکن نشد.','users.col.name':'نام','users.col.token':'نشانی اشتراک','users.col.status':'وضعیت','users.col.enabled':'فعال','users.col.actions':'عملیات','qr.title':'برای افزودن اسکن کنید','qr.download':'دانلود PNG','qr.hint':'کلاینت خود را باز کنید و اسکن کنید یا لینک را کپی کنید.','confirm.logout_title':'خارج می‌شوید؟','confirm.logout_body':'کوکی نشست این دستگاه پاک می‌شود.','confirm.securepath_title':'مسیر امن تغییر کند؟','confirm.securepath_body':'همهٔ نشانی‌های اشتراک و پنل بلافاصله عوض می‌شوند. نشانی‌های جدید را دوباره در همهٔ کلاینت‌ها وارد کنید.','confirm.reset_title':'بازگشت به پیش‌فرض‌ها؟','confirm.reset_body':'همهٔ بخش‌ها بلافاصله به مقادیر کارخانه‌ای برمی‌گردند. قابل بازگشت نیست.','confirm.killswitch_title':'توقف همهٔ ترافیک؟','confirm.killswitch_body':'همهٔ کلاینت‌ها بلافاصله قطع می‌شوند. پنل در دسترس می‌ماند تا بتوانید این را برگردانید.','confirm.yes':'بله، ادامه','toast.settingsSaved':'تنظیمات ذخیره شد','toast.saveFailed':'ذخیره ناموفق بود','toast.killOn':'ترافیک متوقف شد','toast.killOff':'ترافیک از سر گرفته شد','toast.langChanged':'زبان تغییر کرد','toast.networkError':'خطای شبکه — اتصال خود را بررسی کنید.','toast.tooLong':'نشانی برای کد QR بیش از حد طولانی است.','err.required':'این فیلد الزامی است','err.url':'یک نشانی معتبر https:// وارد کنید','err.domain':'نام دامنه نامعتبر است','err.ip_or_host':'IP یا نام میزبان معتبر نیست','err.ipv6_prefix':'پیشوند IPv6 نامعتبر است','err.port':'پورت باید بین ۱ تا ۶۵۵۳۵ باشد','err.uuid':'UUID نامعتبر است','err.number':'عدد معتبر وارد کنید','err.duplicate':'مورد تکراری: {value}','err.invalid_line':'خط نامعتبر: {line}','common.help':'راهنما','home.subs.quota':'این اشتراک‌ها از طریق همین ورکر تونل می‌شوند و از سهمیهٔ ۱۰۰ هزار درخواست روزانهٔ آن مصرف می‌کنند.','warp.chips.direct':'مستقیم · بدون ترافیک ورکر','protocols.ech.short':'کلاینت‌هلوی TLS را رمز می‌کند.','protocols.ech.help':'کلاینت‌هلوی TLS را برای کلاینت‌های پشتیبان رمز می‌کند؛ به‌صورت ech= روی نودهای TLS صادر می‌شود.','ports.cdn.addresses.short':'هر خط یک نشانی.','ports.cdn.addresses.help':'هر خط یک نشانی؛ وقتی عبور از CDN روشن است به‌عنوان نشانی اتصال استفاده می‌شود.','ports.cleanAddrs.short':'هر خط یک مورد: IP یا نام میزبان، با پورت اختیاری.','ports.cleanAddrs.help':'هر خط یک مورد: IP یا نام میزبان، با پورت اختیاری (ip:port یا [ipv6]:port). موارد دارای پورت فقط همان پورت را می‌سازند؛ موارد بدون پورت از پورت‌های TLS/بدون رمز زیر پیروی می‌کنند. خط‌های نامعتبر هنگام ذخیره حذف می‌شوند.','proxyip.list.short':'هر خط یک مورد؛ host:port مجاز است.','proxyip.list.help':'هر خط یک مورد؛ host:port مجاز است. زمانی که اتصال مستقیم شکست بخورد استفاده می‌شود.','proxyip.nat64.short':'هر خط یک پیشوند IPv6.','proxyip.nat64.help':'هر خط یک پیشوند IPv6 (مثلاً 2a02:898:146:64::).','advanced.doh.short':'مبدل DoH پشت نقطهٔ خصوصی زیر.','advanced.doh.help':'مبدل DoH که پشت نقطهٔ خصوصی زیر استفاده می‌شود.','advanced.speedtest.short':'به سرویس‌های تست سرعت پاسخ ساختگی می‌دهد.','advanced.speedtest.help':'به سرویس‌های تست سرعت پاسخ ساختگی بدهید تا از پراکسی عبور نکنند.','routing.customBypass.short':'هر خط یک دامنه؛ پسوندهای منطبق مستقیم می‌روند.','routing.customBypass.help':'هر خط یک دامنه؛ پسوندهای منطبق مستقیم می‌روند (Clash و sing-box).','routing.customBlock.short':'هر خط یک دامنه؛ پسوندهای منطبق رد می‌شوند.','routing.customBlock.help':'هر خط یک دامنه؛ پسوندهای منطبق رد می‌شوند (Clash و sing-box).','fragment.preset.short':'مقادیر ثابت طول/تأخیر را اعمال می‌کند.','fragment.preset.help':'کم/متوسط/زیاد/شدید مقادیر ثابت طول، تأخیر و شکستن متناسب با شدت سانسور را اعمال می‌کنند. «سفارشی» فیلدهای زیر را برای تنظیم دستی آزاد می‌کند.','general.securePath.short':'پیشوند محرمانهٔ پنل و نشانی‌های اشتراک.','general.securePath.help':'پیشوند محرمانهٔ این پنل و همهٔ نشانی‌های اشتراک. تغییر آن همهٔ نشانی‌ها را باطل می‌کند.'
+,'tabs.settings.addresses':'آدرس‌ها و پورت‌ها','tabs.settings.egress':'مسیر خروجی','tabs.settings.sources':'منابع'
+,'addresses.card.title':'آدرس‌ها','addresses.card.label':'نقطه‌های پراکسی','addresses.card.hint':'هر خط یک مورد؛ از نام میزبان ورکر، دامنهٔ سفارشی یا آی‌پی‌های تمیز کلادفلر استفاده کنید. ip:port پورت را قفل می‌کند؛ آیتم بدون پورت از پورت پیش‌فرض استفاده می‌کند.','addresses.card.help':'آدرس‌های اتصال این پنل. آیتم بدون پورت از پورت پیش‌فرض زیر استفاده می‌کند؛ ip:port دقیقاً همان پورت را می‌سازد. برچسب نام نود را بازنویسی می‌کند.','addresses.empty_hint':'هنوز آدرس‌هایی نیست — نودها از نام میزبان ورکر روی پورت پیش‌فرض استفاده می‌کنند.','addresses.add':'افزودن آدرس','addresses.use_hostname':'استفاده از میزبان من','addresses.field.address':'آدرس','addresses.field.port':'پورت','addresses.field.label':'برچسب','addresses.field.host':'هدر میزبان','addresses.field.sni':'SNI','addresses.defaultPort.label':'پورت پیش‌فرض','addresses.defaultPort.hint':'برای آیتم‌های بدون پورت استفاده می‌شود. پیش‌فرض TLS.','addresses.nameTemplate.label':'الگوی نام نود','addresses.nameTemplate.hint':'اختیاری. متغیرها: {IP} {PORT} {PROTOCOL} {PROTOCOL_LABEL} {IP_NAME} {LABEL} {HOST} {FLAG} {COUNTRY} {WORKER}','addresses.remoteSubs.label':'اشتراک‌های خارجی برای ادغام','addresses.remoteSubs.hint':'هر خط یک نشانی https؛ هنگام ساخت اشتراک دریافت و به فهرست خام اضافه می‌شود.'
+,'egress.mode.title':'جایگزین مسیر خروجی','egress.mode.label':'حالت','egress.mode.list':'فهرست آی‌پی پراکسی','egress.mode.nat64':'پیشوندهای NAT64','egress.list.label':'فهرست آی‌پی پراکسی','egress.list.short':'هر خط یک میزبان یا host:port.','egress.list.help':'وقتی اتصال مستقیم شکست می‌خورد استفاده می‌شود. هر خط یک میزبان یا host:port.','egress.nat64.label':'پیشوندهای NAT64','egress.nat64.short':'هر خط یک پیشوند IPv6.','egress.nat64.help':'هر خط یک پیشوند IPv6 (مثلاً 2a02:898:146:64::).','egress.poolUrl.label':'نشانی استخر پراکسی','egress.poolUrl.hint':'نشانی عمومی اختیاری که ورکر برای آی‌پی‌های رلهٔ بیشتر دریافت می‌کند.','egress.pool.title':'استخر منبع','egress.pool.desc':'آی‌پی‌های رله را از فهرست، نشانی استخر یا استخر DNS داخلی پیدا کنید.','egress.pool.fetch':'دریافت استخر','egress.pool.test':'تست','egress.pool.idle':'برای بارگیری استخر «دریافت» را بزنید.','egress.pool.empty':'آی‌پی رله‌ای پیدا نشد.','egress.pool.untested':'تست‌نشده','egress.pool.failed':'بارگیری استخر ممکن نشد.'
+,'sources.title':'منابع','sources.desc':'محل پیدا کردن آی‌پی‌های پراکسی و رلهٔ کارا.','sources.links.label':'پیوندهای منبع','sources.links.hint':'هر خط یک نشانی https:// برای اسکنرها/فهرست‌های خودتان.','sources.tools.title':'ابزارها','sources.tools.doh':'حل DoH','sources.tools.hint':'آی‌پی‌های رله را از استخر DNS داخلی پیدا می‌کند.'
+,'users.override.label':'بازنویسی آدرس','users.override.hint':'اختیاری: این کاربر را به یک نقطهٔ پایانی مشخص (آدرس، پورت) قفل کنید. خالی یعنی پیش‌فرض‌های پنل.'
+,'home.users.desc':'اشتراک‌های محدود با فیلتر و سقف برای هر کاربر.','home.users.manage':'مدیریت','home.users.active':'فعال'
+,'warp.detail.custom_eps_title':'نقطه‌های پایانی سفارشی','warp.detail.custom_eps_desc':'نقطه‌های پایانی این حساب را مشخص کنید (هر خط یک ip:port). خالی یعنی از پیش‌فرض انتخاب‌شده استفاده شود.','warp.detail.amnezia_save':'ذخیرهٔ بازنویسی حساب'
+,'addresses.hostname_badge':'میزبان من','addresses.enabled.toggle':'شامل این آدرس','addresses.port_preview':'پورت','addresses.test':'تست آدرس‌ها'
+,'egress.pool.source':'منبع','egress.pool.updated':'به‌روزرسانی'}
 };
 const getLangCookie=()=>{const m=document.cookie.match(/(?:^|;\s*)qp_lang=(en|fa)/);return m&&m[1]||'fa'};
 let LANG=getLangCookie();
@@ -515,7 +553,7 @@ const SS_METHODS=['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305'];
 const FPS=['chrome','firefox','safari','ios','android','edge','360','qq','random','randomized'];
 const PACKETS=['tlshello','1-1','1-2','1-3','1-5'];
 const PRESETS={low:[100,200,1,1],medium:[50,100,1,5],high:[10,20,10,20],severe:[1,5,1,5]};
-const S={set:{},status:null,subs:[],snap:{},dirty:new Set(),subMode:'normal',users:[],warp:null};
+const S={set:{},status:null,subs:[],snap:{},dirty:new Set(),subMode:'normal',users:[],warp:null,pool:null,addrHealth:[]};
 let UID=0;
 function getPath(o,p){return p.split('.').reduce((a,k)=>a==null?undefined:a[k],o)}
 function setPath(o,p,v){const ks=p.split('.');let c=o;for(let i=0;i<ks.length-1;i++){if(typeof c[ks[i]]!=='object'||c[ks[i]]===null)c[ks[i]]={};c=c[ks[i]]}c[ks[ks.length-1]]=v}
@@ -523,10 +561,8 @@ function leaves(o,pre,out){for(const k in o){const p=pre?pre+'.'+k:k;const v=o[k
 function buildShell(){
 $('tab-home').textContent=t('nav.home');
 $('tab-settings').textContent=t('nav.settings');
-$('tab-checker').textContent=t('nav.checker');
 $('home-h1').textContent=t('nav.home');
 $('settings-h1').textContent=t('nav.settings');
-$('checker-h1').textContent=t('nav.checker');
 $('logout-btn').setAttribute('aria-label',t('nav.logout'));
 $('logout-btn').title=t('nav.logout');
 $('dirty-label').textContent=t('common.unsaved');
@@ -570,15 +606,13 @@ if(seg[0]==='settings'){
 if(seg[1]==='warp'&&seg[2])return{view:'settings',sec:'warp',warpId:seg[2]};
 return{view:'settings',sec:SECTIONS.some(s=>s.key===seg[1])?seg[1]:'general'};
 }
-if(seg[0]==='checker')return{view:'checker'};
 return{view:'home'}}
 function navigate(){
 const r=parseRoute();
-if(r.view!=='checker'&&CK.running)stopTest();
 const h=location.hash;
 if(r.view==='home'&&h!==''&&h!=='#'&&h!=='#/home')history.replaceState(null,'','#/home');
 if(r.view==='settings'&&SECTIONS.some(s=>s.key===r.sec))history.replaceState(null,'','#/settings/'+r.sec+(r.warpId?'/'+r.warpId:''));
-['home','settings','checker'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
+['home','settings'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
 document.querySelectorAll('#nav .tab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.view===r.view)));
 if(r.view==='settings')showSection(r.sec,r.warpId);
 window.scrollTo(0,0)}
@@ -620,12 +654,20 @@ right.appendChild(kill);
 const ip=document.createElement('section');ip.className='card';
 ip.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.stats.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="refresh-ip"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="ip-body"><span class="field__hint">'+esc(t('home.stats.idle'))+'</span></div><p class="field__hint"><a href="'+esc(BASE)+'my-ip" target="_blank" rel="noopener">'+esc(t('home.stats.link'))+'</a></p>';
 right.appendChild(ip);
+const pool=document.createElement('section');pool.className='card';
+pool.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('egress.pool.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="home-pool-refresh"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="home-pool"><span class="field__hint">'+esc(t('egress.pool.idle'))+'</span></div>';
+right.appendChild(pool);
+const uc=document.createElement('section');uc.className='card';
+uc.innerHTML='<div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('home.users.desc'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/settings/users">'+esc(t('home.users.manage'))+'</a></div><div id="home-users"><span class="field__hint">'+esc(t('common.loading'))+'</span></div>';
+right.appendChild(uc);
 if(S.status){
 const st=document.createElement('section');st.className='card';
 const u=S.status.usage||{requestsToday:0,requestsTotal:0};
 st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="check-update">'+esc(t('home.status.checkUpdate'))+'</button></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(String(u.requestsToday!=null?u.requestsToday:'—'))+'</span><span class="mono">'+esc(String(u.requestsTotal!=null?u.requestsTotal:'—'))+'</span></div>';
 right.appendChild(st)}
 body.appendChild(right);
+loadHomePool();
+loadHomeUsers();
 syncKillUI()}
 function syncKillUI(){
 const on=!!(S.status&&S.status.killSwitch);
@@ -654,8 +696,27 @@ if(S.status)S.status.killSwitch=!on;
 syncKillUI();toastErr(e)}
 finally{document.querySelectorAll('[data-kill]').forEach(b=>b.closest('.switch').classList.remove('pending'))}},300)}
 function toastErr(e){toast(!e||e.status===0?t('toast.networkError'):e.message||t('common.error'),'err')}
-async function loadMyIp(){
-const box=$('ip-body');
+async function loadHomePool(){
+const box=$('home-pool');if(!box)return;
+box.innerHTML='<span class="field__hint">'+esc(t('common.loading'))+'</span>';
+try{S.pool=await api('api/proxy-pool?probe=1',{fresh:true});renderHomePool()}catch(e){if(e&&e.status===401)return;box.innerHTML='<p class="field__error" style="display:block">'+esc(t('egress.pool.failed'))+'</p>'}}
+function renderHomePool(){
+const box=$('home-pool');if(!box)return;
+const pool=(S.pool&&S.pool.pool)||[];
+if(!pool.length){box.innerHTML='<span class="field__hint">'+esc(t('egress.pool.empty'))+'</span>';return}
+const probe=((S.pool&&S.pool.probe)||[]);const map=new Map();probe.forEach(p=>map.set(p.ip+':'+p.port,p));
+box.innerHTML=pool.slice(0,8).map(function(e){
+const k=e.ip+':'+e.port;const pr=map.get(k);
+const status=pr?(pr.status==='ok'?'<span class="glyph-ok">✓ '+pr.latencyMs+'ms</span>':'<span class="glyph-bad">✗</span>'):'<span class="pool-status">'+esc(t('egress.pool.untested'))+'</span>';
+return '<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc(k)+'</span><span class="pool-status">'+status+'</span></div>'}).join('')}
+async function loadHomeUsers(){
+const box=$('home-users');if(!box)return;
+try{const d=await api('api/users',{fresh:true});S.users=d.users||[];renderHomeUsers()}catch(e){if(e&&e.status===401)return;box.innerHTML='<p class="field__error" style="display:block">'+esc(t('users.load_failed'))+'</p>'}}
+function renderHomeUsers(){
+const box=$('home-users');if(!box)return;
+const all=S.users||[];const active=all.filter(u=>u.enabled&&!isUserExpired(u)).length;
+box.innerHTML='<div class="stat-grid"><span class="lbl">'+esc(t('users.title'))+'</span><span class="mono">'+all.length+'</span><span></span><span class="lbl">'+esc(t('home.users.active'))+'</span><span class="mono">'+active+'</span></div>'}
+async function loadMyIp(){const box=$('ip-body');
 if(!box)return;
 box.innerHTML='<span class="field__hint">'+esc(t('common.loading'))+'</span>';
 try{
@@ -676,6 +737,47 @@ let warpPromise=null;
 function loadWarp(){if(!warpPromise)warpPromise=(async()=>{const[acc,pre,amz]=await Promise.all([api('api/warp/account'),api('api/warp/presets'),api('api/warp/settings/amnezia')]);return S.warp={accounts:acc.accounts,presets:pre.presets,amnezia:amz.amnezia}})().catch(e=>{warpPromise=null;toastErr(e);throw e});return warpPromise}
 function loadWarpIfNeeded(){return S.warp?Promise.resolve(S.warp):loadWarp().catch(()=>null)}
 function invalidateWarp(){S.warp=null;warpPromise=null}
+function poolCardHtml(){
+return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('egress.pool.title'))+'</div><div class="field__hint">'+esc(t('egress.pool.desc'))+'</div></div><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="pool-fetch">'+esc(t('egress.pool.fetch'))+'</button><button type="button" class="btn btn--primary btn--sm" data-action="pool-test">'+esc(t('egress.pool.test'))+'</button></div></div><div id="pool-list" class="pool-list"><span class="field__hint">'+esc(t('egress.pool.idle'))+'</span></div></section>'}
+function sourcesCardHtml(){
+return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t('sources.title'))+'</div></div><p class="field__hint">'+esc(t('sources.desc'))+'</p>'
++'<div class="field"><span class="field__label">'+esc(t('sources.links.label'))+'</span><div class="line-editor"><textarea rows="4" class="input textarea textarea--mono" dir="ltr" spellcheck="false" placeholder="https://…" data-bind="sourceUrls" data-validate="url">'+esc((S.set.sourceUrls||[]).join('\n'))+'</textarea><div class="meta"><span class="cnt"></span><span class="bad"></span></div></div><p class="field__hint">'+esc(t('sources.links.hint'))+'</p></div>'
++'<div class="field"><span class="field__label">'+esc(t('sources.tools.title'))+'</span><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="pool-fetch">'+esc(t('egress.pool.fetch'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="source-doh">'+esc(t('sources.tools.doh'))+'</button></div><p class="field__hint">'+esc(t('sources.tools.hint'))+'</p></div></section>'}
+async function loadPool(probe){
+const box=$('pool-list');if(!box)return;
+box.innerHTML='<span class="field__hint">'+esc(t('common.loading'))+'</span><span class="spin" style="display:inline-block;vertical-align:middle"></span>';
+try{
+const d=await api('api/proxy-pool'+(probe?'?probe=1':''),{fresh:true});
+S.pool=d;S.poolSource=d.source;S.poolAt=Date.now();renderPool()}
+catch(e){if(e&&e.status===401)return;box.innerHTML='<p class="field__error" style="display:block">'+esc(t('egress.pool.failed'))+'</p>'}}
+function renderPool(){
+const box=$('pool-list');if(!box)return;
+const pool=(S.pool&&S.pool.pool)||[];
+if(!pool.length){box.innerHTML='<span class="field__hint">'+esc(t('egress.pool.empty'))+'</span>';return}
+const probe=((S.pool&&S.pool.probe)||[]);
+const map=new Map();probe.forEach(p=>{map.set(p.ip+':'+p.port,p)});
+const poolSrc=(S.poolSource||'list');
+const at=S.poolAt?new Date(S.poolAt).toLocaleTimeString():'';
+const head='<div class="pool-meta"><span class="pool-status">'+esc(t('egress.pool.source'))+': '+esc(poolSrc)+'</span>'+ (at?'<span class="pool-status">· '+esc(t('egress.pool.updated'))+' '+esc(at)+'</span>':'')+'</div>';
+const sorted=[...pool].sort(function(a,b){const pa=map.get(a.ip+':'+a.port),pb=map.get(b.ip+':'+b.port);const oa=pa?pa.latencyMs:1e9,ob=pb?pb.latencyMs:1e9;if(oa===ob)return 0;if(oa===1e9)return 1;if(ob===1e9)return -1;return oa-ob});
+box.innerHTML=head+sorted.slice(0,16).map(function(e){
+const k=e.ip+':'+e.port;const pr=map.get(k);
+const status=pr?(pr.status==='ok'?('<span class="glyph-ok">✓</span> '+pr.latencyMs+'ms'):'<span class="glyph-bad">✗</span>'):'<span class="pool-status">'+esc(t('egress.pool.untested'))+'</span>';
+return '<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc(k)+'</span><span class="pool-status">'+status+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="pool-add" data-addr="'+esc(k)+'" aria-label="'+esc(t('common.add'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>'}).join('')}
+function renderAddrDots(){
+const map=new Map();
+(S.addrHealth||[]).forEach(r=>{const ip=String(r.ip||'').replace(/^\[|\]$/g,'').toLowerCase();map.set(ip+':'+String(r.port||''),r)});
+document.querySelectorAll('#sp-addresses [data-addr-dot]').forEach(function(dot){
+const card=dot.closest('.addr-card');if(!card)return;
+const addr=(card.querySelector('[data-addr-field="address"]').value||'').trim();
+let host=addr;let portFromAddr='';
+const br=addr.match(/^\[([^\]]+)\](?::(\d+))?$/);if(br){host=br[1];if(br[2])portFromAddr=br[2]}
+else{const c=addr.lastIndexOf(':');if(c>0&&!addr.includes('::')){host=addr.slice(0,c);portFromAddr=addr.slice(c+1)}}
+const port=portFromAddr||(card.querySelector('[data-addr-field="port"]').value||'').trim()||String(S.set.defaultPort||443);
+const r=map.get(host.replace(/^\[|\]$/g,'').toLowerCase()+':'+port);
+if(r){dot.hidden=false;dot.className='addr-dot '+(r.status==='ok'?'dot--ok':'dot--bad');dot.title=r.latencyMs!=null?(r.latencyMs+'ms'):t('egress.pool.untested')}
+else dot.hidden=true});
+}
 function warpCardHtml(card){
 if(card.warpAccounts)return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('warp.accounts'))+'</div></div><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button><button type="button" class="btn btn--primary btn--sm" data-action="warp-generate-open">'+esc(t('warp.generate'))+'</button></div></div><div id="warp-accounts" class="warp-grid"></div></section>';
 if(card.warpPresets)return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.presets.title'))+'</div><button type="button" class="btn btn--primary btn--sm" data-action="warp-preset-add">'+esc(t('warp.presets.add'))+'</button></div><div id="warp-presets"></div></section>';
@@ -691,7 +793,7 @@ ac.innerHTML='<div class="chips-row" style="grid-column:1/-1;margin-block-end:4p
 if(!W.accounts.length){ac.insertAdjacentHTML('beforeend','<div class="empty-card" style="grid-column:1/-1"><div class="empty-icon"><svg aria-hidden="true"><use href="#i-download"/></svg></div><div class="empty-title">'+esc(t('warp.empty_title'))+'</div><p class="empty-msg">'+esc(t('warp.empty_msg'))+'</p><div class="empty-actions"><button type="button" class="btn btn--primary btn--sm" data-action="warp-generate-open">'+esc(t('warp.generate'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button></div></div>')}
 else W.accounts.forEach(function(a,i){const eps=a.endpoint_list&&a.endpoint_list.type==='custom'?t('warp.detail.custom_eps',{n:a.endpoint_list.custom_endpoints.length}):(W.presets.find(function(p){return p.id===(a.endpoint_list&&a.endpoint_list.preset_id)})||{name:a.endpoint_list&&a.endpoint_list.preset_id||''}).name;ac.insertAdjacentHTML('beforeend','<a class="acct-card" href="#/settings/warp/'+esc(a.id)+'"><span class="avatar-tile grad-'+((i%6)+1)+'">'+esc((a.name[0]||'W').toUpperCase())+'</span><span class="acct-info"><span class="acct-name">'+esc(a.name)+'</span><span class="acct-date">'+esc((a.created_at||'').slice(0,10))+' · '+esc(eps)+'</span></span>'+(a.amnezia_overrides?'<span class="amz-tag">AMZ</span>':'')+'</a>')})}
 const pr=$('warp-presets');
-if(pr){let ph='';W.presets.forEach(function(p){const preview=p.endpoints.slice(0,3).map(function(e){return e.ip+':'+e.port}).join(', ')+(p.endpoints.length>3?' +'+(p.endpoints.length-3):'');ph+='<div class="row"><div style="min-width:0"><div class="acct-name">'+esc(p.name)+'</div><div class="acct-date" dir="ltr">'+esc(preview)+'</div></div><div class="btn-row"><span class="stat-chip">'+esc(t('warp.presets.count',{n:p.endpoints.length}))+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="warp-preset-edit" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.edit'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="warp-preset-del" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>'});pr.innerHTML=ph}
+if(pr){let ph='';W.presets.forEach(function(p){const preview=p.endpoints.slice(0,3).map(function(e){return e.ip+':'+e.port}).join(', ')+(p.endpoints.length>3?' +'+(p.endpoints.length-3):'');ph+='<div class="row"><div style="min-width:0"><div class="acct-name">'+esc(p.name)+'</div><div class="acct-date" dir="ltr">'+esc(preview)+'</div></div><div class="btn-row"><span class="stat-chip">'+esc(t('warp.presets.count',{n:p.endpoints.length}))+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="warp-preset-edit" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.edit'))+'"><svg aria-hidden="true"><use href="#i-edit"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="warp-preset-del" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>'});pr.innerHTML=ph}
 const am=$('warp-amnezia');
 if(am){const AMZ=[['Jc','Jc (0-128)'],['Jmin','Jmin (0-1280)'],['Jmax','Jmax (0-1280)'],['S1','S1 (0-65535)'],['S2','S2 (0-65535)'],['S3','S3 (0-65535)'],['S4','S4 (0-65535)'],['H1','H1'],['H2','H2'],['H3','H3'],['H4','H4']];let ah='';AMZ.forEach(function(kv){const key=kv[0],lbl=kv[1];const v=W.amnezia&&W.amnezia[key]!==undefined&&W.amnezia[key]!==null?W.amnezia[key]:'';ah+='<div class="field"><label class="field__label" for="amz-'+key+'">'+esc(lbl)+'</label><input class="input" type="text" id="amz-'+key+'" dir="ltr" value="'+esc(String(v))+'"></div>'});ah+='<div class="field" style="grid-column:1/-1"><label class="field__label" for="amz-I1">'+esc(t('warp.amnezia.i1'))+'</label><input class="input" type="text" id="amz-I1" dir="ltr" value="'+esc(String(W.amnezia&&W.amnezia.I1||''))+'"></div>';am.innerHTML=ah}
 }
@@ -702,10 +804,18 @@ const a=S.warp.accounts.find(function(x){return x.id===id});
 if(!a){location.hash='#/settings/warp';return}
 let html='<div class="detail-title"><a class="back-btn" href="#/settings/warp" aria-label="'+esc(t('warp.back'))+'"><svg aria-hidden="true"><use href="#i-back"/></svg></a><h2 class="view-title">'+esc(a.name)+'</h2>'+(a.amnezia_overrides?'<span class="amz-tag">AMZ</span>':'')+'</div>';
 html+='<section class="token-panel"><div class="card__head" style="margin-block-end:6px"><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('warp.detail.token'))+'</span><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-regen" data-id="'+esc(a.id)+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('warp.detail.regen'))+'</button></div></div><code class="mono" dir="ltr" style="word-break:break-all;font-size:var(--fs-sm);color:var(--cyan-pale)">'+esc(a.token)+'</code></section>';
-const presetSel='<select class="select" id="warp-preset">'+S.warp.presets.map(function(p){return '<option value="'+esc(p.id)+'"'+(a.endpoint_list.type==='preset'&&a.endpoint_list.preset_id===p.id?' selected':'')+'>'+esc(p.name)+' ('+p.endpoints.length+')</option>'}).join('')+(a.endpoint_list.type==='custom'?'<option selected>'+esc(t('warp.detail.custom_eps',{n:a.endpoint_list.custom_endpoints.length}))+'</option>':'')+'</select>';
+const presetSel='<select class="select" id="warp-preset">'+S.warp.presets.map(function(p){return '<option value="'+esc(p.id)+'"'+(a.endpoint_list.type==='preset'&&a.endpoint_list.preset_id===p.id?' selected':'')+'>'+esc(p.name)+' ('+p.endpoints.length+')</option>'}).join('')+'</select>';
 html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.accounts'))+'</div></div><div class="field"><label class="field__label" for="warp-name">'+esc(t('warp.detail.name'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-name" maxlength="100" value="'+esc(a.name)+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="name">'+esc(t('common.apply'))+'</button></div></div><div class="field"><label class="field__label" for="warp-preset">'+esc(t('warp.detail.preset'))+'</label>'+presetSel+'</div><div class="field"><label class="field__label" for="warp-dns">'+esc(t('warp.detail.dns'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-dns" dir="ltr" value="'+esc(a.dns||'')+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="dns">'+esc(t('common.apply'))+'</button></div></div></section>';
+const customEps=(a.endpoint_list.type==='custom'?a.endpoint_list.custom_endpoints:[]).map(function(e){return e.ip+':'+e.port}).join('\n');
+html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.detail.custom_eps_title'))+'</div></div><p class="field__hint">'+esc(t('warp.detail.custom_eps_desc'))+'</p><div class="field"><textarea class="input textarea textarea--mono" id="warp-custom-eps" rows="5" dir="ltr" spellcheck="false" placeholder="162.159.192.1:2408">'+esc(customEps)+'</textarea></div><div class="btn-row"><button type="button" class="btn btn--primary btn--sm" data-action="warp-custom-eps-save" data-id="'+esc(a.id)+'">'+esc(t('common.save'))+'</button></div></section>';
 html+='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('warp.detail.subs'))+'</div><div class="field__hint">'+esc(t('warp.detail.subs_desc'))+'</div></div></div><div id="warp-detail-subs"></div></section>';
-html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.amnezia.title'))+'</div>'+(a.amnezia_overrides?'<button type="button" class="btn btn--ghost btn--sm" data-action="warp-amnezia-reset" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.amnezia_reset'))+'</button>':'')+'</div><p class="field__hint">'+esc(a.amnezia_overrides?t('warp.detail.amnezia_on'):t('warp.detail.amnezia_off'))+'</p></section>';
+const ov=a.amnezia_overrides||S.warp.amnezia||{};
+const AMZK=[['Jc','Jc (0-128)'],['Jmin','Jmin (0-1280)'],['Jmax','Jmax (0-1280)'],['S1','S1 (0-65535)'],['S2','S2 (0-65535)'],['S3','S3 (0-65535)'],['S4','S4 (0-65535)'],['H1','H1'],['H2','H2'],['H3','H3'],['H4','H4']];
+let amh='<p class="field__hint" style="margin-block-end:12px">'+esc(a.amnezia_overrides?t('warp.detail.amnezia_on'):t('warp.detail.amnezia_off'))+'</p><div class="amz-grid">';
+AMZK.forEach(function(kv){const key=kv[0];const valA=ov&&ov[key]!==undefined&&ov[key]!==null?ov[key]:'';amh+='<div class="field"><label class="field__label" for="amza-'+key+'">'+esc(kv[1])+'</label><input class="input" type="text" id="amza-'+key+'" dir="ltr" value="'+esc(String(valA))+'"></div>'});
+amh+='<div class="field" style="grid-column:1/-1"><label class="field__label" for="amza-I1">'+esc(t('warp.amnezia.i1'))+'</label><input class="input" type="text" id="amza-I1" dir="ltr" value="'+esc(String((ov&&ov.I1)||''))+'"></div></div>';
+amh+='<div class="btn-row"><button type="button" class="btn btn--primary btn--sm" data-action="warp-account-amnezia-save" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.amnezia_save'))+'</button>'+(a.amnezia_overrides?'<button type="button" class="btn btn--ghost btn--sm" data-action="warp-amnezia-reset" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.amnezia_reset'))+'</button>':'')+'</div>';
+html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.amnezia.title'))+'</div></div>'+amh+'</section>';
 html+='<section class="card card--danger"><div class="card__head"><div class="card__title">'+esc(t('warp.detail.delete'))+'</div></div><button type="button" class="btn btn--ghost-danger btn--sm" data-action="warp-delete" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.delete'))+'</button></section>';
 panel.innerHTML=html;
 const subs=$('warp-detail-subs');let sh='';WARP_F.forEach(function(fmt,i){const f=fmt[0],label=fmt[1],grad=fmt[2];sh+='<div class="fmt-row"><span class="fmt-icon '+grad+'"><svg aria-hidden="true"><use href="#i-download"/></svg></span><span class="fmt-label">'+esc(label)+'</span>'+copyFieldHtml(warpSubUrl(a.token,f),'warp-u'+i)+'</div>'});subs.innerHTML=sh}
@@ -721,6 +831,7 @@ if(presetId)m.dataset.presetId=presetId;else delete m.dataset.presetId;
 const p=S.warp.presets.find(x=>x.id===presetId);
 $('wp-name').value=p?p.name:'';
 $('wp-endpoints').value=p?p.endpoints.map(e=>e.ip+':'+e.port).join('\n'):'';
+$('wp-dns').value=p&&p.dns?p.dns:'';
 $('wp-error').style.display='';$('wp-error').textContent='';
 $('wp-title').textContent=t(p?'warp.presets.edit':'warp.presets.add');
 $('wp-go').textContent=t(p?'common.save':'warp.presets.add')}
@@ -736,10 +847,11 @@ return '<span class="chip-status '+(!u.enabled||expired?'bad':'ok')+'">'+esc(t(k
 function usersCardHtml(){
 return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('users.desc'))+'</div></div><button type="button" class="btn btn--primary btn--sm" data-action="users-add">'+esc(t('users.add'))+'</button></div><table class="tbl"><thead><tr><th>'+esc(t('users.col.name'))+'</th><th>'+esc(t('users.col.token'))+'</th><th>'+esc(t('users.col.status'))+'</th><th>'+esc(t('users.col.enabled'))+'</th><th></th></tr></thead><tbody id="users-rows"><tr><td colspan="5"><span class="field__hint">'+esc(t('common.loading'))+'</span></td></tr></tbody></table></section>'}
 function userRowHtml(u){
-const acts='<div class="btn-row"><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-edit" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.edit'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-regen" data-id="'+esc(u.id)+'" aria-label="'+esc(t('warp.detail.regen'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="users-del" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>';
+const url=userSubUrl(u.token||'');
+const acts='<div class="btn-row"><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="copy" data-copy-value="'+esc(url)+'" data-qr="'+esc(url)+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="qr" data-qr="'+esc(url)+'" aria-label="'+esc(t('common.qr'))+'"><svg aria-hidden="true"><use href="#i-qr"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-edit" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.edit'))+'"><svg aria-hidden="true"><use href="#i-edit"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-regen" data-id="'+esc(u.id)+'" aria-label="'+esc(t('warp.detail.regen'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="users-del" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>';
 const sw='<label class="switch"><input type="checkbox" role="switch" data-user-toggle="'+esc(u.id)+'"'+(u.enabled?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span></label>';
 return '<tr><td data-l="'+esc(t('users.col.name'))+'" style="max-width:10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(u.name)+'</td>'
-+'<td data-l="'+esc(t('users.col.token'))+'" dir="ltr"><code dir="ltr" class="mono" style="font-size:var(--fs-sm);direction:ltr">'+esc(u.tokenHint||'')+'</code></td>'
++'<td data-l="'+esc(t('users.col.token'))+'" dir="ltr"><code dir="ltr" class="mono" style="font-size:var(--fs-sm);direction:ltr">'+esc(url)+'</code></td>'
 +'<td data-l="'+esc(t('users.col.status'))+'">'+userChip(u)+'</td>'
 +'<td data-l="'+esc(t('users.col.enabled'))+'">'+sw+'</td>'
 +'<td style="text-align:end">'+acts+'</td></tr>'}
@@ -766,6 +878,17 @@ const picked=u&&u.protocols!=='all'?u.protocols:['all'];
 document.querySelectorAll('#mu-protocols input[type=checkbox]').forEach(i=>{i.checked=picked.includes(i.value)});
 $('mu-limit').value=u&&u.dailyReqLimit!=null?String(u.dailyReqLimit):'';
 $('mu-expiry').value=u&&u.expiresAt!=null?toLocalInputValue(u.expiresAt):'';
+$('mu-ov-label').textContent=t('users.override.label');
+$('mu-ov-hint').textContent=t('users.override.hint');
+$('mu-ov-address-label').textContent=t('addresses.field.address');
+$('mu-ov-port-label').textContent=t('addresses.field.port');
+$('mu-ov-label-label').textContent=t('addresses.field.label');
+const ov=u&&u.addressOverride?u.addressOverride:null;
+$('mu-ov-address').value=ov&&ov.address?ov.address:'';
+$('mu-ov-port').value=ov&&ov.port?String(ov.port):'';
+$('mu-ov-label2').value=ov&&ov.label?ov.label:'';
+const dl=$('mu-ov-options');
+if(dl){dl.innerHTML=(S.set.addresses||[]).map(function(a){if(a.enabled===false)return '';return '<option value="'+esc(String(a.address||'').replace(/(:\d+)$/,''))+'"></option>'}).join('')}
 $('mu-error').style.display='';$('mu-error').textContent='';
 openModal('m-user')}
 const FL=(path,type,label,hint,extra)=>Object.assign({path,type,label,hint:hint||null},extra||{});
@@ -807,28 +930,20 @@ FL('randomizeSniCase','bool','protocols.sniCase.label','protocols.sniCase.hint')
 FL('echEnabled','bool','protocols.ech.label','protocols.ech.short',{help:'protocols.ech.help'}),
 FL('echServerName','str','protocols.ech.server','protocols.ech.server_hint',{maxLen:253,vtype:'domain'}),
 FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
-{key:'ports',cards:[
-{title:'ports.domains.label',fields:[
-FL('customDomains','list','ports.domains.label','ports.domains.hint',{validate:'domain'}),
-FL('hostnameOverride','str','ports.hostnameOverride.label','ports.hostnameOverride.hint',{mono:true,vtype:'domain'})]},
-{title:null,fields:[
-FL('tlsPorts','ports','ports.matrix.legend_tls','ports.matrix.hint',{family:'tls'}),
-FL('plainPorts','ports','ports.matrix.legend_plain',null,{family:'plain'}),
-FL('plainPortPolicy','chips','ports.policy.label',null,{opts:[['always','ports.policy.always'],['workers-dev','ports.policy.workersdev'],['never','ports.policy.never']]})]},
-{title:'ports.cdn.title',fields:[
-FL('cdn.enabled','bool','ports.cdn.enabled.label',null),
-FL('cdn.addresses','list','ports.cdn.addresses.label','ports.cdn.addresses.short',{validate:'ip_or_host',help:'ports.cdn.addresses.help'}),
-FL('cdn.host','str','ports.cdn.host.label',null,{mono:true,vtype:'domain'}),
-FL('cdn.sni','str','ports.cdn.sni.label',null,{mono:true,vtype:'domain'})]},
-{title:'ports.cleanAddrs.label',fields:[
-FL('cleanIps','list','ports.cleanAddrs.label','ports.cleanAddrs.short',{validate:'ip_or_host',help:'ports.cleanAddrs.help'})]},
-{title:'ports.remoteSubs.label',fields:[
-FL('remoteSubUrls','list','ports.remoteSubs.label','ports.remoteSubs.hint',{validate:'url'})]}]},
-{key:'proxyip',cards:[
-{title:null,fields:[
-FL('proxyIpMode','chips','proxyip.mode.label',null,{opts:[['proxyip','proxyip.mode.list'],['nat64','proxyip.mode.nat64']]}),
-FL('proxyIps','list','proxyip.list.label','proxyip.list.short',{validate:'ip_or_host',help:'proxyip.list.help',showIf:v=>getPath(v,'proxyIpMode')!=='nat64'}),
-FL('nat64Prefixes','list','proxyip.nat64.label','proxyip.nat64.short',{validate:'ipv6_prefix',help:'proxyip.nat64.help',showIf:v=>getPath(v,'proxyIpMode')==='nat64'})]}]},
+  {key:'addresses',cards:[
+  {title:'addresses.card.title',fields:[
+  FL('addresses','addrList','addresses.card.label','addresses.card.hint',{help:'addresses.card.help'}),
+  FL('defaultPort','select','addresses.defaultPort.label','addresses.defaultPort.hint',{opts:[[443,'443'],[2053,'2053'],[2083,'2083'],[2087,'2087'],[2096,'2096'],[8443,'8443']]}),
+  FL('nameTemplate','str','addresses.nameTemplate.label','addresses.nameTemplate.hint',{mono:true,maxLen:512})]},
+  {title:'addresses.remoteSubs.label',fields:[
+  FL('remoteSubUrls','list','addresses.remoteSubs.label','addresses.remoteSubs.hint',{validate:'url'})]}]},
+  {key:'egress',cards:[
+  {title:'egress.mode.title',fields:[
+  FL('proxyIpMode','chips','egress.mode.label',null,{opts:[['proxyip','egress.mode.list'],['nat64','egress.mode.nat64']]}),
+  FL('proxyIps','list','egress.list.label','egress.list.short',{validate:'host_port',help:'egress.list.help',showIf:v=>getPath(v,'proxyIpMode')!=='nat64'}),
+  FL('nat64Prefixes','list','egress.nat64.label','egress.nat64.short',{validate:'ipv6_prefix',help:'egress.nat64.help',showIf:v=>getPath(v,'proxyIpMode')==='nat64'}),
+  FL('proxyIpPoolUrl','str','egress.poolUrl.label','egress.poolUrl.hint',{mono:true,vtype:'url'})]},
+  {title:'egress.pool.title',pool:true,fields:[]}]},
 {key:'fragment',cards:[
 {title:null,fields:[
 FL('fragment.mode','fpreset','fragment.enable',null),
@@ -865,6 +980,7 @@ FL('routingRules.blockAds','bool','routing.blockAds.label','routing.blockAds.hin
 FL('routingRules.blockMalware','bool','routing.blockMalware.label','routing.blockMalware.hint'),
 FL('routingRules.customBypass','list','routing.customBypass.label','routing.customBypass.short',{help:'routing.customBypass.help'}),
  FL('routingRules.customBlock','list','routing.customBlock.label','routing.customBlock.short',{help:'routing.customBlock.help'})]}]},
+  {key:'sources',cards:[{title:'sources.title',sources:true,fields:[]}]},
   {key:'users',cards:[{title:'users.title',users:true,fields:[]}]},
   {key:'warp',cards:[{warpAccounts:true,fields:[]},{warpPresets:true,fields:[]},{warpAmnezia:true,fields:[]}]}
 ];
@@ -877,6 +993,29 @@ lbl='<div class="field__label-row"><label class="field__label" for="'+id+'">'+es
 return '<div class="field" id="fw-'+id+'">'+lbl+'{B}'+(hint?'<p class="field__hint">'+esc(t(hint))+'</p>':'')+'<p class="field__error"></p></div>'}
 
 function lines(v){return Array.isArray(v)?v.map(x=>String(x)).filter(x=>x.trim().length>0):[]}
+ function addrCardHtml(a,i){
+   const host=location.hostname;
+   const isHost=a&&a.address&&String(a.address).trim().toLowerCase()===host.toLowerCase();
+   const enabled=!(a&&a.enabled===false);
+   const get=(k)=>a&&a[k]!=null?String(a[k]):'';
+   const field=(k,label,ph)=>{const dir=(k==='address'||k==='port')?'ltr':'auto';return '<div class="addr-card__field"><label>'+esc(label)+'</label><input class="input input--mono" type="text" data-addr-field="'+k+'" value="'+esc(get(k))+'" placeholder="'+esc(ph)+'" spellcheck="false" dir="'+dir+'"></div>'};
+   const port=get('port');
+   const inlinePort=(String(a&&a.address||'').match(/:(\d+)\s*$/i)||[])[1];
+   const preview=port||inlinePort||String(S.set.defaultPort||443);
+   return '<div class="addr-card'+(enabled?'':' addr-card--off')+'" data-addr-index="'+i+'" data-addr-enabled="'+(enabled?'1':'0')+'">'
+     +'<div class="addr-card__main">'
+     +field('address',t('addresses.field.address'),'1.2.3.4 / asdasd.workers.dev')
+     +field('port',t('addresses.field.port'),'443')
+     +field('label',t('addresses.field.label'),'US-Blue')
+     +field('host',t('addresses.field.host'),'cdn.example.net')
+     +field('sni',t('addresses.field.sni'),'cdn.example.net')
+     +'</div>'
+     +'<div class="addr-card__side"><span class="addr-dot" data-addr-dot="'+esc(String(get('address')).replace(/^\[|\]$/g,'').toLowerCase())+'" hidden></span>'
+     +(isHost?'<span class="addr-badge">'+esc(t('addresses.hostname_badge'))+'</span>':'')
+     +'<label class="switch addr-switch" title="'+esc(t('addresses.enabled.toggle'))+'"><input type="checkbox" data-addr-enabled-input'+(enabled?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span></label>'
+     +'<span class="addr-preview">'+esc(t('addresses.port_preview'))+' '+esc(preview)+'</span>'
+     +'<button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="addr-del" data-index="'+i+'" aria-label="'+esc(t('common.remove'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>';
+ }
 function bindHtml(f){
 const paths=Array.isArray(f.path)?f.path:[f.path];
 const id='f'+(++UID);
@@ -935,11 +1074,21 @@ h+='</div>';
 return fieldWrap(id,'fragment.preset.label','fragment.preset.short','fragment.preset.help').replace('{B}',h)}
 case 'copyonly':{
 return fieldWrap(id,f.label,null).replace('{B}','<div class="copy-field"><code dir="ltr">'+esc(BASE+'doh')+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-value="'+esc(BASE+'doh')+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>')}
+case 'addrList':{
+const arr=Array.isArray(getPath(S.set,paths[0]))?(getPath(S.set,paths[0])||[]):[];
+let h='<div class="addr-list" data-type="addrList" data-bind="'+paths[0]+'">';
+if(arr.length===0)h+='<div class="addr-empty">'+esc(t('addresses.empty_hint'))+'</div>';
+h+='<div data-addr-body>'+arr.map(addrCardHtml).join('')+'</div>';
+h+='<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="addr-add">'+esc(t('addresses.add'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="addr-hostname">'+esc(t('addresses.use_hostname'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="addr-probe">'+esc(t('addresses.test'))+'</button></div>';
+h+='</div>';
+return fieldWrap(id,f.label,f.hint,f.help).replace('{B}',h)}
 default:return ''}
 }
 function cardHtml(card){
 if(card.users)return usersCardHtml();
 if(card.warpAccounts||card.warpPresets||card.warpAmnezia)return warpCardHtml(card);
+if(card.pool)return poolCardHtml();
+if(card.sources)return sourcesCardHtml();
 if(card.danger&&!card.fields.length){
 return '<section class="card"><div class="card__head"><div class="card__title hint-danger">'+esc(t(card.title))+'</div></div><button type="button" class="btn btn--ghost-danger" data-action="reset-defaults">'+esc(t('common.resetDefaults'))+'</button></section>'}
 if(card.backup&&!card.fields.length){
@@ -969,10 +1118,11 @@ const protoCards=s.cards.slice(0,4);
 const commonCards=s.cards.slice(4);
 h+='<div class="grid2">';protoCards.forEach(c=>{h+=cardHtml(c)});h+='</div>';
 commonCards.forEach(c=>{h+=cardHtml(c)});
-} else {
-s.cards.forEach(c=>{h+=cardHtml(c)});
-}
- p.innerHTML=h;
+ } else {
+ s.cards.forEach(c=>{h+=cardHtml(c)});
+ }
+  h='<div class="section-actions"><button type="button" class="btn btn--primary btn--sm" data-action="section-save" data-sec="'+s.key+'">'+esc(t('common.save'))+'</button><span class="section-actions__hint" data-dirty-hint hidden>'+esc(t('common.unsaved'))+'</span></div>'+h;
+  p.innerHTML=h;
  wrap.appendChild(p)});
 applyFragmentPresetUi(String(getPath(S.set,'fragment.mode')||'off'));
 SECTIONS.forEach(s=>{S.snap[s.key]=JSON.stringify(collectSection(s.key))});
@@ -1016,6 +1166,19 @@ const el=$('sp-'+s.key).querySelector('[data-fpath="'+paths[0]+'"]');
 if(el)el.hidden=!f.showIf(collectSection(s.key))})))}
 
 function readBind(el){
+if(el.dataset.type==='addrList'){
+const body=el.querySelector('[data-addr-body]');
+if(!body)return [];
+return [...body.querySelectorAll('.addr-card')].map(c=>{
+const get=(k)=>{const f=c.querySelector('[data-addr-field="'+k+'"]');return f?f.value.trim():''};
+const e={address:get('address')};
+if(e.address.length===0)return null;
+const p=get('port');if(p)e.port=Number(p);
+const l=get('label');if(l)e.label=l;
+const h=get('host');if(h)e.host=h;
+const sn=get('sni');if(sn)e.sni=sn;
+if(c.dataset.addrEnabled==='0')e.enabled=false;
+return e}).filter(Boolean)}
 if(el.dataset.type==='ports'){
 const fam=el.dataset.family==='tls'?TLS_PORTS:PLAIN_PORTS;
 return fam.filter(p=>el.querySelector('input[data-port-opt][value="'+p+'"]').checked)}
@@ -1028,6 +1191,12 @@ if(el.tagName==='SELECT')return el.value;
 if(el.type==='number'){const n=Number(el.value);return Number.isFinite(n)?n:0}
 return el.value.trim()}
 function writeBind(el,v){
+if(el.dataset.type==='addrList'){
+const body=el.querySelector('[data-addr-body]');
+if(body){body.innerHTML=Array.isArray(v)?v.map(addrCardHtml).join(''):''}
+const empty=el.querySelector('.addr-empty');
+if(empty)empty.style.display=Array.isArray(v)&&v.length?'none':'';
+return}
 if(el.dataset.type==='ports'){
 const arr=lines(v).map(Number);
 el.querySelectorAll('input[data-port-opt]').forEach(c=>{c.checked=arr.includes(Number(c.value))});
@@ -1063,7 +1232,8 @@ updateApplyBar()}
 function updateApplyBar(){
 $('applybar').hidden=S.dirty.size===0;
 $('apply-btn').disabled=false;
-$('apply-btn').textContent=t('common.apply')}
+$('apply-btn').textContent=t('common.apply');
+document.querySelectorAll('.section-actions__hint').forEach(hint=>{hint.hidden=!S.dirty.has(hint.closest('[id^="sp-"]').id.replace('sp-',''))})}
 async function refreshSubUrls(){
 try{sessionStorage.removeItem('qpe:api/bootstrap');sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
 try{const d=await api('api/bootstrap',{fresh:true});S.subs=(d.subUrls&&d.subUrls.urls)||[];renderHome()}catch(e){}}
@@ -1081,7 +1251,7 @@ S.snap[sec]=JSON.stringify(cur);
 markDirty();
  toast(t('toast.settingsSaved'),'ok');
  if(patch.securePath!==undefined){const nb='/'+String(cur.securePath||'').replace(/^\/+|\/+$/g,'');location.replace(nb+'/panel');return}
- if(sec==='general'||sec==='ports')await refreshSubUrls()}
+  if(sec==='general'||sec==='addresses')await refreshSubUrls()}
 catch(e){
 if(e&&e.fields&&Object.keys(e.fields).length){
 let n=0;
@@ -1127,7 +1297,7 @@ if(fw)fw.classList.remove('field--error')}
 const RE_DOMAIN=/^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 const RE_IPV4=/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const RE_HOST=/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i;
-const RE_V6PREFIX=/^[\da-f:]{2,45}$/i;
+const RE_V6PREFIX=/^[0-9A-Fa-f:\[\]\/]{2,50}$/i;
 function validIpOrHost(line){
 const s=line.replace(/^\[|\]$/g,'');
 if(RE_IPV4.test(s))return true;
@@ -1140,6 +1310,7 @@ case 'domain':return RE_DOMAIN.test(line);
 case 'url':return /^https:\/\/\S+$/.test(line);
 case 'ipv6_prefix':return RE_V6PREFIX.test(line)&&line.includes(':');
 case 'ip_or_host':return validIpOrHost(line);
+case 'host_port':return validIpOrHost(stripPort(line));
 default:return true}}
 let leTimer=null;
 function validateLineEditors(scope){
@@ -1208,117 +1379,9 @@ function randomHex(nBytes){
 const a=new Uint8Array(nBytes);crypto.getRandomValues(a);
 return[...a].map(b=>b.toString(16).padStart(2,'0')).join('')}
 
-const CK={running:false,stop:false,ctl:null};
-function renderChecker(){
-const body=$('checker-body');
-body.innerHTML='';
-const card=document.createElement('section');card.className='card';
-card.innerHTML='<div class="card__head"><div><div class="card__title">'+esc(t('checker.title'))+'</div><div class="field__hint">'+esc(t('checker.desc'))+'</div></div></div>'
-+'<div class="field"><label class="field__label" for="ck-targets">'+esc(t('checker.targets.label'))+'</label><div class="line-editor"><textarea id="ck-targets" rows="6" class="input textarea textarea--mono" dir="ltr" spellcheck="false" placeholder="1.2.3.4:443"></textarea><div class="meta"><span class="cnt"></span><span class="bad"></span></div></div><p class="field__hint">'+esc(t('checker.targets.hint'))+'</p></div>'
-+'<div class="btn-row"><button type="button" class="btn btn--primary" id="ck-run" data-action="run-test"><svg aria-hidden="true"><use href="#i-play"/></svg>'+esc(t('checker.run'))+'</button><button type="button" class="btn btn--ghost" id="ck-stop" data-action="stop-test" disabled><svg aria-hidden="true"><use href="#i-stop"/></svg>'+esc(t('checker.stop'))+'</button></div>';
-body.appendChild(card);
-const prog=document.createElement('section');prog.className='card';prog.hidden=true;prog.id='ck-progress-card';
-prog.innerHTML='<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="ck-fill"></i></div><p class="field__hint" id="ck-count"></p>';
-body.appendChild(prog);
-const res=document.createElement('section');res.className='card';
-res.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('checker.results'))+'</div></div><table class="tbl"><thead><tr><th>'+esc(t('checker.col.target'))+'</th><th>'+esc(t('checker.col.latency'))+'</th><th>'+esc(t('checker.col.rate'))+'</th><th>'+esc(t('checker.col.status'))+'</th></tr></thead><tbody id="ck-rows"></tbody></table>';
-body.appendChild(res);
-addEmptyRow();
-validateOneEditor($('ck-targets'))}
-function addEmptyRow(){
-$('ck-rows').innerHTML='<tr><td colspan="4"><span class="field__hint">'+esc(t('checker.empty'))+'</span></td></tr>'}
-function parseTargets(){
-const ta=$('ck-targets');
-if(!ta)return[];
-const raw=ta.value.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
-const seen=new Set(),ok=[],bad=[];
-raw.forEach(l=>{
-if(!validateLine('',l)||(!RE_IPV4.test(l)&&!validIpOrHost(stripPort(l)))){bad.push(l);return}
-const key=l.toLowerCase();
-if(seen.has(key))return;
-seen.add(key);ok.push(l)});
-return{ok,bad,total:raw.length}}
 function stripPort(s){
 const m=s.match(/^(.+):(\d+)$/);
 return m?m[1]:s}
-function targetPort(t){
-const m=t.match(/^(.+):(\d+)$/);
-return m?Number(m[2]):443}
-function normalizeTarget(t){
-let host=t,port='443';
-const m=t.match(/^(.+):(\d+)$/);
-if(m){host=m[1];port=m[2]}
-return 'https://'+host+':'+port+'/cdn-cgi/trace'}
-async function runTest(){
-if(CK.running)return;
-const{ok,bad}=parseTargets();
-validateOneEditor($('ck-targets'));
-if(bad.length)toast(t('err.invalid_line',{line:bad[0]}),'err');
-if(!ok.length)return;
-if(ok.length>MAX_TARGETS){toast(t('checker.tooMany'),'err');return}
-const supported=[],unsupported=[];
-ok.forEach(x=>{(TLS_PORTS.includes(targetPort(x))?supported:unsupported).push(x)});
-const rows=$('ck-rows');
-rows.innerHTML='';
-unsupported.forEach(x=>appendResultRow(x,{ok:false,avg:null,rate:0,unsupported:true}));
-if(!supported.length){finishTest(0,0,0);return}
-CK.running=true;CK.stop=false;
-$('ck-run').disabled=true;
-$('ck-stop').disabled=false;
-const prog=$('ck-progress-card');
-prog.hidden=false;
-let done=0,healthy=0;
-for(const target of supported){
-if(CK.stop)break;
-const r=await probeTarget(target);
-done++;
-if(r.ok)healthy++;
-appendResultRow(target,r);
-updateProgress(done,supported.length);
-$('ck-live').textContent=done+' / '+supported.length}
-finishTest(done,supported.length,healthy)}
-function updateProgress(done,total){
-const pct=Math.round(done/total*100);
-const fill=$('ck-fill'),bar=fill.closest('.progress'),cnt=$('ck-count');
-fill.style.width=pct+'%';
-bar.setAttribute('aria-valuenow',String(pct));
-cnt.textContent=done+' / '+total}
-function finishTest(done,total,healthy){
-CK.running=false;CK.stop=false;CK.ctl=null;
-$('ck-run').disabled=false;
-$('ck-stop').disabled=true;
-if(done>0)toast(t('checker.summary',{ok:healthy,total:done}),'ok')}
-async function probeTarget(target){
-let ok=0,sum=0,made=0;
-for(let i=0;i<PROBE_TRIES;i++){
-if(CK.stop)break;
-made++;
-const ctl=new AbortController();
-CK.ctl=ctl;
-const timer=setTimeout(()=>ctl.abort(),PROBE_TIMEOUT);
-const t0=performance.now();
-try{
-await fetch(normalizeTarget(target),{mode:'no-cors',cache:'no-store',credentials:'omit',signal:ctl.signal});
-sum+=performance.now()-t0;ok++}
-catch(e){}
-finally{clearTimeout(timer)}}
-return{ok:ok>0,avg:ok?Math.round(sum/ok):null,rate:made?Math.round(ok/made*100):0}}
-
-function appendResultRow(target,r){
-const rows=$('ck-rows');
-const tr=document.createElement('tr');
-const glyph=r.ok&&r.rate===100?'<span class="glyph-ok">✓</span>':r.ok?'<span class="glyph-warn">⚠</span>':'<span class="glyph-bad">✗</span>';
-tr.innerHTML='<td data-l="'+esc(t('checker.col.target'))+'"><code dir="ltr" class="mono">'+esc(target)+'</code></td>'
-+'<td data-l="'+esc(t('checker.col.latency'))+'">'+(r.avg!=null?r.avg+' ms':'—')+'</td>'
-+'<td data-l="'+esc(t('checker.col.rate'))+'">'+(r.unsupported?'—':r.rate+' %')+'</td>'
-+'<td data-l="'+esc(t('checker.col.status'))+'">'+glyph+' '+esc(r.unsupported?t('checker.unsupported_port'):r.ok?(r.rate===100?t('checker.status.ok'):t('checker.status.partial')):t('checker.status.failed'))+'</td>';
-rows.appendChild(tr)}
-function stopTest(){
-CK.stop=true;
-CK.running=false;
-$('ck-run').disabled=false;
-$('ck-stop').disabled=true;
-if(CK.ctl)CK.ctl.abort()}
 function genFor(kind){
 if(kind==='uuid')return crypto.randomUUID();
 if(kind==='hex12')return randomHex(12);
@@ -1397,8 +1460,6 @@ discard(){
 if(!yes)return;
 try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}catch(err){toastErr(err)}})},
  'refresh-ip'(){loadMyIp()},
- 'run-test'(){runTest()},
- 'stop-test'(){stopTest()},
  accent(el){
  const a=el.dataset.accent||'cyan';
  if(a==='cyan')delete document.documentElement.dataset.accent;
@@ -1418,7 +1479,7 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  'warp-delete'(el){
  confirmDialog('warp.confirm.delete_title','warp.confirm.delete_body',true).then(async yes=>{
  if(!yes)return;
- try{await api('api/warp/account/'+el.dataset.id,{method:'DELETE'});
+ try{await api('api/warp/account/'+el.dataset.id,{method:'DELETE',mutate:true});
  toast(t('warp.toast.deleted'),'ok');invalidateWarp();location.hash='#/settings/warp'}catch(err){toastErr(err)}})},
  'warp-amnezia-reset'(el){
  (async()=>{
@@ -1441,10 +1502,22 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  try{const d=await api('api/warp/settings/amnezia',{method:'PUT',body:{amnezia:body}});
  if(!S.warp)S.warp={accounts:[],presets:[],amnezia:null};
  S.warp.amnezia=d.amnezia;toast(t('common.saved'),'ok')}catch(err){toastErr(err)}})()},
- 'warp-preset-del'(el){
- (async()=>{
- try{await api('api/warp/presets/'+el.dataset.id,{method:'DELETE'});
- toast(t('warp.toast.presetDeleted'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}catch(err){toastErr(err)}})()},
+  'warp-preset-del'(el){
+  (async()=>{
+  try{await api('api/warp/presets/'+el.dataset.id,{method:'DELETE',mutate:true});
+  toast(t('warp.toast.presetDeleted'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}catch(err){toastErr(err)}})()},
+  'warp-custom-eps-save'(el){
+  (async()=>{
+  const eps=$('warp-custom-eps').value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
+  try{await api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{endpoint_list:{type:'custom',custom_endpoints:eps}}});
+  toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})()},
+  'warp-account-amnezia-save'(el){
+  (async()=>{
+  const body={};
+  ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const inp=$('amza-'+k);if(!inp)return;const v=inp.value.trim();if(v.length>0)body[k]=v});
+  const i1el=$('amza-I1');const i1=i1el?i1el.value.trim():'';if(i1.length>0)body.I1=i1;
+  try{await api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:Object.keys(body).length?body:null}});
+  toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})()},
  'close-user-modal'(el){closeModal(el.dataset.modal)},
  'users-add'(){openUserModal()},
  'users-edit'(el){openUserModal(el.dataset.id)},
@@ -1452,7 +1525,7 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  'users-del'(el){
  confirmDialog('users.confirm_delete_title','users.confirm_delete_body',true).then(async yes=>{
  if(!yes)return;
- try{await api('api/users/'+el.dataset.id,{method:'DELETE'});toast(t('users.toast.deleted'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
+ try{await api('api/users/'+el.dataset.id,{method:'DELETE',mutate:true});toast(t('users.toast.deleted'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
  'users-regen'(el){
  confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
  if(!yes)return;
@@ -1471,8 +1544,41 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  else toast(t('tg.remove_fail')+(d.description?' · '+d.description:''),'err')}
  catch(err){toastErr(err)}
  finally{el.disabled=false}})()},
- 'theme-toggle'(){const cur=getTheme();const nxt=cur==='dark'?'light':'dark';try{localStorage.setItem(THEME_KEY,nxt)}catch(e){}applyTheme(nxt);},
- 'change-password'(el){
+  'theme-toggle'(){const cur=getTheme();const nxt=cur==='dark'?'light':'dark';try{localStorage.setItem(THEME_KEY,nxt)}catch(e){}applyTheme(nxt);},
+  'addr-add'(el){
+   const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
+   if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({},body.children.length));
+   const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
+   markDirty()},
+  'addr-del'(el){
+   const card=el.closest('.addr-card'),body=el.closest('[data-addr-body]');
+   if(body&&card){card.remove();
+   const list=el.closest('[data-type="addrList"]');
+   if(list&&list.querySelectorAll('[data-addr-body] .addr-card').length===0){const empty=list.querySelector('.addr-empty');if(empty)empty.style.display=''}
+   }
+   markDirty()},
+  'addr-hostname'(el){
+   const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
+   if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({address:location.hostname},body.children.length));
+   const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
+   markDirty()},
+  'addr-probe'(el){
+   (async()=>{
+   try{const d=await api('api/address-probe',{fresh:true});S.addrHealth=d&&d.results||[];renderAddrDots()}catch(err){toastErr(err)}})()},
+  'pool-fetch'(el){loadPool(false)},
+  'pool-test'(el){loadPool(true)},
+  'home-pool-refresh'(el){loadHomePool()},
+  'pool-add'(el){
+   const addr=el.dataset.addr||'';
+   const ta=document.querySelector('#sp-egress [data-bind="proxyIps"]');
+   if(ta&&addr){const lines=ta.value.split('\n').map(x=>x.trim()).filter(Boolean);
+   if(!lines.some(x=>x.toLowerCase()===addr.toLowerCase())){lines.push(addr);}
+   ta.value=lines.join('\n');markDirty();validateOneEditor(ta)}
+   else toastErr()},
+  'section-save'(el){applySection(el.dataset.sec)},
+  'source-doh'(el){
+   (async()=>{try{await loadPool(false)}catch(err){toastErr(err)}})()},
+  'change-password'(el){
  (async()=>{
  const cur=$('sec-cur'),nw=$('sec-new'),cf=$('sec-confirm');
  if(!cur||!nw||!cf)return;
@@ -1528,6 +1634,11 @@ applyFragmentPresetUi(chip.dataset.preset)}
 refreshShowIf();
 validateAllLineEditors()}
 function onChange(e){
+if(e.target.matches('[data-addr-field]')){markDirty();return}
+if(e.target.matches('[data-addr-enabled-input]')){
+const card=e.target.closest('.addr-card');
+if(card){card.dataset.addrEnabled=e.target.checked?'1':'0';card.classList.toggle('addr-card--off',!e.target.checked)}
+markDirty();return}
 if(e.target.closest('[data-user-toggle]')){
 const sw=e.target.closest('.switch');sw.classList.add('pending');
 (async()=>{try{await api('api/users/'+e.target.dataset.userToggle,{method:'PUT',body:{enabled:e.target.checked}});toast(t('users.toast.saved'),'ok');await loadUsers()}catch(err){e.target.checked=!e.target.checked;toastErr(err)}finally{sw.classList.remove('pending')}})();
@@ -1555,6 +1666,7 @@ markDirty();
 updatePortMasters();
 if(/^vlessEnabled$|^vmessEnabled$|^trojanEnabled$|^ssEnabled$/.test(bind.dataset.bind))applyProtoDim()}}
 function onInput(e){
+if(e.target.matches('[data-addr-field]')){markDirty();return}
 const bind=e.target.closest('[data-bind]');
 if(!bind)return;
 if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250)}
@@ -1607,9 +1719,10 @@ $('wp-go').addEventListener('click',async()=>{
 const btn=$('wp-go');btn.disabled=true;
 const m=$('m-warp-preset');const editId=m.dataset.presetId||'';
 const endpoints=$('wp-endpoints').value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
+const dns=$('wp-dns').value.trim();
 try{
-if(editId)await api('api/warp/presets/'+editId,{method:'PUT',body:{name:$('wp-name').value.trim(),endpoints}});
-else await api('api/warp/presets',{method:'POST',body:{name:$('wp-name').value.trim(),endpoints}});
+if(editId)await api('api/warp/presets/'+editId,{method:'PUT',body:{name:$('wp-name').value.trim(),endpoints,dns:dns.length?dns:null}});
+else await api('api/warp/presets',{method:'POST',body:{name:$('wp-name').value.trim(),endpoints,dns:dns.length?dns:null}});
 closeModal('m-warp-preset');toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}
 catch(err){if(err&&err.fields){$('wp-error').textContent=Object.values(err.fields)[0]||t('common.error');$('wp-error').style.display='block'}else toastErr(err)}
 finally{btn.disabled=false}});
@@ -1620,6 +1733,9 @@ const picked=[...document.querySelectorAll('#mu-protocols input[type=checkbox]:c
 const body={name:$('mu-name').value.trim(),protocols:picked.includes('all')?'all':picked};
 const limit=$('mu-limit').value.trim();body.dailyReqLimit=limit===''?null:Number(limit);
 const exp=$('mu-expiry').value;body.expiresAt=exp===''?null:new Date(exp).getTime();
+const ovAddr=$('mu-ov-address').value.trim(),ovPort=$('mu-ov-port').value.trim(),ovLabel=$('mu-ov-label2').value.trim();
+if(ovAddr.length>0){body.addressOverride={address:ovAddr};if(ovPort.length>0)body.addressOverride.port=Number(ovPort);if(ovLabel.length>0)body.addressOverride.label=ovLabel}
+else body.addressOverride=null;
 try{
 if(editId){await api('api/users/'+editId,{method:'PUT',body});closeModal('m-user');toast(t('users.toast.saved'),'ok')}
 else{const d=await api('api/users',{method:'POST',body});const tok=d&&d.user&&d.user.token;closeModal('m-user');toast(t('users.toast.created'),'ok');if(tok){const url=userSubUrl(tok);copyText(url);openQr(url)}}
@@ -1659,7 +1775,6 @@ S.set={};
 toastErr(e);
 return}
 renderSettings();
-renderChecker();
 renderHome();
 navigate();
 maybeWizard()}

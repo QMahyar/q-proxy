@@ -1,15 +1,18 @@
 import { constantTimeEqual } from "../utils/random";
 import { dayKeyUtc } from "../utils/time";
+import type { AddressSetting } from "../types/settings";
 
 export interface UserAccount {
   id: string;
   name: string;
   tokenHash: string;
   tokenHint: string;
+  token?: string;
   enabled: boolean;
   expiresAt: number | null;
   dailyReqLimit: number | null;
   protocols: "all" | string[];
+  addressOverride?: AddressSetting | null;
   createdAt: string;
 }
 
@@ -49,7 +52,22 @@ function sanitizeStoredUser(u: UserAccount): UserAccount {
     expiresAt: typeof u.expiresAt === "number" || u.expiresAt === null ? u.expiresAt : null,
     dailyReqLimit: typeof u.dailyReqLimit === "number" || u.dailyReqLimit === null ? u.dailyReqLimit : null,
     protocols: normalizeProtocols(u.protocols),
+    addressOverride: normalizeAddressOverride(u.addressOverride),
   };
+}
+
+export function normalizeAddressOverride(value: unknown): AddressSetting | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object" || Array.isArray(value)) return null;
+  const r = value as Record<string, unknown>;
+  const addrRaw = typeof r.address === "string" ? r.address.trim() : "";
+  if (addrRaw.length === 0) return null;
+  const out: AddressSetting = { address: addrRaw };
+  if (typeof r.port === "number" && Number.isInteger(r.port) && r.port > 0) out.port = r.port;
+  if (typeof r.label === "string" && r.label.trim().length > 0) out.label = r.label.trim();
+  if (typeof r.host === "string" && r.host.trim().length > 0) out.host = r.host.trim();
+  if (typeof r.sni === "string" && r.sni.trim().length > 0) out.sni = r.sni.trim();
+  return out;
 }
 
 export function isUuid(value: string): boolean {
@@ -111,10 +129,12 @@ export async function listUsers(env: { QPROXY_KV: KvLike }): Promise<UserAccount
         name: rec.name as string,
         tokenHash,
         tokenHint,
+        token: typeof rec.token === "string" ? (rec.token as string) : "",
         enabled: typeof rec.enabled === "boolean" ? (rec.enabled as boolean) : true,
         expiresAt: typeof rec.expiresAt === "number" || rec.expiresAt === null ? (rec.expiresAt as number | null) : null,
         dailyReqLimit: typeof rec.dailyReqLimit === "number" || rec.dailyReqLimit === null ? (rec.dailyReqLimit as number | null) : null,
         protocols: normalizeProtocols(rec.protocols),
+        addressOverride: normalizeAddressOverride(rec.addressOverride),
         createdAt: typeof rec.createdAt === "string" ? (rec.createdAt as string) : new Date().toISOString(),
       });
       continue;
@@ -147,10 +167,12 @@ export function sanitizeUser(user: UserAccount): PublicUser {
     id: user.id,
     name: user.name,
     tokenHint: user.tokenHint,
+    token: user.token ?? "",
     enabled: user.enabled,
     expiresAt: user.expiresAt,
     dailyReqLimit: user.dailyReqLimit,
     protocols: user.protocols,
+    addressOverride: user.addressOverride ?? null,
     createdAt: user.createdAt,
   };
 }
