@@ -32,7 +32,7 @@ node scripts/release.mjs <version> [--dry]  # tag + changelog check + build
 
 CI: `.github/workflows/ci.yml` runs `npm ci` + `npm run typecheck` + `npm test` on every push/PR (node 22).
 
-No eslint by design (decided wayfinder ticket 05): `typescript-eslint` peer-depends on `typescript <6.1.0` while this repo runs TypeScript 7.0.2 native; strict `tsc --noEmit` (incl. `noUnusedLocals`/`noUnusedParameters`) is the lint gate, and the esbuild single-file build rejects bare imports. Revisit when typescript-eslint supports TS 7.
+No eslint by design: `typescript-eslint` peer-depends on `typescript <6.1.0` while this repo runs TypeScript 7.0.2 native; strict `tsc --noEmit` (incl. `noUnusedLocals`/`noUnusedParameters`) is the lint gate, and the esbuild single-file build rejects bare imports. Revisit when typescript-eslint supports TS 7.
 
 If a local `wrangler dev` wedges (workerd accepts connections but never responds): kill the stray workerd process on the port, then relaunch on another port (`npx wrangler dev --port 8788`). **Gotcha:** `wrangler dev` serves `dist/q-proxy.js` (per `wrangler.toml main=`) — `npm run dev` rebuilds first, but a bare `npx wrangler dev` shows only what was last built; if a change "doesn't take effect", rebuild before debugging the code.
 
