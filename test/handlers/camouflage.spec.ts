@@ -99,4 +99,31 @@ describe("handleCamouflage", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toBe(ASSETS.camo);
   });
+
+  it("rejects a protocol-relative path that would rebind the upstream host (SSRF)", async () => {
+    const fetchMock = vi.fn(async () => new Response("evil", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await handleCamouflage(
+      new Request("https://x//evil.example/steal"),
+      {} as never,
+      settingsWith("proxy", "https://camo.example/page"),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(ASSETS.camo);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not follow a redirect to a different origin (SSRF via redirect)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 302, headers: { Location: "https://evil.example/x" } })),
+    );
+    const res = await handleCamouflage(
+      new Request("https://x/junk"),
+      {} as never,
+      settingsWith("proxy", "https://camo.example/page"),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(ASSETS.camo);
+  });
 });
