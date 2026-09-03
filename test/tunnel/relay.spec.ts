@@ -308,7 +308,7 @@ describe("failure handling", () => {
     };
     const relay = createRelay(sink);
     void relay.run(establishedOf(stuck, 0));
-    for (let i = 0; i < 520; i++) relay.feedClient(new Uint8Array(20480));
+    for (let i = 0; i < 60; i++) relay.feedClient(new Uint8Array(20480));
     await Promise.resolve();
     await Promise.resolve();
     expect(sink.closedWith).toBe(1011);
@@ -321,7 +321,7 @@ describe("failure handling", () => {
       uplinkDecode: () => new Promise<Uint8Array | null>(() => {}),
     });
     void relay.run(establishedOf(sock.socket, 0));
-    for (let i = 0; i < 520; i++) relay.feedClient(new Uint8Array(20480));
+    for (let i = 0; i < 60; i++) relay.feedClient(new Uint8Array(20480));
     await Promise.resolve();
     await Promise.resolve();
     expect(sink.closedWith).toBe(1011);
@@ -339,10 +339,73 @@ describe("failure handling", () => {
     });
     void relay.run(establishedOf(sock.socket, 0));
     for (let round = 0; round < 3; round++) {
-      for (let i = 0; i < 300; i++) relay.feedClient(new Uint8Array(20480));
+      for (let i = 0; i < 50; i++) relay.feedClient(new Uint8Array(20480));
       await vi.advanceTimersByTimeAsync(35);
     }
-    expect(decodes).toBe(900);
+    expect(decodes).toBe(150);
     expect(sink.closedWith).toBeNull();
+  });
+});
+
+describe("read-error failover", () => {
+  it("swaps sockets on a downlink read error with zero bytes received", async () => {
+    const dead = manualSocket();
+    const healthy = manualSocket();
+    const sink = new RecordingSink();
+    let retries = 0;
+    const relay = createRelay(sink, {
+      retry: () => {
+        retries++;
+        healthy.push(utf8Encode("recovered"));
+        healthy.closeRemote();
+        return Promise.resolve(establishedOf(healthy.socket, 1, "proxyip"));
+      },
+    });
+    const done = relay.run(establishedOf(dead.socket, 0));
+    dead.failRemote(new Error("connection reset"));
+    await done;
+    expect(retries).toBe(1);
+    expect(sink.closedWith).toBe(1000);
+    expect(utf8Decode(sink.sent[0]!)).toBe("recovered");
+  });
+
+  it("still closes 1011 on a read error after bytes were received", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const retry = vi.fn(() => Promise.resolve<EstablishedEgress | null>(null));
+    const relay = createRelay(sink, { retry });
+    const done = relay.run(establishedOf(sock.socket, 0));
+    sock.push(utf8Encode("data"));
+    await vi.advanceTimersByTimeAsync(1);
+    sock.failRemote(new Error("connection reset"));
+    await done;
+    expect(retry).not.toHaveBeenCalled();
+    expect(sink.closedWith).toBe(1011);
+  });
+});
+
+describe("idle ceiling", () => {
+  it("closes with 1000 after 300 s with no activity in either direction", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink);
+    const done = relay.run(establishedOf(sock.socket, 0));
+    await vi.advanceTimersByTimeAsync(300_000);
+    await done;
+    expect(sink.closedWith).toBe(1000);
+  });
+
+  it("extends the ceiling on activity and closes after the next full idle window", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink);
+    const done = relay.run(establishedOf(sock.socket, 0));
+    await vi.advanceTimersByTimeAsync(250_000);
+    sock.push(utf8Encode("keepalive"));
+    await vi.advanceTimersByTimeAsync(250_000);
+    expect(sink.closedWith).toBeNull();
+    await vi.advanceTimersByTimeAsync(50_000);
+    await done;
+    expect(sink.closedWith).toBe(1000);
   });
 });

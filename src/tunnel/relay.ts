@@ -5,8 +5,9 @@ import { concatBytes } from "../utils/bytes";
 const COALESCE_TARGET_BYTES = 20480;
 const COALESCE_INTERVAL_MS = 30;
 const DOWNLINK_BATCH_BYTES = 32768;
-const UPLINK_HARD_CAP_BYTES = 8 * 1024 * 1024;
+const UPLINK_HARD_CAP_BYTES = 1 * 1024 * 1024;
 const HALF_OPEN_GRACE_MS = 5000;
+const IDLE_CEILING_MS = 300_000;
 
 export interface RelayOptions {
   responseHeader?: Uint8Array | null;
@@ -39,8 +40,10 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   let retriedOnce = false;
   let headerSent = false;
   let downlinkBytes = 0;
+  let lastActivityMs = Date.now();
   let graceDeadline = Number.POSITIVE_INFINITY;
   let graceTimer: ReturnType<typeof setTimeout> | null = null;
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let generation = 0;
   let slot: Slot | null = null;
 
@@ -78,12 +81,27 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
       clearTimeout(graceTimer);
       graceTimer = null;
     }
+    if (idleTimer !== null) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
     const s = slot;
     slot = null;
     if (s !== null) void teardownSlot(s);
     try {
       sink.close(code);
     } catch {}
+  };
+
+  const checkIdle = (): void => {
+    idleTimer = null;
+    if (finished) return;
+    const idleFor = Date.now() - lastActivityMs;
+    if (idleFor < IDLE_CEILING_MS) {
+      idleTimer = setTimeout(checkIdle, IDLE_CEILING_MS - idleFor);
+      return;
+    }
+    void flushPendingDownlink().finally(() => finish(1000));
   };
 
   const fail = (scope: string, err: unknown): void => {
@@ -169,6 +187,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
 
   const feedClient = (chunk: Uint8Array): void => {
     if (finished || halfOpen) return;
+    lastActivityMs = Date.now();
     if (opts.uplinkDecode !== undefined && opts.uplinkDecode !== null) {
       decodeQueued += chunk.length;
       if (decodeQueued > UPLINK_HARD_CAP_BYTES) {
@@ -218,7 +237,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
     }, HALF_OPEN_GRACE_MS);
   };
 
-  const handleRemoteClose = async (closed: Slot): Promise<boolean> => {
+  const handleRemoteClose = async (closed: Slot, viaError = false): Promise<boolean> => {
     await flushPendingDownlink();
     if (finished) return false;
     if (halfOpen) {
@@ -255,7 +274,10 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
       writer: next.socket.writable.getWriter(),
       index: next.candidateIndex,
     };
-    log.info("relay", "zero-byte failover swap", { candidateIndex: next.candidateIndex });
+    log.info("relay", "zero-byte failover swap", {
+      candidateIndex: next.candidateIndex,
+      via: viaError ? "read-error" : "eof",
+    });
     scheduleFlush();
     return true;
   };
@@ -272,6 +294,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
       const header = opts.responseHeader;
       if (header !== undefined && header !== null && header.length > 0) sink.send(header);
     }
+    idleTimer = setTimeout(checkIdle, IDLE_CEILING_MS);
     let current: Slot = slot;
     while (!finished) {
       let done: boolean;
@@ -281,10 +304,28 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
         done = result.done === true;
         value = result.value;
       } catch (err) {
-        if (!finished) fail("downlink read failed", err);
+        if (!finished) {
+          const retry = opts.retry;
+          const canRetry =
+            retry !== undefined &&
+            retry !== null &&
+            !retriedOnce &&
+            !halfOpen &&
+            downlinkBytes === 0;
+          if (canRetry) {
+            const swapped = await handleRemoteClose(current, true);
+            if (!swapped || finished) return;
+            const nextSlot = slot;
+            if (nextSlot === null) return;
+            current = nextSlot;
+            continue;
+          }
+          fail("downlink read failed", err);
+        }
         return;
       }
       if (finished) return;
+      lastActivityMs = Date.now();
       if (done) {
         const swapped = await handleRemoteClose(current);
         if (!swapped || finished) return;
