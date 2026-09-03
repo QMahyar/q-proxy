@@ -94,7 +94,7 @@ describe("users api handler", () => {
     expect(listed.length).toBe(50);
   });
 
-  it("create and list expose the full token for the sub URL", async () => {
+  it("create exposes the full token once; the list only exposes the hint, not the token", async () => {
     const r = jsonReq("/api/users", "POST", { name: "Alice" });
     const res = (await handleUsersApi(r, env as never, {} as never)) as Response;
     const j = (await res.json()) as { data: { user: Record<string, unknown> } };
@@ -109,8 +109,7 @@ describe("users api handler", () => {
     const listJ = (await listRes.json()) as { data: { users: Record<string, unknown>[] } };
     expect(listJ.data.users.length).toBe(1);
     const listedUser = listJ.data.users[0]!;
-    expect(typeof listedUser.token).toBe("string");
-    expect(listedUser.token).toBe(j.data.user.token);
+    expect(listedUser.token).toBeUndefined();
     expect(listedUser.tokenHash).toBeUndefined();
     expect(typeof listedUser.tokenHint).toBe("string");
     expect((listedUser.tokenHint as string).endsWith("…")).toBe(true);
@@ -127,7 +126,7 @@ describe("users api handler", () => {
     const putReq = jsonReq(`/api/users/${id}`, "PUT", { name: "Bobby" });
     const putRes = (await handleUsersApi(putReq, env as never, {} as never)) as Response;
     const putJ = (await putRes.json()) as { data: { user: Record<string, unknown> } };
-    expect(putJ.data.user.token).toBe(oldToken);
+    expect(putJ.data.user.token).toBeUndefined();
     expect(typeof putJ.data.user.tokenHint).toBe("string");
     expect(putJ.data.user.tokenHint).toBe(oldHint);
 
@@ -140,7 +139,7 @@ describe("users api handler", () => {
 
     const listAfter = await listUsers(env as never);
     expect(listAfter[0]!.tokenHint).toBe(regenJ.data.token.slice(0, 8) + "…");
-    expect(listAfter[0]!.token).toBe(regenJ.data.token);
+    expect(Object.prototype.hasOwnProperty.call(listAfter[0]!, "token")).toBe(false);
   });
 
   it("tokenHint format is first 8 chars plus ellipsis", async () => {

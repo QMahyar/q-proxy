@@ -117,7 +117,6 @@ async function buildUser(body: Record<string, unknown>): Promise<{ user: UserAcc
       name: requireName(body.name),
       tokenHash,
       tokenHint,
-      token: plain,
       enabled: true,
       expiresAt: parseExpiry(body.expiresAt),
       dailyReqLimit: parseLimit(body.dailyReqLimit),
@@ -190,7 +189,7 @@ export const handleUsersApi: RouteHandler = async (req, env, _s) => {
       const plain = newUserToken();
       const tokenHash = await hashToken(plain);
       const tokenHint = tokenHintFor(plain);
-      users[index] = { ...user, tokenHash, tokenHint, token: plain };
+      users[index] = { ...user, tokenHash, tokenHint };
       await migrateUserUsage(env, oldHash, plain);
       await saveUsers(env, users);
       return jsonOk({ token: plain });
