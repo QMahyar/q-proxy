@@ -1,5 +1,6 @@
 import { chacha20Poly1305Open, chacha20Poly1305Seal } from "../crypto/chacha20";
 import { evpBytesToKey, hkdfSha1 } from "../crypto/kdf";
+import { aesGcmKeyFor, aesGcmOpenWith, aesGcmSealWith, type AesGcmKey } from "../crypto/aesgcm";
 import { pruneBoundedRegistry } from "../utils/bounded";
 import { randomBytes } from "../utils/random";
 import { concatBytes, bytesToHex, readU16BE, writeU16BE } from "../utils/bytes";
@@ -40,6 +41,7 @@ export function createSSInbound(
   const keyLen = method === "aes-128-gcm" ? 16 : 32;
   const masterKey = evpBytesToKey(password, keyLen);
   const subkeyInfo = new TextEncoder().encode(SUBKEY_INFO);
+  const isChacha = method === "chacha20-ietf-poly1305";
 
   let acc = new ByteAccumulator();
   let subkey: Uint8Array | null = null;
@@ -88,8 +90,8 @@ export function createSSInbound(
         return { state: "need-more" };
       }
       upState.counter = 0;
-      const isChacha = method === "chacha20-ietf-poly1305";
-      const lenFrame = await openFrame(subkey, upState.counter++, stream.subarray(0, LEN_FRAME_LEN), isChacha);
+      const upCipher = createFrameCipher(frameKeyFor(subkey!, isChacha, "decrypt"), isChacha);
+      const lenFrame = await upCipher.open(upState.counter++, stream.subarray(0, LEN_FRAME_LEN));
       if (lenFrame === null || lenFrame.length !== 2) {
         rollbackSalt();
         return complete({ state: "reject", reason: "length chunk decrypt failed" });
@@ -105,11 +107,9 @@ export function createSSInbound(
         acc.append(buf);
         return { state: "need-more" };
       }
-      const payloadFrame = await openFrame(
-        subkey,
+      const payloadFrame = await upCipher.open(
         upState.counter++,
         stream.subarray(LEN_FRAME_LEN, LEN_FRAME_LEN + payloadFrameLen),
-        isChacha,
       );
       if (payloadFrame === null || payloadFrame.length !== chunkLen) {
         rollbackSalt();
@@ -158,7 +158,7 @@ export function createSSInbound(
         subkey,
         upState,
         pendingBody,
-        method === "chacha20-ietf-poly1305",
+        isChacha,
       );
     },
   };
@@ -178,6 +178,8 @@ function createSsBodyCodec(
   pending: Uint8Array[],
   isChacha: boolean,
 ): BodyCodec {
+  const upKey = frameKeyFor(upSubkey, isChacha, "decrypt");
+  const upCipher = createFrameCipher(upKey, isChacha);
   return {
     async decodeUp(chunk: Uint8Array): Promise<Uint8Array | null> {
       if (chunk.length > 0 && !appendChunk(pending, chunk)) {
@@ -187,7 +189,7 @@ function createSsBodyCodec(
       while (true) {
         const lenFrameBytes = peekFlat(pending, LEN_FRAME_LEN);
         if (lenFrameBytes === null) break;
-        const lenFrame = await openFrame(upSubkey, upState.counter, lenFrameBytes, isChacha);
+        const lenFrame = await upCipher.open(upState.counter, lenFrameBytes);
         if (lenFrame === null || lenFrame.length !== 2) {
           throw new Error("ss uplink length frame failed to decrypt");
         }
@@ -198,11 +200,9 @@ function createSsBodyCodec(
         const frameLen = LEN_FRAME_LEN + chunkLen + TAG_LEN;
         const wholeFrame = peekFlat(pending, frameLen);
         if (wholeFrame === null) break;
-        const payload = await openFrame(
-          upSubkey,
+        const payload = await upCipher.open(
           upState.counter + 1,
           wholeFrame.subarray(LEN_FRAME_LEN),
-          isChacha,
         );
         if (payload === null || payload.length !== chunkLen) {
           throw new Error("ss uplink payload frame failed to decrypt");
@@ -216,22 +216,28 @@ function createSsBodyCodec(
     },
     beginDownlink(): DownlinkEncoder {
       const salt = randomBytes(keyLen);
-      const downSubkeyPromise = hkdfSha1(masterKey, salt, subkeyInfo, keyLen);
+      const downKey: FrameKey = { raw: new Uint8Array(0), aes: null };
+      const ready = (async () => {
+        const sk = await hkdfSha1(masterKey, salt, subkeyInfo, keyLen);
+        downKey.raw = sk;
+        downKey.aes = isChacha ? null : aesGcmKeyFor(sk, "encrypt");
+      })();
       let counter = 0;
+      const downCipher = createFrameCipher(downKey, isChacha);
       return {
         header(): Uint8Array | null {
           return salt;
         },
         async encode(chunk: Uint8Array): Promise<Uint8Array> {
-          const sk = await downSubkeyPromise;
+          await ready;
           if (chunk.length === 0) return new Uint8Array(0);
           const parts: Uint8Array[] = [];
           for (let off = 0; off < chunk.length; off += MAX_CHUNK_LEN) {
             const piece = chunk.subarray(off, Math.min(off + MAX_CHUNK_LEN, chunk.length));
             const lenPlain = new Uint8Array(2);
             writeU16BE(lenPlain, 0, piece.length);
-            parts.push(await sealFrame(sk, counter++, lenPlain, isChacha));
-            parts.push(await sealFrame(sk, counter++, piece, isChacha));
+            parts.push(await downCipher.seal(counter++, lenPlain));
+            parts.push(await downCipher.seal(counter++, piece));
           }
           return concatBytes(...parts);
         },
@@ -240,47 +246,33 @@ function createSsBodyCodec(
   };
 }
 
-async function openFrame(
-  subkey: Uint8Array,
-  counter: number,
-  frame: Uint8Array,
-  isChacha: boolean,
-): Promise<Uint8Array | null> {
-  const nonce = buildNonce(counter);
-  if (isChacha) return chacha20Poly1305Open(subkey, nonce, frame, null);
-  try {
-    const ck = await crypto.subtle.importKey("raw", subkey as BufferSource, "AES-GCM", false, [
-      "decrypt",
-    ]);
-    const plaintext = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: nonce as BufferSource, tagLength: 128 },
-      ck,
-      frame as BufferSource,
-    );
-    return new Uint8Array(plaintext);
-  } catch {
-    return null;
-  }
+interface FrameKey {
+  raw: Uint8Array;
+  aes: Promise<AesGcmKey> | null;
 }
 
-async function sealFrame(
-  subkey: Uint8Array,
-  counter: number,
-  plaintext: Uint8Array,
-  isChacha: boolean,
-): Promise<Uint8Array> {
-  const nonce = buildNonce(counter);
-  if (isChacha) return chacha20Poly1305Seal(subkey, nonce, plaintext, null);
-  const ck = await crypto.subtle.importKey("raw", subkey as BufferSource, "AES-GCM", false, [
-    "encrypt",
-  ]);
-  return new Uint8Array(
-    await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: nonce as BufferSource, tagLength: 128 },
-      ck,
-      plaintext as BufferSource,
-    ),
-  );
+interface FrameCipher {
+  open(counter: number, frame: Uint8Array): Promise<Uint8Array | null>;
+  seal(counter: number, plaintext: Uint8Array): Promise<Uint8Array>;
+}
+
+function frameKeyFor(subkey: Uint8Array, isChacha: boolean, usage: "encrypt" | "decrypt"): FrameKey {
+  return { raw: subkey, aes: isChacha ? null : aesGcmKeyFor(subkey, usage) };
+}
+
+function createFrameCipher(key: FrameKey, isChacha: boolean): FrameCipher {
+  return {
+    async open(counter: number, frame: Uint8Array): Promise<Uint8Array | null> {
+      const nonce = buildNonce(counter);
+      if (isChacha) return chacha20Poly1305Open(key.raw, nonce, frame, null);
+      return aesGcmOpenWith((await key.aes)!, nonce, frame, null);
+    },
+    async seal(counter: number, plaintext: Uint8Array): Promise<Uint8Array> {
+      const nonce = buildNonce(counter);
+      if (isChacha) return chacha20Poly1305Seal(key.raw, nonce, plaintext, null);
+      return aesGcmSealWith((await key.aes)!, nonce, plaintext, null);
+    },
+  };
 }
 
 function buildNonce(counter: number): Uint8Array {

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   MAX_USERS,
   USER_USAGE_PREFIX,
+  USER_TOTAL_PREFIX,
   USERS_KEY,
   findUserByToken,
   consumeUserHit,
@@ -15,11 +16,15 @@ import {
   sanitizeUser,
   saveUsers,
   tokenHintFor,
+  clearUsersMemoForTests,
+  clearUserTotalsForTests,
+  flushPendingUserTotals,
   type UserAccount,
 } from "../../src/users/store";
 
 class FakeKV {
   map = new Map<string, string>();
+  putCalls = 0;
   async get(key: string): Promise<unknown> {
     const raw = this.map.get(key);
     if (raw === undefined) return null;
@@ -30,10 +35,14 @@ class FakeKV {
     }
   }
   async put(key: string, value: string): Promise<void> {
+    this.putCalls += 1;
     this.map.set(key, value);
   }
   async delete(key: string): Promise<void> {
     this.map.delete(key);
+  }
+  puts(): number {
+    return this.putCalls;
   }
   asEnv() {
     return { QPROXY_KV: this };
@@ -76,6 +85,8 @@ function mkLegacyRaw(token = "22222222-2222-4222-8222-222222222222", over: Recor
 let kv: FakeKV;
 beforeEach(() => {
   kv = new FakeKV();
+  clearUsersMemoForTests();
+  clearUserTotalsForTests();
 });
 
 describe("users store", () => {
@@ -271,10 +282,36 @@ describe("users store", () => {
   it("consumeUserHit enforces the daily limit and reports hits", async () => {
     const env = kv.asEnv();
     const token = "99999999-9999-4999-8999-999999999999";
-    expect(await consumeUserHit(env, token, 2)).toEqual({ allowed: true, hits: 1 });
-    expect(await consumeUserHit(env, token, 2)).toEqual({ allowed: true, hits: 2 });
-    expect(await consumeUserHit(env, token, 2)).toEqual({ allowed: false, hits: 2 });
+    expect(await consumeUserHit(env, token, 2)).toEqual({ allowed: true, hits: 1, total: 1 });
+    expect(await consumeUserHit(env, token, 2)).toEqual({ allowed: true, hits: 2, total: 2 });
+    expect(await consumeUserHit(env, token, 2)).toEqual({ allowed: false, hits: 2, total: 2 });
     expect(await getUserHits(env, token)).toBe(2);
+  });
+
+  it("batches lifetime total writes until the flush threshold", async () => {
+    const env = kv.asEnv();
+    const token = "77777777-7777-4777-8777-777777777777";
+    const hash = await hashToken(token);
+    const totalKey = USER_TOTAL_PREFIX + hash;
+    for (let i = 0; i < 3; i++) await consumeUserHit(env, token, null);
+    expect(kv.map.has(totalKey)).toBe(false);
+    expect(await getUserTotalHits(env, token)).toBe(3);
+    await flushPendingUserTotals(env);
+    expect(kv.map.get(totalKey)).toBe("3");
+    expect(await getUserTotalHits(env, token)).toBe(3);
+  });
+
+  it("does not write usage or totals when the daily limit is already exhausted", async () => {
+    const env = kv.asEnv();
+    const token = "88888888-8888-4888-8888-888888888888";
+    const hash = await hashToken(token);
+    await consumeUserHit(env, token, 1);
+    const totalKey = USER_TOTAL_PREFIX + hash;
+    kv.map.delete(totalKey);
+    const putsBefore = kv.puts();
+    expect(await consumeUserHit(env, token, 1)).toEqual({ allowed: false, hits: 1, total: 1 });
+    expect(kv.puts()).toBe(putsBefore);
+    expect(kv.map.has(totalKey)).toBe(false);
   });
 
   it("caps the directory at 50 users", () => {
@@ -323,6 +360,21 @@ describe("users store", () => {
     const rec = persisted[0] as Record<string, unknown>;
     expect(rec.token).toBe(legacyToken);
     expect(rec.tokenHash).toBe(await hashToken(legacyToken));
+  });
+
+  it("memoizes the users array in-isolate and refreshes on save", async () => {
+    const env = kv.asEnv();
+    const token = "22222222-2222-4222-8222-222222222222";
+    await saveUsers(env, [await mkUser()]);
+    kv.map.delete(USERS_KEY);
+    expect(await findUserByToken(env, token)).not.toBeNull();
+
+    const listed = await listUsers(env);
+    listed.pop();
+    expect((await listUsers(env)).length).toBe(1);
+
+    await saveUsers(env, []);
+    expect(await findUserByToken(env, token)).toBeNull();
   });
 
   it("tokenHint is first 8 chars plus ellipsis", () => {

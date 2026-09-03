@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleUserSub } from "../../src/handlers/users-sub";
-import { hashToken, saveUsers, tokenHintFor, type UserAccount } from "../../src/users/store";
+import {
+  hashToken,
+  saveUsers,
+  tokenHintFor,
+  clearUsersMemoForTests,
+  clearUserTotalsForTests,
+  type UserAccount,
+} from "../../src/users/store";
 import type { Settings } from "../../src/types/settings";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 
@@ -83,6 +90,8 @@ describe("users-sub address override", () => {
   let kv: FakeKV;
   beforeEach(() => {
     kv = new FakeKV();
+    clearUsersMemoForTests();
+    clearUserTotalsForTests();
   });
 
   it("emits only the override address and port when set", async () => {

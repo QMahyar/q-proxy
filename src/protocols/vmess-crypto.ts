@@ -1,6 +1,7 @@
 import { Aes128 } from "../crypto/aes";
 import { md5 } from "../crypto/md5";
 import { vmessKdf, vmessKdf16 } from "../crypto/kdf";
+import { aesGcmKeyFor, aesGcmOpenWith, aesGcmSealWith } from "../crypto/aesgcm";
 import { concatBytes, readU16BE, readU32BE, writeU16BE } from "../utils/bytes";
 import { randomBytes } from "../utils/random";
 
@@ -47,11 +48,8 @@ async function aesGcmEncrypt(
   plaintext: Uint8Array,
   aad: Uint8Array | null,
 ): Promise<Uint8Array> {
-  const ck = await crypto.subtle.importKey("raw", key as BufferSource, "AES-GCM", false, ["encrypt"]);
-  const params: { name: "AES-GCM"; iv: Uint8Array; tagLength: number; additionalData?: Uint8Array } =
-    { name: "AES-GCM", iv: nonce, tagLength: 128 };
-  if (aad) params.additionalData = aad;
-  return new Uint8Array(await crypto.subtle.encrypt(params, ck, plaintext as BufferSource));
+  const ck = await aesGcmKeyFor(key, "encrypt");
+  return aesGcmSealWith(ck, nonce, plaintext, aad);
 }
 
 export { aesGcmEncrypt };
@@ -62,21 +60,8 @@ export async function aesGcmDecrypt(
   ciphertext: Uint8Array,
   aad: Uint8Array | null,
 ): Promise<Uint8Array | null> {
-  try {
-    const ck = await crypto.subtle.importKey("raw", key as BufferSource, "AES-GCM", false, [
-      "decrypt",
-    ]);
-    const params: {
-      name: "AES-GCM";
-      iv: Uint8Array;
-      tagLength: number;
-      additionalData?: Uint8Array;
-    } = { name: "AES-GCM", iv: nonce, tagLength: 128 };
-    if (aad) params.additionalData = aad;
-    return new Uint8Array(await crypto.subtle.decrypt(params, ck, ciphertext as BufferSource));
-  } catch {
-    return null;
-  }
+  const ck = await aesGcmKeyFor(key, "decrypt");
+  return aesGcmOpenWith(ck, nonce, ciphertext, aad);
 }
 
 const CMD_KEY_SALT = "c48619fe-8f02-49e0-b9e9-edf763e17e21";

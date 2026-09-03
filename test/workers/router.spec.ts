@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SELF, env } from "cloudflare:test";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { telegramWebhookSecret } from "../../src/handlers/api/telegram";
+import { clearUsersMemoForTests, clearUserTotalsForTests } from "../../src/users/store";
 import { seed, SETTINGS_KEY, testKv } from "../helpers/seed";
 
 const kv = testKv(env);
@@ -84,6 +85,11 @@ async function waitForUsage(token: string, ms = 4000): Promise<void> {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+beforeEach(() => {
+  clearUsersMemoForTests();
+  clearUserTotalsForTests();
 });
 
 describe("router dispatch", () => {
@@ -682,6 +688,7 @@ describe("router dispatch", () => {
       },
     );
     await kv.put(usersKey, JSON.stringify(directory));
+    clearUsersMemoForTests();
 
     res = await SELF.fetch(`${BASE}/sub/u/33333333-3333-4333-8333-333333333333?target=base64`);
     expect(res.status).toBe(410);

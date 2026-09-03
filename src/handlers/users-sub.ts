@@ -16,7 +16,7 @@ import {
 } from "../subscription/render";
 import { pickSubFormat, SUB_FORMATS } from "../subscription/negotiate";
 import { dayKeyUtc } from "../utils/time";
-import { findUserByToken, getUserTotalHits, consumeUserHit } from "../users/store";
+import { findUserByToken, getUserHits, consumeUserHit } from "../users/store";
 
 function plain(status: number, message: string, extra: Record<string, string> = {}): Response {
   return new Response(`${message}\n`, {
@@ -52,15 +52,20 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
     return htmlResponse(infoPageHtml(subUrls, s.profileTitle), 200, { "Cache-Control": "no-store" });
   }
 
-  const { allowed, hits } = await consumeUserHit(env, token, user.dailyReqLimit);
+  const cacheKey = makeEdgeCacheKey(req, format, isFragmentMode, token);
+  const cached = await matchEdgeCache(cacheKey);
+  if (cached !== undefined) {
+    const hits = await getUserHits(env, token);
+    if (user.dailyReqLimit !== null && hits >= user.dailyReqLimit) {
+      return plain(429, "daily quota exceeded", { "Retry-After": String(secondsUntilUtcMidnight(now)) });
+    }
+    return cached;
+  }
+
+  const { allowed, hits, total } = await consumeUserHit(env, token, user.dailyReqLimit);
   if (!allowed) {
     return plain(429, "daily quota exceeded", { "Retry-After": String(secondsUntilUtcMidnight(now)) });
   }
-  const total = await getUserTotalHits(env, token);
-
-  const cacheKey = makeEdgeCacheKey(req, format, isFragmentMode, token);
-  const cached = await matchEdgeCache(cacheKey);
-  if (cached !== undefined) return cached;
 
   const override = user.addressOverride ?? null;
   const nodeSettings: Settings =
