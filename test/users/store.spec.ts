@@ -152,13 +152,13 @@ describe("users store", () => {
     expect(a).not.toBe(b);
   });
 
-  it("sanitizes to the exact public field set, exposing tokenHint and token not tokenHash", async () => {
+  it("sanitizes to the exact public field set, exposing tokenHint but never token or tokenHash", async () => {
     const u = await mkUser({ dailyReqLimit: 100, expiresAt: 1893456000000 });
     const view = sanitizeUser(u);
     expect(Object.keys(view).sort()).toEqual(
-      ["addressOverride", "createdAt", "dailyReqLimit", "enabled", "expiresAt", "id", "name", "protocols", "token", "tokenHint"].sort(),
+      ["addressOverride", "createdAt", "dailyReqLimit", "enabled", "expiresAt", "id", "name", "protocols", "tokenHint"].sort(),
     );
-    expect(typeof (view as Record<string, unknown>).token).toBe("string");
+    expect((view as Record<string, unknown>).token).toBeUndefined();
     expect((view as Record<string, unknown>).tokenHash).toBeUndefined();
     expect(view.tokenHint).toBe(u.tokenHint);
     expect(view.addressOverride).toBeNull();
@@ -217,7 +217,7 @@ describe("users store", () => {
     const view = sanitizeUser(u) as Record<string, unknown>;
     expect(view.addressOverride).toEqual({ address: "5.6.7.8", port: 443 });
     expect(view.tokenHash).toBeUndefined();
-    expect(typeof view.token).toBe("string");
+    expect(view.token).toBeUndefined();
   });
 
   it("records and reads per-token daily hits via hashed keys", async () => {
@@ -307,7 +307,7 @@ describe("users store", () => {
     expect((await findUserByToken(env, plain))!.id).toBe(user.id);
   });
 
-  it("lazy-migrates legacy plaintext token records", async () => {
+  it("lazy-migrates legacy plaintext token records without persisting the plaintext", async () => {
     const env = kv.asEnv();
     const legacyToken = "44444444-4444-4444-8444-444444444444";
     const legacy = mkLegacyRaw(legacyToken);
@@ -316,12 +316,12 @@ describe("users store", () => {
     expect(users.length).toBe(1);
     expect(users[0]!.tokenHash).toBe(await hashToken(legacyToken));
     expect(users[0]!.tokenHint).toBe(legacyToken.slice(0, 8) + "…");
-    expect((users[0] as unknown as Record<string, unknown>).token).toBe(legacyToken);
+    expect((users[0] as unknown as Record<string, unknown>).token).toBeUndefined();
     expect(await findUserByToken(env, legacyToken)).not.toBeNull();
     await saveUsers(env, users);
     const persisted = JSON.parse(kv.map.get(USERS_KEY)!) as unknown[];
     const rec = persisted[0] as Record<string, unknown>;
-    expect(rec.token).toBe(legacyToken);
+    expect(rec.token).toBeUndefined();
     expect(rec.tokenHash).toBe(await hashToken(legacyToken));
   });
 
@@ -360,11 +360,11 @@ describe("users store", () => {
     expect(kv.map.has(legacyKey)).toBe(false);
   });
 
-  it("sanitizeUser never exposes tokenHash", async () => {
+  it("sanitizeUser never exposes tokenHash or token", async () => {
     const u = await mkUser();
     const sanitized = sanitizeUser(u) as Record<string, unknown>;
     expect(sanitized.tokenHash).toBeUndefined();
-    expect(typeof sanitized.token).toBe("string");
+    expect(sanitized.token).toBeUndefined();
     expect(typeof sanitized.tokenHint).toBe("string");
   });
 });

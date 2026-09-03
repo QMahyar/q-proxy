@@ -7,7 +7,6 @@ export interface UserAccount {
   name: string;
   tokenHash: string;
   tokenHint: string;
-  token?: string;
   enabled: boolean;
   expiresAt: number | null;
   dailyReqLimit: number | null;
@@ -129,7 +128,6 @@ export async function listUsers(env: { QPROXY_KV: KvLike }): Promise<UserAccount
         name: rec.name as string,
         tokenHash,
         tokenHint,
-        token: typeof rec.token === "string" ? (rec.token as string) : "",
         enabled: typeof rec.enabled === "boolean" ? (rec.enabled as boolean) : true,
         expiresAt: typeof rec.expiresAt === "number" || rec.expiresAt === null ? (rec.expiresAt as number | null) : null,
         dailyReqLimit: typeof rec.dailyReqLimit === "number" || rec.dailyReqLimit === null ? (rec.dailyReqLimit as number | null) : null,
@@ -167,7 +165,6 @@ export function sanitizeUser(user: UserAccount): PublicUser {
     id: user.id,
     name: user.name,
     tokenHint: user.tokenHint,
-    token: user.token ?? "",
     enabled: user.enabled,
     expiresAt: user.expiresAt,
     dailyReqLimit: user.dailyReqLimit,
