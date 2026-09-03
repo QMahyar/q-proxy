@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleUsersApi } from "../../src/handlers/api/users";
-import { hashToken, listUsers, saveUsers, tokenHintFor, type UserAccount } from "../../src/users/store";
+import {
+  hashToken,
+  listUsers,
+  saveUsers,
+  tokenHintFor,
+  clearUsersMemoForTests,
+  clearUserTotalsForTests,
+  type UserAccount,
+} from "../../src/users/store";
 
 class FakeKV {
   map = new Map<string, string>();
@@ -42,6 +50,8 @@ describe("users api handler", () => {
   beforeEach(() => {
     kv = new FakeKV();
     env = kv.asEnv() as unknown as { QPROXY_KV: FakeKV };
+    clearUsersMemoForTests();
+    clearUserTotalsForTests();
   });
 
   it("parseLimit caps at 10000", async () => {

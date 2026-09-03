@@ -110,6 +110,31 @@ function isLegacyUser(raw: unknown): boolean {
 }
 
 export async function listUsers(env: { QPROXY_KV: KvLike }): Promise<UserAccount[]> {
+  return (await listUsersCached(env)).users.map((u) => ({ ...u }));
+}
+
+const USERS_MEMO_MS = 15_000;
+
+interface UsersMemo {
+  value: UserAccount[];
+  expiresAt: number;
+}
+
+let usersMemo: UsersMemo | null = null;
+
+export function clearUsersMemoForTests(): void {
+  usersMemo = null;
+}
+
+async function listUsersCached(env: { QPROXY_KV: KvLike }): Promise<{ users: UserAccount[] }> {
+  const now = Date.now();
+  if (usersMemo !== null && usersMemo.expiresAt > now) return { users: usersMemo.value };
+  const users = await listUsersFromKv(env);
+  usersMemo = { value: users, expiresAt: now + USERS_MEMO_MS };
+  return { users };
+}
+
+async function listUsersFromKv(env: { QPROXY_KV: KvLike }): Promise<UserAccount[]> {
   const raw = (await env.QPROXY_KV.get(USERS_KEY, "json")) as unknown;
   if (!Array.isArray(raw)) return [];
   const out: UserAccount[] = [];
@@ -142,7 +167,10 @@ export async function listUsers(env: { QPROXY_KV: KvLike }): Promise<UserAccount
 }
 
 export async function saveUsers(env: { QPROXY_KV: KvLike }, users: UserAccount[]): Promise<void> {
-  await env.QPROXY_KV.put(USERS_KEY, JSON.stringify(users));
+  const clean: UserAccount[] = [];
+  for (const u of users) if (isUser(u)) clean.push(sanitizeStoredUser(u));
+  await env.QPROXY_KV.put(USERS_KEY, JSON.stringify(clean));
+  usersMemo = { value: clean.map((u) => ({ ...u })), expiresAt: Date.now() + USERS_MEMO_MS };
 }
 
 export function newUserToken(): string {
@@ -201,6 +229,100 @@ async function readUsageRows(env: { QPROXY_KV: KvLike }): Promise<UsageRow[]> {
 
 const usageLocks = new Map<string, Promise<unknown>>();
 
+const TOTAL_FLUSH_MS = 60_000;
+const TOTAL_FLUSH_HITS = 32;
+const TOTAL_MEMO_LIMIT = 512;
+
+interface TotalMemoEntry {
+  value: number;
+  expiresAt: number;
+}
+
+const totalMemo = new Map<string, TotalMemoEntry>();
+const totalDeltas = new Map<string, number>();
+let totalHitsSinceFlush = 0;
+let totalLastFlushMs = Date.now();
+let totalFlushing = false;
+
+export function clearUserTotalsForTests(): void {
+  totalMemo.clear();
+  totalDeltas.clear();
+  totalHitsSinceFlush = 0;
+  totalLastFlushMs = Date.now();
+  totalFlushing = false;
+}
+
+function parseTotalValue(raw: unknown): number {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
+  if (typeof raw === "string") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+  }
+  return 0;
+}
+
+function memoizeTotal(key: string, value: number): void {
+  if (totalMemo.size >= TOTAL_MEMO_LIMIT) totalMemo.clear();
+  totalMemo.set(key, { value, expiresAt: Date.now() + USERS_MEMO_MS });
+}
+
+async function flushUserTotals(env: { QPROXY_KV: KvLike }, captured: Map<string, number>): Promise<void> {
+  if (captured.size === 0) return;
+  try {
+    const entries = [...captured.entries()];
+    const reads = await Promise.all(entries.map(([k]) => env.QPROXY_KV.get(k, "json")));
+    await Promise.all(
+      entries.map(async ([k], i) => {
+        const value = parseTotalValue(reads[i]) + captured.get(k)!;
+        memoizeTotal(k, value);
+        await env.QPROXY_KV.put(k, JSON.stringify(value));
+      }),
+    );
+  } catch {
+    totalMemo.clear();
+  }
+}
+
+export async function flushPendingUserTotals(env: { QPROXY_KV: KvLike }): Promise<void> {
+  const captured = new Map(totalDeltas);
+  totalDeltas.clear();
+  await flushUserTotals(env, captured);
+}
+
+async function baseForKey(env: { QPROXY_KV: KvLike }, key: string): Promise<number> {
+  const memo = totalMemo.get(key);
+  if (memo !== undefined && memo.expiresAt > Date.now()) return memo.value;
+  const base = parseTotalValue(await env.QPROXY_KV.get(key, "json"));
+  memoizeTotal(key, base);
+  return base;
+}
+
+async function totalForKey(env: { QPROXY_KV: KvLike }, key: string): Promise<number> {
+  return (await baseForKey(env, key)) + (totalDeltas.get(key) ?? 0);
+}
+
+async function bumpUserTotal(env: { QPROXY_KV: KvLike }, hash: string): Promise<number> {
+  const key = USER_TOTAL_PREFIX + hash;
+  const pending = (totalDeltas.get(key) ?? 0) + 1;
+  totalDeltas.set(key, pending);
+  totalHitsSinceFlush += 1;
+  const total = (await baseForKey(env, key)) + pending;
+  const stale = Date.now() - totalLastFlushMs >= TOTAL_FLUSH_MS;
+  if (!stale && totalHitsSinceFlush < TOTAL_FLUSH_HITS) return total;
+  if (totalFlushing) return total;
+  totalFlushing = true;
+  totalHitsSinceFlush = 0;
+  totalLastFlushMs = Date.now();
+  try {
+    const captured = new Map(totalDeltas);
+    totalDeltas.clear();
+    await flushUserTotals(env, captured);
+  } finally {
+    totalFlushing = false;
+  }
+  return total;
+}
+
 function withUsageLock<T>(token: string, fn: () => Promise<T>): Promise<T> {
   const prev = usageLocks.get(token) ?? Promise.resolve();
   const next = prev.then(fn, fn);
@@ -238,15 +360,17 @@ export function consumeUserHit(
   env: { QPROXY_KV: KvLike },
   token: string,
   limit: number | null,
-): Promise<{ allowed: boolean; hits: number }> {
+): Promise<{ allowed: boolean; hits: number; total: number }> {
   return withUsageLock(token, async () => {
     const h = await toHash(token);
     const hits = await readUsageCount(env, h);
-    if (limit !== null && hits >= limit) return { allowed: false, hits };
+    if (limit !== null && hits >= limit) {
+      const total = await totalForKey(env, USER_TOTAL_PREFIX + h);
+      return { allowed: false, hits, total };
+    }
     await env.QPROXY_KV.put(usageKey(h), JSON.stringify(hits + 1));
-    const total = await getUserTotalHits(env, h);
-    await env.QPROXY_KV.put(USER_TOTAL_PREFIX + h, JSON.stringify(total + 1));
-    return { allowed: true, hits: hits + 1 };
+    const total = await bumpUserTotal(env, h);
+    return { allowed: true, hits: hits + 1, total };
   });
 }
 
@@ -257,19 +381,16 @@ export async function getUserHits(env: { QPROXY_KV: KvLike }, token: string): Pr
 
 export async function getUserTotalHits(env: { QPROXY_KV: KvLike }, token: string): Promise<number> {
   const h = await toHash(token);
-  const raw = await env.QPROXY_KV.get(USER_TOTAL_PREFIX + h, "json");
-  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
-  if (typeof raw === "string") {
-    const n = Number(raw);
-    if (Number.isFinite(n) && n >= 0) return Math.floor(n);
-  }
-  return 0;
+  return totalForKey(env, USER_TOTAL_PREFIX + h);
 }
 
 export async function migrateUserUsage(env: { QPROXY_KV: KvLike }, oldTokenOrHash: string, newTokenOrHash: string): Promise<void> {
   const oldHash = (await toHash(oldTokenOrHash)).toLowerCase();
   const newHash = (await toHash(newTokenOrHash)).toLowerCase();
   if (oldHash === newHash) return;
+  await flushPendingUserTotals(env);
+  totalMemo.delete(USER_TOTAL_PREFIX + oldHash);
+  totalMemo.delete(USER_TOTAL_PREFIX + newHash);
   const oldCount = await readUsageCount(env, oldHash);
   await env.QPROXY_KV.delete(usageKey(oldHash));
   const rows = await readUsageRows(env);
@@ -312,5 +433,6 @@ export async function migrateUserUsage(env: { QPROXY_KV: KvLike }, oldTokenOrHas
     }
     await env.QPROXY_KV.put(newTotalKey, JSON.stringify(newTotal + oldTotal));
     await env.QPROXY_KV.delete(oldTotalKey);
+    totalMemo.delete(newTotalKey);
   }
 }

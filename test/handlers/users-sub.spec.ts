@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { handleUserSub } from "../../src/handlers/users-sub";
 import type { Env } from "../../src/types/env";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import type { Settings } from "../../src/types/settings";
-import { USERS_KEY, hashToken } from "../../src/users/store";
+import { USERS_KEY, hashToken, clearUsersMemoForTests, clearUserTotalsForTests } from "../../src/users/store";
 import type { UserAccount } from "../../src/users/store";
 import { decodeBase64 } from "../../src/utils/base64";
 
@@ -55,6 +55,11 @@ function request(url: string, ua?: string): Request {
 }
 
 describe("handleUserSub", () => {
+  beforeEach(() => {
+    clearUsersMemoForTests();
+    clearUserTotalsForTests();
+  });
+
   it("serves a scoped base64 sub with the 60s cache-throttle headers", async () => {
     const res = await handleUserSub(
       request(`https://w.test/sp12345678/sub/u/${TOKEN}?target=base64`, "v2rayNG/1.8.14"),
