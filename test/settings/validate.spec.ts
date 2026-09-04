@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
 import { validateSettings } from "../../src/settings/validate";
+import { handleCamouflage } from "../../src/handlers/camouflage";
+import { makeFailoverStrategy } from "../../src/tunnel/egress";
+import { ASSETS } from "../../src/ui/assets";
 import { makeTestSettings } from "../helpers/settings";
 
 function fieldsOf(input: unknown): Record<string, string> {
@@ -107,7 +110,7 @@ describe("validateSettings", () => {
   it("sanitizes arrays: trim, dedupe, drop empties, cap counts", () => {
     const result = validateSettings({
       addresses: [{ address: "1.2.3.4" }, { address: " 1.2.3.4 " }, { address: "5.6.7.8" }],
-      proxyIps: Array.from({ length: 70 }, (_, i) => `10.1.0.${i % 256}`),
+      proxyIps: Array.from({ length: 70 }, (_, i) => `192.0.2.${(i % 250) + 1}`),
       nat64Prefixes: Array.from({ length: 12 }, () => "[2a02:898:146:64::]"),
     });
     expect(result.ok).toBe(true);
@@ -317,5 +320,78 @@ describe("telegram settings block", () => {
     const result = validateSettings({ telegram: [1] });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.fields.telegram).toBe("must be an object");
+  });
+});
+
+describe("ssrf guards", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects a private camouflage URL at save in proxy mode", () => {
+    for (const url of [
+      "http://127.0.0.1/page",
+      "http://10.0.0.5/page",
+      "http://192.168.1.1/page",
+      "http://169.254.169.254/latest/meta-data/",
+      "http://localhost/page",
+      "http://[::1]/page",
+    ]) {
+      const result = validateSettings({ camouflage: { mode: "proxy", url } });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.fields["camouflage.url"]).toBeTruthy();
+    }
+    expect(validateSettings({ camouflage: { mode: "proxy", url: "https://camo.example/page" } }).ok).toBe(true);
+    expect(validateSettings({ camouflage: { mode: "static", url: "" } }).ok).toBe(true);
+  });
+
+  it("rejects a private chainProxy host at save when enabled", () => {
+    for (const uri of [
+      "socks5://127.0.0.1:1080",
+      "socks5://10.0.0.5:1080",
+      "http://192.168.1.1:8080",
+      "http://localhost:8080",
+      "socks5://[::1]:1080",
+    ]) {
+      const result = validateSettings({ chainProxy: { enabled: true, uri } });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.fields["chainProxy.uri"]).toBeTruthy();
+    }
+    expect(validateSettings({ chainProxy: { enabled: true, uri: "socks5://chain.example:1080" } }).ok).toBe(true);
+    expect(validateSettings({ chainProxy: { enabled: false, uri: "" } }).ok).toBe(true);
+  });
+
+  it("rejects private proxyIps entries at save", () => {
+    for (const entry of ["127.0.0.1", "10.0.0.5", "192.168.1.1:443", "localhost", "10.0.0.5:8443"]) {
+      const result = validateSettings({ proxyIps: [entry] });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.fields.proxyIps).toBeTruthy();
+    }
+    expect(validateSettings({ proxyIps: ["8.8.8.8", "93.184.216.34:443"] }).ok).toBe(true);
+  });
+
+  it("blocks a camouflage redirect to a private host", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 302, headers: { Location: "http://169.254.169.254/latest/meta-data/" } })),
+    );
+    const res = await handleCamouflage(
+      new Request("https://x/junk"),
+      {} as never,
+      makeTestSettings({ camouflage: { mode: "proxy", url: "https://camo.example/page" } }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(ASSETS.camo);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("omits private and Cloudflare proxyIP candidates from the failover strategy", async () => {
+    const s = makeTestSettings({ proxyIpMode: "proxyip", proxyIps: ["127.0.0.1", "10.0.0.5", "104.16.132.229", "8.8.8.8"] });
+    const strategy = await makeFailoverStrategy(s, { host: "dest.example.com", port: 443 });
+    const proxied = strategy.candidates.filter((c) => c.via === "proxyip").map((c) => c.host);
+    expect(proxied).not.toContain("127.0.0.1");
+    expect(proxied).not.toContain("10.0.0.5");
+    expect(proxied).not.toContain("104.16.132.229");
+    expect(proxied).toContain("8.8.8.8");
   });
 });

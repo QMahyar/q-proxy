@@ -244,7 +244,7 @@ describe("router dispatch", () => {
       const res = await SELF.fetch(
         `${BASE}/api/settings`,
         put(
-          { camouflage: { mode: "proxy", url: "http://127.0.0.1:9/unreachable" } },
+          { camouflage: { mode: "proxy", url: "http://unreachable.example/unreachable" } },
           csrfHeaders,
         ),
       );

@@ -390,16 +390,19 @@ function applyCustomField(
       const uri = strField(patch, "uri", fields, { maxLen: 2048 });
       if (uri !== undefined) out.chainProxy.uri = uri;
       if (out.chainProxy.enabled) {
+        let parsedHost = "";
         let parsedOk = false;
         try {
           const parsed = new URL(out.chainProxy.uri);
           parsedOk =
             (parsed.protocol === "socks5:" || parsed.protocol === "http:") &&
             parsed.hostname.length > 0;
+          if (parsedOk) parsedHost = parsed.hostname;
         } catch {
           parsedOk = false;
         }
         if (!parsedOk) fail(fields, "uri", "must be a socks5:// or http:// proxy URI");
+        else if (isLocalOrPrivateTarget(parsedHost)) fail(fields, "uri", "must not target a local or private address");
       }
       return;
     }
@@ -437,8 +440,9 @@ function applyCustomField(
     case "camouflage.url": {
       const url = strField(patch, "url", fields, { maxLen: 2048 });
       if (url !== undefined) out.camouflage.url = url;
-      if (out.camouflage.mode === "proxy" && !isHttpUrl(out.camouflage.url)) {
-        fail(fields, "url", "must be a valid http(s) URL when camouflage mode is proxy");
+      if (out.camouflage.mode === "proxy") {
+        if (!isHttpUrl(out.camouflage.url)) fail(fields, "url", "must be a valid http(s) URL when camouflage mode is proxy");
+        else if (isLocalOrPrivateTarget(new URL(out.camouflage.url).hostname)) fail(fields, "url", "must not target a local or private address");
       }
       return;
     }
@@ -475,6 +479,19 @@ function applyCustomField(
         if (!TG_CHAT_ID_RE.test(trimmed)) fail(fields, "chatId", "must be a numeric chat id or @channelname");
         else out.telegram.chatId = trimmed;
       }
+      return;
+    }
+  }
+}
+
+function validateProxyIps(out: Settings, fields: Record<string, string>): void {
+  for (const entry of out.proxyIps) {
+    const token = entry.trim().replace(/^["']+|["']+$/g, "").toLowerCase();
+    if (token.length === 0) continue;
+    const bareToken = token.replace(/\.tp\d{1,5}$/, "");
+    const hp = parseHostPort(bareToken, 443);
+    if (hp !== null && isLocalOrPrivateTarget(hp.host)) {
+      fail(fields, "proxyIps", "must not target a local or private address");
       return;
     }
   }
@@ -538,6 +555,7 @@ export function validateSettings(input: unknown): ValidationResult {
     }
   }
 
+  validateProxyIps(out, fields);
   validateFragmentOrdering(patch, out, fields);
 
   if (Object.keys(fields).length > 0) return { ok: false, fields };

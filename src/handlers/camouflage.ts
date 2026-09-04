@@ -24,6 +24,7 @@ async function proxyPassthrough(reqUrl: string, upstreamBase: string): Promise<R
       if (loc === null) return null;
       const next = new URL(loc, target);
       if (next.origin !== base.origin) return null;
+      if (isLocalOrPrivateTarget(next.hostname)) return null;
       if (++hops > MAX_REDIRECTS) return null;
       target = next;
       upstream = await fetch(target, { redirect: "manual", signal: AbortSignal.timeout(PROXY_TIMEOUT_MS) });
