@@ -42,7 +42,7 @@ function decodeBody(body: string): string {
 
 describe("EMITTERS registry", () => {
   it("covers exactly the four sync SubFormats (base64 renders async via renderSubscriptionBody)", () => {
-    expect(Object.keys(EMITTERS).sort()).toEqual(["clash", "loon", "singbox", "surge"]);
+    expect(Object.keys(EMITTERS).sort()).toEqual(["clash", "loon", "quantumult", "singbox", "surge"]);
   });
 });
 

@@ -24,6 +24,7 @@ const FORMAT_LABELS: Record<SubFormat, string> = {
   singbox: "sing-box",
   surge: "Surge",
   loon: "Loon",
+  quantumult: "Quantumult X",
 };
 
 function settingsCacheStamp(s: Settings): string {

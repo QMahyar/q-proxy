@@ -2,6 +2,7 @@ import type { SubFormat } from "../../core/ua";
 import type { ProxyNode } from "../../types/node";
 import { emitClashYaml } from "./clash-yaml";
 import { emitLoonConf } from "./loon-conf";
+import { emitQuantumultConf } from "./quantumult-conf";
 import { emitSingBoxJson } from "./singbox-json";
 import { emitSurgeConf } from "./surge-conf";
 
@@ -66,4 +67,5 @@ export const EMITTERS: Record<SyncSubFormat, NodeEmitter> = {
   singbox: emitSingBoxJson,
   surge: emitSurgeConf,
   loon: emitLoonConf,
+  quantumult: emitQuantumultConf,
 };
