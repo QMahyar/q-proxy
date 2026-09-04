@@ -27,7 +27,7 @@ Full deployment guide with all seven paths — including Workers and Pages, dash
 | 3b | Settings → Bindings → Add D1 → variable `QPROXY_DB` → create + bind database `q-proxy`, then apply `migrations/0001_init.sql` (database SQL console or `npx wrangler d1 migrations apply q-proxy --remote`) |
 | 4 | Deploy. Visit any worker URL once — this seeds settings into KV |
 | 5 | Read your secret path from KV key `qproxy:settings`, field `data.securePath` (dashboard binding viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV`) |
-| 6 | Open `https://<worker>.workers.dev/<securePath>/panel` → first-run wizard |
+| 6 | Open `https://<worker>.workers.dev/<securePath>/panel` → first-run setup card (24 h window — see §3.2) |
 
 For the one-click Deploy Button, Wrangler CLI, `npm run deploy` (direct API), and Pages paths, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -79,18 +79,36 @@ npm run deploy               # = build + wrangler deploy (package.json:11)
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for Pages (`dist/_worker.js`), Deploy Button, and Git-connected Builds. Screenshot: *Terminal `wrangler whoami` + `deploy` success + assigned `*.workers.dev` URL*
 
-## 3. First-Setup Wizard
+## 3. First Run and Onboarding
 
-On first load with empty `qproxy:settings`, every panel route renders the setup form (`src/handlers/api/auth.ts:handleSetup`).
+How you get your first admin password depends on the deploy path:
+
+| Deploy path | First password |
+|-------------|----------------|
+| `npm run deploy` (direct API) | The script generates a strong bootstrap password (`qproxy-XXXXXXXX`), **prints it exactly once** in the terminal, and sets it through the setup endpoint. Copy it immediately — it is never shown or stored again. `--password` / `QPROXY_PASSWORD` override the generated value. |
+| One-liner scripts (`deploy.sh` / `deploy.ps1`) | The script prompts for a password (or takes `--password`) and sets it the same way. |
+| Dashboard paste / Pages / wrangler | Nothing is set at deploy time — the login page shows the **Create passphrase** setup card on first visit (§3.2). |
+
+### 3.1 Bootstrap password and the forced change
+
+The deploy-script password is marked as a *bootstrap* password: it protects the panel, but it is not meant to stay. Logging in with it succeeds (the login response carries `mustChangePassword: true`), and until you pick a personal password the panel blocks everything else — every other authenticated API answers `403 PASSWORD_CHANGE_REQUIRED`. While the flag is on you can only change the password, view settings (read-only), or log out.
+
+Fix it in one step: Settings → General → Security card → Change passphrase. The new password clears the bootstrap flag, unlocks the whole panel, and logs out every other device (existing behavior).
+
+### 3.2 The 24 h setup card (paste deploys)
+
+On first load with empty `qproxy:settings`, every panel route renders the setup form (`src/handlers/api/auth.ts:handleSetup`), and the first visit seeds settings with a `seededAt` timestamp. The setup card accepts a passphrase only for **24 hours** after that seed — a submission after the window returns `409 SETUP_WINDOW_EXPIRED` and the panel can no longer be claimed from the web.
+
+Missed the window? Delete the `qproxy:settings` key (Cloudflare dashboard → KV → `qproxy` namespace → delete `qproxy:settings`) and revisit the worker URL: settings re-seed with a fresh 24 h window (same recovery path as the IP allowlist, §4.5).
 
 | Step | Screen | Action |
 |------|--------|--------|
 | 1 | `/{securePath}/panel` redirects to `/{securePath}/login` | Shown automatically when `passwordHash === null` (`src/types/settings.ts:43`) |
-| 2 | Set Password | Enter ≥8 chars with letter+digit; stored as PBKDF2-SHA256 (`src/auth/password.ts`). Race-guarded: only accepted while unset |
+| 2 | Set Password | Enter ≥8 chars with letter+digit; stored as PBKDF2-SHA256 (`src/auth/password.ts`). Race-guarded: only accepted while unset, and only inside the 24 h window (§3.2) |
 | 3 | Secure Path noted | Generated `randomHex(12)` (`src/settings/seed.ts`). Gating: panel, APIs, subscriptions, DoH, and all `/{vl|vm|tr|ss}/` tunnels live under it (`src/core/routes.ts:53`) |
-| 4 | Login | Sets `q_session` cookie (`HttpOnly; Secure; SameSite=Lax`, 7-day, `src/handlers/api/auth.ts` flow) + CSRF header `X-Q-Panel: 1` for mutating calls |
+| 4 | Login | Sets `q_session` cookie (`HttpOnly; Secure; SameSite=Lax`, 7-day, `src/handlers/api/auth.ts` flow) + CSRF header `X-Q-Panel: 1` for mutating calls. With a deploy-script bootstrap password you land on the forced change first (§3.1) |
 
-Screenshot: *Setup form (EN/FA toggle) → Login → Panel Home*
+Screenshot: *Setup form (EN/FA toggle) → Login → forced password change → Panel Home*
 
 Keep the full `https://<worker>/ <securePath>` URL — rotating the path invalidates every client config.
 
@@ -166,6 +184,16 @@ Settings → Protocols → VLESS / Shadowsocks (`vlessFlow`, `ssDirect` in `src/
 
 - **Vision flow (`vlessFlow: xtls-rprx-vision`)** — set it when your clients configure `flow=xtls-rprx-vision` on the VLESS node. The worker detects the flow from the handshake and decodes the length-prefixed body framing; the response header stays `[version, 0x00]` and non-vision clients keep working unchanged. `generateNodes` stamps the flow onto TLS VLESS nodes only — plain-port (`security: none`) nodes never carry it, so enabling the setting cannot break plain-port subs. Emitted share URIs gain `flow=xtls-rprx-vision` after the transport params; Clash adds `flow: xtls-rprx-vision` and sing-box adds `"flow": "xtls-rprx-vision"` on the VLESS entry. Surge/Loon output is unchanged. If a client enables vision locally but the setting is off here, only the URI advertisement is missing — the inbound still negotiates vision from the handshake.
 - **Direct Shadowsocks (`ssDirect: true`)** — emits plain `ss://` links (no `plugin=v2ray-plugin;…` segment) plus Clash entries without `plugin`/`plugin-opts` and sing-box outbounds without `plugin`/`plugin_opts`, for clients that speak raw Shadowsocks. Default (`false`) keeps the v2ray-plugin WebSocket wrapping, which is what carries SS over the worker's WebSocket tunnels — switch to direct only if your client handles raw SS itself.
+
+### 4.9 Two-Factor Authentication (TOTP)
+
+Settings → General → Security card. Enabling TOTP is a one-sitting operation — plan a few minutes:
+
+- **Fresh QR in one sitting.** Click *Set up authenticator* once and finish: scan the QR (or paste the secret), enter the current 6-digit code, enable. If you click setup again while an attempt is in progress (or after a previous, unfinished one), the panel asks for confirmation and warns that a restart generates a **new** secret — previously shown QRs become invalid, so delete the stale Q Proxy entry from your authenticator before re-adding.
+- **Save the recovery codes when they appear.** The 10 one-time recovery codes are shown exactly once, during setup (never after enable). Copy them all, or download them as a plain-text file (`q-proxy-recovery-codes.txt`). The *Verify and enable* button stays locked until you acknowledge "I saved my recovery codes" — if you lose both your authenticator and the codes, the only way back in is resetting the panel from KV.
+- **Clock skew note.** TOTP tolerates one 30-second time step in each direction. If codes get rejected at login, check the device clock of the phone running the authenticator — the login screen's error hint says the same — and remove duplicate Q Proxy entries from the app before trying again.
+
+Disabling 2FA later (Settings → Security → *Disable two-factor*) requires a confirmation click and returns login to password-only.
 
 ## 5. Subscriptions
 
@@ -258,6 +286,8 @@ Do not set `type=grpc`, `type=xhttp`, or `security=reality` on worker nodes — 
 | # | Symptom | Cause | Fix |
 |---|---------|-------|-----|
 | 1 | **Bad password / 401 on panel** — login fails, no hint which field | PBKDF2 constant-time check (`src/auth/password.ts`); login throttle 5 fails/15 min → 403 | Wait 15 min or clear KV `rl:*`; verify password has letter+digit; check cookie `q_session` not blocked; `X-Q-Panel: 1` header present on PUTs |
+| 1b | **403 PASSWORD_CHANGE_REQUIRED on panel APIs** | The deploy-script bootstrap password is still in force — the panel is locked until a personal password is set | Settings → Security → change the passphrase (§3.1); the flag clears on success |
+| 1c | **409 SETUP_WINDOW_EXPIRED on the setup card** | The panel was seeded but never claimed, more than 24 h ago | Delete KV `qproxy:settings` and revisit the worker URL to re-seed with a fresh window (§3.2) |
 | 2 | **Early data rejected / WS 1008** | `Sec-WebSocket-Protocol` payload >8 KB or not base64url, or SS path with early data (early data disabled for SS, `src/types/node.ts` invariant) | Cap at `earlyDataMaxBytes: 2048` (`src/types/settings.ts:195`), ensure `ed=2048` in URI (`?ed=2048`), use dedicated `/ss/<suffix>` path (`src/core/routes.ts:11`) |
 | 3 | **Fragment sub empty / plain ports in fragment** | `fragment.mode: "off"` disables fragment family; fragment forces TLS only, excludes CDN hosts (`src/types/node.ts:358`) | Set `fragment.mode` to `low`/`medium`/`high`/`severe`; check `tlsPorts` includes 443; disable `cdn.enabled` for fragment |
 | 4 | **Camouflage shows 500 on valid path** | Wrong `securePath` segment (case-sensitive), unmatched route, or internal error all return identical fake 1101 HTML (`src/handlers/camouflage.ts`) | Copy exact `/{securePath}/panel` URL from KV `qproxy:settings`; check `GET /robots.txt` returns `Disallow: /`; never guess — rotate path via Settings if leaked |
@@ -335,6 +365,7 @@ Fragment forces TLS ports and excludes CDN hosts (src/types/node.ts). Use ?mode=
 - Store trojanPassword / ssPassword / UUIDs only in KV — never commit wrangler.toml with secrets. Mask in any diagnostic output.
 - Enable camouflage.mode: static (default) so probes get fake 1101 HTML 500, not 404 fingerprints (src/handlers/camouflage.ts). /robots.txt always Disallow.
 - killSwitch is instant containment — no redeploy needed (src/core/router.ts). Panel stays live.
+- Replace the deploy-script bootstrap password (`qproxy-XXXXXXXX`) with a personal one immediately after first login — the panel refuses every other API until you do (§3.1).
 - Password stored PBKDF2-SHA256 >=100k iterations + 16-byte salt; setup race-guarded.
 
 ## 10. Updating
@@ -417,7 +448,7 @@ GET /{sp}/my-ip (src/handlers/myip.ts) performs two server-side fetches: CF-fron
 
 ## 20. End-to-End Smoke Test
 
-1. Deploy (path A or B) -> open /{sp}/panel -> complete wizard -> login.
+1. Deploy (path A or B) -> open /{sp}/panel -> complete setup (§3) -> login (and clear the bootstrap flag if the deploy script set the password, §3.1).
 2. Settings -> verify hostnameOverride empty, tlsPorts defaults present.
 3. Home -> copy ?target=base64 URL -> import in v2rayNG -> verify 4 protocol lines decoded.
 4. Open ?target=clash URL in browser with clash UA -> verify YAML parses in mihomo strict.

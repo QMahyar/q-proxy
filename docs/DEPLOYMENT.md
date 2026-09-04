@@ -53,7 +53,7 @@ npm run deploy         # → node scripts/deploy-direct.mjs
 # or: CLOUDFLARE_API_TOKEN=xxx npm run deploy
 ```
 
-Uses the same direct-API flow as Way 2 but from your local `dist/q-proxy.js` if present (otherwise downloads from Releases → default-branch raw). Creates/reuses KV `q-proxy-QPROXY_KV`, creates/reuses D1 database `q-proxy` and applies `migrations/0001_init.sql`, uploads Worker with KV + D1 bindings, waits 2s for KV eventual consistency, seeds `/`, reads `securePath`, optionally sets password via `POST /<sp>/api/auth/setup`, prints Panel URL. Supports `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_API_KEY` + `CLOUDFLARE_EMAIL` env vars (API tokens need Workers Scripts:Edit + Workers KV Storage:Edit + D1:Edit). Default branch is auto-detected (API → master → main). If D1 setup fails the deploy continues KV-only with a warning — the worker falls back to KV until D1 is configured.
+Uses the same direct-API flow as Way 2 but from your local `dist/q-proxy.js` if present (otherwise downloads from Releases → default-branch raw). Creates/reuses KV `q-proxy-QPROXY_KV`, creates/reuses D1 database `q-proxy` and applies `migrations/0001_init.sql`, uploads Worker with KV + D1 bindings, polls the freshly seeded worker (KV eventual consistency), seeds `/`, reads `securePath`, then sets the password via `POST /<sp>/api/auth/setup` — a generated `qproxy-XXXXXXXX` bootstrap password when neither `--password` nor `QPROXY_PASSWORD` is provided, printed exactly once (see [Password handoff](#password-handoff)). Supports `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_API_KEY` + `CLOUDFLARE_EMAIL` env vars (API tokens need Workers Scripts:Edit + Workers KV Storage:Edit + D1:Edit). Default branch is auto-detected (API → master → main). If D1 setup fails the deploy continues KV-only with a warning — the worker falls back to KV until D1 is configured; a failed password handoff exits 1.
 
 ### `npm run deploy:pages` — Cloudflare Pages Advanced Mode
 
@@ -117,7 +117,20 @@ Re-applying is safe (`CREATE TABLE IF NOT EXISTS`). On first boot with D1 bound,
 
 ## KV propagation
 
-All deploy paths wait **2s after seeding `https://<worker>/`** before reading `qproxy:settings` — KV is eventually consistent. The 2s value is unified across `scripts/deploy-direct.mjs` (was 1.5s), `scripts/deploy.sh` and `scripts/deploy.ps1` (`sleep 2` / `Start-Sleep -Seconds 2`). If `securePath` still reads empty, retry after a few seconds or read via `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV --remote`.
+All deploy paths handle KV eventual consistency after seeding: the shell one-liners (`scripts/deploy.sh`, `scripts/deploy.ps1`) keep a fixed 2 s wait (`sleep 2` / `Start-Sleep -Seconds 2`), while `scripts/deploy-direct.mjs` polls the freshly seeded worker until it responds (see [Password handoff](#password-handoff)). If `securePath` still reads empty, retry after a few seconds or read via `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV --remote`.
+
+## Password handoff
+
+`npm run deploy` / `node scripts/deploy-direct.mjs` owns the first-login flow:
+
+1. **Generation** — when neither `--password` nor `QPROXY_PASSWORD` is provided, the script generates a strong password in the `qproxy-XXXXXXXX` form (8 random characters); an explicit value is used verbatim.
+2. **Polling** — after upload + seed, the script polls the worker until it responds (KV eventual consistency) instead of making a single fixed-delay attempt.
+3. **One-time print** — the generated password is printed to the terminal **exactly once** as part of the deploy summary and is never stored or printed again. Copy it immediately.
+4. **Setup** — the password is set via `POST /<sp>/api/auth/setup` (with the `X-Q-Panel: 1` CSRF header). On failure the deploy **exits 1** — a failed handoff is an error, not a warning.
+
+The printed password is a *bootstrap* password: the first login works, then the panel requires choosing a personal password before any other action — everything else answers `403 PASSWORD_CHANGE_REQUIRED` (see [User Guide §3.1](USER_GUIDE.md)). Changing the password in Settings → Security clears the flag and unlocks the panel.
+
+Paste-style deploys (dashboard, Pages, plain `wrangler deploy`) skip this flow entirely: the login page shows the setup card, which stays open for **24 h** after the first seed; after that it answers `409 SETUP_WINDOW_EXPIRED`, and the recovery is deleting the `qproxy:settings` KV key and re-seeding (fresh 24 h window).
 
 ## Troubleshooting
 
