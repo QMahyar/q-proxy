@@ -2,6 +2,7 @@ import type { Env } from "../types/env";
 import type { RouteHandler } from "../types/context";
 import { ForbiddenError, RateLimitedError, UnauthorizedError } from "../core/errors";
 import { getSessionFloor, verifySession } from "./session";
+import { cidrContains } from "../utils/net";
 import { bytesToHex } from "../utils/bytes";
 
 const COOKIE_RE = /(?:^|;\s*)q_session=([^;\s]+)/;
@@ -29,6 +30,26 @@ export function getSession(req: Request): string | null {
   }
 }
 
+export function isIpAllowlisted(ip: string, allowlist: readonly string[]): boolean {
+  if (allowlist.length === 0) return true;
+  const candidate = ip.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (candidate.length === 0) return false;
+  for (const raw of allowlist) {
+    if (typeof raw !== "string") continue;
+    const entry = raw.trim();
+    if (entry.length === 0) continue;
+    if (entry.includes("/")) {
+      const slash = entry.indexOf("/");
+      if (entry.indexOf("/", slash + 1) !== -1) continue;
+      if (!/^\d+$/.test(entry.slice(slash + 1).trim())) continue;
+      if (cidrContains(candidate, entry)) return true;
+      continue;
+    }
+    if (candidate === entry.toLowerCase().replace(/^\[|\]$/g, "")) return true;
+  }
+  return false;
+}
+
 export function requireAuth(handler: RouteHandler): RouteHandler {
   return async (req, env, s) => {
     const raw = getSession(req);
@@ -40,6 +61,8 @@ export function requireAuth(handler: RouteHandler): RouteHandler {
     }
     const session = raw !== null ? await verifySession(raw, s.sessionSecret, floor) : null;
     if (session === null) throw new UnauthorizedError();
+    if (!isIpAllowlisted(clientIp(req), s.allowedIps ?? []))
+      throw new ForbiddenError("client ip is not allowlisted for panel access");
     return handler(req, env, s);
   };
 }

@@ -199,3 +199,24 @@ describe("totp settings", () => {
     }
   });
 });
+
+describe("allowedIps", () => {
+  it("declares allowedIps as a custom list defaulting to allow-all", () => {
+    const row = SETTING_FIELD_DESCRIPTORS.find((d) => d.path === "allowedIps");
+    expect(row).toBeDefined();
+    expect(row!.spec).toEqual({ kind: "custom" });
+    expect(DEFAULT_SETTINGS.allowedIps).toEqual([]);
+  });
+
+  it("binds the allowlist editor in the panel with i18n in both languages", () => {
+    const { dict, fields } = buildPanelRegistry();
+    expect(flPathsOf(fields)).toContain("allowedIps");
+    for (const key of [
+      "security.allowlist.label",
+      "security.allowlist.hint",
+    ]) {
+      expect(dict.en[key]).toBeTruthy();
+      expect(dict.fa[key]).toBeTruthy();
+    }
+  });
+});

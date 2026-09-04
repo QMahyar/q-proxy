@@ -110,6 +110,7 @@ export const SETTING_FIELD_DESCRIPTORS: readonly SettingFieldDescriptor[] = [
   { path: "remoteSubUrls", spec: { kind: "urlList", maxItems: 16 } },
   { path: "sourceUrls", spec: { kind: "urlList", maxItems: 16 } },
   { path: "killSwitch", spec: { kind: "bool" } },
+  { path: "allowedIps", spec: { kind: "custom" } },
   { path: "speedtestIntercept", spec: { kind: "bool" } },
   { path: "camouflage.mode", spec: { kind: "enum", allowed: CAMOUFLAGE_MODES } },
   { path: "camouflage.url", spec: { kind: "custom" } },
