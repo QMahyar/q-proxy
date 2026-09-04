@@ -131,7 +131,7 @@ flowchart LR
     R --> DONE
 ```
 
-Implementation: `makeFailoverStrategy(settings, target)` builds candidates; `createEgressOpener(strategy, dialImpl?)` sequential-walks with a default dial that writes `firstPacket` eagerly. Zero-byte retry is triggered by `relay.ts`, not `egress.ts` itself.
+Implementation: `makeFailoverStrategy(settings, target)` builds candidates; `createEgressOpener(strategy, dialImpl?, opts?)` sequential-walks with a default dial that writes `firstPacket` eagerly. Walks are capped by a 15 s total dial budget (`TOTAL_DIAL_BUDGET_MS`, overridable via `EgressOpenerOptions.totalBudgetMs`) so hanging candidates can't stack N× per-dial timeouts. `openEgressWithSpeculativeDirect` starts the synchronously-known prefix dials (chain + direct) before proxyIP/NAT64 tail expansion finishes and reuses them in the opener; late sockets that lose the race are closed. Zero-byte retry is triggered by `relay.ts`, not `egress.ts` itself.
 
 ### 4.3 Emitter Pipeline
 
@@ -224,9 +224,9 @@ Handshake bounded: 16 KiB accumulated + 10 s timeout → WS close 1008. Reasons 
 
 ## 10. Settings Store (src/settings/)
 
-- store.ts: `loadSettings(env)` with 60 s isolate cache; `saveSettings` validates then deep-merges; `ensureInitialized` seeds securePath + UUIDs + sessionSecret once.
+- store.ts: `loadSettings(env)` with 60 s isolate cache; `saveSettings` validates then deep-merges; `ensureInitialized` seeds securePath + UUIDs + sessionSecret once. Stored blob carries a monotonic `rev` (bumped via a fresh KV read on every save, returned to callers); all four write paths (save/reset/import/killswitch) merge from `loadSettingsFresh`, not the isolate cache.
 - seed.ts: `randomHex(12)` securePath, `randomUUID()` for empty UUIDs, 24-char passwords.
-- validate.ts: full-schema validation → `{ok:false, fields}` map for 422 responses.
+- validate.ts: full-schema validation → `{ok:false, fields}` map for 422 responses. ECH server-name resolution is `resolveEchServerName(settings, sni)`: disabled ⇒ null, manual `echServerName` wins, else `echAuto` derives the domain-shaped SNI (warning string when unresolvable).
 - migrate.ts: pure stepwise migrations — see §5.
 
 ## 11. Observability
@@ -269,15 +269,15 @@ Cross-imports only via frozen symbols. Adding a file outside ownership requires 
 Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},fields?}`. Key endpoints (session unless noted):
 
 - `POST api/auth/login` `{password}` → sets `q_session`; `POST api/auth/setup` accepted only while password unset
-- `GET api/settings` → redacted view; `PUT api/settings` (CSRF) → `{saved:true}` or 422 `{fields}`; `POST api/settings/reset`
-- `GET api/settings/export` → secrets-stripped JSON; `POST api/settings/import`
+- `GET api/settings` → redacted view; `PUT api/settings` (CSRF) → `{saved:true, rev}` or 422 `{fields}`; `POST api/settings/reset` → `{saved:true, rev}`
+- `GET api/settings/export` → secrets-stripped JSON; `POST api/settings/import` → `{saved:true, rev, imported}`
 - `GET api/bootstrap` → `{settings, status, subUrls}` aggregate with ETag/304
-- `GET api/status`; `POST api/killswitch {enabled}`; `GET api/suburls`; `GET api/version/check`
+- `GET api/status`; `POST api/killswitch {enabled}` → `{killSwitch, rev}`; `GET api/suburls`; `GET api/version/check`
 - `ANY api/warp/{…}` → accounts/presets/amnezia sub-dispatch
 - `ANY api/users/{…}` → user CRUD + token regeneration
 - `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated)
 
-Method guards live in `dispatchApi`; `OPTIONS` on APIs → 405.
+Method guards live in the declarative `API_ROUTES` table in `src/core/router.ts` (`Record<ApiRouteName, {methods, auth: none|read|write, handler}>` + a 5-line dispatcher: method gate, then none⇒direct / read⇒authed / write⇒authed on GET else authedCsrf); `OPTIONS` on APIs → 405.
 
 Two validation tiers exist — pick by surface:
 
@@ -301,7 +301,7 @@ Both funnel into the same 422 envelope `{ok:false,error:{code:"VALIDATION"},fiel
 - Settings: 60 s isolate cache + KV `cacheTtl:60` + write-through with no-op skip — typical request ≤1 KV read.
 - Counters buffered 60 s / 32 connections; usage reads memoized 15 s.
 - Subscription responses edge-cached 60 s via Cache API, keyed by format+mode; WARP subs purged on account/preset/amnezia changes.
-- DoH resolver caches proxyIP A/AAAA/TXT expansions 10 min per isolate.
+- DoH resolver caches proxyIP A/AAAA/TXT expansions 10 min per isolate with LRU eviction (hits refresh recency; 256-entry cap).
 
 ## 19. Versioning
 
