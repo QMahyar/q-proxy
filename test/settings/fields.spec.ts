@@ -28,7 +28,7 @@ interface Dict {
 const VERSION_PATH = "version";
 const PSEUDO_UI_PATHS = ["__privateDoh"];
 const NON_REGISTRY_UI_PATHS = ["sourceUrls"];
-const API_MANAGED_PATHS = ["passwordHash", "passwordSalt", "sessionSecret"];
+const API_MANAGED_PATHS = ["passwordHash", "passwordSalt", "sessionSecret", "totp.enabled", "totp.secret", "totp.recoveryCodes"];
 
 function settingLeafPaths(value: unknown, prefix = ""): string[] {
   if (prefix.length > 0 && (value === null || typeof value !== "object" || Array.isArray(value))) {
@@ -148,6 +148,51 @@ describe("echAuto binding", () => {
       "protocols.ech.preview_manual",
       "protocols.ech.preview_auto",
       "protocols.ech.preview_off",
+    ]) {
+      expect(dict.en[key]).toBeTruthy();
+      expect(dict.fa[key]).toBeTruthy();
+    }
+  });
+});
+
+describe("totp settings", () => {
+  it("declares the totp block with locked-down defaults", () => {
+    expect(DEFAULT_SETTINGS.totp).toEqual({ enabled: false, secret: "", recoveryCodes: [] });
+    for (const path of ["totp.enabled", "totp.secret", "totp.recoveryCodes"]) {
+      expect(SETTING_FIELD_DESCRIPTORS.some((d) => d.path === path)).toBe(true);
+    }
+    expect(SETTING_FIELD_DESCRIPTORS.find((d) => d.path === "totp.enabled")!.spec).toEqual({ kind: "bool" });
+  });
+
+  it("keeps totp out of the generic panel registry behind the custom card", () => {
+    const { fields } = buildPanelRegistry();
+    const paths = flPathsOf(fields);
+    expect(paths).not.toContain("totp.enabled");
+    expect(paths).not.toContain("totp.secret");
+    expect(paths).not.toContain("totp.recoveryCodes");
+  });
+
+  it("registers every totp dictionary key in both languages", () => {
+    const { dict } = buildPanelRegistry();
+    for (const key of [
+      "totp.title",
+      "totp.desc",
+      "totp.status_hint",
+      "totp.setup",
+      "totp.step_secret",
+      "totp.secret_label",
+      "totp.show_qr",
+      "totp.step_verify",
+      "totp.code_label",
+      "totp.verify_enable",
+      "totp.step_backup",
+      "totp.recovery_title",
+      "totp.disable",
+      "totp.confirm_disable",
+      "totp.confirm_disable_body",
+      "totp.wrong_code",
+      "totp.enabled_ok",
+      "totp.disabled_ok",
     ]) {
       expect(dict.en[key]).toBeTruthy();
       expect(dict.fa[key]).toBeTruthy();

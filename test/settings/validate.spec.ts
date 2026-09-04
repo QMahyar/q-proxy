@@ -484,3 +484,55 @@ describe("resolveEchServerName", () => {
     });
   });
 });
+
+describe("totp settings block", () => {
+  const SECRET = "JBSWY3DPEHPK3PXP";
+  const DIGEST = "ab".repeat(32);
+
+  it("defaults to disabled with no secret or codes", () => {
+    const d = validateSettings({});
+    expect(d.ok).toBe(true);
+    if (d.ok) expect(d.value.totp).toEqual({ enabled: false, secret: "", recoveryCodes: [] });
+  });
+
+  it("accepts a full valid totp patch and normalizes it", () => {
+    const result = validateSettings({
+      totp: { enabled: true, secret: "jbsw y3dp-ehpk 3pxp", recoveryCodes: [DIGEST.toUpperCase(), DIGEST] },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.totp).toEqual({ enabled: true, secret: SECRET, recoveryCodes: [DIGEST] });
+  });
+
+  it("requires a secret when enabling", () => {
+    expect(fieldsOf({ totp: { enabled: true } })["totp.secret"]).toBeTruthy();
+    expect(fieldsOf({ totp: { enabled: true, secret: "" } })["totp.secret"]).toBeTruthy();
+    expect(validateSettings({ totp: { enabled: true, secret: SECRET } }).ok).toBe(true);
+  });
+
+  it("rejects malformed secrets", () => {
+    for (const secret of ["short", "JBSWY3DP", "JBSW!3DPEHPK3PXP", "JBSWY3DPEHPK3PX0", "JBSWY3DPEHPK3PX8", "JBSWY3DPEHPK3PX1"]) {
+      expect(fieldsOf({ totp: { secret } })["totp.secret"]).toBeTruthy();
+    }
+    expect(validateSettings({ totp: { secret: SECRET } }).ok).toBe(true);
+  });
+
+  it("validates recovery code shape strictly", () => {
+    expect(fieldsOf({ totp: { recoveryCodes: "nope" } })["totp.recoveryCodes"]).toBeTruthy();
+    expect(fieldsOf({ totp: { recoveryCodes: [42] } })["totp.recoveryCodes"]).toBeTruthy();
+    expect(fieldsOf({ totp: { recoveryCodes: ["xyz"] } })["totp.recoveryCodes"]).toBeTruthy();
+    expect(validateSettings({ totp: { recoveryCodes: ["AB".repeat(32)] } }).ok).toBe(true);
+    expect(fieldsOf({ totp: { recoveryCodes: Array.from({ length: 17 }, (_, i) => String(i).padStart(64, "0")) } })["totp.recoveryCodes"]).toBeTruthy();
+    expect(validateSettings({ totp: { recoveryCodes: [] } }).ok).toBe(true);
+  });
+
+  it("rejects non-object totp blocks and non-boolean flags", () => {
+    expect(fieldsOf({ totp: [1] }).totp).toBe("must be an object");
+    expect(fieldsOf({ totp: { enabled: "yes" } })["totp.enabled"]).toBeTruthy();
+  });
+
+  it("keeps totp out of the round-trip fixture", () => {
+    const result = validateSettings(makeTestSettings());
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual(makeTestSettings());
+  });
+});

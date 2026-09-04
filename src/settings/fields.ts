@@ -122,4 +122,7 @@ export const SETTING_FIELD_DESCRIPTORS: readonly SettingFieldDescriptor[] = [
   { path: "telegram.enabled", spec: { kind: "bool" } },
   { path: "telegram.botToken", spec: { kind: "custom" } },
   { path: "telegram.chatId", spec: { kind: "custom" } },
+  { path: "totp.enabled", spec: { kind: "bool" } },
+  { path: "totp.secret", spec: { kind: "custom" } },
+  { path: "totp.recoveryCodes", spec: { kind: "custom" } },
 ];
