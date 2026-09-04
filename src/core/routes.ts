@@ -1,4 +1,5 @@
 import type { Settings } from "../types/settings";
+import { isIpLiteral, parseHostPort } from "../utils/net";
 
 export type TunnelKind = "vless" | "vmess" | "trojan" | "ss";
 
@@ -126,6 +127,29 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
 }
 
 export function resolveHostname(s: Settings, url: URL): string {
-  void s;
+  if (typeof s !== "object" || s === null) return url.hostname;
+  const legacy = s as unknown as { hostnameOverride?: unknown; customDomains?: unknown; primaryCustomDomain?: unknown };
+  if (typeof legacy.hostnameOverride === "string" && legacy.hostnameOverride.trim().length > 0) {
+    return legacy.hostnameOverride.trim();
+  }
+  if (typeof legacy.primaryCustomDomain === "string" && legacy.primaryCustomDomain.trim().length > 0) {
+    return legacy.primaryCustomDomain.trim();
+  }
+  if (Array.isArray(legacy.customDomains)) {
+    for (const d of legacy.customDomains) {
+      if (typeof d === "string" && d.trim().length > 0) return d.trim();
+    }
+  }
+  const list = Array.isArray(s.addresses) ? s.addresses : [];
+  for (const a of list) {
+    if (typeof a !== "object" || a === null) continue;
+    if (a.enabled === false) continue;
+    const raw = typeof a.address === "string" ? a.address.trim() : "";
+    if (raw.length === 0) continue;
+    const hp = parseHostPort(raw, typeof a.port === "number" && a.port > 0 ? a.port : s.defaultPort);
+    if (hp === null || hp.host.length === 0) continue;
+    if (isIpLiteral(hp.host)) continue;
+    return hp.host.toLowerCase();
+  }
   return url.hostname;
 }

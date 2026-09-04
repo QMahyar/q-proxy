@@ -98,6 +98,41 @@ describe("resolveHostname", () => {
     expect(resolveHostname(makeTestSettings(), url)).toBe("worker.example.com");
     expect(resolveHostname(makeTestSettings({}), new URL("https://alt.example.net/sub"))).toBe("alt.example.net");
   });
+
+  it("prefers the first configured hostname over the request host", () => {
+    const s = makeTestSettings({ addresses: [{ address: "custom.example.com" }] });
+    expect(resolveHostname(s, new URL("https://worker.example.com/sub"))).toBe("custom.example.com");
+  });
+
+  it("skips disabled entries and IP literals", () => {
+    const s = makeTestSettings({
+      addresses: [
+        { address: "1.2.3.4" },
+        { address: "standby.example.net", enabled: false },
+        { address: "primary.example.org" },
+      ],
+    });
+    expect(resolveHostname(s, new URL("https://worker.example.com/sub"))).toBe("primary.example.org");
+  });
+
+  it("falls back to the request host when no hostname is configured", () => {
+    const onlyIp = makeTestSettings({ addresses: [{ address: "1.2.3.4" }] });
+    expect(resolveHostname(onlyIp, new URL("https://worker.example.com/sub"))).toBe("worker.example.com");
+    const emptyAddr = makeTestSettings({ addresses: [{ address: "  " }] });
+    expect(resolveHostname(emptyAddr, new URL("https://worker.example.com/sub"))).toBe("worker.example.com");
+  });
+
+  it("honors legacy hostnameOverride over addresses and request host", () => {
+    const s = makeTestSettings({ addresses: [{ address: "custom.example.com" }] }) as unknown as Record<string, unknown>;
+    s.hostnameOverride = "override.example.net";
+    expect(resolveHostname(s as never, new URL("https://worker.example.com/sub"))).toBe("override.example.net");
+  });
+
+  it("honors legacy customDomains over addresses and request host", () => {
+    const s = makeTestSettings({ addresses: [{ address: "custom.example.com" }] }) as unknown as Record<string, unknown>;
+    s.customDomains = ["legacy.example.org"];
+    expect(resolveHostname(s as never, new URL("https://worker.example.com/sub"))).toBe("legacy.example.org");
+  });
 });
 
 const UUID = "12345678-1234-4234-8234-123456789abc";
