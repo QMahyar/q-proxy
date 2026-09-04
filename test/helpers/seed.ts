@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { invalidateSettingsCache } from "../../src/settings/store";
 import { SESSION_FLOOR_KEY, clearSessionFloorCache } from "../../src/auth/session";
-import { clearLoginFailures, clientIp } from "../../src/auth/guard";
+import { LOGIN_FAIL_PREFIX, clearLoginFailures, clientIp } from "../../src/auth/guard";
 import { clearRemoteSubCache } from "../../src/subscription/merge";
 import { clearSaltRegistry } from "../../src/protocols/shadowsocks";
 import { clearVmessReplayCache } from "../../src/protocols/vmess";
@@ -19,6 +19,8 @@ export async function seed(
 ): Promise<void> {
   await kv.delete(SETTINGS_KEY);
   await kv.delete(SESSION_FLOOR_KEY);
+  const listed = await kv.list({ prefix: LOGIN_FAIL_PREFIX });
+  for (const key of listed.keys) await kv.delete(key.name);
   await kv.put(
     SETTINGS_KEY,
     JSON.stringify({
