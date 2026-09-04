@@ -23,6 +23,8 @@ const PRESERVED_FIELDS = [
   "vmessPath",
   "trojanPath",
   "ssPath",
+  "passwordIsBootstrap",
+  "seededAt",
 ] as const satisfies readonly (keyof Settings)[];
 
 export function publicSettingsView(s: Settings): PublicSettings & { hasPassword: boolean } {
@@ -58,7 +60,7 @@ function changedTopLevelKeys(before: Settings, after: Settings): string[] {
 
 export const handleSaveSettings: RouteHandler = async (req, _env, s) => {
   const body = await readJsonObject(req);
-  for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath"]) delete (body as Record<string, unknown>)[k];
+  for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "passwordIsBootstrap", "seededAt"]) delete (body as Record<string, unknown>)[k];
   const fresh = await loadSettingsFresh(_env);
   const merged = deepMergeDefaults(fresh, body);
   void s;
