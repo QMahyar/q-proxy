@@ -408,3 +408,108 @@ describe("generateNodes ssDirect marking", () => {
     expect(nodes.filter((n) => n.kind !== "ss").every((n) => !("direct" in n))).toBe(true);
   });
 });
+
+describe("generateNodes remote nodes (admin scope)", () => {
+  const PBK = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
+
+  function remoteSettings(): Settings {
+    const s = settings();
+    s.remoteNodes = [
+      {
+        kind: "reality",
+        name: "VPS Reality",
+        address: "203.0.113.10",
+        port: 443,
+        uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
+        sni: "www.microsoft.com",
+        pbk: PBK,
+        sid: "6ba85179",
+        flow: "xtls-rprx-vision",
+        spx: "/",
+        fp: "chrome",
+      },
+      {
+        kind: "hy2",
+        name: "VPS Hy2",
+        address: "203.0.113.11",
+        port: 4443,
+        password: "hy2secret",
+        sni: "example.com",
+        obfs: "",
+        obfsPassword: "",
+      },
+    ];
+    return s;
+  }
+
+  it("appends configured remote nodes after worker nodes", () => {
+    const nodes = generateNodes(ctx(remoteSettings()));
+    expect(nodes.length).toBe(6);
+    const reality = nodes.find((n) => n.kind === "reality")!;
+    expect(reality.name).toBe("VPS Reality");
+    expect(reality.address).toBe("203.0.113.10");
+    expect(reality.port).toBe(443);
+    if (reality.kind !== "reality") throw new Error("unreachable");
+    expect(reality.uuid).toBe("d342d11e-d424-4583-b36e-524ab1f0afa4");
+    expect(reality.pbk).toBe(PBK);
+    expect(reality.sid).toBe("6ba85179");
+    expect(reality.variant).toBe("normal");
+    const hy2 = nodes.find((n) => n.kind === "hy2")!;
+    expect(hy2.name).toBe("VPS Hy2");
+    if (hy2.kind !== "hy2") throw new Error("unreachable");
+    expect(hy2.password).toBe("hy2secret");
+    expect(hy2.variant).toBe("normal");
+  });
+
+  it("emits no remote nodes when remoteNodes is empty", () => {
+    const nodes = generateNodes(ctx(settings()));
+    expect(nodes.some((n) => n.kind === "reality" || n.kind === "hy2")).toBe(false);
+  });
+
+  it("dedupes remote names against worker node names", () => {
+    const s = remoteSettings();
+    s.remoteNodes = [
+      {
+        kind: "hy2",
+        name: "VPS Hy2",
+        address: "203.0.113.11",
+        port: 4443,
+        password: "a",
+        sni: "example.com",
+        obfs: "",
+        obfsPassword: "",
+      },
+      {
+        kind: "hy2",
+        name: "VPS Hy2",
+        address: "203.0.113.12",
+        port: 4443,
+        password: "b",
+        sni: "example.com",
+        obfs: "",
+        obfsPassword: "",
+      },
+    ];
+    const names = generateNodes(ctx(s))
+      .filter((n) => n.kind === "hy2")
+      .map((n) => n.name);
+    expect(names).toEqual(["VPS Hy2", "VPS Hy2 2"]);
+  });
+
+  it("counts remote nodes against maxNodesPerFormat", () => {
+    const s = remoteSettings();
+    s.maxNodesPerFormat = 5;
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.length).toBe(5);
+    expect(nodes.filter((n) => n.kind === "reality" || n.kind === "hy2")).toHaveLength(1);
+  });
+
+  it("keeps the address-composition guarantee: only worker hosts plus admin remoteNodes", () => {
+    const s = remoteSettings();
+    s.addresses = [{ address: "1.2.3.4", port: 2053 }];
+    const allowed = new Set(["1.2.3.4", "203.0.113.10", "203.0.113.11"]);
+    for (const n of generateNodes(ctx(s))) {
+      expect(allowed.has(n.address), `unexpected address ${n.address}`).toBe(true);
+    }
+  });
+});

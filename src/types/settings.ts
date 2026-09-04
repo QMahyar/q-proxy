@@ -47,6 +47,37 @@ export interface TelegramSettings {
   chatId: string;
 }
 
+export type RemoteNodeKind = "reality" | "hy2";
+
+export interface RemoteRealitySetting {
+  kind: "reality";
+  name: string;
+  address: string;
+  port: number;
+  uuid: string;
+  sni: string;
+  pbk: string;
+  sid: string;
+  flow: string;
+  spx: string;
+  fp: Fingerprint;
+}
+
+export interface RemoteHy2Setting {
+  kind: "hy2";
+  name: string;
+  address: string;
+  port: number;
+  password: string;
+  sni: string;
+  obfs: string;
+  obfsPassword: string;
+}
+
+export type RemoteNodeSetting = RemoteRealitySetting | RemoteHy2Setting;
+
+export const MAX_REMOTE_NODES = 20;
+
 export interface TotpSettings {
   enabled: boolean;
   secret: string;
@@ -112,6 +143,7 @@ export interface Settings {
   profileTitle: string;
   subUpdateIntervalHours: number;
   maxNodesPerFormat: number;
+  remoteNodes: RemoteNodeSetting[];
   remoteSubUrls: string[];
   sourceUrls: string[];
   killSwitch: boolean;
@@ -180,6 +212,7 @@ export const DEFAULT_SETTINGS: Settings = {
   profileTitle: "Q Proxy",
   subUpdateIntervalHours: 12,
   maxNodesPerFormat: 500,
+  remoteNodes: [],
   remoteSubUrls: [],
   sourceUrls: [],
   killSwitch: false,

@@ -1,6 +1,6 @@
 import type { NodeBuilderContext } from "../types/context";
-import type { NodeTag, ProxyNode, SSNode, TrojanNode, VMessNode, VlessNode } from "../types/node";
-import type { AddressSetting } from "../types/settings";
+import type { Hy2Node, NodeTag, ProxyNode, RealityNode, SSNode, TrojanNode, VMessNode, VlessNode } from "../types/node";
+import type { AddressSetting, RemoteNodeSetting } from "../types/settings";
 import { CF_PLAIN_PORTS, CF_TLS_PORTS, type Settings } from "../types/settings";
 import { fragmentQuery } from "./fragments";
 import { resolveEchServerName } from "./ech";
@@ -226,6 +226,51 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
   return list;
 }
 
+function toRemoteNode(r: RemoteNodeSetting): ProxyNode {
+  if (r.kind === "reality") {
+    return {
+      kind: "reality",
+      name: r.name,
+      address: r.address,
+      port: r.port,
+      security: "tls",
+      sni: r.sni,
+      host: r.sni,
+      path: "",
+      earlyData: 0,
+      fingerprint: r.fp,
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      uuid: r.uuid,
+      pbk: r.pbk,
+      sid: r.sid,
+      flow: r.flow,
+      spx: r.spx,
+    } satisfies RealityNode;
+  }
+  return {
+    kind: "hy2",
+    name: r.name,
+    address: r.address,
+    port: r.port,
+    security: "tls",
+    sni: r.sni,
+    host: r.sni,
+    path: "",
+    earlyData: 0,
+    fingerprint: null,
+    alpn: [],
+    ech: null,
+    variant: "normal",
+    tags: [],
+    password: r.password,
+    obfs: r.obfs,
+    obfsPassword: r.obfsPassword,
+  } satisfies Hy2Node;
+}
+
 export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
   const s = ctx.settings;
   const limit = Math.max(0, Math.floor(s.maxNodesPerFormat));
@@ -277,6 +322,15 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
       progressed = true;
     }
     if (!progressed) break;
+  }
+  for (const r of s.remoteNodes) {
+    if (out.length >= limit) break;
+    const raw = toRemoteNode(r);
+    let name = raw.name;
+    let k = 2;
+    while (usedNames.has(name)) name = `${raw.name} ${k++}`;
+    usedNames.add(name);
+    out.push(name === raw.name ? raw : { ...raw, name });
   }
   return out;
 }

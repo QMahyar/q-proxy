@@ -639,3 +639,126 @@ describe("allowedIps", () => {
     expect(fieldsOf({ allowedIps: [42] }).allowedIps).toBeTruthy();
   });
 });
+
+describe("remoteNodes", () => {
+  const PBK = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
+  const UUID = "d342d11e-d424-4583-b36e-524ab1f0afa4";
+
+  function reality(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      kind: "reality",
+      name: "VPS Reality",
+      address: "203.0.113.10",
+      port: 443,
+      uuid: UUID,
+      sni: "www.microsoft.com",
+      pbk: PBK,
+      sid: "6ba85179",
+      flow: "xtls-rprx-vision",
+      spx: "/",
+      fp: "chrome",
+      ...overrides,
+    };
+  }
+
+  function hy2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      kind: "hy2",
+      name: "VPS Hy2",
+      address: "203.0.113.11",
+      port: 4443,
+      password: "hy2secret",
+      sni: "example.com",
+      obfs: "",
+      obfsPassword: "",
+      ...overrides,
+    };
+  }
+
+  it("defaults to an empty list and accepts valid reality and hy2 entries", () => {
+    expect(DEFAULT_SETTINGS.remoteNodes).toEqual([]);
+    const result = validateSettings({ remoteNodes: [reality(), hy2()] });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.remoteNodes).toHaveLength(2);
+      expect(result.value.remoteNodes[0]).toMatchObject({ kind: "reality", name: "VPS Reality" });
+      expect(result.value.remoteNodes[1]).toMatchObject({ kind: "hy2", name: "VPS Hy2" });
+    }
+  });
+
+  it("fills reality defaults for flow, spx, fp and an empty sid", () => {
+    const { flow: _f, spx: _s, fp: _p, sid: _i, ...bare } = reality();
+    const result = validateSettings({ remoteNodes: [bare] });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.remoteNodes[0]).toMatchObject({
+        flow: "xtls-rprx-vision",
+        spx: "/",
+        fp: "chrome",
+        sid: "",
+      });
+    }
+  });
+
+  it("rejects non-array input and caps the list at 20 entries", () => {
+    expect(fieldsOf({ remoteNodes: "x" }).remoteNodes).toBeTruthy();
+    const many = Array.from({ length: 21 }, (_, i) => reality({ name: `R${i}` }));
+    expect(fieldsOf({ remoteNodes: many }).remoteNodes).toBeTruthy();
+    const max = Array.from({ length: 20 }, (_, i) => reality({ name: `R${i}` }));
+    expect(validateSettings({ remoteNodes: max }).ok).toBe(true);
+  });
+
+  it("rejects unknown kinds, non-object entries and bad names", () => {
+    expect(fieldsOf({ remoteNodes: [reality({ kind: "vless" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [42] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ name: "" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ name: "x".repeat(65) })] }).remoteNodes).toBeTruthy();
+  });
+
+  it("rejects bad addresses, ports and SSRF targets", () => {
+    expect(fieldsOf({ remoteNodes: [reality({ address: "" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ address: "not a host!!" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ port: 0 })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ port: 99999 })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ address: "127.0.0.1" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ address: "10.0.0.5" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ address: "localhost" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ sni: "" })] }).remoteNodes).toBeTruthy();
+    expect(validateSettings({ remoteNodes: [reality({ address: "vps.example.net", port: 8443 })] }).ok).toBe(true);
+    expect(validateSettings({ remoteNodes: [reality({ port: 2083 })] }).ok).toBe(true);
+  });
+
+  it("validates reality uuid, pbk, sid, flow, fp shapes", () => {
+    expect(fieldsOf({ remoteNodes: [reality({ uuid: "not-a-uuid" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ pbk: "!!!not-base64!!!" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ pbk: "aGk" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ sid: "xyz" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ sid: "123456789" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ flow: "bogus" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [reality({ fp: "ie6" })] }).remoteNodes).toBeTruthy();
+    expect(validateSettings({ remoteNodes: [reality({ sid: "", flow: "" })] }).ok).toBe(true);
+  });
+
+  it("validates hy2 password and obfs pairing", () => {
+    expect(fieldsOf({ remoteNodes: [hy2({ password: "" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [hy2({ obfs: "bogus" })] }).remoteNodes).toBeTruthy();
+    expect(fieldsOf({ remoteNodes: [hy2({ obfs: "salamander" })] }).remoteNodes).toBeTruthy();
+    expect(
+      validateSettings({ remoteNodes: [hy2({ obfs: "salamander", obfsPassword: "obfsecret" })] }).ok,
+    ).toBe(true);
+  });
+
+  it("drops unknown smuggled keys instead of storing them", () => {
+    const result = validateSettings({ remoteNodes: [reality({ privateKey: "topsecret" })] });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.remoteNodes[0]).not.toHaveProperty("privateKey");
+      expect(result.value.remoteNodes[0]).not.toHaveProperty("private_key");
+    }
+  });
+
+  it("fails the patch when any entry is invalid", () => {
+    const result = validateSettings({ remoteNodes: [reality({ uuid: "bad" }), hy2()] });
+    expect(result.ok).toBe(false);
+  });
+});

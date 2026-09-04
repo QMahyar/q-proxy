@@ -1,4 +1,4 @@
-import type { ProxyNode, SSNode, TrojanNode, VMessNode, VlessNode } from "../types/node";
+import type { ProxyNode, RealityNode, Hy2Node, SSNode, TrojanNode, VMessNode, VlessNode } from "../types/node";
 import { encodeBase64Url, encodeUtf8Base64 } from "../utils/base64";
 import { bracketIpv6 } from "../utils/net";
 
@@ -88,6 +88,30 @@ export function buildSSShareUri(node: SSNode): string {
   return `ss://${userinfo}@${authority(node.address, node.port)}/?plugin=${plugin}#${enc(node.name)}`;
 }
 
+export function buildVlessRealityUri(node: RealityNode): string {
+  const params = [
+    `encryption=none`,
+    `security=reality`,
+    `sni=${enc(node.sni ?? node.host)}`,
+    `fp=${enc(node.fingerprint ?? "chrome")}`,
+    `pbk=${enc(node.pbk)}`,
+    ...(node.sid.length > 0 ? [`sid=${enc(node.sid)}`] : []),
+    `type=tcp`,
+    ...(node.flow.length > 0 ? [`flow=${enc(node.flow)}`] : []),
+    ...(node.spx.length > 0 ? [`spx=${enc(node.spx)}`] : []),
+  ];
+  return `vless://${enc(node.uuid)}@${authority(node.address, node.port)}?${params.join("&")}#${enc(node.name)}`;
+}
+
+export function buildHy2Uri(node: Hy2Node): string {
+  const params = [
+    `sni=${enc(node.sni ?? node.host)}`,
+    ...(node.obfs.length > 0 ? [`obfs=${enc(node.obfs)}`] : []),
+    ...(node.obfsPassword.length > 0 ? [`obfs-password=${enc(node.obfsPassword)}`] : []),
+  ];
+  return `hysteria2://${enc(node.password)}@${authority(node.address, node.port)}?${params.join("&")}#${enc(node.name)}`;
+}
+
 export function buildShareUri(node: ProxyNode): string {
   switch (node.kind) {
     case "vless":
@@ -98,6 +122,10 @@ export function buildShareUri(node: ProxyNode): string {
       return buildTrojanShareUri(node);
     case "ss":
       return buildSSShareUri(node);
+    case "reality":
+      return buildVlessRealityUri(node);
+    case "hy2":
+      return buildHy2Uri(node);
   }
 }
 

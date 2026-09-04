@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emitSingBoxJson } from "../../../src/nodes/emitters/singbox-json";
 import type { EmitOptions } from "../../../src/nodes/emitters/registry";
-import type { ProxyNode, SSNode, TrojanNode, VlessNode, VMessNode } from "../../../src/types/node";
+import type { Hy2Node, ProxyNode, RealityNode, SSNode, TrojanNode, VlessNode, VMessNode } from "../../../src/types/node";
 
 const OPTS: EmitOptions = {
   remoteDns: "https://8.8.8.8/dns-query",
@@ -333,5 +333,103 @@ describe("emitSingBoxJson vision flow and direct-ss", () => {
 
   it("emits byte-identical legacy output when direct is false", () => {
     expect(emitSingBoxJson([{ ...ss(), direct: false }], OPTS)).toBe(emitSingBoxJson([ss()], OPTS));
+  });
+});
+
+describe("emitSingBoxJson remote nodes", () => {
+  const PBK = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
+
+  function reality(): RealityNode {
+    return {
+      kind: "reality",
+      name: "VPS Reality",
+      address: "203.0.113.10",
+      port: 443,
+      security: "tls",
+      sni: "www.microsoft.com",
+      host: "www.microsoft.com",
+      path: "",
+      earlyData: 0,
+      fingerprint: "chrome",
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
+      pbk: PBK,
+      sid: "6ba85179",
+      flow: "xtls-rprx-vision",
+      spx: "/",
+    };
+  }
+
+  function hy2(): Hy2Node {
+    return {
+      kind: "hy2",
+      name: "VPS Hy2",
+      address: "203.0.113.11",
+      port: 4443,
+      security: "tls",
+      sni: "example.com",
+      host: "example.com",
+      path: "",
+      earlyData: 0,
+      fingerprint: null,
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      password: "hy2secret",
+      obfs: "",
+      obfsPassword: "",
+    };
+  }
+
+  function outbounds(nodes: ProxyNode[]): Array<Record<string, unknown>> {
+    return (JSON.parse(emitSingBoxJson(nodes, OPTS)) as { outbounds: Array<Record<string, unknown>> }).outbounds;
+  }
+
+  it("emits a vless outbound with a reality tls block and tcp transport", () => {
+    const o = outbounds([reality()])[0]!;
+    expect(o).toMatchObject({
+      type: "vless",
+      tag: "VPS Reality",
+      server: "203.0.113.10",
+      server_port: 443,
+      uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
+      flow: "xtls-rprx-vision",
+      packet_encoding: "xudp",
+      transport: { type: "tcp" },
+    });
+    expect(o.tls).toMatchObject({
+      enabled: true,
+      server_name: "www.microsoft.com",
+      utls: { enabled: true, fingerprint: "chrome" },
+      reality: { enabled: true, public_key: PBK, short_id: "6ba85179" },
+    });
+  });
+
+  it("omits flow when empty but keeps the reality block", () => {
+    const o = outbounds([{ ...reality(), flow: "" }])[0]!;
+    expect("flow" in o).toBe(false);
+    expect((o.tls as Record<string, unknown>).reality).toBeTruthy();
+  });
+
+  it("emits a hysteria2 outbound with tls server_name", () => {
+    const o = outbounds([hy2()])[0]!;
+    expect(o).toMatchObject({
+      type: "hysteria2",
+      tag: "VPS Hy2",
+      server: "203.0.113.11",
+      server_port: 4443,
+      password: "hy2secret",
+    });
+    expect(o.tls).toMatchObject({ enabled: true, server_name: "example.com" });
+    expect("obfs" in o).toBe(false);
+  });
+
+  it("emits the salamander obfs object only when obfs is set", () => {
+    const o = outbounds([{ ...hy2(), obfs: "salamander", obfsPassword: "obf" }])[0]!;
+    expect(o.obfs).toEqual({ type: "salamander", password: "obf" });
   });
 });

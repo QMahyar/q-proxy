@@ -51,4 +51,28 @@ export interface SSNode extends NodeBase {
   direct?: boolean;
 }
 
-export type ProxyNode = VlessNode | VMessNode | TrojanNode | SSNode;
+export interface RealityNode extends NodeBase {
+  kind: "reality";
+  uuid: string;
+  pbk: string;
+  sid: string;
+  flow: string;
+  spx: string;
+}
+
+export interface Hy2Node extends NodeBase {
+  kind: "hy2";
+  password: string;
+  obfs: string;
+  obfsPassword: string;
+}
+
+export type ProxyNode = VlessNode | VMessNode | TrojanNode | SSNode | RealityNode | Hy2Node;
+
+export const REMOTE_NODE_KINDS = ["reality", "hy2"] as const;
+
+export type RemoteNodeKind = (typeof REMOTE_NODE_KINDS)[number];
+
+export function isRemoteNode(node: ProxyNode): node is RealityNode | Hy2Node {
+  return node.kind === "reality" || node.kind === "hy2";
+}

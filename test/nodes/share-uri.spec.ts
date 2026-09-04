@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { ProxyNode, SSNode, TrojanNode, VMessNode, VlessNode } from "../../src/types/node";
+import type { Hy2Node, ProxyNode, RealityNode, SSNode, TrojanNode, VMessNode, VlessNode } from "../../src/types/node";
 import {
+  buildHy2Uri,
   buildSSShareUri,
   buildShareUri,
   buildShareUris,
   buildTrojanShareUri,
   buildVMessShareUri,
+  buildVlessRealityUri,
   buildVlessShareUri,
 } from "../../src/nodes/share-uri";
 import { decodeBase64 } from "../../src/utils/base64";
@@ -348,5 +350,96 @@ describe("buildShareUri dispatch", () => {
     expect(uris[1]).toBe(buildShareUri(trojan));
     expect(uris[0]!.startsWith("vless://")).toBe(true);
     expect(uris[1]!.startsWith("trojan://")).toBe(true);
+  });
+});
+
+describe("buildVlessRealityUri", () => {
+  const PBK = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
+
+  function reality(): RealityNode {
+    return {
+      kind: "reality",
+      name: "Reality-Vision",
+      address: "203.0.113.10",
+      port: 443,
+      security: "tls",
+      sni: "www.microsoft.com",
+      host: "www.microsoft.com",
+      path: "",
+      earlyData: 0,
+      fingerprint: "chrome",
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
+      pbk: PBK,
+      sid: "6ba85179",
+      flow: "xtls-rprx-vision",
+      spx: "/",
+    };
+  }
+
+  it("matches the R4 reality grammar example exactly", () => {
+    expect(buildVlessRealityUri(reality())).toBe(
+      "vless://d342d11e-d424-4583-b36e-524ab1f0afa4@203.0.113.10:443" +
+        "?encryption=none&security=reality&sni=www.microsoft.com&fp=chrome" +
+        `&pbk=${PBK}&sid=6ba85179&type=tcp&flow=xtls-rprx-vision&spx=%2F#Reality-Vision`,
+    );
+  });
+
+  it("omits sid and flow when empty but keeps spx", () => {
+    const uri = buildVlessRealityUri({ ...reality(), sid: "", flow: "" });
+    expect(uri).not.toContain("sid=");
+    expect(uri).not.toContain("flow=");
+    expect(uri).toContain("spx=%2F");
+    expect(uri).toContain("security=reality");
+    expect(uri).toContain("type=tcp");
+  });
+
+  it("brackets ipv6 hosts", () => {
+    expect(buildVlessRealityUri({ ...reality(), address: "2001:db8::1", name: "V6" })).toContain(
+      "@[2001:db8::1]:443?",
+    );
+  });
+});
+
+describe("buildHy2Uri", () => {
+  function hy2(): Hy2Node {
+    return {
+      kind: "hy2",
+      name: "HY2",
+      address: "203.0.113.11",
+      port: 4443,
+      security: "tls",
+      sni: "example.com",
+      host: "example.com",
+      path: "",
+      earlyData: 0,
+      fingerprint: null,
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      password: "hy2secret",
+      obfs: "",
+      obfsPassword: "",
+    };
+  }
+
+  it("emits the de-facto hysteria2 grammar", () => {
+    expect(buildHy2Uri(hy2())).toBe("hysteria2://hy2secret@203.0.113.11:4443?sni=example.com#HY2");
+  });
+
+  it("appends obfs params only when set and percent-encodes the password", () => {
+    const uri = buildHy2Uri({ ...hy2(), password: "p@ss w:rd", obfs: "salamander", obfsPassword: "obf" });
+    expect(uri).toBe(
+      "hysteria2://p%40ss%20w%3Ard@203.0.113.11:4443?sni=example.com&obfs=salamander&obfs-password=obf#HY2",
+    );
+  });
+
+  it("routes reality and hy2 kinds through buildShareUri dispatch", () => {
+    const nodes: ProxyNode[] = [hy2()];
+    expect(buildShareUris(nodes)[0]).toBe(buildHy2Uri(hy2()));
   });
 });
