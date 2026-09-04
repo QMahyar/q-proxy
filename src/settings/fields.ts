@@ -79,6 +79,7 @@ export const SETTING_FIELD_DESCRIPTORS: readonly SettingFieldDescriptor[] = [
   { path: "fingerprint", spec: { kind: "enum", allowed: FINGERPRINTS } },
   { path: "randomizeSniCase", spec: { kind: "bool" } },
   { path: "echEnabled", spec: { kind: "bool" } },
+  { path: "echAuto", spec: { kind: "bool" } },
   { path: "echServerName", spec: { kind: "custom" } },
   { path: "alpn", spec: { kind: "custom" } },
   { path: "fragment.mode", spec: { kind: "enum", allowed: FRAGMENT_MODES } },
