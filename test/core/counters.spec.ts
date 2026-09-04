@@ -7,6 +7,8 @@ interface StoredCounters {
   day: string;
   requestsToday: number;
   requestsTotal: number;
+  bytesUpTotal?: number;
+  bytesDownTotal?: number;
 }
 
 type CountersModule = typeof import("../../src/core/counters");
@@ -221,5 +223,80 @@ describe("KV failure resilience", () => {
     kv.getFails = true;
     await expect(readUsage(env)).rejects.toThrow("kv down");
     kv.getFails = false;
+  });
+});
+
+describe("byte accounting", () => {
+  it("flushes accumulated byte deltas alongside the request counts", async () => {
+    const { readUsage, recordConnection } = await loadCounters();
+    const kv = new MockKV();
+    const env = kv.asEnv() as never;
+    for (let i = 0; i < 31; i++) await recordConnection(env, { bytesUp: 100, bytesDown: 1000 });
+    expect(kv.puts).toEqual([]);
+    await recordConnection(env, { bytesUp: 100, bytesDown: 1000 });
+    expect(kv.puts.length).toBe(1);
+    expect(kv.lastPut()).toMatchObject({
+      requestsToday: 32,
+      requestsTotal: 32,
+      bytesUpTotal: 3200,
+      bytesDownTotal: 32000,
+    });
+    const usage = await readUsage(env);
+    expect(usage.bytesUpTotal).toBe(3200);
+    expect(usage.bytesDownTotal).toBe(32000);
+  });
+
+  it("merges unflushed byte deltas into usage reads", async () => {
+    const { readUsage, recordConnection } = await loadCounters();
+    const kv = new MockKV();
+    const env = kv.asEnv() as never;
+    kv.seedStored({ day: dayKeyUtc(), requestsToday: 1, requestsTotal: 1, bytesUpTotal: 50, bytesDownTotal: 60 });
+    await readUsage(env);
+    await recordConnection(env, { bytesUp: 5, bytesDown: 6 });
+    const usage = await readUsage(env);
+    expect(usage).toMatchObject({ requestsToday: 2, requestsTotal: 2, bytesUpTotal: 55, bytesDownTotal: 66 });
+  });
+
+  it("defaults missing byte fields to zero for rows written before accounting", async () => {
+    const { readUsage, recordConnection } = await loadCounters();
+    const kv = new MockKV();
+    const env = kv.asEnv() as never;
+    kv.seedStored({ day: dayKeyUtc(), requestsToday: 3, requestsTotal: 10 });
+    expect(await readUsage(env)).toMatchObject({
+      requestsToday: 3,
+      requestsTotal: 10,
+      bytesUpTotal: 0,
+      bytesDownTotal: 0,
+    });
+    await recordConnection(env);
+    const usage = await readUsage(env);
+    expect(usage).toMatchObject({ requestsToday: 4, requestsTotal: 11, bytesUpTotal: 0, bytesDownTotal: 0 });
+  });
+
+  it("preserves byte totals across the daily rollover", async () => {
+    const { readUsage } = await loadCounters();
+    const kv = new MockKV();
+    const env = kv.asEnv() as never;
+    kv.seedStored({ day: "2000-01-01", requestsToday: 5, requestsTotal: 10, bytesUpTotal: 70, bytesDownTotal: 80 });
+    const usage = await readUsage(env);
+    expect(usage.day).toBe(dayKeyUtc());
+    expect(usage.requestsToday).toBe(0);
+    expect(usage.requestsTotal).toBe(10);
+    expect(usage.bytesUpTotal).toBe(70);
+    expect(usage.bytesDownTotal).toBe(80);
+  });
+
+  it("flushes across midnight without resetting cumulative byte totals", async () => {
+    const { recordConnection } = await loadCounters();
+    const kv = new MockKV();
+    const env = kv.asEnv() as never;
+    kv.seedStored({ day: "2000-01-01", requestsToday: 9, requestsTotal: 9, bytesUpTotal: 7, bytesDownTotal: 8 });
+    for (let i = 0; i < 32; i++) await recordConnection(env, { bytesUp: 1, bytesDown: 2 });
+    const put = kv.lastPut();
+    expect(put.day).toBe(dayKeyUtc());
+    expect(put.requestsToday).toBe(32);
+    expect(put.requestsTotal).toBe(41);
+    expect(put.bytesUpTotal).toBe(39);
+    expect(put.bytesDownTotal).toBe(72);
   });
 });

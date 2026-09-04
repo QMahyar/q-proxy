@@ -419,3 +419,73 @@ describe("idle ceiling", () => {
     expect(sink.closedWith).toBe(1000);
   });
 });
+
+describe("byte accounting", () => {
+  it("counts accepted uplink bytes and delivered downlink bytes", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink);
+    expect(relay.bytesUp).toBe(0);
+    expect(relay.bytesDown).toBe(0);
+    const done = relay.run(establishedOf(sock.socket, 0));
+    relay.feedClient(utf8Encode("aaaa"));
+    relay.feedClient(new Uint8Array(10));
+    expect(relay.bytesUp).toBe(14);
+    sock.push(utf8Encode("hello"));
+    sock.push(new Uint8Array(7));
+    sock.closeRemote();
+    await done;
+    expect(relay.bytesDown).toBe(12);
+    expect(relay.bytesUp).toBe(14);
+    expect(sink.closedWith).toBe(1000);
+  });
+
+  it("counts raw client bytes even when the decode hook drops the frame", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink, { uplinkDecode: async () => null });
+    const done = relay.run(establishedOf(sock.socket, 0));
+    relay.feedClient(utf8Encode("dropped-frame"));
+    await vi.advanceTimersByTimeAsync(40);
+    expect(relay.bytesUp).toBe(13);
+    sock.closeRemote();
+    await done;
+    expect(sink.closedWith).toBe(1011);
+  });
+
+  it("stops counting uplink once the client half-closes", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink);
+    const done = relay.run(establishedOf(sock.socket, 0));
+    relay.feedClient(utf8Encode("kept"));
+    relay.clientClosed();
+    relay.feedClient(utf8Encode("dropped"));
+    await vi.advanceTimersByTimeAsync(60);
+    expect(relay.bytesUp).toBe(4);
+    sock.closeRemote();
+    await done;
+    expect(sink.closedWith).toBe(1000);
+  });
+
+  it("accumulates totals across the zero-byte failover swap", async () => {
+    const dead = manualSocket();
+    const healthy = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink, {
+      retry: () => {
+        healthy.push(utf8Encode("payload"));
+        healthy.closeRemote();
+        return Promise.resolve(establishedOf(healthy.socket, 1, "proxyip"));
+      },
+    });
+    const done = relay.run(establishedOf(dead.socket, 0));
+    relay.feedClient(utf8Encode("up-bytes"));
+    await vi.advanceTimersByTimeAsync(40);
+    dead.closeRemote();
+    await done;
+    expect(relay.bytesUp).toBe(8);
+    expect(relay.bytesDown).toBe(7);
+    expect(sink.closedWith).toBe(1000);
+  });
+});

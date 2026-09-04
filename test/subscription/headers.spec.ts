@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { subscriptionHeaders, throttleHeaders } from "../../src/subscription/headers";
+import { subscriptionHeaders, subscriptionUserinfo, throttleHeaders } from "../../src/subscription/headers";
 import type { ProxyNode } from "../../src/types/node";
 import type { UsageSnapshot } from "../../src/types/context";
 
@@ -103,5 +103,38 @@ describe("throttleHeaders", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("subscriptionUserinfo byte totals", () => {
+  it("reports real up/download when byte totals are available", () => {
+    expect(subscriptionUserinfo({ requestsTotal: 5, bytesUpTotal: 123, bytesDownTotal: 456 })).toBe(
+      "upload=123; download=456",
+    );
+  });
+
+  it("falls back to the requests estimate only when byte totals are zero", () => {
+    expect(subscriptionUserinfo({ requestsTotal: 5, bytesUpTotal: 0, bytesDownTotal: 0 })).toBe(
+      "upload=0; download=5242880",
+    );
+    expect(subscriptionUserinfo({ requestsTotal: 5 })).toBe("upload=0; download=5242880");
+  });
+
+  it("reports real download with zero upload when only downlink bytes exist", () => {
+    expect(subscriptionUserinfo({ requestsTotal: 5, bytesDownTotal: 456 })).toBe("upload=0; download=456");
+  });
+
+  it("appends expire alongside real byte totals", () => {
+    expect(subscriptionUserinfo({ requestsTotal: 5, bytesUpTotal: 123, bytesDownTotal: 456 }, 1893456000123)).toBe(
+      "upload=123; download=456; expire=1893456000",
+    );
+  });
+
+  it("forwards real byte totals through subscriptionHeaders", () => {
+    const h = subscriptionHeaders("base64", "T", nodes, { ...usage, bytesUpTotal: 10, bytesDownTotal: 20 }, {
+      updateIntervalHours: 1,
+      webPageUrl: "",
+    });
+    expect(h["Subscription-Userinfo"]).toBe("upload=10; download=20");
   });
 });
