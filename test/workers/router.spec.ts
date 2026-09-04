@@ -236,6 +236,101 @@ describe("router dispatch", () => {
       expect(res.status).toBe(401);
     });
 
+    it("enforces the dispatchApi method/auth matrix", async () => {
+      const getOnly = [
+        `${BASE}/api/status`,
+        `${BASE}/api/suburls`,
+        `${BASE}/api/bootstrap`,
+        `${BASE}/api/settings/export`,
+        `${BASE}/api/version/check`,
+      ];
+      for (const url of getOnly) {
+        const res = await SELF.fetch(url, post({}));
+        expect(res.status).toBe(405);
+        expect((await body(res)).error.code).toBe("METHOD");
+      }
+
+      let res = await SELF.fetch(`${BASE}/api/settings`, post({}));
+      expect(res.status).toBe(405);
+      expect((await body(res)).error.code).toBe("METHOD");
+
+      const postOnly = [
+        `${BASE}/api/killswitch`,
+        `${BASE}/api/settings/reset`,
+        `${BASE}/api/settings/import`,
+        `${BASE}/api/auth/login`,
+        `${BASE}/api/auth/logout`,
+        `${BASE}/api/auth/setup`,
+        `${BASE}/api/auth/password`,
+        `${BASE}/telegram/setup`,
+        `${BASE}/telegram/remove`,
+      ];
+      for (const url of postOnly) {
+        const rejected = await SELF.fetch(url);
+        expect(rejected.status).toBe(405);
+        expect((await body(rejected)).error.code).toBe("METHOD");
+      }
+
+      res = await SELF.fetch(`${BASE}/api/settings/save`);
+      expect(res.status).toBe(405);
+      expect((await body(res)).error.code).toBe("METHOD");
+
+      const cookieOnly = { Cookie: cookie };
+      const protectedGet = [
+        `${BASE}/api/status`,
+        `${BASE}/api/suburls`,
+        `${BASE}/api/bootstrap`,
+        `${BASE}/api/settings`,
+        `${BASE}/api/settings/export`,
+        `${BASE}/api/version/check`,
+        `${BASE}/api/users`,
+        `${BASE}/api/warp/presets`,
+      ];
+      for (const url of protectedGet) {
+        const unauth = await SELF.fetch(url);
+        expect(unauth.status).toBe(401);
+        expect((await body(unauth)).error.code).toBe("UNAUTHORIZED");
+      }
+
+      res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: false }));
+      expect(res.status).toBe(401);
+      expect((await body(res)).error.code).toBe("UNAUTHORIZED");
+
+      res = await SELF.fetch(`${BASE}/api/settings`, { headers: cookieOnly });
+      expect(res.status).toBe(200);
+      res = await SELF.fetch(`${BASE}/api/users`, { headers: cookieOnly });
+      expect(res.status).toBe(200);
+      res = await SELF.fetch(`${BASE}/api/warp/presets`, { headers: cookieOnly });
+      expect(res.status).toBe(200);
+
+      const csrfMissing: Array<{ url: string; init: RequestInit }> = [
+        { url: `${BASE}/api/settings/save`, init: put({ profileTitle: "Matrix Panel" }, cookieOnly) },
+        { url: `${BASE}/api/settings`, init: put({ profileTitle: "Matrix Panel" }, cookieOnly) },
+        { url: `${BASE}/api/killswitch`, init: post({ enabled: false }, cookieOnly) },
+        { url: `${BASE}/api/settings/reset`, init: post({}, cookieOnly) },
+        { url: `${BASE}/api/settings/import`, init: post({ settings: {} }, cookieOnly) },
+        { url: `${BASE}/api/users`, init: post({ name: "Matrix" }, cookieOnly) },
+        { url: `${BASE}/api/auth/password`, init: post({}, cookieOnly) },
+        { url: `${BASE}/telegram/setup`, init: post({}, cookieOnly) },
+        { url: `${BASE}/telegram/remove`, init: post({}, cookieOnly) },
+      ];
+      for (const { url, init } of csrfMissing) {
+        const forbidden = await SELF.fetch(url, init);
+        expect(forbidden.status).toBe(403);
+        expect((await body(forbidden)).error.code).toBe("FORBIDDEN");
+      }
+
+      res = await SELF.fetch(`${BASE}/api/settings/save`, put({ profileTitle: "Matrix Panel" }, csrfHeaders));
+      expect(res.status).toBe(200);
+      expect((await body(res)).data.saved).toBe(true);
+
+      res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: false }, csrfHeaders));
+      expect(res.status).toBe(200);
+
+      res = await SELF.fetch(`${BASE}/api/status`, { headers: cookieOnly });
+      expect(res.status).toBe(200);
+    });
+
     it("authorizes my-ip after setup and hides unknown paths behind camo-off 404s", async () => {
       let res = await SELF.fetch(`${BASE}/my-ip`, { headers: { Cookie: cookie } });
       expect(res.status).toBe(200);
