@@ -1,5 +1,8 @@
+// @ts-expect-error node builtin available in the unit (node) project only
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  D1_SCHEMA,
   MAX_USERS,
   USER_ACTIVITY_DEFAULT_DAYS,
   USER_ACTIVITY_MAX_DAYS,
@@ -325,6 +328,21 @@ describe("users store", () => {
 
   it("caps the directory at 50 users", () => {
     expect(MAX_USERS).toBe(50);
+  });
+
+  it("keeps the embedded d1 schema in sync with migrations/0001_init.sql", () => {
+    const sql = readFileSync("migrations/0001_init.sql", "utf8");
+    const norm = (s: string): string =>
+      s
+        .replace(/\r\n/g, "\n")
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0)
+        .join("\n");
+    expect(norm(D1_SCHEMA)).toBe(norm(sql));
+    for (const table of ["users", "user_totals", "user_usage", "user_activity", "counters", "audit_log", "meta"]) {
+      expect(D1_SCHEMA).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
+    }
   });
 
   it("hashes tokens to sha256 hex and round-trips via findUserByToken", async () => {

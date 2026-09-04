@@ -10,6 +10,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKER_NAME = "q-proxy";
 const KV_TITLE = "q-proxy-QPROXY_KV";
 const KV_BINDING = "QPROXY_KV";
+const D1_DB_NAME = "q-proxy";
+const D1_BINDING = "QPROXY_DB";
+const D1_MIGRATIONS_FILE = resolve(root, "migrations/0001_init.sql");
 const COMPAT_DATE = "2026-08-01";
 
 function ask(rl, q) {
@@ -123,17 +126,64 @@ async function getSubdomain(token, email, accountId) {
   }
 }
 
-async function uploadWorker(token, email, accountId, kvId, scriptContent) {
+async function getOrCreateD1(token, email, accountId) {
+  try {
+    const data = await cfFetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database`, token, email);
+    const existing = (data.result || []).find((db) => db.name === D1_DB_NAME);
+    if (existing) {
+      console.log(`D1 exists: ${existing.name} → ${existing.uuid}`);
+      return existing.uuid;
+    }
+  } catch {}
+  console.log(`Creating D1 database "${D1_DB_NAME}"...`);
+  const data = await cfFetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database`, token, email, {
+    method: "POST",
+    body: JSON.stringify({ name: D1_DB_NAME }),
+  });
+  console.log(`D1 created: ${data.result.uuid}`);
+  return data.result.uuid;
+}
+
+async function applyD1Migrations(token, email, accountId, dbId) {
+  const sql = readFileSync(D1_MIGRATIONS_FILE, "utf8");
+  if (!sql.includes("CREATE TABLE")) throw new Error(`Migration file looks invalid: ${D1_MIGRATIONS_FILE}`);
+  try {
+    await cfFetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${dbId}/query`, token, email, {
+      method: "POST",
+      body: JSON.stringify({ sql }),
+    });
+    console.log(`D1 migrations applied from migrations/0001_init.sql`);
+    return;
+  } catch (e) {
+    console.log(`Single-query migrate failed (${String(e.message).slice(0, 120)}), retrying as a batch...`);
+  }
+  const batch = sql
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => ({ sql: s }));
+  await cfFetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${dbId}/query`, token, email, {
+    method: "POST",
+    body: JSON.stringify(batch),
+  });
+  console.log(`D1 migrations applied from migrations/0001_init.sql (${batch.length} statements)`);
+}
+
+async function uploadWorker(token, email, accountId, kvId, scriptContent, d1Id) {
+  const bindings = [
+    {
+      type: "kv_namespace",
+      name: KV_BINDING,
+      namespace_id: kvId,
+    },
+  ];
+  if (d1Id) {
+    bindings.push({ type: "d1", name: D1_BINDING, id: d1Id });
+  }
   const metadata = {
     main_module: "q-proxy.js",
     compatibility_date: COMPAT_DATE,
-    bindings: [
-      {
-        type: "kv_namespace",
-        name: KV_BINDING,
-        namespace_id: kvId,
-      },
-    ],
+    bindings,
   };
 
   const form = new FormData();
@@ -226,6 +276,7 @@ function prefilledTokenUrl() {
   const perms = [
     { key: "workers_scripts", type: "edit" },
     { key: "workers_kv_storage", type: "edit" },
+    { key: "d1", type: "edit" },
   ];
   const encoded = encodeURIComponent(JSON.stringify(perms));
   return `https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=${encoded}&name=Q%20Proxy&accountId=*&zoneId=all`;
@@ -274,8 +325,9 @@ What it does:
   1. Asks for token (or reads env), detects Global vs Token
   2. Resolves account_id (auto via /accounts)
   3. Creates KV namespace QPROXY_KV (or reuses)
-  4. Uploads dist/q-proxy.js via direct CF API (no wrangler)
-  5. Fetches https://<worker>.workers.dev/ to seed, reads KV via API, prints Panel URL
+  4. Creates D1 database q-proxy (or reuses) + applies migrations/0001_init.sql
+  5. Uploads dist/q-proxy.js via direct CF API (no wrangler) with KV + D1 bindings
+  6. Fetches https://<worker>.workers.dev/ to seed, reads KV via API, prints Panel URL
 `);
     process.exit(0);
   }
@@ -294,7 +346,7 @@ What it does:
 
   if (!token) {
     console.log("\nNo API token found in env (CLOUDFLARE_API_TOKEN or CLOUDFLARE_API_KEY).");
-    console.log("Create a token with: Workers Scripts:Edit + Workers KV Storage:Edit");
+    console.log("Create a token with: Workers Scripts:Edit + Workers KV Storage:Edit + D1:Edit");
     const url = prefilledTokenUrl();
     console.log(`\nPre-filled token URL:\n  ${url}\n`);
     const openAns = await ask(rl, "Open browser to create token? [Y/n] ");
@@ -327,7 +379,9 @@ What it does:
   if (isDry) {
     console.log(`Account ID: ${accountId || "(would auto-detect)"}`);
     console.log(`\n[dry] Would create KV "${KV_TITLE}" in ${accountId || "<accountId>"}`);
-    console.log(`[dry] Would upload Worker "${WORKER_NAME}" with KV binding ${KV_BINDING}`);
+    console.log(`[dry] Would create D1 database "${D1_DB_NAME}" in ${accountId || "<accountId>"}`);
+    console.log(`[dry] Would apply ${D1_MIGRATIONS_FILE} via the D1 query API`);
+    console.log(`[dry] Would upload Worker "${WORKER_NAME}" with KV binding ${KV_BINDING} + D1 binding ${D1_BINDING}`);
     console.log(`[dry] Would fetch https://<subdomain>.workers.dev/ to seed and read securePath`);
     if (password) console.log(`[dry] Would set first password via POST /<sp>/api/auth/setup`);
     rl.close();
@@ -356,9 +410,19 @@ What it does:
   rl.close();
 
   const kvId = await getOrCreateKv(token, email, accountId);
+  let d1Id = "";
+  try {
+    d1Id = await getOrCreateD1(token, email, accountId);
+    await applyD1Migrations(token, email, accountId, d1Id);
+  } catch (e) {
+    console.warn(`D1 setup skipped: ${String(e.message).slice(0, 300)}`);
+    console.warn("Continuing without the D1 binding — the worker falls back to KV until D1 is configured.");
+    console.warn(`Create it later: npx wrangler d1 create ${D1_DB_NAME} && npx wrangler d1 migrations apply ${D1_DB_NAME} --remote`);
+    d1Id = "";
+  }
   const script = await getWorkerScript();
-  console.log(`\nUploading Worker "${WORKER_NAME}" (${Math.round(script.length / 1024)} KB) with KV ${kvId}...`);
-  await uploadWorker(token, email, accountId, kvId, script);
+  console.log(`\nUploading Worker "${WORKER_NAME}" (${Math.round(script.length / 1024)} KB) with KV ${kvId}${d1Id ? ` + D1 ${d1Id}` : " (no D1)"}...`);
+  await uploadWorker(token, email, accountId, kvId, script, d1Id);
   console.log("Worker uploaded");
 
   let subdomain = await getSubdomain(token, email, accountId);

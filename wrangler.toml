@@ -12,7 +12,14 @@ compatibility_date = "2026-08-01"
 [[kv_namespaces]]
 binding = "QPROXY_KV"
 id = "REPLACE_WITH_YOUR_KV_ID"
+
 # preview_id = "REPLACE_WITH_PREVIEW_KV_ID"  # optional, for wrangler dev --remote
+
+[[d1_databases]]
+binding = "QPROXY_DB"
+database_name = "q-proxy"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+migrations_dir = "migrations"
 
 [triggers]
 crons = ["0 8 * * *"]

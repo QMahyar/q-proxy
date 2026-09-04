@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SELF, env } from "cloudflare:test";
+import { SELF, env as cfEnv } from "cloudflare:test";
+import type { Env } from "../../src/types/env";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
 import { telegramWebhookSecret } from "../../src/handlers/api/telegram";
 import { clearUsersMemoForTests, clearUserTotalsForTests } from "../../src/users/store";
 import { seed, SETTINGS_KEY, testKv } from "../helpers/seed";
 
+const env: Env = cfEnv as unknown as Env;
 const kv = testKv(env);
 
 const SP = "routepath";
@@ -80,14 +82,23 @@ async function waitForEdgeCache(url: string, ms = 4000): Promise<void> {
   throw new Error(`edge cache never populated for ${url}`);
 }
 
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function waitForUsage(token: string, ms = 4000): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-  const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const hash = await sha256Hex(token);
   const perUserKey = `qproxy:user-usage:${today}:${hash}`;
   const legacyKey = `qproxy:user-usage:${today}`;
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
+    const row = await env.QPROXY_DB.prepare("SELECT hits FROM user_usage WHERE day = ? AND token_hash = ?")
+      .bind(today, hash)
+      .first<{ hits: number }>()
+      .catch(() => null);
+    if (row !== null && typeof row.hits === "number" && row.hits > 0) return;
     if ((await kv.get(perUserKey)) !== null) return;
     const rows = JSON.parse(((await kv.get(legacyKey)) as string | null) ?? "[]") as Array<{ token: string }>;
     if (rows.some((r) => r.token === token || r.token === hash)) return;
@@ -809,31 +820,37 @@ describe("router dispatch", () => {
     });
     expect(res.status).toBe(422);
 
-    const usersKey = "qproxy:users";
-    const directory = JSON.parse((await kv.get(usersKey)) as string) as unknown[];
-    directory.push(
-      {
-        id: "55555555-5555-4555-8555-555555555555",
-        name: "Old",
-        token: "33333333-3333-4333-8333-333333333333",
-        enabled: true,
-        expiresAt: Date.now() - 1000,
-        dailyReqLimit: null,
-        protocols: "all",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "66666666-6666-4666-8666-666666666666",
-        name: "Off",
-        token: "44444444-4444-4444-8444-444444444444",
-        enabled: false,
-        expiresAt: null,
-        dailyReqLimit: null,
-        protocols: ["ss"],
-        createdAt: new Date().toISOString(),
-      },
-    );
-    await kv.put(usersKey, JSON.stringify(directory));
+    const createdAt = new Date().toISOString();
+    await env.QPROXY_DB.batch([
+      env.QPROXY_DB.prepare(
+        "INSERT INTO users(id, name, token_hash, token_hint, enabled, expires_at, daily_req_limit, protocols, address_override, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).bind(
+        "55555555-5555-4555-8555-555555555555",
+        "Old",
+        await sha256Hex("33333333-3333-4333-8333-333333333333"),
+        "33333333…",
+        1,
+        Date.now() - 1000,
+        null,
+        '"all"',
+        null,
+        createdAt,
+      ),
+      env.QPROXY_DB.prepare(
+        "INSERT INTO users(id, name, token_hash, token_hint, enabled, expires_at, daily_req_limit, protocols, address_override, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).bind(
+        "66666666-6666-4666-8666-666666666666",
+        "Off",
+        await sha256Hex("44444444-4444-4444-8444-444444444444"),
+        "44444444…",
+        0,
+        null,
+        null,
+        '["ss"]',
+        null,
+        createdAt,
+      ),
+    ]);
     clearUsersMemoForTests();
 
     res = await SELF.fetch(`${BASE}/sub/u/33333333-3333-4333-8333-333333333333?target=base64`);
@@ -864,9 +881,12 @@ describe("router dispatch", () => {
     res = await SELF.fetch(`${BASE}/api/users/${user.id}`, put({ dailyReqLimit: 2 }, csrfHeaders));
     expect(res.status).toBe(200);
     const today = new Date().toISOString().slice(0, 10);
-    const usageDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(user.token));
-    const usageHash = [...new Uint8Array(usageDigest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-    await kv.put(`qproxy:user-usage:${today}:${usageHash}`, "2");
+    const usageHash = await sha256Hex(user.token as string);
+    await env.QPROXY_DB.prepare(
+      "INSERT INTO user_usage(day, token_hash, hits) VALUES(?, ?, ?) ON CONFLICT(day, token_hash) DO UPDATE SET hits = excluded.hits",
+    )
+      .bind(today, usageHash, 2)
+      .run();
     res = await SELF.fetch(`${BASE}/sub/u/${user.token}?target=surge`);
     expect(res.status).toBe(429);
     expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
