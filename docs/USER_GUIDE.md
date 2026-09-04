@@ -6,12 +6,12 @@
 
 | Requirement | Notes | Check |
 |-------------|-------|-------|
-| Cloudflare account | Free tier works; one KV namespace required | `npx wrangler whoami` |
+| Cloudflare account | Free tier works; one KV namespace + one D1 database required | `npx wrangler whoami` |
 | Node 20+ + npm | Only for wrangler path; dashboard paste needs no local toolchain | `node -v` |
 | Domain (optional) | Custom domains via Settings → routing; TLS/plain ports auto-paired | — |
 | Clients | v2rayNG / sing-box / Clash Meta / Surge / Loon / Shadowrocket | — |
 
-No runtime `dependencies` — `package.json:13` is `devDependencies` only. No D1, no Durable Objects.
+No runtime `dependencies` — `package.json:13` is `devDependencies` only. No Durable Objects. D1 holds write-hot state (users, quotas, counters, audit log); settings and the WARP store stay in KV.
 
 ## 2. Deploy
 
@@ -24,6 +24,7 @@ Full deployment guide with all seven paths — including Workers and Pages, dash
 | 1 | `npm run build` → verify `dist/q-proxy.js` exists (`scripts/build-single-file.mjs:15`) |
 | 2 | Cloudflare Dashboard → Workers & Pages → Create Worker → Edit Code → paste entire `dist/q-proxy.js` → Save |
 | 3 | Settings → Bindings → Add KV Namespace → variable `QPROXY_KV` → create + bind `qproxy` namespace |
+| 3b | Settings → Bindings → Add D1 → variable `QPROXY_DB` → create + bind database `q-proxy`, then apply `migrations/0001_init.sql` (database SQL console or `npx wrangler d1 migrations apply q-proxy --remote`) |
 | 4 | Deploy. Visit any worker URL once — this seeds settings into KV |
 | 5 | Read your secret path from KV key `qproxy:settings`, field `data.securePath` (dashboard binding viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV`) |
 | 6 | Open `https://<worker>.workers.dev/<securePath>/panel` → first-run wizard |
@@ -41,6 +42,11 @@ compatibility_date = "2026-08-01"
 [[kv_namespaces]]
 binding = "QPROXY_KV"
 id = "REPLACE_WITH_YOUR_KV_ID"
+[[d1_databases]]
+binding = "QPROXY_DB"
+database_name = "q-proxy"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+migrations_dir = "migrations"
 ```
 
 Automated:
@@ -49,10 +55,12 @@ Automated:
 npx wrangler login            # or export CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
 npm run build                 # → dist/q-proxy.js
 npx wrangler kv namespace create QPROXY_KV   # replace id in wrangler.toml
+npx wrangler d1 create q-proxy                # replace database_id in wrangler.toml
+npx wrangler d1 migrations apply q-proxy --remote   # one-time schema setup
 npx wrangler deploy
 ```
 
-Or skip wrangler entirely: `npm run deploy` uploads `dist/q-proxy.js` via the Cloudflare REST API and creates the KV namespace if missing.
+Or skip wrangler entirely: `npm run deploy` uploads `dist/q-proxy.js` via the Cloudflare REST API and creates the KV namespace and D1 database (plus schema) if missing.
 
 Manual:
 
@@ -355,7 +363,9 @@ Screenshot: *Panel QR modal with per-format tabs (base64/clash/singbox/surge/loo
 
 ## 15. Backup and Restore
 
-Settings live in KV qproxy:settings. To backup: authenticated GET /{sp}/api/settings -> save redacted JSON (passwordHash omitted). To restore: PUT /{sp}/api/settings with saved data. For full migration, copy wrangler.toml KV id and redeploy.
+Settings live in KV `qproxy:settings`. To backup: authenticated `GET /{sp}/api/settings` → save redacted JSON (passwordHash omitted). To restore: `PUT /{sp}/api/settings` with saved data. For full migration, copy wrangler.toml KV id and redeploy.
+
+Users, per-user quotas/activity, global counters, and the audit trail live in D1 (`q-proxy` database), not in that export. Back them up separately — dashboard D1 console or `npx wrangler d1 export q-proxy --remote --output backup.sql` — and point the new deploy at the same database (copy the `[[d1_databases]] database_id`, or restore the export into the new database). A settings-only restore on a fresh database starts with an empty user directory and zeroed counters.
 
 ## 16. Common Gotchas
 

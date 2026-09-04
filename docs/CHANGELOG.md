@@ -25,6 +25,9 @@
 - VLESS `xtls-rprx-vision` flow: the inbound negotiates vision from the handshake addons field (TCP only; UDP keeps the length-framed codec) and serves the body phase through a dedicated length-prefixed body codec (split-frame buffering, 64 KiB cap, never throws); new `vlessFlow` setting (default off) stamps the flow onto TLS VLESS nodes only — share URIs gain `flow=`, Clash/sing-box emit `flow` (surge/loon untouched).
 - Direct Shadowsocks mode: new `ssDirect` setting (default off) emits plain `ss://` URIs and Clash/sing-box nodes with no `v2ray-plugin` indirection, for clients that handle raw SS.
 - Transport roadmap decisions (docs only, no route changes): gRPC DEFERRED (no trailer/h2 APIs in the fetch handler), XHTTP DEFERRED as nearest-term candidate (gated on an Xray source pin + an edge full-duplex probe), REALITY termination ruled out permanently with a specified-but-parked remote-reference model (ADR-006/007/008, sequenced by ADR-009).
+- D1 persistence for write-hot state: new `QPROXY_DB` binding with `migrations/0001_init.sql` (`users`, `user_totals`, `user_usage`, `user_activity`, `counters`, `audit_log`, `meta`); users directory, per-user quota/activity/totals, global counters, and the audit trail now live in D1 with single-statement race-free UPSERTs. Settings blob, WARP store, and login-throttle/session/ratelimit keys stay on KV. Boot runs schema bootstrap plus a guarded idempotent KV→D1 migration (`meta.kv_migrated_v1`); `npm run deploy` creates the database and applies migrations automatically.
+- sing-box subscriptions now emit typed DNS servers by default: `proxy-dns` as `{type, server, detour: "PROXY"}` (domain upstreams resolve via `domain_resolver: "local-dns"`, non-default ports/paths preserved) and `local-dns` as `{type: "local"}`; legacy `address`-string servers are gone.
+- Panel sources split for development: `src/ui/panel/` (`shell.html` + `head.js` + `app.css` + 9 JS parts in fixed order) assembles into `src/ui/panel.html` on every build; the committed `panel.html` is byte-identical generated output, covered by an in-sync spec.
 
 ### Fixed
 - Review sweep (5 rounds, ~70 findings): tunnel lifecycle (origin socket closed when client disconnects mid-dial; chain handshake deadline with proper timer cleanup), VLESS UDP/53 now length-framed per Xray `LengthPacketReader` (was forwarded raw, broken both directions), VMess rejects unknown security types (7-15) and plain+authenticated-length at handshake, fatal uplink corruption closes the tunnel (1011/1008) instead of hanging silently.
@@ -36,6 +39,7 @@
 - SSRF host guards now deny cloud-metadata literals/hostnames (`169.254.169.254/253`, `100.100.100.200`, `fd00:ec2::254/253` in any IPv6 spelling, `metadata.google.internal`/`metadata.goog`/`instance-data*`/`rancher-metadata`/`metadata`) plus any `.internal` hostname.
 - DNS resolver cache is LRU instead of FIFO, so hot entries survive unique-name bursts (256-entry cap and TTL unchanged).
 - Settings save/reset/import/killswitch merge from fresh KV state (`loadSettingsFresh`) instead of the stale 60 s isolate cache — locked by regression specs; concurrent writers can still race on the blob `rev` (KV read-modify-write is approximate across isolates).
+- Per-user quota/activity and global counters no longer lose increments to cross-isolate read-modify-write races: D1 increments are single `ON CONFLICT` UPSERTs, and the one-time boot migration copies legacy KV keys into D1 behind the `kv_migrated_v1` guard row (legacy keys deleted after copy).
 
 ### Changed
 - Subscription base64 output drops `ss://` and plain-security VLESS/Trojan URIs (Xray-family clients cannot run them); ss-only per-user scopes keep their nodes.
@@ -45,6 +49,8 @@
 - `dispatchApi` 21-case switch replaced by a declarative `API_ROUTES` method/auth/handler table — dispatch semantics unchanged.
 - Sing-box/clash emitters share typed `SingBoxOutbound` outbounds and `nodeHas*` helpers — emitted configs byte-identical.
 - Test-only coverage: warp emitter goldens, subscription pipeline, and relay-failover specs (no `src/` changes).
+- `Env` requires the `QPROXY_DB` D1 binding and `wrangler.toml` ships the matching `[[d1_databases]]` stanza; `audit()` persists to the D1 `audit_log` table (via `waitUntil`) in addition to the JSON log line; counters read/flush D1-first with KV fallback; the `workers` vitest project covers `test/d1/**` with a provisioned `QPROXY_DB`.
+- `scripts/deploy-direct.mjs` provisions D1 (create database, apply `migrations/0001_init.sql`, bind on upload; API tokens need `D1:Edit`) and continues KV-only with a warning when D1 setup fails.
 
 ## 1.2.0 - 2026-08-27
 
