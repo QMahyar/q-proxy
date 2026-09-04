@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- External remote nodes (REALITY + Hysteria2, admin-owned VPS backends): `remoteNodes[]` setting, reality/hy2 share-URI grammars, clash/sing-box emission, admin-subscriptions only (`users-sub` excluded); hy2 outbounds default to self-signed-tolerant TLS (documented).
 - Password peppering: PBKDF2 input is HMAC-SHA256(keyed by `sessionSecret`); legacy unpeppered hashes verify once then upgrade to peppered-100k.
 - Surge emitter: VLESS + Shadowsocks lines (Surge 5 grammar); Loon emitter: Shadowsocks + `tls-profile` fingerprint + `ech=` lines; Clash TLS proxies: `skip-cert-verify: true`.
 - KV-backed login throttle (`qproxy:login-fail:<sha256-ip>:<minute>`, 120s TTL, fail-open); VMess chunk-nonce wrap guard; 2MB relay downlink cap (1009).
