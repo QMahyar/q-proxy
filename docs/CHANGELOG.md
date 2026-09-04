@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 - 2026-09-04
 
 ### Added
 - External remote nodes (REALITY + Hysteria2, admin-owned VPS backends): `remoteNodes[]` setting, reality/hy2 share-URI grammars, clash/sing-box emission, admin-subscriptions only (`users-sub` excluded); hy2 outbounds default to self-signed-tolerant TLS (documented).
