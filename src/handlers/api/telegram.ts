@@ -164,19 +164,97 @@ export async function runExpirySweep(env: Env, s: Settings, now: number = Date.n
   return result;
 }
 
+interface TelegramChat {
+  id?: unknown;
+  username?: unknown;
+}
+
 interface TelegramUpdate {
   message?: {
-    chat?: { id?: unknown; username?: unknown };
+    chat?: TelegramChat;
     text?: unknown;
+  };
+  callback_query?: {
+    id?: unknown;
+    data?: unknown;
+    from?: TelegramChat;
+    message?: {
+      message_id?: unknown;
+      chat?: TelegramChat;
+    };
   };
 }
 
-async function sendTelegramMessage(token: string, chatId: string, text: string): Promise<void> {
+interface TgInlineKeyboard {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+}
+
+export function telegramMenuKeyboard(): TgInlineKeyboard {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Status", callback_data: "tg:status" },
+        { text: "Usage", callback_data: "tg:usage" },
+      ],
+      [
+        { text: "Subscription", callback_data: "tg:sub" },
+        { text: "Expiry", callback_data: "tg:expiry" },
+      ],
+      [
+        { text: "Kill ON", callback_data: "tg:kill-on" },
+        { text: "Kill OFF", callback_data: "tg:kill-off" },
+      ],
+    ],
+  };
+}
+
+async function sendTelegramMessage(
+  token: string,
+  chatId: string,
+  text: string,
+  replyMarkup?: TgInlineKeyboard,
+): Promise<void> {
   try {
     await fetch(`${TG_API_BASE}${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify(
+        replyMarkup === undefined
+          ? { chat_id: chatId, text }
+          : { chat_id: chatId, text, reply_markup: replyMarkup },
+      ),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    });
+  } catch {}
+}
+
+async function answerTelegramCallback(token: string, callbackId: string): Promise<void> {
+  try {
+    await fetch(`${TG_API_BASE}${token}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callbackId }),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    });
+  } catch {}
+}
+
+async function editTelegramMessage(
+  token: string,
+  chatId: string,
+  messageId: number,
+  text: string,
+  replyMarkup?: TgInlineKeyboard,
+): Promise<void> {
+  try {
+    await fetch(`${TG_API_BASE}${token}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        replyMarkup === undefined
+          ? { chat_id: chatId, text, message_id: messageId }
+          : { chat_id: chatId, text, message_id: messageId, reply_markup: replyMarkup },
+      ),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
   } catch {}
@@ -186,57 +264,101 @@ export function normalizeTelegramChatId(chatId: string): string {
   return chatId.startsWith("@") ? chatId.toLowerCase() : chatId;
 }
 
+function updateChat(update: TelegramUpdate): TelegramChat | undefined {
+  return update.message?.chat ?? update.callback_query?.message?.chat ?? update.callback_query?.from;
+}
+
 function chatMatches(update: TelegramUpdate, s: Settings): boolean {
   const wanted = s.telegram.chatId;
   if (wanted.length === 0) return false;
-  const id = update.message?.chat?.id;
+  const chat = updateChat(update);
+  const id = chat?.id;
   if (id !== undefined && id !== null && String(id) === wanted) return true;
   const wantUsername = normalizeTelegramChatId(wanted);
   if (wantUsername.startsWith("@")) {
-    const username = update.message?.chat?.username;
+    const username = chat?.username;
     return typeof username === "string" && username.length > 0 && `@${username.toLowerCase()}` === wantUsername;
   }
   return false;
 }
 
-async function buildReply(env: Env, s: Settings, req: Request, text: string): Promise<string> {
+interface BotReply {
+  text: string;
+  keyboard: boolean;
+}
+
+async function replyStatus(env: Env, s: Settings): Promise<string> {
+  const usage = await readUsage(env);
+  return langFor(s).status(appVersion(), s.killSwitch, usage.requestsToday, usage.requestsTotal);
+}
+
+async function replyUsage(env: Env, s: Settings): Promise<string> {
+  const usage = await readUsage(env);
+  return langFor(s).usage(usage.requestsToday, usage.requestsTotal);
+}
+
+function replySub(s: Settings, req: Request): string {
+  const hostname = resolveHostname(s, new URL(req.url));
+  return langFor(s).sub(
+    buildSubUrls(hostname, s.securePath)
+      .map((u) => `${u.label}: ${u.url}`)
+      .join("\n"),
+  );
+}
+
+async function applyKillSwitch(env: Env, s: Settings, on: boolean): Promise<string> {
+  const fresh = await loadSettingsFresh(env);
+  const next = structuredClone(fresh);
+  next.telegram.chatId = normalizeTelegramChatId(next.telegram.chatId);
+  next.killSwitch = on;
+  const v = validateSettings(next);
+  if (!v.ok) return "error: kill switch update failed";
+  await saveSettings(env, v.value);
+  return langFor(s).kill(on);
+}
+
+async function buildReply(env: Env, s: Settings, req: Request, text: string): Promise<BotReply> {
   const lang = langFor(s);
   const tokens = text.split(/\s+/).filter((t) => t.length > 0);
   const cmd = tokens.length > 0 ? tokens[0]!.split("@")[0]!.toLowerCase() : "";
   const arg = tokens.length > 1 ? tokens[1]!.toLowerCase() : "";
   switch (cmd) {
-    case "/status": {
-      const usage = await readUsage(env);
-      return lang.status(appVersion(), s.killSwitch, usage.requestsToday, usage.requestsTotal);
-    }
-    case "/usage": {
-      const usage = await readUsage(env);
-      return lang.usage(usage.requestsToday, usage.requestsTotal);
-    }
-    case "/expiry": {
-      return buildExpiryReport(env, s);
-    }
-    case "/sub": {
-      const hostname = resolveHostname(s, new URL(req.url));
-      return lang.sub(
-        buildSubUrls(hostname, s.securePath)
-          .map((u) => `${u.label}: ${u.url}`)
-          .join("\n"),
-      );
-    }
+    case "/start":
+    case "/menu":
+      return { text: lang.help(), keyboard: true };
+    case "/status":
+      return { text: await replyStatus(env, s), keyboard: false };
+    case "/usage":
+      return { text: await replyUsage(env, s), keyboard: false };
+    case "/expiry":
+      return { text: await buildExpiryReport(env, s), keyboard: false };
+    case "/sub":
+      return { text: replySub(s, req), keyboard: false };
     case "/kill": {
-      if (arg !== "on" && arg !== "off") return lang.help();
-      const fresh = await loadSettingsFresh(env);
-      const next = structuredClone(fresh);
-      next.telegram.chatId = normalizeTelegramChatId(next.telegram.chatId);
-      next.killSwitch = arg === "on";
-      const v = validateSettings(next);
-      if (!v.ok) return "error: kill switch update failed";
-      await saveSettings(env, v.value);
-      return lang.kill(arg === "on");
+      if (arg !== "on" && arg !== "off") return { text: lang.help(), keyboard: false };
+      return { text: await applyKillSwitch(env, s, arg === "on"), keyboard: false };
     }
     default:
-      return lang.help();
+      return { text: lang.help(), keyboard: false };
+  }
+}
+
+async function buildCallbackReply(env: Env, s: Settings, req: Request, data: string): Promise<BotReply | null> {
+  switch (data) {
+    case "tg:status":
+      return { text: await replyStatus(env, s), keyboard: true };
+    case "tg:usage":
+      return { text: await replyUsage(env, s), keyboard: true };
+    case "tg:expiry":
+      return { text: await buildExpiryReport(env, s), keyboard: true };
+    case "tg:sub":
+      return { text: replySub(s, req), keyboard: true };
+    case "tg:kill-on":
+      return { text: await applyKillSwitch(env, s, true), keyboard: true };
+    case "tg:kill-off":
+      return { text: await applyKillSwitch(env, s, false), keyboard: true };
+    default:
+      return null;
   }
 }
 
@@ -257,10 +379,38 @@ export const handleTelegramWebhook: RouteHandler = async (req, env, s) => {
     return silentOk();
   }
   if (!chatMatches(update, s)) return silentOk();
+  const callback = update.callback_query;
+  if (callback !== undefined && callback !== null && typeof callback === "object") {
+    const data = typeof callback.data === "string" ? callback.data : "";
+    const reply = await buildCallbackReply(env, s, req, data);
+    if (reply === null) return silentOk();
+    const rawId = callback.id;
+    const callbackId =
+      typeof rawId === "string" ? rawId : rawId === undefined || rawId === null ? "" : String(rawId);
+    if (callbackId.length > 0) void answerTelegramCallback(s.telegram.botToken, callbackId).catch(() => {});
+    const rawMessageId = callback.message?.message_id;
+    if (typeof rawMessageId === "number" && Number.isInteger(rawMessageId)) {
+      const rawChatId = callback.message?.chat?.id;
+      const chatId = rawChatId === undefined || rawChatId === null ? s.telegram.chatId : String(rawChatId);
+      void editTelegramMessage(s.telegram.botToken, chatId, rawMessageId, reply.text, telegramMenuKeyboard()).catch(
+        () => {},
+      );
+    } else {
+      void sendTelegramMessage(s.telegram.botToken, s.telegram.chatId, reply.text, telegramMenuKeyboard()).catch(
+        () => {},
+      );
+    }
+    return silentOk();
+  }
   const rawText = update.message?.text;
   const text = typeof rawText === "string" ? rawText.trim() : "";
   const reply = await buildReply(env, s, req, text);
-  void sendTelegramMessage(s.telegram.botToken, s.telegram.chatId, reply).catch(() => {});
+  void sendTelegramMessage(
+    s.telegram.botToken,
+    s.telegram.chatId,
+    reply.text,
+    reply.keyboard ? telegramMenuKeyboard() : undefined,
+  ).catch(() => {});
   return silentOk();
 }
 
@@ -294,7 +444,7 @@ export const handleTelegramSetup: RouteHandler = async (req, _env, s) => {
   const hookUrl = `https://${host}/${s.securePath}/telegram/webhook/${secret}`;
   const result = await tgAdminCall(s.telegram.botToken, "setWebhook", {
     url: hookUrl,
-    allowed_updates: ["message"],
+    allowed_updates: ["message", "callback_query"],
     secret_token: secret,
   });
   return jsonOk(result);
