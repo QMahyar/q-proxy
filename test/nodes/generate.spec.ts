@@ -369,3 +369,42 @@ describe("generateNodes country filter", () => {
     expect(addrs(`https://${HOST}/sub?country=,,,`)).toEqual(full);
   });
 });
+
+describe("generateNodes vlessFlow stamping", () => {
+  it("defaults vless flow to null", () => {
+    for (const n of generateNodes(ctx(settings()))) {
+      if (n.kind === "vless") expect(n.flow).toBeNull();
+    }
+  });
+
+  it("stamps the configured flow onto TLS vless nodes only", () => {
+    const s = settings();
+    s.vlessFlow = "xtls-rprx-vision";
+    s.addresses = [{ address: "1.2.3.4" }, { address: "5.6.7.8", port: 2052 }];
+    const nodes = generateNodes(ctx(s));
+    const tls = nodes.filter((n) => n.kind === "vless" && n.security === "tls");
+    const plain = nodes.filter((n) => n.kind === "vless" && n.security === "none");
+    expect(tls.length).toBeGreaterThan(0);
+    expect(plain.length).toBeGreaterThan(0);
+    expect(tls.every((n) => n.kind === "vless" && n.flow === "xtls-rprx-vision")).toBe(true);
+    expect(plain.every((n) => n.kind === "vless" && n.flow === null)).toBe(true);
+  });
+});
+
+describe("generateNodes ssDirect marking", () => {
+  it("defaults ss direct to false", () => {
+    for (const n of generateNodes(ctx(settings()))) {
+      if (n.kind === "ss") expect(n.direct).toBe(false);
+    }
+  });
+
+  it("marks every ss node direct when enabled", () => {
+    const s = settings();
+    s.ssDirect = true;
+    const nodes = generateNodes(ctx(s));
+    const ss = nodes.filter((n) => n.kind === "ss");
+    expect(ss.length).toBeGreaterThan(0);
+    expect(ss.every((n) => n.kind === "ss" && n.direct === true)).toBe(true);
+    expect(nodes.filter((n) => n.kind !== "ss").every((n) => !("direct" in n))).toBe(true);
+  });
+});

@@ -60,6 +60,19 @@ describe("buildVlessShareUri", () => {
     expect(uri).not.toContain("flow");
   });
 
+  it("appends flow= after the transport params when set", () => {
+    const node = { ...vlessTls(), flow: "xtls-rprx-vision" };
+    expect(buildVlessShareUri(node)).toBe(
+      "vless://d342d11e-d424-4583-b36e-524ab1f0afa4@example.com:443" +
+        "?encryption=none&security=tls&sni=example.com&fp=chrome&alpn=http%2F1.1" +
+        "&type=ws&host=example.com&path=%2Fvl%3Fed%3D2560&flow=xtls-rprx-vision#CF-WS-TLS",
+    );
+  });
+
+  it("emits byte-identical legacy output when flow is null", () => {
+    expect(buildVlessShareUri({ ...vlessTls(), flow: null })).toBe(buildVlessShareUri(vlessTls()));
+  });
+
   it("brackets ipv6 hosts", () => {
     const node = { ...vlessTls(), address: "2001:db8::1", name: "V6" };
     expect(buildVlessShareUri(node)).toContain("@[2001:db8::1]:443?");
@@ -258,6 +271,31 @@ describe("buildSSShareUri", () => {
     expect(new TextDecoder().decode(r.ok ? r.value : new Uint8Array())).toBe(userinfo);
   });
 
+  it("emits a plain ss:// URI without any plugin when direct", () => {
+    const node: SSNode = {
+      kind: "ss",
+      name: "SS Direct",
+      address: "203.0.113.10",
+      port: 8388,
+      security: "tls",
+      sni: null,
+      host: "example.com",
+      path: "/ss/abc?ed=2048",
+      earlyData: 2048,
+      fingerprint: null,
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      method: "aes-128-gcm",
+      password: "ss:pass=w;rd",
+      direct: true,
+    };
+    const userinfo = Buffer.from("aes-128-gcm:ss:pass=w;rd", "utf8").toString("base64url");
+    expect(buildSSShareUri(node)).toBe(`ss://${userinfo}@203.0.113.10:8388#SS%20Direct`);
+    expect(buildSSShareUri(node)).not.toContain("plugin");
+  });
+
   it("omits the tls flag on plain ports", () => {
     const node: SSNode = {
       kind: "ss",
@@ -276,6 +314,7 @@ describe("buildSSShareUri", () => {
       tags: [],
       method: "aes-256-gcm",
       password: "k",
+      direct: false,
     };
     const uri = buildSSShareUri(node);
     expect(uri).not.toContain("%3Btls%3B");

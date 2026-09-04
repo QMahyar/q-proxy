@@ -33,6 +33,7 @@ export function buildVlessShareUri(node: VlessNode): string {
     `security=${node.security}`,
     ...(node.security === "tls" ? tlsParams(node) : []),
     ...transportParams(node),
+    ...(node.flow ? [`flow=${enc(node.flow)}`] : []),
   ];
   return `vless://${enc(node.uuid)}@${authority(node.address, node.port)}?${params.join("&")}#${enc(node.name)}`;
 }
@@ -73,6 +74,9 @@ function sip002Escape(v: string): string {
 
 export function buildSSShareUri(node: SSNode): string {
   const userinfo = encodeBase64Url(`${node.method}:${node.password}`);
+  if (node.direct === true) {
+    return `ss://${userinfo}@${authority(node.address, node.port)}#${enc(node.name)}`;
+  }
   const pluginArgs = [
     "v2ray-plugin",
     "mode=websocket",

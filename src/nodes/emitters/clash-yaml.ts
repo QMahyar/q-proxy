@@ -34,6 +34,7 @@ function proxyEntry(node: ProxyNode): YamlObject {
   };
   if (node.kind === "vless") {
     p.uuid = node.uuid;
+    if (node.flow) p.flow = node.flow;
     p.tls = isTls;
     if (isTls) p.servername = node.sni ?? node.host;
     if (nodeHasEch(node)) p["ech-opts"] = echOpts(node);
@@ -54,9 +55,11 @@ function proxyEntry(node: ProxyNode): YamlObject {
     p.udp = true;
     p.cipher = node.method;
     p.password = node.password;
-    p.plugin = "v2ray-plugin";
-    p["plugin-opts"] = ssPluginOpts(node);
-    if (isTls) p["skip-cert-verify"] = true;
+    if (node.direct !== true) {
+      p.plugin = "v2ray-plugin";
+      p["plugin-opts"] = ssPluginOpts(node);
+      if (isTls) p["skip-cert-verify"] = true;
+    }
     return p;
   }
   if (isTls) {

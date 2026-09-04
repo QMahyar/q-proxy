@@ -462,6 +462,30 @@ describe("echAuto", () => {
   });
 });
 
+describe("vlessFlow and ssDirect", () => {
+  it("default to empty flow and direct off", () => {
+    const d = validateSettings({});
+    expect(d.ok).toBe(true);
+    if (d.ok) {
+      expect(d.value.vlessFlow).toBe("");
+      expect(d.value.ssDirect).toBe(false);
+    }
+    expect(validateSettings({ vlessFlow: "", ssDirect: false }).ok).toBe(true);
+    expect(validateSettings({ vlessFlow: "xtls-rprx-vision", ssDirect: true }).ok).toBe(true);
+  });
+
+  it("accepts only known flows", () => {
+    expect(fieldsOf({ vlessFlow: "xtls-rprx-vision-extra" }).vlessFlow).toBeTruthy();
+    expect(fieldsOf({ vlessFlow: "vision" }).vlessFlow).toBeTruthy();
+    expect(fieldsOf({ vlessFlow: 0 }).vlessFlow).toBeTruthy();
+  });
+
+  it("rejects non-boolean ssDirect values", () => {
+    expect(fieldsOf({ ssDirect: "yes" }).ssDirect).toBeTruthy();
+    expect(fieldsOf({ ssDirect: 1 }).ssDirect).toBeTruthy();
+  });
+});
+
 describe("resolveEchServerName", () => {
   it("returns null when ECH is disabled", () => {
     expect(

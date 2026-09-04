@@ -200,6 +200,37 @@ describe("totp settings", () => {
   });
 });
 
+describe("vlessFlow and ssDirect settings", () => {
+  it("declares the new fields with safe defaults", () => {
+    expect(DEFAULT_SETTINGS.vlessFlow).toBe("");
+    expect(DEFAULT_SETTINGS.ssDirect).toBe(false);
+    const flowRow = SETTING_FIELD_DESCRIPTORS.find((d) => d.path === "vlessFlow");
+    expect(flowRow).toBeDefined();
+    expect(flowRow!.spec).toEqual({ kind: "enum", allowed: ["", "xtls-rprx-vision"] });
+    const directRow = SETTING_FIELD_DESCRIPTORS.find((d) => d.path === "ssDirect");
+    expect(directRow).toBeDefined();
+    expect(directRow!.spec).toEqual({ kind: "bool" });
+  });
+
+  it("binds both fields in the panel with i18n in both languages", () => {
+    const { dict, fields } = buildPanelRegistry();
+    const paths = flPathsOf(fields);
+    expect(paths).toContain("vlessFlow");
+    expect(paths).toContain("ssDirect");
+    for (const key of [
+      "protocols.flow.label",
+      "protocols.flow.hint",
+      "protocols.flow.off",
+      "protocols.flow.vision",
+      "protocols.ssDirect.label",
+      "protocols.ssDirect.hint",
+    ]) {
+      expect(dict.en[key]).toBeTruthy();
+      expect(dict.fa[key]).toBeTruthy();
+    }
+  });
+});
+
 describe("allowedIps", () => {
   it("declares allowedIps as a custom list defaulting to allow-all", () => {
     const row = SETTING_FIELD_DESCRIPTORS.find((d) => d.path === "allowedIps");
