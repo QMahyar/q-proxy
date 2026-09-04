@@ -7,6 +7,9 @@ import { jsonOk, readJsonObject } from "../../core/respond";
 import { bracketIpv6, isIpLiteral, parseHostPort } from "../../utils/net";
 import {
   MAX_USERS,
+  USER_ACTIVITY_DEFAULT_DAYS,
+  USER_ACTIVITY_MAX_DAYS,
+  getUserActivity,
   getUserHits,
   hashToken,
   listUsers,
@@ -127,6 +130,15 @@ async function buildUser(body: Record<string, unknown>): Promise<{ user: UserAcc
   };
 }
 
+function parseActivityDays(value: unknown): number {
+  if (value === null || value === undefined || value === "") return USER_ACTIVITY_DEFAULT_DAYS;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return USER_ACTIVITY_DEFAULT_DAYS;
+  if (Math.floor(n) < 1) return 1;
+  if (Math.floor(n) > USER_ACTIVITY_MAX_DAYS) return USER_ACTIVITY_MAX_DAYS;
+  return Math.floor(n);
+}
+
 async function withHits(env: Parameters<RouteHandler>[1], users: UserAccount[]): Promise<PublicUser[]> {
   return Promise.all(
     users.map(async (u) => ({ ...sanitizeUser(u), todayHits: await getUserHits(env, u.tokenHash) })),
@@ -158,6 +170,10 @@ export const handleUsersApi: RouteHandler = async (req, env, _s) => {
     const index = users.findIndex((u) => u.id === id);
     if (index < 0) throw new NotFoundError();
     const user = users[index]!;
+    if (rest.length === 2 && rest[1] === "activity" && method === "GET") {
+      const days = parseActivityDays(url.searchParams.get("days"));
+      return jsonOk({ activity: await getUserActivity(env, user.tokenHash, days) });
+    }
     if (rest.length === 1 && method === "PUT") {
       const body = await readJsonObject(req);
       let name = user.name;
