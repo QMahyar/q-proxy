@@ -317,3 +317,55 @@ describe("generateNodes ECH wiring", () => {
     expect(plain.every((n) => n.ech === null)).toBe(true);
   });
 });
+
+describe("generateNodes country filter", () => {
+  function tagged(): Settings {
+    const s = settings();
+    s.addresses = [
+      { address: "1.1.1.1", country: "DE" },
+      { address: "2.2.2.2", country: "US" },
+      { address: "3.3.3.3" },
+    ];
+    return s;
+  }
+
+  function addrs(url: string, s?: Settings): Set<string> {
+    return new Set(generateNodes(ctx(s ?? tagged(), url)).map((n) => n.address));
+  }
+
+  it("returns every address when no ?country= param is present", () => {
+    expect(addrs(`https://${HOST}/sub`)).toEqual(new Set(["1.1.1.1", "2.2.2.2", "3.3.3.3"]));
+  });
+
+  it("keeps matching tagged entries and always keeps untagged ones", () => {
+    expect(addrs(`https://${HOST}/sub?country=DE`)).toEqual(new Set(["1.1.1.1", "3.3.3.3"]));
+    expect(addrs(`https://${HOST}/sub?country=US`)).toEqual(new Set(["2.2.2.2", "3.3.3.3"]));
+  });
+
+  it("matches comma-separated lists case-insensitively", () => {
+    expect(addrs(`https://${HOST}/sub?country=de,us`)).toEqual(
+      new Set(["1.1.1.1", "2.2.2.2", "3.3.3.3"]),
+    );
+    expect(addrs(`https://${HOST}/sub?country= De , uS `)).toEqual(
+      new Set(["1.1.1.1", "2.2.2.2", "3.3.3.3"]),
+    );
+  });
+
+  it("keeps only untagged entries when no tag matches", () => {
+    expect(addrs(`https://${HOST}/sub?country=JP`)).toEqual(new Set(["3.3.3.3"]));
+  });
+
+  it("always includes the worker hostname fallback", () => {
+    const s = settings();
+    s.addresses = [];
+    const nodes = generateNodes(ctx(s, `https://${HOST}/sub?country=DE`));
+    expect(new Set(nodes.map((n) => n.address))).toEqual(new Set([HOST]));
+  });
+
+  it("ignores an empty or invalid filter value", () => {
+    const full = new Set(["1.1.1.1", "2.2.2.2", "3.3.3.3"]);
+    expect(addrs(`https://${HOST}/sub?country=`)).toEqual(full);
+    expect(addrs(`https://${HOST}/sub?country=xyz`)).toEqual(full);
+    expect(addrs(`https://${HOST}/sub?country=,,,`)).toEqual(full);
+  });
+});
