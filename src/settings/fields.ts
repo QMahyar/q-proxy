@@ -56,6 +56,8 @@ export const SETTING_FIELD_DESCRIPTORS: readonly SettingFieldDescriptor[] = [
   { path: "securePath", spec: { kind: "str", maxLen: 64, minLen: 1, pattern: SECURE_PATH_RE } },
   { path: "passwordHash", spec: { kind: "nullableStr", maxLen: 512 } },
   { path: "passwordSalt", spec: { kind: "nullableStr", maxLen: 128 } },
+  { path: "passwordIsBootstrap", spec: { kind: "bool" } },
+  { path: "seededAt", spec: { kind: "int", min: 0, max: 4_102_444_800_000 } },
   { path: "sessionSecret", spec: { kind: "str", maxLen: 512 } },
   { path: "language", spec: { kind: "enum", allowed: LANGUAGES } },
   { path: "debugLogging", spec: { kind: "bool" } },

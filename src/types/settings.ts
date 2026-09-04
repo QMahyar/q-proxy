@@ -100,6 +100,8 @@ export interface Settings {
   securePath: string;
   passwordHash: string | null;
   passwordSalt: string | null;
+  passwordIsBootstrap: boolean;
+  seededAt: number;
   sessionSecret: string;
   language: Language;
   debugLogging: boolean;
@@ -160,6 +162,8 @@ export const DEFAULT_SETTINGS: Settings = {
   securePath: "",
   passwordHash: null,
   passwordSalt: null,
+  passwordIsBootstrap: false,
+  seededAt: 0,
   sessionSecret: "",
   language: "fa",
   debugLogging: false,

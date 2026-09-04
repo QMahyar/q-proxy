@@ -209,6 +209,60 @@ describe("validateSettings", () => {
   });
 });
 
+describe("onboarding bootstrap fields", () => {
+  it("defaults passwordIsBootstrap to false and seededAt to epoch 0", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.passwordIsBootstrap).toBe(false);
+      expect(result.value.seededAt).toBe(0);
+    }
+  });
+
+  it("preserves both fields through a full validate round-trip", () => {
+    const result = validateSettings(
+      makeTestSettings({ passwordIsBootstrap: true, seededAt: 1_700_000_000_000, passwordHash: "a".repeat(64), passwordSalt: "b".repeat(32) }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.passwordIsBootstrap).toBe(true);
+      expect(result.value.seededAt).toBe(1_700_000_000_000);
+    }
+    const plain = validateSettings(makeTestSettings());
+    expect(plain.ok).toBe(true);
+    if (plain.ok) {
+      expect(plain.value.passwordIsBootstrap).toBe(false);
+      expect(plain.value.seededAt).toBe(0);
+    }
+  });
+
+  it("allows the bootstrap flag only with an existing admin password", () => {
+    const withHash = validateSettings({ passwordIsBootstrap: true, passwordHash: "a".repeat(64), passwordSalt: "b".repeat(32) });
+    expect(withHash.ok).toBe(true);
+    if (withHash.ok) expect(withHash.value.passwordIsBootstrap).toBe(true);
+    for (const patch of [{ passwordIsBootstrap: true }, { passwordIsBootstrap: true, passwordHash: null }]) {
+      const result = validateSettings(patch);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.fields.passwordIsBootstrap).toBeTruthy();
+    }
+    expect(validateSettings({ passwordIsBootstrap: false, passwordHash: null }).ok).toBe(true);
+  });
+
+  it("validates the seed timestamp shape", () => {
+    expect(fieldsOf({ seededAt: -1 }).seededAt).toBeTruthy();
+    expect(fieldsOf({ seededAt: 1.5 }).seededAt).toBeTruthy();
+    expect(fieldsOf({ seededAt: "now" }).seededAt).toBeTruthy();
+    expect(fieldsOf({ seededAt: 4_102_444_800_001 }).seededAt).toBeTruthy();
+    expect(validateSettings({ seededAt: 0 }).ok).toBe(true);
+    expect(validateSettings({ seededAt: Date.now() }).ok).toBe(true);
+  });
+
+  it("rejects non-boolean passwordIsBootstrap values", () => {
+    expect(fieldsOf({ passwordIsBootstrap: "yes" }).passwordIsBootstrap).toBeTruthy();
+    expect(fieldsOf({ passwordIsBootstrap: 1 }).passwordIsBootstrap).toBeTruthy();
+  });
+});
+
 describe("defaultPort guard", () => {
   it("rejects a non-Cloudflare default port with a clear message", () => {
     const result = validateSettings({ defaultPort: 8081 });

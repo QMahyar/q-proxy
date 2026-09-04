@@ -427,6 +427,45 @@ describe("router dispatch", () => {
     }, 120_000);
   });
 
+  it("gates the api behind PASSWORD_CHANGE_REQUIRED while the bootstrap password is active", async () => {
+    const { resetThrottle } = await import("../helpers/seed");
+    resetThrottle();
+    await seed(kv, SP);
+    const { hashPassword } = await import("../../src/auth/password");
+    const { hash, salt } = await hashPassword(PASSWORD);
+    await seed(kv, SP, { passwordHash: hash, passwordSalt: salt, passwordIsBootstrap: true });
+
+    let res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    expect(res.status).toBe(200);
+    expect((await body(res)).data.mustChangePassword).toBe(true);
+    const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+    const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
+
+    const gated = [
+      `${BASE}/api/status`,
+      `${BASE}/api/suburls`,
+      `${BASE}/api/settings/export`,
+      `${BASE}/api/version/check`,
+    ];
+    for (const url of gated) {
+      const denied = await SELF.fetch(url, { headers: { Cookie: cookie } });
+      expect(denied.status, url).toBe(403);
+      expect((await body(denied)).error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+    }
+
+    res = await SELF.fetch(`${BASE}/api/settings`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+    res = await SELF.fetch(`${BASE}/api/bootstrap`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+
+    const deniedWrite = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: false }, csrfHeaders));
+    expect(deniedWrite.status).toBe(403);
+    expect((await body(deniedWrite)).error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+
+    res = await SELF.fetch(`${BASE}/api/auth/logout`, { method: "POST", headers: { "X-Q-Panel": "1" } });
+    expect(res.status).toBe(200);
+  });
+
   it("serves the bootstrap aggregate with ETag revalidation", async () => {
     await seed(kv, SP);
 

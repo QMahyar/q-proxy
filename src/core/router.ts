@@ -1,7 +1,7 @@
 import type { Env } from "../types/env";
 import type { Settings } from "../types/settings";
 import { AppError } from "./errors";
-import { redirect } from "./respond";
+import { jsonError, redirect } from "./respond";
 import { setDebugEnabled, log } from "./log";
 import { recordConnection } from "./counters";
 import {
@@ -80,11 +80,29 @@ function authed(handler: RouteHandler): RouteHandler {
 }
 
 type ApiAuthLevel = "none" | "read" | "write";
+type BootstrapExemption = "allow" | "read";
 
 interface ApiRouteDescriptor {
   methods: string[];
   auth: ApiAuthLevel;
   handler: RouteHandler;
+  bootstrap?: BootstrapExemption;
+}
+
+function passwordChangeRequired(): Response {
+  return jsonError(403, "PASSWORD_CHANGE_REQUIRED", "choose a personal admin password before using the panel");
+}
+
+function bootstrapAllowed(route: ApiRouteDescriptor, req: Request): boolean {
+  if (route.bootstrap === "allow") return true;
+  return route.bootstrap === "read" && req.method === "GET";
+}
+
+function bootstrapGated(handler: RouteHandler, route: ApiRouteDescriptor): RouteHandler {
+  return async (req, env, s) => {
+    if (s.passwordIsBootstrap && !bootstrapAllowed(route, req)) return passwordChangeRequired();
+    return handler(req, env, s);
+  };
 }
 
 const guardedMyIp = authed(handleMyIp);
@@ -94,11 +112,11 @@ const settingsGetOrSave: RouteHandler = (req, env, s) =>
 
 const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
   "auth-login": { methods: ["POST"], auth: "none", handler: handleLogin },
-  "auth-logout": { methods: ["POST"], auth: "none", handler: csrfOnly(handleLogout) },
+  "auth-logout": { methods: ["POST"], auth: "none", handler: csrfOnly(handleLogout), bootstrap: "allow" },
   "auth-setup": { methods: ["POST"], auth: "none", handler: csrfOnly(handleSetup) },
-  "auth-password": { methods: ["POST"], auth: "write", handler: handlePasswordChange },
-  "settings-get": { methods: ["GET", "PUT"], auth: "write", handler: settingsGetOrSave },
-  bootstrap: { methods: ["GET"], auth: "read", handler: handleBootstrap },
+  "auth-password": { methods: ["POST"], auth: "write", handler: handlePasswordChange, bootstrap: "allow" },
+  "settings-get": { methods: ["GET", "PUT"], auth: "write", handler: settingsGetOrSave, bootstrap: "read" },
+  bootstrap: { methods: ["GET"], auth: "read", handler: handleBootstrap, bootstrap: "allow" },
   "settings-save": { methods: ["PUT"], auth: "write", handler: handleSaveSettings },
   "settings-reset": { methods: ["POST"], auth: "write", handler: handleResetSettings },
   "settings-export": { methods: ["GET"], auth: "read", handler: handleExportSettings },
@@ -125,8 +143,10 @@ async function dispatchApi(
   const route = API_ROUTES[api]!;
   if (route.methods.length > 0) expectMethods(req, route.methods);
   if (route.auth === "none") return route.handler(req, env, s);
-  if (route.auth === "read" || req.method === "GET") return authed(route.handler)(req, env, s);
-  return authedCsrf(route.handler)(req, env, s);
+  if (route.auth === "read" || req.method === "GET") {
+    return authed(bootstrapGated(route.handler, route))(req, env, s);
+  }
+  return authedCsrf(bootstrapGated(route.handler, route))(req, env, s);
 }
 
 async function dispatchSecureRoute(

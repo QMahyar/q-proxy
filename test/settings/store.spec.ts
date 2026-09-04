@@ -88,6 +88,45 @@ describe("settings store", () => {
     expect(blob.data.securePath).toBe(s.securePath);
   });
 
+  it("stamps seededAt once on the first seed and never re-stamps it", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const env = kv.asEnv() as never;
+    const s = await loadSettings(env);
+    expect(s.seededAt).toBeGreaterThan(0);
+    expect(s.seededAt).toBeLessThanOrEqual(Date.now());
+    expect(s.passwordIsBootstrap).toBe(false);
+    expect(JSON.parse(kv.map.get("qproxy:settings")!).data.seededAt).toBe(s.seededAt);
+    invalidateSettingsCache();
+    const again = await loadSettings(env);
+    expect(again.seededAt).toBe(s.seededAt);
+    expect(kv.putCalls.get("qproxy:settings")).toBe(1);
+  });
+
+  it("leaves a pre-existing identity blob untouched so legacy seededAt stays 0", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    kv.map.set(
+      "qproxy:settings",
+      JSON.stringify({
+        version: SETTINGS_VERSION,
+        updatedAt: Date.now(),
+        data: {
+          ...structuredClone(DEFAULT_SETTINGS),
+          securePath: "legacy-path",
+          vlessUuid: "11111111-2222-3333-4444-555555555555",
+          vmessUuid: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+          trojanPassword: "trojanpass123",
+          ssPassword: "sspass123456",
+          sessionSecret: "s".repeat(64),
+        },
+      }),
+    );
+    const s = await loadSettings(kv.asEnv() as never);
+    expect(s.seededAt).toBe(0);
+    expect(s.securePath).toBe("legacy-path");
+  });
+
   it("caches reads for the 60 second TTL", async () => {
     invalidateSettingsCache();
     const kv = new FakeKV();
