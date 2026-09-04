@@ -26,6 +26,8 @@ export interface RelayHandle {
   feedClient(chunk: Uint8Array): void;
   clientClosed(): void;
   run(initial: EstablishedEgress): Promise<void>;
+  readonly bytesUp: number;
+  readonly bytesDown: number;
 }
 
 interface Slot {
@@ -41,6 +43,8 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   let retriedOnce = false;
   let headerSent = false;
   let downlinkBytes = 0;
+  let bytesUp = 0;
+  let bytesDown = 0;
   let lastActivityMs = Date.now();
   let graceDeadline = Number.POSITIVE_INFINITY;
   let graceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -189,6 +193,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   const feedClient = (chunk: Uint8Array): void => {
     if (finished || halfOpen) return;
     lastActivityMs = Date.now();
+    bytesUp += chunk.length;
     if (opts.uplinkDecode !== undefined && opts.uplinkDecode !== null) {
       decodeQueued += chunk.length;
       if (decodeQueued > UPLINK_HARD_CAP_BYTES) {
@@ -337,6 +342,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
       }
       if (value !== undefined && value.length > 0) {
         downlinkBytes += value.length;
+        bytesDown += value.length;
         pendingDown.push(value);
         pendingDownBytes += value.length;
         if (pendingDownBytes > DOWNLINK_HARD_CAP_BYTES) {
@@ -361,6 +367,16 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
     }
   };
 
-  return { feedClient, clientClosed, run };
+  return {
+    feedClient,
+    clientClosed,
+    run,
+    get bytesUp(): number {
+      return bytesUp;
+    },
+    get bytesDown(): number {
+      return bytesDown;
+    },
+  };
 }
 

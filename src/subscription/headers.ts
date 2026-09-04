@@ -11,8 +11,18 @@ export interface SubscriptionMeta {
 
 export const BYTES_PER_REQUEST = 1024 * 1024;
 
-export function subscriptionUserinfo(usage: Pick<UsageSnapshot, "requestsTotal">, expireAt?: number | null): string {
-  let userinfo = `upload=0; download=${usage.requestsTotal * BYTES_PER_REQUEST}`;
+export interface UserinfoBytes {
+  bytesUpTotal?: number;
+  bytesDownTotal?: number;
+}
+
+export function subscriptionUserinfo(
+  usage: Pick<UsageSnapshot, "requestsTotal"> & UserinfoBytes,
+  expireAt?: number | null,
+): string {
+  const up = usage.bytesUpTotal ?? 0;
+  const down = usage.bytesDownTotal ?? 0;
+  let userinfo = `upload=${up > 0 ? up : 0}; download=${down > 0 ? down : usage.requestsTotal * BYTES_PER_REQUEST}`;
   if (expireAt !== null && expireAt !== undefined && expireAt > 0) {
     userinfo += `; expire=${Math.floor(expireAt / 1000)}`;
   }
@@ -47,7 +57,7 @@ export function subscriptionHeaders(
   format: SubFormat,
   title: string,
   nodes: readonly ProxyNode[],
-  usage: UsageSnapshot,
+  usage: UsageSnapshot & UserinfoBytes,
   meta: SubscriptionMeta,
 ): Record<string, string> {
   void nodes;

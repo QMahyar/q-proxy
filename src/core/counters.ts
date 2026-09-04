@@ -10,6 +10,8 @@ const FLUSH_EVERY_CONNECTIONS = 32;
 interface CounterBuffer {
   todayDelta: number;
   totalDelta: number;
+  bytesUpDelta: number;
+  bytesDownDelta: number;
   connectionsSinceFlush: number;
   lastFlushMs: number;
   ctx: ExecutionContext | null;
@@ -18,6 +20,8 @@ interface CounterBuffer {
 const buffer: CounterBuffer = {
   todayDelta: 0,
   totalDelta: 0,
+  bytesUpDelta: 0,
+  bytesDownDelta: 0,
   connectionsSinceFlush: 0,
   lastFlushMs: Date.now(),
   ctx: null,
@@ -31,6 +35,18 @@ interface StoredUsage {
   day: string;
   requestsToday: number;
   requestsTotal: number;
+  bytesUpTotal?: number;
+  bytesDownTotal?: number;
+}
+
+export interface ConnectionBytes {
+  bytesUp?: number;
+  bytesDown?: number;
+}
+
+export interface UsageWithBytes extends UsageSnapshot {
+  bytesUpTotal: number;
+  bytesDownTotal: number;
 }
 
 let usageMemo: { value: StoredUsage; expiresAt: number } | null = null;
@@ -71,20 +87,44 @@ async function readStored(env: Env): Promise<StoredUsage> {
     typeof (raw as Record<string, unknown>).day === "string" &&
     typeof (raw as Record<string, unknown>).requestsTotal === "number"
   ) {
-    const r = raw as { day: string; requestsToday?: number; requestsTotal: number };
+    const r = raw as {
+      day: string;
+      requestsToday?: number;
+      requestsTotal: number;
+      bytesUpTotal?: number;
+      bytesDownTotal?: number;
+    };
     const stored = r.requestsToday ?? 0;
-    if (r.day !== dayKeyUtc()) value = { day: dayKeyUtc(), requestsToday: 0, requestsTotal: r.requestsTotal };
-    else value = { day: r.day, requestsToday: stored, requestsTotal: r.requestsTotal };
+    const storedUp = r.bytesUpTotal ?? 0;
+    const storedDown = r.bytesDownTotal ?? 0;
+    if (r.day !== dayKeyUtc())
+      value = {
+        day: dayKeyUtc(),
+        requestsToday: 0,
+        requestsTotal: r.requestsTotal,
+        bytesUpTotal: storedUp,
+        bytesDownTotal: storedDown,
+      };
+    else
+      value = {
+        day: r.day,
+        requestsToday: stored,
+        requestsTotal: r.requestsTotal,
+        bytesUpTotal: storedUp,
+        bytesDownTotal: storedDown,
+      };
   } else {
-    value = { day: dayKeyUtc(), requestsToday: 0, requestsTotal: 0 };
+    value = { day: dayKeyUtc(), requestsToday: 0, requestsTotal: 0, bytesUpTotal: 0, bytesDownTotal: 0 };
   }
   usageMemo = { value, expiresAt: now + USAGE_MEMO_MS };
   return value;
 }
 
-export async function recordConnection(env: Env): Promise<void> {
+export async function recordConnection(env: Env, bytes?: ConnectionBytes): Promise<void> {
   buffer.todayDelta += 1;
   buffer.totalDelta += 1;
+  buffer.bytesUpDelta += bytes?.bytesUp ?? 0;
+  buffer.bytesDownDelta += bytes?.bytesDown ?? 0;
   buffer.connectionsSinceFlush += 1;
   const stale = Date.now() - buffer.lastFlushMs >= FLUSH_INTERVAL_MS;
   if (!stale && buffer.connectionsSinceFlush < FLUSH_EVERY_CONNECTIONS) return;
@@ -92,8 +132,12 @@ export async function recordConnection(env: Env): Promise<void> {
   flushing = true;
   const capturedToday = buffer.todayDelta;
   const capturedTotal = buffer.totalDelta;
+  const capturedUp = buffer.bytesUpDelta;
+  const capturedDown = buffer.bytesDownDelta;
   buffer.todayDelta = 0;
   buffer.totalDelta = 0;
+  buffer.bytesUpDelta = 0;
+  buffer.bytesDownDelta = 0;
   buffer.connectionsSinceFlush = 0;
   buffer.lastFlushMs = Date.now();
   try {
@@ -101,12 +145,14 @@ export async function recordConnection(env: Env): Promise<void> {
     const writeDay = dayKeyUtc();
     const requestsToday = (stored.day === writeDay ? stored.requestsToday : 0) + capturedToday;
     const requestsTotal = stored.requestsTotal + capturedTotal;
+    const bytesUpTotal = (stored.bytesUpTotal ?? 0) + capturedUp;
+    const bytesDownTotal = (stored.bytesDownTotal ?? 0) + capturedDown;
     const put = env.QPROXY_KV.put(
       KV_KEY,
-      JSON.stringify({ day: writeDay, requestsToday, requestsTotal, updatedAt: Date.now() }),
+      JSON.stringify({ day: writeDay, requestsToday, requestsTotal, bytesUpTotal, bytesDownTotal, updatedAt: Date.now() }),
     );
     usageMemo = {
-      value: { day: writeDay, requestsToday, requestsTotal },
+      value: { day: writeDay, requestsToday, requestsTotal, bytesUpTotal, bytesDownTotal },
       expiresAt: Date.now() + USAGE_MEMO_MS,
     };
     const tracked = put.then(
@@ -120,11 +166,13 @@ export async function recordConnection(env: Env): Promise<void> {
   }
 }
 
-export async function readUsage(env: Env): Promise<UsageSnapshot> {
+export async function readUsage(env: Env): Promise<UsageWithBytes> {
   const stored = await readStored(env);
   return {
     day: stored.day,
     requestsToday: stored.requestsToday + buffer.todayDelta,
     requestsTotal: stored.requestsTotal + buffer.totalDelta,
+    bytesUpTotal: (stored.bytesUpTotal ?? 0) + buffer.bytesUpDelta,
+    bytesDownTotal: (stored.bytesDownTotal ?? 0) + buffer.bytesDownDelta,
   };
 }
