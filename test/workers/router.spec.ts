@@ -401,6 +401,44 @@ describe("router dispatch", () => {
     expect((await body(res)).error.code).toBe("VALIDATION");
   });
 
+  it("merges settings saves with fresh KV state instead of the stale isolate cache", async () => {
+    await seed(kv, SP);
+    const { cookie, csrfHeaders } = await setupAdmin();
+
+    let res = await SELF.fetch(`${BASE}/api/settings`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+    expect((await body(res)).data.profileTitle).toBe(DEFAULT_SETTINGS.profileTitle);
+
+    const before = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as {
+      rev: number;
+      data: Record<string, unknown>;
+    };
+    expect(typeof before.rev).toBe("number");
+    before.data.profileTitle = "fresh-concurrent";
+    await kv.put(SETTINGS_KEY, JSON.stringify(before));
+
+    res = await SELF.fetch(`${BASE}/api/settings`, put({ urlTestIntervalSec: 600 }, csrfHeaders));
+    expect(res.status).toBe(200);
+    const saved = (await body(res)).data;
+    expect(saved.saved).toBe(true);
+    expect(saved.rev).toBe(before.rev + 1);
+
+    res = await SELF.fetch(`${BASE}/api/settings`, { headers: { Cookie: cookie } });
+    const view = (await body(res)).data;
+    expect(view.profileTitle).toBe("fresh-concurrent");
+    expect(view.urlTestIntervalSec).toBe(600);
+
+    res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: true }, csrfHeaders));
+    expect(res.status).toBe(200);
+    const kill = (await body(res)).data;
+    expect(kill.killSwitch).toBe(true);
+    expect(kill.rev).toBe(saved.rev + 1);
+
+    res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: false }, csrfHeaders));
+    expect(res.status).toBe(200);
+    expect((await body(res)).data.killSwitch).toBe(false);
+  });
+
   it("dispatches the warp api with auth, csrf and a full import roundtrip", async () => {
     await seed(kv, SP);
 

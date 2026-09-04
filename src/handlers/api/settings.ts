@@ -51,8 +51,8 @@ export const handleSaveSettings: RouteHandler = async (req, _env, s) => {
   void s;
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);
-  await saveSettings(_env, result.value);
-  return jsonOk({ saved: true });
+  const rev = await saveSettings(_env, result.value);
+  return jsonOk({ saved: true, rev });
 };
 
 export const handleResetSettings: RouteHandler = async (_req, env, _s) => {
@@ -64,8 +64,8 @@ export const handleResetSettings: RouteHandler = async (_req, env, _s) => {
   }
   const result = validateSettings(fresh);
   if (!result.ok) throw new ValidationError(result.fields);
-  await saveSettings(env, result.value);
-  return jsonOk({ saved: true });
+  const rev = await saveSettings(env, result.value);
+  return jsonOk({ saved: true, rev });
 };
 
 export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
@@ -104,6 +104,6 @@ export const handleImportSettings: RouteHandler = async (req, env, s) => {
   }
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);
-  await saveSettings(env, result.value);
-  return jsonOk({ saved: true, imported: publicSettingsView(result.value) });
+  const rev = await saveSettings(env, result.value);
+  return jsonOk({ saved: true, rev, imported: publicSettingsView(result.value) });
 };

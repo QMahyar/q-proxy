@@ -30,8 +30,8 @@ export const handleKillSwitch: RouteHandler = async (req, env, _s) => {
   const fresh = await loadSettingsFresh(env);
   const v = validateSettings({ ...fresh, killSwitch: body.enabled });
   if (!v.ok) throw new ValidationError(v.fields);
-  await saveSettings(env, v.value);
-  return jsonOk({ killSwitch: body.enabled });
+  const rev = await saveSettings(env, v.value);
+  return jsonOk({ killSwitch: body.enabled, rev });
 };
 
 export interface SubUrlEntry {
