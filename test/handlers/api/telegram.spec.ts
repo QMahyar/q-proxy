@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS } from "../../../src/types/settings";
+import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../../src/types/settings";
 import type { Settings } from "../../../src/types/settings";
 import { invalidateSettingsCache } from "../../../src/settings/store";
 import {
   handleTelegramRemove,
   handleTelegramSetup,
   handleTelegramWebhook,
+  normalizeTelegramChatId,
   telegramWebhookSecret,
 } from "../../../src/handlers/api/telegram";
 
@@ -60,6 +61,14 @@ function stubFetch(handler?: (url: string, init: RequestInit | undefined) => Res
       return respond(url);
     }),
   );
+}
+
+function usernameWebhookRequest(text: string, username: string, secret: string): Request {
+  return new Request(`https://panel.example.com/testpath/telegram/webhook/${secret}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ update_id: 2, message: { message_id: 2, chat: { id: 777001, username }, text } }),
+  });
 }
 
 function webhookRequest(text: string, chatId: number | string, secret?: string): Request {
@@ -199,11 +208,62 @@ describe("handleTelegramWebhook", () => {
     expect(payload).not.toContain("sendMessage");
   });
 
+  it("matches @usernames case-insensitively when stored lowercase", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    const settings = makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "@opsalerts" } });
+    const res = await handleTelegramWebhook(usernameWebhookRequest("/status", "OpsAlerts", secret), new FakeKV().asEnv() as never, settings);
+    expect(res.status).toBe(200);
+    const sent = await lastSent();
+    expect(String(sent.body.text)).toContain("Version: 0.0.0-dev");
+  });
+
+  it("matches @usernames case-insensitively when stored mixed-case", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    const settings = makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "@OpsAlerts" } });
+    const res = await handleTelegramWebhook(usernameWebhookRequest("/usage", "opsalerts", secret), new FakeKV().asEnv() as never, settings);
+    expect(res.status).toBe(200);
+    const sent = await lastSent();
+    expect(String(sent.body.text)).toMatch(/^Today: \d+ requests/);
+  });
+
+  it("still rejects a different @username regardless of case", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    const settings = makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "@opsalerts" } });
+    const res = await handleTelegramWebhook(usernameWebhookRequest("/status", "SomeoneElse", secret), new FakeKV().asEnv() as never, settings);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { data: unknown }).data).toEqual({});
+    expect(calls.length).toBe(0);
+  });
+
+  it("lowercases an @chatId when saving through /kill", async () => {
+    const kv = new FakeKV();
+    const seeded = makeSettings({ telegram: { enabled: false, botToken: BOT_TOKEN, chatId: "@OpsAlerts" } });
+    kv.map.set("qproxy:settings", JSON.stringify({ version: SETTINGS_VERSION, updatedAt: Date.now(), data: seeded }));
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    const live = makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "@OpsAlerts" } });
+    const res = await handleTelegramWebhook(usernameWebhookRequest("/kill on", "OPSALERTS", secret), kv.asEnv() as never, live);
+    expect(res.status).toBe(200);
+    const sent = await lastSent();
+    expect(String(sent.body.text)).toContain("enabled");
+    const blob = JSON.parse(kv.map.get("qproxy:settings")!) as { data: Settings };
+    expect(blob.data.killSwitch).toBe(true);
+    expect(blob.data.telegram.chatId).toBe("@opsalerts");
+  });
+
   it("replies in persian when settings.language is fa", async () => {
     const secret = await telegramWebhookSecret(SESSION_SECRET);
     await handleTelegramWebhook(webhookRequest("/kill on", CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings({ language: "fa" }));
     const sent = await lastSent();
     expect(String(sent.body.text)).toContain("کلید قطع");
+  });
+});
+
+describe("normalizeTelegramChatId", () => {
+  it("lowercases @names and leaves numeric ids alone", () => {
+    expect(normalizeTelegramChatId("@OpsAlerts")).toBe("@opsalerts");
+    expect(normalizeTelegramChatId("@opsalerts")).toBe("@opsalerts");
+    expect(normalizeTelegramChatId("424242")).toBe("424242");
+    expect(normalizeTelegramChatId("")).toBe("");
   });
 });
 
