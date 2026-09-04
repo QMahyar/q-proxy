@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bracketIpv6,
   cidrContains,
+  isBlockedEgressHost,
   isCloudflareIp,
   isIPv4,
   isIPv6,
@@ -144,6 +145,96 @@ describe("isLocalOrPrivateTarget", () => {
   it("allows public targets", () => {
     for (const h of ["example.com", "8.8.8.8", "104.16.0.1", "2606:4700::1111"]) {
       expect(isLocalOrPrivateTarget(h), h).toBe(false);
+    }
+  });
+});
+
+describe("isLocalOrPrivateTarget metadata denylist", () => {
+  it("blocks cloud metadata literal ips", () => {
+    for (const h of [
+      "169.254.169.254",
+      "169.254.169.253",
+      "100.100.100.200",
+      "fd00:ec2::254",
+      "fd00:ec2::253",
+      "FD00:EC2::254",
+      "[fd00:ec2::254]",
+      "fd00:ec2:0:0:0:0:0:254",
+      "fd00:ec2::254%eth0",
+    ]) {
+      expect(isLocalOrPrivateTarget(h), h).toBe(true);
+    }
+  });
+  it("blocks cloud metadata hostnames", () => {
+    for (const h of [
+      "metadata.google.internal",
+      "metadata.goog",
+      "instance-data.compute.internal",
+      "instance-data",
+      "rancher-metadata",
+      "metadata",
+      "METADATA.GOOGLE.INTERNAL",
+      "metadata.google.internal.",
+      "metadata.goog.",
+      "db.internal",
+      "a.b.internal",
+    ]) {
+      expect(isLocalOrPrivateTarget(h), h).toBe(true);
+    }
+  });
+  it("still allows public targets and non-metadata single-label test hosts", () => {
+    for (const h of [
+      "example.com",
+      "dns.google",
+      "cloudflare-dns.com",
+      "8.8.8.8",
+      "1.1.1.1",
+      "9.9.9.9",
+      "100.100.100.201",
+      "2001:db8::1",
+      "2606:4700:4700::1111",
+      "r",
+    ]) {
+      expect(isLocalOrPrivateTarget(h), h).toBe(false);
+    }
+  });
+});
+
+describe("isBlockedEgressHost", () => {
+  it("blocks private, metadata, and cloudflare targets", () => {
+    for (const h of [
+      "localhost",
+      "127.0.0.1",
+      "10.0.0.1",
+      "192.168.1.1",
+      "::1",
+      "[::1]",
+      "169.254.169.254",
+      "100.100.100.200",
+      "fd00:ec2::254",
+      "[fd00:ec2::254]",
+      "metadata.google.internal",
+      "metadata.goog",
+      "instance-data.compute.internal",
+      "rancher-metadata",
+      "db.internal",
+      "104.16.132.229",
+      "172.64.0.1",
+      "2606:4700:4700::1111",
+    ]) {
+      expect(isBlockedEgressHost(h), h).toBe(true);
+    }
+  });
+  it("allows public targets", () => {
+    for (const h of [
+      "example.com",
+      "dns.google",
+      "8.8.8.8",
+      "1.1.1.1",
+      "9.9.9.9",
+      "2001:db8::1",
+    ]) {
+      expect(isBlockedEgressHost(h), h).toBe(false);
     }
   });
 });
