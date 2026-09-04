@@ -165,6 +165,8 @@ Namespace binding `QPROXY_KV`.
 | `qproxy:counters` | `{day, requestsToday, requestsTotal, updatedAt}` | `src/core/counters.ts:recordConnection` | Buffered per-isolate; flush >60 s or every 32 conns |
 | `qproxy:users` | JSON array of ≤50 user records (token, protocols, quota, expiry) | `src/users/store.ts` | Read per admin request / sub hit |
 | `qproxy:user-usage:{yyyy-mm-dd}:{hash}` | per-user daily hit counter (per-hash key; legacy `qproxy:user-usage:{yyyy-mm-dd}` array still read for same-day migration) | `src/users/store.ts` | Day-keyed |
+| `qproxy:user-activity:{yyyy-mm-dd}:{hash}` | per-user daily activity row `{day, requests, bytesUp, bytesDown}` (never plaintext tokens; corrupt rows read as zeros) | `src/users/store.ts:recordUserActivity` (in-isolate deltas, flush every 32 ops / 60 s) | Day-keyed, no TTL |
+| `qproxy:ratelimit:{hash}:{window}` | per-user rate-limit bucket `{tokens, updatedAt}` (1-min window stamp) | `src/users/ratelimit.ts:tryConsume` | 120 s TTL, fail-open on KV error |
 | `qproxy:warp:account:{id}` / `qproxy:warp:token:{token}` / `qproxy:warp:presets` / `qproxy:warp:global` | WARP device + preset state | `src/warp/store.ts` | Two-key write with rollback |
 
 Sessions are stateless HMAC cookies — no session records in KV. Sensitive paths `passwordHash`, `passwordSalt`, `sessionSecret` (plus write-only `telegram.botToken`) never leave authenticated views.
@@ -201,6 +203,7 @@ Adding a **WARP** format follows the same shape via `src/warp/formats/`: impleme
 - **Early data:** `src/tunnel/websocket.ts` extracts the `Sec-WebSocket-Protocol` b64url payload (≤ `earlyDataMaxBytes`), ignores it for SS; handshake buffer capped 16 KiB / 10 s.
 - **Logging:** `src/core/log.ts` debug-gated with request id; never logs deny-list material (passwords, hashes, UUIDs, session secrets, securePath free-text).
 - **Camouflage:** `src/handlers/camouflage.ts` — identical fake-1101 body for wrong path / unknown route / internal error; `/robots.txt` always `Disallow: /`.
+- **Relay admission gate:** `RelayOptions.gate?: () => Promise<boolean | {allowed, retryAfterMs?}>` is consulted once at relay start; throw ⇒ allow (fail-open), deny ⇒ `finish(1008)`. Token-bucket state lives in `src/users/ratelimit.ts` (`ratelimitKey`/`consumeBucket` pure, `tryConsume` KV-backed, 30/min + burst 10, 120 s TTL) — pass it in via `gate`, the relay never imports KV itself.
 
 ## 8. References
 
@@ -227,12 +230,15 @@ Handshake bounded: 16 KiB accumulated + 10 s timeout → WS close 1008. Reasons 
 - store.ts: `loadSettings(env)` with 60 s isolate cache; `saveSettings` validates then deep-merges; `ensureInitialized` seeds securePath + UUIDs + sessionSecret once. Stored blob carries a monotonic `rev` (bumped via a fresh KV read on every save, returned to callers); all four write paths (save/reset/import/killswitch) merge from `loadSettingsFresh`, not the isolate cache.
 - seed.ts: `randomHex(12)` securePath, `randomUUID()` for empty UUIDs, 24-char passwords.
 - validate.ts: full-schema validation → `{ok:false, fields}` map for 422 responses. ECH server-name resolution is `resolveEchServerName(settings, sni)`: disabled ⇒ null, manual `echServerName` wins, else `echAuto` derives the domain-shaped SNI (warning string when unresolvable).
+- `allowedIps` is a `{kind:"custom"}` descriptor-validated list (trim/dedupe/drop-empty, 64-entry cap; exact IP or v4/v6 CIDR only — hostnames and `ip:port` rejected). Enforcement is `isIpAllowlisted` + a `requireAuth` check after session verification (401 before 403); `s.allowedIps ?? []` keeps old blobs working.
 - migrate.ts: pure stepwise migrations — see §5.
 
 ## 11. Observability
 
 - log.ts: debug-gated structured logging with request id; redaction deny-list asserted in tests.
 - counters.ts: `readUsage`/`recordConnection` with isolate-buffered flush; the `Subscription-Userinfo` estimate derives from it (`download ≈ requestsTotal × 1 MiB`).
+- audit trail: `audit(action, detail)` in `src/core/log.ts` emits a JSON `info` line (`scope:"audit"`) via the `log.info` seam. Allowlist design — only caller-supplied fields are serialized (`settings.save|reset|import` → `{ip, keys}`, `killswitch` → `{ip, enabled}`, `warp.account.*`/`warp.preset.*` → `{ip, id}`, `warp.amnezia.update` → `{ip}`); never pass values or secrets, only key names/ids/booleans.
+- per-user activity: `recordUserActivity(env, tokenOrHash, delta)` buffers `{requests, bytesUp, bytesDown}` per day-key (merges pending + stored on read); `getUserActivity(env, hash, days)` clamps 1–31 (default 7), returns chronological rows with zeros for gaps; `flushPendingUserActivity` + token-regen migration included.
 
 ## 12. Local Development Tips
 
@@ -275,8 +281,8 @@ Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},f
 - `GET api/bootstrap` → `{settings, status, subUrls}` aggregate with ETag/304
 - `GET api/status`; `POST api/killswitch {enabled}` → `{killSwitch, rev}`; `GET api/suburls`; `GET api/version/check`
 - `ANY api/warp/{…}` → accounts/presets/amnezia sub-dispatch
-- `ANY api/users/{…}` → user CRUD + token regeneration
-- `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated)
+- `ANY api/users/{…}` → user CRUD + token regeneration; `GET api/users/{id}/activity?days=` → `{activity: [{day, requests, bytesUp, bytesDown}]}` (default 7, clamp 1–31; 404 on unknown id)
+- `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated; also handles `callback_query` with `tg:*` data via `telegramMenuKeyboard()` — `/start`+`/menu` attach it, taps answer + `editMessageText` in place)
 
 Method guards live in the declarative `API_ROUTES` table in `src/core/router.ts` (`Record<ApiRouteName, {methods, auth: none|read|write, handler}>` + a 5-line dispatcher: method gate, then none⇒direct / read⇒authed / write⇒authed on GET else authedCsrf); `OPTIONS` on APIs → 405.
 
