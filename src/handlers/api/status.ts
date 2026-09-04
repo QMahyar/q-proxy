@@ -1,10 +1,11 @@
 import type { RouteHandler } from "../../types/context";
 import type { SubFormat } from "../../core/ua";
 import { ValidationError } from "../../core/errors";
+import { audit } from "../../core/log";
 import { jsonOk, readJsonObject } from "../../core/respond";
 import { resolveHostname } from "../../core/routes";
 import { readUsage } from "../../core/counters";
-import { assertCsrf } from "../../auth/guard";
+import { assertCsrf, clientIp } from "../../auth/guard";
 import { appVersion, loadSettingsFresh, saveSettings } from "../../settings/store";
 import { validateSettings } from "../../settings/validate";
 
@@ -30,6 +31,7 @@ export const handleKillSwitch: RouteHandler = async (req, env, _s) => {
   const fresh = await loadSettingsFresh(env);
   const v = validateSettings({ ...fresh, killSwitch: body.enabled });
   if (!v.ok) throw new ValidationError(v.fields);
+  audit("killswitch", { ip: clientIp(req), enabled: body.enabled });
   const rev = await saveSettings(env, v.value);
   return jsonOk({ killSwitch: body.enabled, rev });
 };

@@ -15,6 +15,8 @@ import {
   storeAccount,
   validateAmnezia,
 } from "../../src/warp/store";
+import { handleWarpApi } from "../../src/handlers/api/warp";
+import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import type { WarpAccount } from "../../src/types/warp";
 
 class FakeKV {
@@ -260,5 +262,43 @@ describe("warp store", () => {
   it("persists global settings", async () => {
     await setGlobalSettings(kv.asEnv(), { amnezia: { Jc: 9 } });
     expect((await getGlobalSettings(kv.asEnv())).amnezia.Jc).toBe(9);
+  });
+
+  it("warp account update audits ids only, never keys or tokens", async () => {
+    const account = mkAccount();
+    await storeAccount(kv.asEnv(), account);
+    const s = { ...structuredClone(DEFAULT_SETTINGS), securePath: "testpath" };
+    const lines: string[] = [];
+    const orig = console.log;
+    console.log = (...args: unknown[]) => {
+      lines.push(args.map(String).join(" "));
+    };
+    try {
+      const req = new Request(`https://panel.example/testpath/api/warp/account/${account.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.13" },
+        body: JSON.stringify({ name: "Renamed Account" }),
+      });
+      const res = await handleWarpApi(req, kv.asEnv() as never, s);
+      expect(res.status).toBe(200);
+    } finally {
+      console.log = orig;
+    }
+    const entries = lines
+      .map((line) => {
+        try {
+          return JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      })
+      .filter((e) => e !== null && e.scope === "audit");
+    expect(entries.length).toBe(1);
+    expect(entries[0]!.message).toBe("warp.account.update");
+    expect(entries[0]!.extra).toEqual({ ip: "203.0.113.13", id: account.id });
+    const line = lines.join("\n");
+    for (const secret of [account.token, account.warp_token, account.config.private_key]) {
+      if (typeof secret === "string" && secret.length > 0) expect(line).not.toContain(secret);
+    }
   });
 });

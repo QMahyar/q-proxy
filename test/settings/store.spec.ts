@@ -12,6 +12,7 @@ import {
   handleSaveSettings,
 } from "../../src/handlers/api/settings";
 import { handleKillSwitch } from "../../src/handlers/api/status";
+import { audit } from "../../src/core/log";
 
 class FakeKV {
   map = new Map<string, string>();
@@ -37,6 +38,41 @@ class FakeKV {
 afterEach(() => {
   vi.useRealTimers();
 });
+
+function captureLogs(): { lines: string[]; restore: () => void } {
+  const lines: string[] = [];
+  const orig = console.log;
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+  };
+  return { lines, restore: () => {
+    console.log = orig;
+  } };
+}
+
+interface AuditEntry {
+  t: number;
+  level: string;
+  scope: string;
+  message: string;
+  extra: Record<string, unknown>;
+}
+
+function auditEntries(lines: string[]): AuditEntry[] {
+  const out: AuditEntry[] = [];
+  for (const line of lines) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof parsed === "object" && parsed !== null && (parsed as Record<string, unknown>).scope === "audit") {
+      out.push(parsed as AuditEntry);
+    }
+  }
+  return out;
+}
 
 describe("settings store", () => {
   it("seeds identity on first load and persists the wrapped blob", async () => {
@@ -137,7 +173,25 @@ describe("settings store", () => {
     expect(JSON.parse(kv.map.get("qproxy:settings")!).rev).toBe(1);
   });
 
-  it("handleSaveSettings merges fresh KV state instead of the stale isolate cache", async () => {
+  it("audit emits only explicitly passed fields and never ambient secrets", () => {
+    const ambientSecret = "ambient-secret-marker-9f3c7a";
+    const { lines, restore } = captureLogs();
+    try {
+      audit("settings.save", { ip: "203.0.113.7", keys: ["profileTitle"] });
+    } finally {
+      restore();
+    }
+    expect(lines.length).toBe(1);
+    const entry = JSON.parse(lines[0]!) as AuditEntry;
+    expect(entry.level).toBe("info");
+    expect(entry.scope).toBe("audit");
+    expect(entry.message).toBe("settings.save");
+    expect(typeof entry.t).toBe("number");
+    expect(entry.extra).toEqual({ ip: "203.0.113.7", keys: ["profileTitle"] });
+    expect(lines[0]).not.toContain(ambientSecret);
+  });
+
+  it("handleSaveSettings emits an audit line with changed keys and client ip", async () => {
     invalidateSettingsCache();
     const kv = new FakeKV();
     const env = kv.asEnv() as never;
@@ -233,5 +287,56 @@ describe("settings store", () => {
     const stored = JSON.parse(kv.map.get("qproxy:settings")!);
     expect(stored.data.profileTitle).toBe("imported-title");
     expect(stored.data.trojanPassword).toBe("concurrent-trojan-pass-2");
+  });
+
+  it("handleSaveSettings audits changed top-level keys without secret values", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const env = kv.asEnv() as never;
+    const s = await loadSettings(env);
+    const { lines, restore } = captureLogs();
+    try {
+      const req = new Request("https://panel.example/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.9" },
+        body: JSON.stringify({ profileTitle: "Audited Title" }),
+      });
+      const res = await handleSaveSettings(req, env, s);
+      expect(res.status).toBe(200);
+    } finally {
+      restore();
+    }
+    const entries = auditEntries(lines);
+    expect(entries.length).toBe(1);
+    expect(entries[0]!.message).toBe("settings.save");
+    expect(entries[0]!.extra.ip).toBe("203.0.113.9");
+    expect(entries[0]!.extra.keys).toContain("profileTitle");
+    const line = lines.join("\n");
+    for (const secret of [s.sessionSecret, s.securePath, s.vlessUuid, s.trojanPassword]) {
+      if (secret.length > 0) expect(line).not.toContain(secret);
+    }
+  });
+
+  it("handleKillSwitch audits the toggle value with client ip", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const env = kv.asEnv() as never;
+    const s = await loadSettings(env);
+    const { lines, restore } = captureLogs();
+    try {
+      const req = new Request("https://panel.example/api/killswitch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Q-Panel": "1", "CF-Connecting-IP": "203.0.113.11" },
+        body: JSON.stringify({ enabled: true }),
+      });
+      const res = await handleKillSwitch(req, env, s);
+      expect(res.status).toBe(200);
+    } finally {
+      restore();
+    }
+    const entries = auditEntries(lines);
+    expect(entries.length).toBe(1);
+    expect(entries[0]!.message).toBe("killswitch");
+    expect(entries[0]!.extra).toEqual({ ip: "203.0.113.11", enabled: true });
   });
 });

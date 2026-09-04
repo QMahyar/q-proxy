@@ -26,3 +26,7 @@ export const log = {
   info: (scope: string, message: string, extra?: unknown) => emit("info", scope, message, extra),
   error: (scope: string, message: string, extra?: unknown) => emit("error", scope, message, extra),
 };
+
+export function audit(action: string, detail: Record<string, unknown>): void {
+  log.info("audit", action, detail);
+}

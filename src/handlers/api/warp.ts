@@ -2,7 +2,9 @@ import type { RouteHandler } from "../../types/context";
 import type { AppError } from "../../core/errors";
 import type { AmneziaParams, WarpAccount, WarpConfig, WarpEndpoint, WarpPreset } from "../../types/warp";
 import { ValidationError, NotFoundError, RateLimitedError } from "../../core/errors";
+import { audit } from "../../core/log";
 import { jsonOk, readJsonObject } from "../../core/respond";
+import { clientIp } from "../../auth/guard";
 import { parseWarpConfig, parseWarpJson, parseEndpointHostPort } from "../../warp/config";
 import { registerWarpDevice, removeWarpDevice, WarpApiError } from "../../warp/api";
 import { purgeAllWarpSubs, purgeWarpSub } from "../../warp/cache";
@@ -177,6 +179,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
         void removeWarpDevice(reg.warpId, reg.warpToken).catch(() => {});
         throw err;
       }
+      audit("warp.account.create", { ip: clientIp(req), id: account.id });
       return jsonOk({ account: sanitizeAccount(account) });
     }
     if (rest[1] === "import" && rest.length === 2 && method === "POST") {
@@ -198,6 +201,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
           : undefined;
       const account = await buildAccount(env, body, parsed.config, parsed.amnezia_overrides, defaultEndpointList);
       await storeAccount(env, account);
+      audit("warp.account.import", { ip: clientIp(req), id: account.id });
       return jsonOk({ account: sanitizeAccount(account) });
     }
     const id = rest[1];
@@ -227,12 +231,14 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
         }
         await storeAccount(env, account);
         await purgeWarpSub(origin, s.securePath, account.token).catch(() => {});
+        audit("warp.account.update", { ip: clientIp(req), id: account.id });
         return jsonOk({ account: sanitizeAccount(account) });
       }
       if (rest.length === 2 && method === "DELETE") {
         await deleteAccount(env, account);
         void removeWarpDevice(account.warp_id, account.warp_token).catch(() => {});
         await purgeWarpSub(origin, s.securePath, account.token).catch(() => {});
+        audit("warp.account.delete", { ip: clientIp(req), id: account.id });
         return jsonOk({ deleted: true });
       }
       if (rest.length === 3 && rest[2] === "regenerate-token" && method === "POST") {
@@ -242,6 +248,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
           purgeWarpSub(origin, s.securePath, oldToken).catch(() => {}),
           purgeWarpSub(origin, s.securePath, token).catch(() => {}),
         ]);
+        audit("warp.account.regenerate-token", { ip: clientIp(req), id: account.id });
         return jsonOk({ token });
       }
     }
@@ -264,6 +271,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
       presets.push(preset);
       await savePresets(env, presets);
       void purgeAll();
+      audit("warp.preset.create", { ip: clientIp(req), id: preset.id });
       return jsonOk({ preset });
     }
     const id = rest[1];
@@ -280,6 +288,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
         }
         await savePresets(env, presets);
         void purgeAll();
+        audit("warp.preset.update", { ip: clientIp(req), id });
         return jsonOk({ preset: presets[index] });
       }
       if (method === "DELETE") {
@@ -289,6 +298,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
         presets.splice(index, 1);
         await savePresets(env, presets);
         void purgeAll();
+        audit("warp.preset.delete", { ip: clientIp(req), id });
         return jsonOk({ deleted: true });
       }
     }
@@ -307,6 +317,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
       if (!check.ok) throw new ValidationError(check.fields);
       await setGlobalSettings(env, { amnezia: check.value });
       void purgeAll();
+      audit("warp.amnezia.update", { ip: clientIp(req) });
       return jsonOk({ amnezia: check.value });
     }
   }
