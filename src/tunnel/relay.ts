@@ -5,6 +5,7 @@ import { concatBytes } from "../utils/bytes";
 const COALESCE_TARGET_BYTES = 20480;
 const COALESCE_INTERVAL_MS = 30;
 const DOWNLINK_BATCH_BYTES = 32768;
+const DOWNLINK_HARD_CAP_BYTES = 2 * 1024 * 1024;
 const UPLINK_HARD_CAP_BYTES = 1 * 1024 * 1024;
 const HALF_OPEN_GRACE_MS = 5000;
 const IDLE_CEILING_MS = 300_000;
@@ -338,6 +339,11 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
         downlinkBytes += value.length;
         pendingDown.push(value);
         pendingDownBytes += value.length;
+        if (pendingDownBytes > DOWNLINK_HARD_CAP_BYTES) {
+          log.error("relay", "downlink backlog overflow", `buffered ${pendingDownBytes} bytes`);
+          finish(1009);
+          return;
+        }
         if (pendingDownBytes >= DOWNLINK_BATCH_BYTES) {
           const chunks = pendingDown.slice();
           pendingDown.length = 0;
