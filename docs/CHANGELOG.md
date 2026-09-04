@@ -17,6 +17,10 @@
 - Per-user activity aggregates: daily `{day, requests, bytesUp, bytesDown}` rows in `qproxy:user-activity:<day>:<hash>` plus `GET /api/users/:id/activity?days=` (default 7, clamped 1–31, zeros for missing days).
 - Per-user connection rate-limit seam: token-bucket module (30 conns/min refill, burst 10, 120 s KV TTL, fail-open) with an opt-in relay admission gate (`RelayOptions.gate`; deny closes 1008).
 - Telegram inline keyboard: `/start`/`/menu` show Status/Usage/Subscription/Expiry/Kill ON-OFF buttons (`tg:*` callbacks); taps are answered and edit the message in place.
+- Country-tagged addresses: `AddressSetting` gains optional `country`/`city`; `?country=XX` (comma-separated, case-insensitive, invalid tokens ignored) on `/{sp}/sub` and per-user links keeps matching tagged addresses plus all untagged entries and the hostname fallback.
+- Bulk user operations: `POST /{sp}/api/users/bulk` patches `enabled`/`expiresAt` or deletes up to 50 users per call (`{updated, deleted, unknown}`; unknown ids skipped, tokens never returned).
+- Quantumult X subscription format: `?target=quantumult` (UA `quantumult`/`quanx`), `.conf` download with a single static PROXY group; VLESS/Trojan TLS-only, plain VMess/Shadowsocks included.
+- Panel wave-4 batch: show-once token-rotation modal (copy+QR), keyboard shortcuts (`?` cheatsheet; Ctrl/Cmd+S apply, Ctrl/Cmd+K search-or-home, g-h home, Ctrl/Cmd+Z per-section undo/redo), traffic chart on Home, 30-day backup nudge, per-address country/city fields, mobile pass.
 
 ### Fixed
 - Review sweep (5 rounds, ~70 findings): tunnel lifecycle (origin socket closed when client disconnects mid-dial; chain handshake deadline with proper timer cleanup), VLESS UDP/53 now length-framed per Xray `LengthPacketReader` (was forwarded raw, broken both directions), VMess rejects unknown security types (7-15) and plain+authenticated-length at handshake, fatal uplink corruption closes the tunnel (1011/1008) instead of hanging silently.

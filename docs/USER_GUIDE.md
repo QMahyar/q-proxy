@@ -144,6 +144,14 @@ Settings saves/resets/imports, kill-switch toggles, and WARP account/preset/Amne
 - `killswitch` logs `{ip, enabled}`; `warp.account.*` / `warp.preset.*` log `{ip, id}`; `warp.amnezia.update` logs `{ip}`.
 - Filter with `"scope":"audit"`. Secrets (passwords, UUIDs, tokens, `securePath`) never appear — only key names, account ids, and booleans.
 
+### 4.7 Panel Productivity (Shortcuts, Undo/Redo, Traffic, Backup)
+
+- **Keyboard shortcuts** — press `?` in the top bar for the cheatsheet: `Ctrl/Cmd+S` applies unsaved settings, `Ctrl/Cmd+K` focuses search (or goes home), `g` then `h` goes home, `Ctrl/Cmd+Z` undoes and `Shift+Ctrl/Cmd+Z` redoes the last change.
+- **Undo/redo** — per settings section, kept in memory while the panel is open (up to 20 steps); switching sections keeps each section's own history.
+- **Traffic chart** — the Home status card renders an SVG sparkline from the `qp_traffic` browser-local history (accumulated from the bootstrap usage counters on each visit); it shows an empty state until enough visits have built history. History never leaves the browser.
+- **Backup nudge** — if no settings export has happened in over 30 days, a banner offers a one-click export (dismissable). Export via Settings → Backup regularly regardless.
+- **Mobile** — below 500 px the layout stacks (tables collapse to labeled rows, modals go near-full-width); on touch devices help triggers are 44 px targets.
+
 ## 5. Subscriptions
 
 ### 5.1 Matrix
@@ -157,6 +165,7 @@ Base path: `GET /{sp}/sub` (`src/handlers/subscribe.ts`, `src/core/router.ts:154
 | `singbox` | `sing-box`/`singbox`/`sfa`/`hiddify`/`nekobox`/`karing` | sing-box JSON | `application/json` | Full profile: tun+mixed inbounds, DNS detour, `urltest` best-ping |
 | `surge` | `surge` | Surge INI | `text/plain` | `[Proxy]` + select/url-test groups; SS omitted (no v2ray-plugin) |
 | `loon` | `loon` | Loon | `text/plain` | `[Proxy]` lines; SS omitted |
+| `quantumult` | `quantumult`/`quanx` | Quantumult X | `text/plain` | `.conf`: `[server_local]` nodes + single static PROXY group; VLESS/Trojan TLS-only, plain VMess/SS included |
 | *(none, browser UA)* | `mozilla/`/`chrome/`/`safari`/`firefox` | Info page | `text/html` | Bilingual EN/FA landing with per-format copy/QR |
 
 Priority: `?target=` param > UA tokens > `base64` fallback; browsers get the info page. Non-browser UAs get `Content-Disposition: attachment` + `Subscription-Userinfo` / `Profile-Title` headers (`src/subscription/headers.ts`).
@@ -173,6 +182,7 @@ Fragment variant: `?mode=fragment` filters nodes to the fragment family (Xray JS
 | **Shadowrocket** (iOS) | Use base64 sub; fragment param auto-appended when UA is Shadowrocket — verify `fragment=` appears in URI preview |
 | **Surge** | Use `?target=surge` → Surge → Add config from URL; `#!MANAGED-CONFIG` interval auto-updates |
 | **Loon** | Use `?target=loon` → Loon → Add from URL → `[Proxy]` section populated |
+| **Quantumult X** | Use `?target=quantumult` → Quantumult X → download/import the `.conf`; nodes land in `[server_local]` under one static PROXY policy |
 
 Screenshot placeholders: *QR modal + "Copy URL" toast + per-format tabs on info page*
 
@@ -191,6 +201,12 @@ Each user link supports the same `?target=` formats as the main subscription. Up
 **Activity:** `GET /{sp}/api/users/{id}/activity?days=N` returns `{activity: [{day, requests, bytesUp, bytesDown}, …]}` — one row per day, chronological, zeros for days with no traffic. Defaults to 7 days, clamped to 1–31 (`?days=abc` behaves as omitted). Unknown or malformed user ids return 404; the response never contains the user token or its hash.
 
 **Rate limiting:** the per-user limiter is a token bucket (30 connections/min refill, burst of 10, keyed by token hash, 120 s KV entries, fail-open so a KV outage never blocks users); a denied relay admission closes with 1008.
+
+**Bulk operations:** the Users tab has a multiselect bulk bar (checkbox column + select-all) — Enable, Disable, Set expiry (pick a date first), Delete — with a confirm dialog and a `{updated} · deleted {deleted}` toast (unknown ids reported inline). Same operations are available as `POST /{sp}/api/users/bulk` with `{ids (1–50), patch: {enabled?, expiresAt?} | {delete: true}}` → `{updated, deleted, unknown}`; unknown ids are skipped and tokens are never returned.
+
+**Token rotation:** regenerating a user token opens a show-once modal with the new subscription URL (copy + QR) — copy it immediately, as it is never shown again; the old links stop working at once.
+
+Per-user links accept the same `?country=` filter as the main subscription (see §7.1).
 
 ### 5.4 WARP Subscriptions
 
@@ -233,6 +249,8 @@ Still stuck? Enable `debugLogging: true` (`src/types/settings.ts:48` → `src/co
 | cleanIps[] | 104.21.12.34, [2606:4700::1]:8443, ip:port | Direct addresses in the pool. An entry with `:port` emits only that port (TLS family decides security); bare entries follow the TLS/plain port selection below. Invalid lines are dropped on save. |
 
 Address composition guarantee: subscriptions contain **only** your worker hostname plus entries from these user-owned lists — no built-in or hard-coded IPs/domains are ever added.
+
+Each clean-IP/custom-domain entry can carry optional `country` (2-letter code, stored uppercase) and `city` (free text, 64 chars) metadata, set in the address editor. Appending `?country=XX` to any subscription URL (`/{sp}/sub` or a per-user link, comma-separated for several, case-insensitive) keeps only nodes whose tagged address matches, plus every untagged address and the worker-hostname fallback — e.g. `/{sp}/sub?target=clash&country=DE,NL`. Missing, empty, or fully-invalid values disable filtering. The panel Home page shows the same hint under the subscription list.
 
 Set in Panel -> Settings -> Routing. DNS for custom domains must be proxied (orange cloud) in CF dashboard — no auto DNS changes.
 
