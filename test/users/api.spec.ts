@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleUsersApi } from "../../src/handlers/api/users";
+import { routeRequest } from "../../src/core/router";
+import { clearSessionFloorCache, issueSession } from "../../src/auth/session";
+import { SETTINGS_KEY, invalidateSettingsCache } from "../../src/settings/store";
+import { makeTestSettings } from "../helpers/settings";
 import {
   consumeUserHit,
   hashToken,
@@ -321,5 +325,208 @@ describe("users api handler", () => {
     await expect(
       handleUsersApi(req(`/api/users/${createJ.data.user.id}/activity`, { method: "POST" }), env as never, {} as never),
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  describe("bulk endpoint", () => {
+    const SP = "bulkpath1";
+    const SECRET = "s".repeat(64);
+
+    interface BulkData {
+      updated: number;
+      deleted: number;
+      unknown: number;
+    }
+
+    beforeEach(async () => {
+      invalidateSettingsCache();
+      clearSessionFloorCache();
+      const settings = makeTestSettings({ securePath: SP, sessionSecret: SECRET });
+      await kv.put(
+        SETTINGS_KEY,
+        JSON.stringify({ version: 1, updatedAt: Date.now(), data: settings }),
+      );
+    });
+
+    async function create(name: string): Promise<{ id: string; token: string }> {
+      const res = (await handleUsersApi(jsonReq("/api/users", "POST", { name }), env as never, {} as never)) as Response;
+      const j = (await res.json()) as { data: { user: { id: string; token: string } } };
+      return { id: j.data.user.id, token: j.data.user.token };
+    }
+
+    async function bulk(body: unknown): Promise<{ status: number; json: { ok: boolean; data: BulkData } }> {
+      const res = (await handleUsersApi(jsonReq("/api/users/bulk", "POST", body), env as never, {} as never)) as Response;
+      return { status: res.status, json: (await res.json()) as { ok: boolean; data: BulkData } };
+    }
+
+    function fakeId(n: number): string {
+      return `aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, "0")}`;
+    }
+
+    it("disables and re-enables a batch", async () => {
+      const a = await create("BulkA");
+      const b = await create("BulkB");
+      const c = await create("BulkC");
+      const ids = [a.id, b.id, c.id];
+      const off = await bulk({ ids, patch: { enabled: false } });
+      expect(off.status).toBe(200);
+      expect(off.json).toEqual({ ok: true, data: { updated: 3, deleted: 0, unknown: 0 } });
+      expect((await listUsers(env as never)).every((u) => u.enabled === false)).toBe(true);
+      const on = await bulk({ ids, patch: { enabled: true } });
+      expect(on.json).toEqual({ ok: true, data: { updated: 3, deleted: 0, unknown: 0 } });
+      expect((await listUsers(env as never)).every((u) => u.enabled === true)).toBe(true);
+    });
+
+    it("counts unknown ids without erroring", async () => {
+      const known = await create("Known");
+      const res = await bulk({ ids: [known.id, fakeId(1), "not-a-uuid"], patch: { enabled: false } });
+      expect(res.json).toEqual({ ok: true, data: { updated: 1, deleted: 0, unknown: 2 } });
+      expect((await listUsers(env as never))[0]!.enabled).toBe(false);
+    });
+
+    it("deletes a batch and skips unknown ids", async () => {
+      const a = await create("DelA");
+      const b = await create("DelB");
+      const res = await bulk({ ids: [a.id, b.id, fakeId(2)], patch: { delete: true } });
+      expect(res.json).toEqual({ ok: true, data: { updated: 0, deleted: 2, unknown: 1 } });
+      expect(await listUsers(env as never)).toHaveLength(0);
+    });
+
+    it("sets and clears expiresAt in batch with single-user validation", async () => {
+      const a = await create("ExpA");
+      const b = await create("ExpB");
+      const future = Date.now() + 30 * 24 * 60 * 60 * 1000;
+      const set = await bulk({ ids: [a.id, b.id], patch: { expiresAt: future } });
+      expect(set.json).toEqual({ ok: true, data: { updated: 2, deleted: 0, unknown: 0 } });
+      for (const u of await listUsers(env as never)) expect(u.expiresAt).toBe(future);
+      const clear = await bulk({ ids: [a.id, b.id], patch: { expiresAt: null } });
+      expect(clear.json.data.updated).toBe(2);
+      for (const u of await listUsers(env as never)) expect(u.expiresAt).toBeNull();
+    });
+
+    it("rejects empty ids", async () => {
+      await expect(handleUsersApi(jsonReq("/api/users/bulk", "POST", { ids: [], patch: { enabled: false } }), env as never, {} as never)).rejects.toMatchObject({
+        fields: expect.objectContaining({ ids: expect.any(String) }),
+      });
+    });
+
+    it("rejects over-50 ids and accepts exactly 50", async () => {
+      const known = await create("Cap");
+      const over = [known.id];
+      for (let i = 0; i < 50; i++) over.push(fakeId(100 + i));
+      expect(over).toHaveLength(51);
+      await expect(handleUsersApi(jsonReq("/api/users/bulk", "POST", { ids: over, patch: { enabled: false } }), env as never, {} as never)).rejects.toMatchObject({
+        fields: expect.objectContaining({ ids: expect.stringContaining("50") }),
+      });
+      const exact = [known.id];
+      for (let i = 0; i < 49; i++) exact.push(fakeId(200 + i));
+      const res = await bulk({ ids: exact, patch: { enabled: false } });
+      expect(res.json).toEqual({ ok: true, data: { updated: 1, deleted: 0, unknown: 49 } });
+    });
+
+    it("rejects ambiguous, empty, or malformed patch", async () => {
+      const known = await create("PatchShape");
+      for (const patch of [
+        {},
+        { enabled: true, delete: true },
+        { expiresAt: null, delete: true },
+        { delete: false },
+        { delete: "yes" },
+        { enabled: true, turbo: true },
+      ]) {
+        await expect(
+          handleUsersApi(jsonReq("/api/users/bulk", "POST", { ids: [known.id], patch }), env as never, {} as never),
+        ).rejects.toMatchObject({ fields: expect.objectContaining({ patch: expect.any(String) }) });
+      }
+      await expect(
+        handleUsersApi(jsonReq("/api/users/bulk", "POST", { ids: [known.id] }), env as never, {} as never),
+      ).rejects.toMatchObject({ fields: expect.objectContaining({ patch: expect.any(String) }) });
+      expect((await listUsers(env as never))[0]!.enabled).toBe(true);
+    });
+
+    it("rejects invalid field values without mutating anyone", async () => {
+      const a = await create("ValA");
+      const b = await create("ValB");
+      await expect(
+        handleUsersApi(jsonReq("/api/users/bulk", "POST", { ids: [a.id, b.id], patch: { expiresAt: Date.now() - 1000 } }), env as never, {} as never),
+      ).rejects.toMatchObject({ fields: expect.objectContaining({ expiresAt: expect.any(String) }) });
+      await expect(
+        handleUsersApi(jsonReq("/api/users/bulk", "POST", { ids: [a.id], patch: { enabled: "yes" } }), env as never, {} as never),
+      ).rejects.toMatchObject({ fields: expect.objectContaining({ enabled: expect.any(String) }) });
+      await expect(
+        handleUsersApi(jsonReq("/api/users/bulk", "POST", { ids: "nope", patch: { enabled: false } }), env as never, {} as never),
+      ).rejects.toMatchObject({ fields: expect.objectContaining({ ids: expect.any(String) }) });
+      for (const u of await listUsers(env as never)) {
+        expect(u.enabled).toBe(true);
+        expect(u.expiresAt).toBeNull();
+      }
+    });
+
+    it("never returns tokens, hashes, or secrets", async () => {
+      const a = await create("LeakA");
+      const b = await create("LeakB");
+      const hash = await hashToken(a.token);
+      const patched = await bulk({ ids: [a.id, b.id], patch: { enabled: false } });
+      const removed = await bulk({ ids: [a.id], patch: { delete: true } });
+      for (const payload of [JSON.stringify(patched.json), JSON.stringify(removed.json)]) {
+        expect(payload).not.toContain(a.token);
+        expect(payload).not.toContain(b.token);
+        expect(payload).not.toContain(hash);
+        expect(payload).not.toContain("tokenHash");
+        expect(payload).not.toContain("token");
+      }
+      expect(Object.keys(patched.json.data).sort()).toEqual(["deleted", "unknown", "updated"]);
+    });
+
+    it("rejects non-POST methods on bulk", async () => {
+      await expect(
+        handleUsersApi(req(`/api/users/bulk`, { method: "GET" }), env as never, {} as never),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it("requires a session (401 without cookie)", async () => {
+      const target = `https://example.com/${SP}/api/users/bulk`;
+      await expect(
+        routeRequest(
+          new Request(target, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Q-Panel": "1" },
+            body: JSON.stringify({ ids: [fakeId(1)], patch: { enabled: false } }),
+          }),
+          env as never,
+        ),
+      ).rejects.toMatchObject({ status: 401 });
+    });
+
+    it("requires the CSRF header (403 with session but no header)", async () => {
+      const target = `https://example.com/${SP}/api/users/bulk`;
+      const token = await issueSession(SECRET);
+      await expect(
+        routeRequest(
+          new Request(target, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: `q_session=${token}` },
+            body: JSON.stringify({ ids: [fakeId(1)], patch: { enabled: false } }),
+          }),
+          env as never,
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+    });
+
+    it("accepts session plus CSRF and applies the batch", async () => {
+      const known = await create("Routed");
+      const target = `https://example.com/${SP}/api/users/bulk`;
+      const token = await issueSession(SECRET);
+      const res = (await routeRequest(
+        new Request(target, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: `q_session=${token}`, "X-Q-Panel": "1" },
+          body: JSON.stringify({ ids: [known.id, fakeId(9)], patch: { enabled: false } }),
+        }),
+        env as never,
+      )) as Response;
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true, data: { updated: 1, deleted: 0, unknown: 1 } });
+      expect((await listUsers(env as never))[0]!.enabled).toBe(false);
+    });
   });
 });
