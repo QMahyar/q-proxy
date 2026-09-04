@@ -61,7 +61,7 @@ Layout rule: specs mirror `src/` — `src/protocols/vless.ts` ⇔ `test/protocol
 | Share URIs + emitters (golden snapshots) | unit | `test/nodes/emitters/*.spec.ts` |
 | WARP parsers/formatters, x25519 keypairs | unit | `test/warp/*` |
 | Settings migrate/validate/seed, UA, proxyIP/NAT64, failover planner | unit | Mocked `fetch` for DoH/TXT |
-| Router/auth/KV/sub/tunnel smoke (injectable `dialImpl`) | workers | `test/workers/core/router.spec.ts`, `test/workers/handlers/*` |
+| Router/auth/KV/sub/tunnel smoke (injectable `dialImpl`) | workers | `test/workers/core/router.spec.ts`, `test/workers/handlers/*`; bootstrap gate + setup-window specs in `test/workers/auth-flow.spec.ts` |
 | D1 stores + KV→D1 migration (provisioned `QPROXY_DB`) | workers | `test/d1/migrate.spec.ts`, `test/helpers/seed.ts` fixtures |
 
 ### 3.3 Testing Protocol Changes
@@ -253,6 +253,7 @@ Handshake bounded: 16 KiB accumulated + 10 s timeout → WS close 1008. Reasons 
 - validate.ts: full-schema validation → `{ok:false, fields}` map for 422 responses. ECH server-name resolution is `resolveEchServerName(settings, sni)`: disabled ⇒ null, manual `echServerName` wins, else `echAuto` derives the domain-shaped SNI (warning string when unresolvable).
 - `allowedIps` is a `{kind:"custom"}` descriptor-validated list (trim/dedupe/drop-empty, 64-entry cap; exact IP or v4/v6 CIDR only — hostnames and `ip:port` rejected). Enforcement is `isIpAllowlisted` + a `requireAuth` check after session verification (401 before 403); `s.allowedIps ?? []` keeps old blobs working.
 - `vlessFlow` is an `{kind:"enum", allowed:["", "xtls-rprx-vision"]}` descriptor (`VLESS_FLOWS` in `src/settings/fields.ts`, default `""`) and `ssDirect` a `{kind:"bool"}` descriptor (default `false`); both bound in the panel registry with en/fa dicts (`protocols.flow.*`, `protocols.ssDirect.*`). Unknown flow strings and non-boolean `ssDirect` values fail validation with English field errors.
+- `passwordIsBootstrap` (`{kind:"bool"}`, default `false`) and `seededAt` (`{kind:"int", min:0, max:4_102_444_800_000}`, default `0`) back the onboarding bootstrap flow (no `SETTINGS_VERSION` bump — deep-merge defaults fill absent keys). `fillIdentity` stamps `seededAt = Date.now()` only when it was `0`; `validateBootstrapConsistency` rejects `passwordIsBootstrap: true` without an existing `passwordHash`. While the flag is on, `dispatchApi`'s `bootstrapGated` wrapper answers `403 PASSWORD_CHANGE_REQUIRED` on every authed route except the exemption rows (`auth-logout`/`auth-password`/`bootstrap` = `allow`, `settings-get` = `read` ⇒ GET-only); `handleSetup` refuses first-password setup once `seededAt` is older than 24 h (409 `SETUP_WINDOW_EXPIRED`), and `handlePasswordChange` saves `passwordIsBootstrap: false` to lift the gate.
 - migrate.ts: pure stepwise migrations — see §5.
 
 ## 11. Observability
@@ -298,7 +299,7 @@ Cross-imports only via frozen symbols. Adding a file outside ownership requires 
 
 Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},fields?}`. Key endpoints (session unless noted):
 
-- `POST api/auth/login` `{password}` → sets `q_session`; `POST api/auth/setup` accepted only while password unset; `POST api/auth/password` (session+CSRF) → `{changed:true}`
+- `POST api/auth/login` `{password}` → sets `q_session`; success data gains `mustChangePassword: true` while `passwordIsBootstrap` is on (the TOTP-pending response stays `{totpRequired:true}`); `POST api/auth/setup` accepted only while password unset and within 24 h of `seededAt` (else 409 `ALREADY_SET` / 409 `SETUP_WINDOW_EXPIRED`); `POST api/auth/password` (session+CSRF) → `{changed:true}` and clears `passwordIsBootstrap`; while the flag is on, non-exempt authed APIs answer `403 PASSWORD_CHANGE_REQUIRED` (allowlist: logout, password, bootstrap, GET settings — see §10)
 - `GET /healthz` → `{ok:true, version, colo}` (no auth, `no-store`)
 - `GET api/settings` → redacted view; `PUT api/settings` (CSRF) → `{saved:true, rev}` or 422 `{fields}`; `POST api/settings/reset` → `{saved:true, rev}`
 - `GET api/settings/export` → secrets-stripped JSON; `POST api/settings/import` → `{saved:true, rev, imported}`
@@ -308,7 +309,7 @@ Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},f
 - `ANY api/users/{…}` → user CRUD + token regeneration; `GET api/users/{id}/activity?days=` → `{activity: [{day, requests, bytesUp, bytesDown}]}` (default 7, clamp 1–31; 404 on unknown id); `POST api/users/bulk` `{ids (1–50), patch: {enabled?, expiresAt?} | {delete: true}}` → `{updated, deleted, unknown}` (unknown ids skipped, tokens never returned)
 - `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated; also handles `callback_query` with `tg:*` data via `telegramMenuKeyboard()` — `/start`+`/menu` attach it, taps answer + `editMessageText` in place)
 
-Method guards live in the declarative `API_ROUTES` table in `src/core/router.ts` (`Record<ApiRouteName, {methods, auth: none|read|write, handler}>` + a 5-line dispatcher: method gate, then none⇒direct / read⇒authed / write⇒authed on GET else authedCsrf); `OPTIONS` on APIs → 405.
+Method guards live in the declarative `API_ROUTES` table in `src/core/router.ts` (`Record<ApiRouteName, {methods, auth: none|read|write, handler, bootstrap?: "allow"|"read"}>` + a 5-line dispatcher: method gate, then none⇒direct / read⇒authed / write⇒authed on GET else authedCsrf, with authed handlers additionally wrapped in `bootstrapGated` for the bootstrap lock); `OPTIONS` on APIs → 405.
 
 Two validation tiers exist — pick by surface:
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Onboarding v2 server: new settings fields `passwordIsBootstrap` (default `false`) and `seededAt` (default `0`) with descriptor rows and migrate-safe defaults merge; `fillIdentity` stamps `seededAt` on first seed and never refreshes it.
+- Setup window: `POST /{sp}/api/auth/setup` answers `409 SETUP_WINDOW_EXPIRED` once a seeded-but-passwordless panel is older than 24 h (checked after the fresh KV re-read; blobs seeded before this change keep the setup endpoint open).
+- Bootstrap gate: while the bootstrap password is in force, every authenticated API answers `403 PASSWORD_CHANGE_REQUIRED` except the allowlist — `GET api/bootstrap`, `POST api/auth/logout`, `POST api/auth/password`, and read-only `GET api/settings` (PUT still gated); a successful password change clears the flag and unlocks the panel.
+- Deploy-direct password handoff: the script generates a strong bootstrap password in the `qproxy-XXXXXXXX` form, prints it exactly once, polls the freshly seeded worker until it responds, and exits 1 when the handoff fails (`--password` / `QPROXY_PASSWORD` still override).
+- TOTP enable-flow hardening: recovery codes are a hard gate — the 10 codes are shown once, during setup, with copy-all plus a plain-text download (`q-proxy-recovery-codes.txt`); "Verify and enable" stays disabled until the "I saved my recovery codes" switch is on (EN/FA), with a defense-in-depth re-check in the confirm action.
+
+### Changed
+- Full-auth login success data gains `mustChangePassword: true` while `passwordIsBootstrap` is on (field absent otherwise); the TOTP-pending `{totpRequired:true}` response is unchanged.
+- TOTP re-enable guidance: starting setup while an enable attempt is in progress or was previously started asks for confirmation and warns that the fresh secret invalidates the previously shown QR (idle and setup views, EN/FA); after enable the codes view is replaced by a persistent device-clock-skew note, and the login TOTP error view hints "check your device clock or use a recovery code".
+
 ## 1.3.0 - 2026-09-04
 
 ### Added
