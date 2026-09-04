@@ -8,6 +8,7 @@ import {
   handleTelegramWebhook,
   normalizeTelegramChatId,
   runExpirySweep,
+  telegramMenuKeyboard,
   telegramWebhookSecret,
   userExpiringSoon,
   userQuotaExhausted,
@@ -483,5 +484,173 @@ describe("runExpirySweep", () => {
     const res = await runExpirySweep(kv.asEnv() as never, makeSettings());
     expect(res).toEqual({ sent: 0, skipped: 0 });
     expect(calls.length).toBe(0);
+  });
+});
+
+function callbackRequest(
+  data: unknown,
+  chatId: number | string,
+  secret: string,
+  messageId: number | null = 11,
+): Request {
+  const callback: Record<string, unknown> = { id: "cb-1", data, from: { id: chatId } };
+  if (messageId !== null) callback.message = { message_id: messageId, chat: { id: chatId } };
+  return new Request(`https://panel.example.com/testpath/telegram/webhook/${secret}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ update_id: 3, callback_query: callback }),
+  });
+}
+
+function sentTo(method: string): Array<{ url: string; body: Record<string, unknown> }> {
+  return calls
+    .filter((c) => c.url === `https://api.telegram.org/bot${BOT_TOKEN}/${method}`)
+    .map((c) => ({ url: c.url, body: JSON.parse(String(c.init!.body)) as Record<string, unknown> }));
+}
+
+describe("telegram menu keyboard", () => {
+  it("exposes the six namespaced payloads across three rows of two", () => {
+    const keyboard = telegramMenuKeyboard();
+    expect(keyboard.inline_keyboard).toHaveLength(3);
+    for (const row of keyboard.inline_keyboard) expect(row).toHaveLength(2);
+    expect(keyboard.inline_keyboard.flat().map((b) => b.callback_data)).toEqual([
+      "tg:status",
+      "tg:usage",
+      "tg:sub",
+      "tg:expiry",
+      "tg:kill-on",
+      "tg:kill-off",
+    ]);
+  });
+
+  it("attaches the keyboard to /menu replies", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    await handleTelegramWebhook(webhookRequest("/menu", CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings());
+    const sent = await lastSent();
+    expect(String(sent.body.text)).toContain("/status");
+    const markup = sent.body.reply_markup as { inline_keyboard: unknown };
+    expect(markup.inline_keyboard).toEqual(telegramMenuKeyboard().inline_keyboard);
+  });
+
+  it("attaches the keyboard to /start replies", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    await handleTelegramWebhook(webhookRequest("/start", CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings());
+    const sent = await lastSent();
+    expect(String(sent.body.text)).toContain("/kill");
+    const markup = sent.body.reply_markup as { inline_keyboard: unknown };
+    expect(markup.inline_keyboard).toEqual(telegramMenuKeyboard().inline_keyboard);
+  });
+
+  it("leaves plain command replies without a keyboard", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    await handleTelegramWebhook(webhookRequest("/status", CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings());
+    const sent = await lastSent();
+    expect(sent.body.reply_markup).toBeUndefined();
+  });
+});
+
+describe("handleTelegramWebhook callback_query", () => {
+  it("answers tg:status and edits the menu message in place", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    const res = await handleTelegramWebhook(
+      callbackRequest("tg:status", Number(CHAT_ID), secret),
+      new FakeKV().asEnv() as never,
+      makeSettings(),
+    );
+    expect(res.status).toBe(200);
+    await vi.waitFor(() => expect(calls.length).toBe(2));
+    const answers = sentTo("answerCallbackQuery");
+    expect(answers).toHaveLength(1);
+    expect(answers[0]!.body.callback_query_id).toBe("cb-1");
+    const edits = sentTo("editMessageText");
+    expect(edits).toHaveLength(1);
+    expect(String(edits[0]!.body.text)).toContain("Version: 0.0.0-dev");
+    expect(edits[0]!.body.message_id).toBe(11);
+    expect(edits[0]!.body.chat_id).toBe(CHAT_ID);
+    const markup = edits[0]!.body.reply_markup as { inline_keyboard: unknown };
+    expect(markup.inline_keyboard).toEqual(telegramMenuKeyboard().inline_keyboard);
+    expect(sentTo("sendMessage")).toHaveLength(0);
+  });
+
+  it("ignores unknown callback data without touching telegram", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    for (const data of ["tg:nope", "status", ""]) {
+      calls = [];
+      const res = await handleTelegramWebhook(
+        callbackRequest(data, Number(CHAT_ID), secret),
+        new FakeKV().asEnv() as never,
+        makeSettings(),
+      );
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { data: unknown }).data).toEqual({});
+    }
+    await new Promise((r) => setTimeout(r, 25));
+    expect(calls.length).toBe(0);
+  });
+
+  it("stays silent for callbacks from other chats", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    const res = await handleTelegramWebhook(
+      callbackRequest("tg:status", 999999, secret),
+      new FakeKV().asEnv() as never,
+      makeSettings(),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { data: unknown }).data).toEqual({});
+    await new Promise((r) => setTimeout(r, 25));
+    expect(calls.length).toBe(0);
+  });
+
+  it("applies tg:kill-on immediately with the same text as /kill on", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    const textKv = new FakeKV();
+    await handleTelegramWebhook(webhookRequest("/kill on", CHAT_ID, secret), textKv.asEnv() as never, makeSettings());
+    const textReply = String((await lastSent()).body.text);
+    calls = [];
+    const buttonKv = new FakeKV();
+    await handleTelegramWebhook(
+      callbackRequest("tg:kill-on", Number(CHAT_ID), secret),
+      buttonKv.asEnv() as never,
+      makeSettings(),
+    );
+    await vi.waitFor(() => expect(calls.length).toBe(2));
+    const edits = sentTo("editMessageText");
+    expect(String(edits[0]!.body.text)).toBe(textReply);
+    expect(String(edits[0]!.body.text)).toContain("enabled");
+    const textBlob = JSON.parse(textKv.map.get("qproxy:settings")!) as { data: Settings };
+    const buttonBlob = JSON.parse(buttonKv.map.get("qproxy:settings")!) as { data: Settings };
+    expect(textBlob.data.killSwitch).toBe(true);
+    expect(buttonBlob.data.killSwitch).toBe(true);
+  });
+
+  it("applies tg:kill-off immediately", async () => {
+    const kv = new FakeKV();
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    await handleTelegramWebhook(
+      callbackRequest("tg:kill-off", Number(CHAT_ID), secret),
+      kv.asEnv() as never,
+      makeSettings({ killSwitch: true }),
+    );
+    await vi.waitFor(() => expect(calls.length).toBe(2));
+    expect(String(sentTo("editMessageText")[0]!.body.text)).toContain("disabled");
+    const blob = JSON.parse(kv.map.get("qproxy:settings")!) as { data: Settings };
+    expect(blob.data.killSwitch).toBe(false);
+  });
+
+  it("sends a fresh keyboard message when the callback carries no message", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    await handleTelegramWebhook(
+      callbackRequest("tg:usage", Number(CHAT_ID), secret, null),
+      new FakeKV().asEnv() as never,
+      makeSettings(),
+    );
+    await vi.waitFor(() => expect(calls.length).toBe(2));
+    expect(sentTo("editMessageText")).toHaveLength(0);
+    const sent = sentTo("sendMessage");
+    expect(sent).toHaveLength(1);
+    expect(String(sent[0]!.body.text)).toMatch(/^Today: \d+ requests/);
+    expect(sent[0]!.body.chat_id).toBe(CHAT_ID);
+    const markup = sent[0]!.body.reply_markup as { inline_keyboard: unknown };
+    expect(markup.inline_keyboard).toEqual(telegramMenuKeyboard().inline_keyboard);
   });
 });
