@@ -34,10 +34,10 @@ The script prints a pre-filled token link, waits for paste, creates KV, uploads 
 
 | Command | What |
 |---------|------|
-| `npm run build` | `dist/q-proxy.js` + `dist/_worker.js` (~400 KB) |
+| `npm run build` | `dist/q-proxy.js` + `dist/_worker.js` (~470 KB) |
 | `npm run deploy` | Direct API deploy (no wrangler needed) |
 | `npm run dev` | Local dev at `http://127.0.0.1:8787` |
-| `npm test` | 763 tests |
+| `npm test` | 957 tests |
 | `npm run typecheck` | Type check |
 
 ## Docs
