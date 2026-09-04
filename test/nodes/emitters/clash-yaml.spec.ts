@@ -217,8 +217,7 @@ describe("emitClashYaml golden", () => {
     expect(out).toContain("    type: ss\n    server: example.com\n    port: 443\n    udp: true");
   });
 
-  it("excludes plain-security vless nodes because mihomo vless requires tls", () => {
-    const plainVless: VlessNode = {
+  it("excludes plain-security vless nodes because mihomo vless requires tls", () => {    const plainVless: VlessNode = {
       ...vless(),
       name: "VLESS plain",
       port: 80,
@@ -233,6 +232,16 @@ describe("emitClashYaml golden", () => {
     expect(out).toContain("server: example.com\n    port: 443");
     expect(out).toContain('proxies: ["VLESS example.com 443"]');
     expect(out).not.toContain("VLESS plain");
+  });
+
+  it("omits ech-opts, fingerprint, and alpn when the node carries none", () => {
+    const out = emitClashYaml([trojan()], OPTS);
+    expect(out).not.toContain("ech-opts");
+    expect(out).toContain("    client-fingerprint: chrome");
+    const bare: TrojanNode = { ...trojan(), fingerprint: null, alpn: [] };
+    const outBare = emitClashYaml([bare], OPTS);
+    expect(outBare).not.toContain("client-fingerprint");
+    expect(outBare).not.toContain("alpn:");
   });
 });
 
