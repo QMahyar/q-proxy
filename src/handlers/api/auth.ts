@@ -22,13 +22,13 @@ import {
 import { loadSettingsFresh, saveSettings } from "../../settings/store";
 import { validateSettings } from "../../settings/validate";
 
-async function upgradeLegacyHash(env: Env, password: string): Promise<void> {
+async function upgradeLegacyHash(env: Env, password: string, pepper: string): Promise<void> {
   try {
     const fresh = await loadSettingsFresh(env);
     if (fresh.passwordHash === null || fresh.passwordSalt === null) return;
-    const verified = await verifyPassword(password, fresh.passwordHash, fresh.passwordSalt);
+    const verified = await verifyPassword(password, fresh.passwordHash, fresh.passwordSalt, pepper);
     if (verified.tier !== "legacy") return;
-    const { hash, salt } = await hashPassword(password);
+    const { hash, salt } = await hashPassword(password, pepper);
     const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
     if (!v.ok) return;
     await saveSettings(env, v.value);
@@ -46,13 +46,15 @@ export const handleLogin: RouteHandler = async (req, env, s) => {
   }
   const password = typeof body.password === "string" ? body.password : "";
   const verified =
-    password.length > 0 ? await verifyPassword(password, s.passwordHash, s.passwordSalt) : null;
+    password.length > 0
+      ? await verifyPassword(password, s.passwordHash, s.passwordSalt, s.sessionSecret)
+      : null;
   if (verified === null || !verified.ok) {
     await recordLoginFailure(env, ip);
     throw new UnauthorizedError("invalid password");
   }
   await clearLoginThrottle(env, ip);
-  if (verified.tier === "legacy") await upgradeLegacyHash(env, password);
+  if (verified.tier === "legacy") await upgradeLegacyHash(env, password, s.sessionSecret);
   const floor = await getSessionFloor(env);
   return jsonOk(
     { hasPassword: true },
@@ -83,7 +85,7 @@ export const handleSetup: RouteHandler = async (req, env, s) => {
   if (newPassword.length < 8) {
     throw new ValidationError({ newPassword: "must be at least 8 characters" });
   }
-  const { hash, salt } = await hashPassword(newPassword);
+  const { hash, salt } = await hashPassword(newPassword, fresh.sessionSecret);
   const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
   if (!v.ok) throw new ValidationError(v.fields);
   await saveSettings(env, v.value);
@@ -103,13 +105,20 @@ export const handlePasswordChange: RouteHandler = async (req, env, _s) => {
   const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
   const currentOk =
     currentPassword.length > 0 &&
-    (await verifyPassword(currentPassword, fresh.passwordHash, fresh.passwordSalt)).ok;
+    (
+      await verifyPassword(
+        currentPassword,
+        fresh.passwordHash,
+        fresh.passwordSalt,
+        fresh.sessionSecret,
+      )
+    ).ok;
   if (!currentOk) throw new UnauthorizedError("invalid password");
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
   if (newPassword.length < 8) {
     throw new ValidationError({ newPassword: "must be at least 8 characters" });
   }
-  const { hash, salt } = await hashPassword(newPassword);
+  const { hash, salt } = await hashPassword(newPassword, fresh.sessionSecret);
   const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
   if (!v.ok) throw new ValidationError(v.fields);
   await saveSettings(env, v.value);
