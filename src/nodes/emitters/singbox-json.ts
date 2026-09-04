@@ -1,6 +1,57 @@
 import type { ProxyNode, SSNode, VMessNode } from "../../types/node";
+import { isIpLiteral } from "../../utils/net";
 import { TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
+
+const DNS_SERVER_SCHEMES: Record<string, { type: string; defaultPort: number }> = {
+  "https:": { type: "https", defaultPort: 443 },
+  "http:": { type: "https", defaultPort: 443 },
+  "tls:": { type: "tls", defaultPort: 853 },
+  "tcp:": { type: "tcp", defaultPort: 53 },
+  "udp:": { type: "udp", defaultPort: 53 },
+  "quic:": { type: "quic", defaultPort: 853 },
+  "h3:": { type: "h3", defaultPort: 443 },
+};
+
+function parseDnsUrl(address: string): URL | null {
+  const texts = address.includes("://") ? [address] : [`https://${address}`, `https://[${address}]`];
+  for (const text of texts) {
+    try {
+      return new URL(text);
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+function dnsServerEntry(address: string, tag: string, detour?: string): Record<string, unknown> {
+  const raw = address.trim();
+  if (raw === "local") return { type: "local", tag };
+  const url = parseDnsUrl(raw);
+  if (url === null) {
+    const fallback: Record<string, unknown> = { type: "https", tag, server: raw };
+    if (detour !== undefined) fallback.detour = detour;
+    return fallback;
+  }
+  const scheme = DNS_SERVER_SCHEMES[url.protocol];
+  const type = scheme?.type ?? "https";
+  const defaultPort = scheme?.defaultPort ?? 443;
+  const entry: Record<string, unknown> = {
+    type,
+    tag,
+    server: url.hostname.replace(/^\[/, "").replace(/\]$/, ""),
+  };
+  const port = url.port === "" ? defaultPort : Number(url.port);
+  if (port !== defaultPort) entry.server_port = port;
+  const fullPath = `${url.pathname}${url.search}`;
+  if ((type === "https" || type === "h3") && fullPath !== "" && fullPath !== "/" && fullPath !== "/dns-query") {
+    entry.path = fullPath;
+  }
+  if (!isIpLiteral(url.hostname) && tag !== "local-dns") entry.domain_resolver = "local-dns";
+  if (detour !== undefined) entry.detour = detour;
+  return entry;
+}
 
 interface SingBoxTls {
   enabled: boolean;
@@ -231,11 +282,8 @@ export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions):
     : null;
 
   const dnsServers: Record<string, unknown>[] = hasNodes
-    ? [
-        { tag: "proxy-dns", address: opts.remoteDns, detour: "PROXY" },
-        { tag: "local-dns", address: "local" },
-      ]
-    : [{ tag: "local-dns", address: opts.remoteDns }];
+    ? [dnsServerEntry(opts.remoteDns, "proxy-dns", "PROXY"), { type: "local", tag: "local-dns" }]
+    : [dnsServerEntry(opts.remoteDns, "local-dns")];
 
   const routeRules: Record<string, unknown>[] = [{ protocol: "dns", action: "hijack-dns" }];
   if (opts.rules && opts.rules.blockDomains.length > 0) {
