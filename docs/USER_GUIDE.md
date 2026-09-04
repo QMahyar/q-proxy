@@ -110,6 +110,7 @@ All fields from `src/types/settings.ts:41` grouped below. Saving is `PUT /{sp}/a
 | Privacy | `camouflage {mode (off/static/proxy), url}`, `killSwitch`, `speedtestIntercept`, `remoteSubUrls[]`, `urlTestIntervalSec` (300) | Camouflage + merging |
 | Routing rules | `routingRules {bypassLan, blockAds, blockMalware, blockQuic, customBypass[], customBlock[]}` | Clash/sing-box rule-section injection |
 | Telegram | `telegram {enabled, chatId}` (`botToken` write-only, never returned) | Bot management |
+| Security | `allowedIps[]` (default empty = allow all) | Panel IP allowlist: one IP or CIDR per line, v4/v6; non-listed client IPs get 403 after login (see §4.5) |
 
 Per-field validation errors return `422 { fields: { "proxyIps[0]": "…" } }`. Reset is `POST /{sp}/api/settings/reset` (keeps identity fields).
 
@@ -122,6 +123,26 @@ Authenticated page (`src/handlers/myip.ts`, `src/core/router.ts:164`). JSON when
 ### 4.4 Kill Switch
 
 `POST /{sp}/api/killswitch {enabled}` (`src/handlers/api/status.ts`). When `killSwitch: true`, every WS upgrade returns `503` before upgrade (`src/core/router.ts:202`); panel/sub/DoH stay live. Operational containment — flip without redeploy.
+
+### 4.5 Panel IP Allowlist
+
+Settings → General → Panel IP allowlist (`allowedIps`, one entry per line). Empty means everyone can log in; any entry restricts the whole panel (APIs included) to those client IPs as seen in `CF-Connecting-IP`:
+
+- Exact addresses (`203.0.113.9`, `2001:db8::1`) or CIDR ranges (`10.0.0.0/8`, `2001:db8::/32`); hostnames and `ip:port` lines are rejected at save, blanks/dupes are cleaned, max 64 entries.
+- Order of checks: bad/missing session → 401 first, then non-listed IP → 403. Login and first-setup stay reachable without a session, so a bad list can never lock you out permanently.
+- **Recovery:** if you lock yourself out, delete the `qproxy:settings` key in the Cloudflare dashboard (KV → `qproxy` namespace → delete `qproxy:settings`) and revisit the worker URL — settings re-seed with an empty allowlist. Reconfigure the panel afterwards.
+
+### 4.6 Admin Audit Log
+
+Settings saves/resets/imports, kill-switch toggles, and WARP account/preset/Amnezia writes append one JSON line to the Worker log (`wrangler tail` or Cloudflare Dashboard → Workers → Logs). Each line has `"scope":"audit"` with the action as message:
+
+```json
+{"t":1725450000000,"level":"info","scope":"audit","message":"settings.save","extra":{"ip":"203.0.113.9","keys":["profileTitle"]}}
+```
+
+- `settings.save|reset|import` log `{ip, keys}` — sorted changed top-level key **names** only, never values.
+- `killswitch` logs `{ip, enabled}`; `warp.account.*` / `warp.preset.*` log `{ip, id}`; `warp.amnezia.update` logs `{ip}`.
+- Filter with `"scope":"audit"`. Secrets (passwords, UUIDs, tokens, `securePath`) never appear — only key names, account ids, and booleans.
 
 ## 5. Subscriptions
 
@@ -167,6 +188,10 @@ Admin panel → Users tab. Create a user (name, protocol filter, optional daily 
 
 Each user link supports the same `?target=` formats as the main subscription. Up to 50 users; usage counters reset daily. Worker-subscription traffic from user links consumes the same Workers request quota as your own links.
 
+**Activity:** `GET /{sp}/api/users/{id}/activity?days=N` returns `{activity: [{day, requests, bytesUp, bytesDown}, …]}` — one row per day, chronological, zeros for days with no traffic. Defaults to 7 days, clamped to 1–31 (`?days=abc` behaves as omitted). Unknown or malformed user ids return 404; the response never contains the user token or its hash.
+
+**Rate limiting:** the per-user limiter is a token bucket (30 connections/min refill, burst of 10, keyed by token hash, 120 s KV entries, fail-open so a KV outage never blocks users); a denied relay admission closes with 1008.
+
 ### 5.4 WARP Subscriptions
 
 Panel → WARP section: register a real Cloudflare WARP device (or import a config), optionally save endpoint presets or Amnezia parameters, then copy a config URL `/{sp}/sub/wg/{token}/{format}`. All 17 format slugs live in `src/warp/formats/registry.ts`; the two zip variants are `wireguard-conf` and `wireguard-conf-amnezia`.
@@ -177,7 +202,9 @@ These configs connect straight to Cloudflare's WARP network — their tunnel tra
 
 1. Create a bot with @BotFather, copy the token.
 2. Panel → Settings → Advanced → Telegram: enable, paste token, set your chat ID.
-3. Click Set webhook. The webhook URL embeds an HMAC-derived secret; commands `/status`, `/sub`, `/kill on|off`, `/usage` get EN/FA replies per `settings.language`.
+3. Click Set webhook. The webhook URL embeds an HMAC-derived secret; commands `/status`, `/sub`, `/kill on|off`, `/usage`, `/expiry` get EN/FA replies per `settings.language`.
+
+**Menu buttons:** `/start` and `/menu` reply with the help text plus an inline keyboard — Status · Usage on row one, Subscription · Expiry on row two, Kill ON · Kill OFF on row three. Tapping a button runs the matching command and edits the same message in place (no chat spam); other commands reply as plain text without buttons. Kill buttons flip the kill switch immediately, so guard chat access accordingly.
 
 Removing the webhook deletes it from BotFather. The bot token is write-only: it is stripped from settings responses and exports.
 
@@ -191,6 +218,7 @@ Removing the webhook deletes it from BotFather. The bot token is write-only: it 
 | 4 | **Camouflage shows 500 on valid path** | Wrong `securePath` segment (case-sensitive), unmatched route, or internal error all return identical fake 1101 HTML (`src/handlers/camouflage.ts`) | Copy exact `/{securePath}/panel` URL from KV `qproxy:settings`; check `GET /robots.txt` returns `Disallow: /`; never guess — rotate path via Settings if leaked |
 | 5 | **DNS / UDP53 fails, only TCP works** | `enableUdp53: false` or upstream `dohUpstream` unreachable; non-53 UDP always rejected (`src/protocols/vless.ts` cmd 2 guard) | Enable `enableUdp53: true`, set `dohUpstream` to `https://cloudflare-dns.com/dns-query`, test `GET /{sp}/doh?dns=...`; expected: only port-53 UDP relayed via `DnsPacketRelay` (`src/types/tunnel.ts:525`) |
 | 6 | **Subscription counters always 0 / `total` missing** | `qproxy:counters` not yet flushed (isolate buffer, 60 s / 32 conns), or `total`/`expire` unset by design | Generate traffic then wait 60 s; `download = requestsTotal × 1 MiB` is an estimate — set `total`/`expire` in Settings if you want explicit quota display |
+| 7 | **403 on panel after setting the IP allowlist** | Your current IP is not in `allowedIps` (session is valid, hence 403 not 401) | Add your IP/CIDR from another allowed network, or recover by deleting KV `qproxy:settings` and re-seeding (see §4.5) |
 
 Still stuck? Enable `debugLogging: true` (`src/types/settings.ts:48` → `src/core/log.ts`) and check `wrangler tail`, or open an issue with the sanitized `GET /{sp}/api/status` output.
 

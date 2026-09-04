@@ -12,6 +12,11 @@
 - Settings writes now return a monotonic blob `rev` — `PUT api/settings`, `POST api/settings/reset`, `POST api/settings/import`, and `POST api/killswitch` include `rev` in success data.
 - Egress dials are capped by a 15 s total budget (`TOTAL_DIAL_BUDGET_MS`, overridable per opener via `totalBudgetMs`), and chain/direct dials start speculatively before proxyIP/NAT64 expansion finishes (`openEgressWithSpeculativeDirect`).
 - New `isBlockedEgressHost(host)` guard combining local/private, cloud-metadata, and Cloudflare-IP checks.
+- Panel IP allowlist: new `allowedIps` setting (default `[]` = allow all); `requireAuth` checks the session first (401) then the client IP (`CF-Connecting-IP`) against exact IPv4/IPv6 or v4/v6 CIDR entries (403 when not listed); login/setup stay reachable so lockout is never permanent.
+- Admin audit trail: `audit()` JSON lines (`scope:"audit"`) for settings save/reset/import (`{ip, keys}` — changed top-level key names only), kill-switch toggles (`{ip, enabled}`), and WARP account/preset/Amnezia writes (`{ip, id}`); values and secrets are never logged.
+- Per-user activity aggregates: daily `{day, requests, bytesUp, bytesDown}` rows in `qproxy:user-activity:<day>:<hash>` plus `GET /api/users/:id/activity?days=` (default 7, clamped 1–31, zeros for missing days).
+- Per-user connection rate-limit seam: token-bucket module (30 conns/min refill, burst 10, 120 s KV TTL, fail-open) with an opt-in relay admission gate (`RelayOptions.gate`; deny closes 1008).
+- Telegram inline keyboard: `/start`/`/menu` show Status/Usage/Subscription/Expiry/Kill ON-OFF buttons (`tg:*` callbacks); taps are answered and edit the message in place.
 
 ### Fixed
 - Review sweep (5 rounds, ~70 findings): tunnel lifecycle (origin socket closed when client disconnects mid-dial; chain handshake deadline with proper timer cleanup), VLESS UDP/53 now length-framed per Xray `LengthPacketReader` (was forwarded raw, broken both directions), VMess rejects unknown security types (7-15) and plain+authenticated-length at handshake, fatal uplink corruption closes the tunnel (1011/1008) instead of hanging silently.
