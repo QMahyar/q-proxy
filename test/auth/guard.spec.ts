@@ -1,13 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonOk } from "../../src/core/respond";
 import {
+  LOGIN_FAIL_PREFIX,
+  LOGIN_FAIL_TTL_SECONDS,
   assertCsrf,
   assertLoginAllowed,
   clearLoginFailures,
+  clearLoginThrottle,
   getSession,
+  hashLoginIp,
+  loginFailKey,
+  loginFailWindow,
   recordLoginFailure,
   requireAuth,
 } from "../../src/auth/guard";
+import type { Env } from "../../src/types/env";
 import { ForbiddenError, RateLimitedError, UnauthorizedError } from "../../src/core/errors";
 import { clearSessionFloorCache, issueSession } from "../../src/auth/session";
 
@@ -99,31 +106,184 @@ describe("requireAuth", () => {
 });
 
 describe("login rate limiter", () => {
-  it("locks an ip after five failures inside the window", () => {
+  interface ThrottlePut {
+    key: string;
+    value: string;
+    options: { expirationTtl?: number } | undefined;
+  }
+
+  function mockThrottle() {
+    const store = new Map<string, string>();
+    const puts: ThrottlePut[] = [];
+    let getFails = false;
+    let putFails = false;
+    const kv = {
+      async get(key: string): Promise<string | null> {
+        if (getFails) throw new Error("kv down");
+        return store.get(key) ?? null;
+      },
+      async put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void> {
+        puts.push({ key, value, options });
+        if (putFails) throw new Error("kv put down");
+        store.set(key, value);
+      },
+      async delete(key: string): Promise<void> {
+        store.delete(key);
+      },
+      async list(opts: { prefix: string }): Promise<{ keys: Array<{ name: string }> }> {
+        return { keys: [...store.keys()].filter((k) => k.startsWith(opts.prefix)).map((name) => ({ name })) };
+      },
+    };
+    const api = {
+      store,
+      puts,
+      env: { QPROXY_KV: kv } as unknown as Env,
+      failReads(): void {
+        getFails = true;
+      },
+      failWrites(): void {
+        putFails = true;
+      },
+    };
+    return api;
+  }
+
+  async function rateLimitedBy(env: Env, ip: string): Promise<RateLimitedError> {
+    try {
+      await assertLoginAllowed(env, ip);
+    } catch (err) {
+      return err as RateLimitedError;
+    }
+    throw new Error("expected RateLimitedError");
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("locks an ip after five failures inside the window", async () => {
+    const t = mockThrottle();
     const ip = "203.0.113.9";
     clearLoginFailures(ip);
-    assertLoginAllowed(ip);
-    for (let i = 0; i < 5; i++) recordLoginFailure(ip);
-    expect(() => assertLoginAllowed(ip)).toThrow(RateLimitedError);
+    await clearLoginThrottle(t.env, ip);
+    await assertLoginAllowed(t.env, ip);
+    for (let i = 0; i < 5; i++) await recordLoginFailure(t.env, ip);
+    const err = await rateLimitedBy(t.env, ip);
+    expect(err).toBeInstanceOf(RateLimitedError);
+    expect(err.status).toBe(429);
+    expect(Number(err.headers["Retry-After"])).toBeGreaterThanOrEqual(1);
+    await clearLoginThrottle(t.env, ip);
   });
 
-  it("allows attempts below the threshold and after clearing", () => {
+  it("allows attempts below the threshold and after clearing", async () => {
+    const t = mockThrottle();
     const ip = "203.0.113.10";
     clearLoginFailures(ip);
-    recordLoginFailure(ip);
-    recordLoginFailure(ip);
-    expect(() => assertLoginAllowed(ip)).not.toThrow();
-    clearLoginFailures(ip);
-    expect(() => assertLoginAllowed(ip)).not.toThrow();
+    await clearLoginThrottle(t.env, ip);
+    await recordLoginFailure(t.env, ip);
+    await recordLoginFailure(t.env, ip);
+    await expect(assertLoginAllowed(t.env, ip)).resolves.toBeUndefined();
+    await clearLoginThrottle(t.env, ip);
+    await expect(assertLoginAllowed(t.env, ip)).resolves.toBeUndefined();
   });
 
-  it("tracks ips independently", () => {
+  it("tracks ips independently", async () => {
+    const t = mockThrottle();
     const hot = "203.0.113.11";
     const cold = "203.0.113.12";
     clearLoginFailures(hot);
     clearLoginFailures(cold);
-    for (let i = 0; i < 6; i++) recordLoginFailure(hot);
-    expect(() => assertLoginAllowed(hot)).toThrow(RateLimitedError);
-    expect(() => assertLoginAllowed(cold)).not.toThrow();
+    await clearLoginThrottle(t.env, hot);
+    await clearLoginThrottle(t.env, cold);
+    for (let i = 0; i < 6; i++) await recordLoginFailure(t.env, hot);
+    await expect(assertLoginAllowed(t.env, hot)).rejects.toThrow(RateLimitedError);
+    await expect(assertLoginAllowed(t.env, cold)).resolves.toBeUndefined();
+    await clearLoginThrottle(t.env, hot);
+  });
+
+  it("persists counts in KV across isolate restarts", async () => {
+    const t = mockThrottle();
+    const ip = "203.0.113.21";
+    await clearLoginThrottle(t.env, ip);
+    for (let i = 0; i < 5; i++) await recordLoginFailure(t.env, ip);
+    await expect(assertLoginAllowed(t.env, ip)).rejects.toThrow(RateLimitedError);
+    clearLoginFailures(ip);
+    await expect(assertLoginAllowed(t.env, ip)).rejects.toThrow(RateLimitedError);
+    await clearLoginThrottle(t.env, ip);
+    await expect(assertLoginAllowed(t.env, ip)).resolves.toBeUndefined();
+  });
+
+  it("resets after the minute window rolls over", async () => {
+    const t = mockThrottle();
+    const ip = "203.0.113.22";
+    await clearLoginThrottle(t.env, ip);
+    const start = Date.now();
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => start);
+    try {
+      for (let i = 0; i < 5; i++) await recordLoginFailure(t.env, ip);
+      await expect(assertLoginAllowed(t.env, ip)).rejects.toThrow(RateLimitedError);
+      nowSpy.mockImplementation(() => start + 61_000);
+      await expect(assertLoginAllowed(t.env, ip)).resolves.toBeUndefined();
+      await recordLoginFailure(t.env, ip);
+      await expect(assertLoginAllowed(t.env, ip)).resolves.toBeUndefined();
+    } finally {
+      nowSpy.mockRestore();
+    }
+    await clearLoginThrottle(t.env, ip);
+  });
+
+  it("writes hashed keys with a 120s TTL and never stores raw ips", async () => {
+    const t = mockThrottle();
+    const ip = "203.0.113.23";
+    const now = Date.now();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      await clearLoginThrottle(t.env, ip);
+      t.puts.length = 0;
+      await recordLoginFailure(t.env, ip);
+      expect(t.puts.length).toBe(1);
+      const hash = await hashLoginIp(ip);
+      expect(hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(t.puts[0]!.key).toBe(loginFailKey(hash, loginFailWindow(now)));
+      expect(t.puts[0]!.key.startsWith(LOGIN_FAIL_PREFIX)).toBe(true);
+      expect(t.puts[0]!.key).not.toContain(ip);
+      expect(t.puts[0]!.value).toBe("1");
+      expect(t.puts[0]!.options).toMatchObject({ expirationTtl: LOGIN_FAIL_TTL_SECONDS });
+      await recordLoginFailure(t.env, ip);
+      expect(t.puts[1]!.key).toBe(t.puts[0]!.key);
+      expect(t.puts[1]!.value).toBe("2");
+    } finally {
+      nowSpy.mockRestore();
+    }
+    await clearLoginThrottle(t.env, ip);
+  });
+
+  it("clears KV counters so a later login starts fresh", async () => {
+    const t = mockThrottle();
+    const ip = "203.0.113.24";
+    await clearLoginThrottle(t.env, ip);
+    for (let i = 0; i < 5; i++) await recordLoginFailure(t.env, ip);
+    expect([...t.store.keys()].some((k) => k.startsWith(LOGIN_FAIL_PREFIX))).toBe(true);
+    await clearLoginThrottle(t.env, ip);
+    expect([...t.store.keys()].some((k) => k.startsWith(LOGIN_FAIL_PREFIX))).toBe(false);
+    await expect(assertLoginAllowed(t.env, ip)).resolves.toBeUndefined();
+  });
+
+  it("fails open when KV reads fail and survives KV write failures", async () => {
+    const t = mockThrottle();
+    const ip = "203.0.113.25";
+    clearLoginFailures(ip);
+    await clearLoginThrottle(t.env, ip);
+    t.failReads();
+    await expect(assertLoginAllowed(t.env, ip)).resolves.toBeUndefined();
+    await expect(recordLoginFailure(t.env, ip)).resolves.toBeUndefined();
+    const w = mockThrottle();
+    const wip = "203.0.113.26";
+    clearLoginFailures(wip);
+    w.failWrites();
+    await expect(recordLoginFailure(w.env, wip)).resolves.toBeUndefined();
+    await expect(assertLoginAllowed(w.env, wip)).resolves.toBeUndefined();
+    clearLoginFailures(ip);
+    clearLoginFailures(wip);
   });
 });

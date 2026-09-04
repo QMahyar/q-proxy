@@ -14,7 +14,7 @@ import {
 import { unixNow } from "../../utils/time";
 import {
   assertLoginAllowed,
-  clearLoginFailures,
+  clearLoginThrottle,
   clientIp,
   getSession,
   recordLoginFailure,
@@ -38,7 +38,8 @@ async function upgradeLegacyHash(env: Env, password: string): Promise<void> {
 }
 
 export const handleLogin: RouteHandler = async (req, env, s) => {
-  assertLoginAllowed(clientIp(req));
+  const ip = clientIp(req);
+  await assertLoginAllowed(env, ip);
   const body = await readJsonObject(req);
   if (s.passwordHash === null || s.passwordSalt === null) {
     return jsonError(409, "SETUP_REQUIRED", "admin password is not configured yet");
@@ -47,10 +48,10 @@ export const handleLogin: RouteHandler = async (req, env, s) => {
   const verified =
     password.length > 0 ? await verifyPassword(password, s.passwordHash, s.passwordSalt) : null;
   if (verified === null || !verified.ok) {
-    recordLoginFailure(clientIp(req));
+    await recordLoginFailure(env, ip);
     throw new UnauthorizedError("invalid password");
   }
-  clearLoginFailures(clientIp(req));
+  await clearLoginThrottle(env, ip);
   if (verified.tier === "legacy") await upgradeLegacyHash(env, password);
   const floor = await getSessionFloor(env);
   return jsonOk(

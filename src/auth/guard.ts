@@ -1,11 +1,15 @@
+import type { Env } from "../types/env";
 import type { RouteHandler } from "../types/context";
 import { ForbiddenError, RateLimitedError, UnauthorizedError } from "../core/errors";
 import { getSessionFloor, verifySession } from "./session";
+import { bytesToHex } from "../utils/bytes";
 
 const COOKIE_RE = /(?:^|;\s*)q_session=([^;\s]+)/;
 const FAILURE_WINDOW_MS = 60_000;
 const MAX_FAILURES = 5;
 const MAX_TRACKED_IPS = 10_000;
+export const LOGIN_FAIL_PREFIX = "qproxy:login-fail:";
+export const LOGIN_FAIL_TTL_SECONDS = 120;
 
 interface FailureRecord {
   count: number;
@@ -49,14 +53,45 @@ export function clientIp(req: Request): string {
   return req.headers.get("CF-Connecting-IP") ?? "unknown";
 }
 
-export function assertLoginAllowed(ip: string): void {
+export function loginFailWindow(now: number): number {
+  return Math.floor(now / FAILURE_WINDOW_MS);
+}
+
+export function loginFailKey(ipHash: string, window: number): string {
+  return `${LOGIN_FAIL_PREFIX}${ipHash}:${window}`;
+}
+
+export async function hashLoginIp(ip: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ip));
+  return bytesToHex(new Uint8Array(digest));
+}
+
+function parseFailCount(raw: string | null): number {
+  if (raw === null) return 0;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return 0;
+  return n;
+}
+
+export async function assertLoginAllowed(env: Env, ip: string): Promise<void> {
+  const now = Date.now();
   const rec = failures.get(ip);
-  if (rec !== undefined && rec.resetAt > Date.now() && rec.count >= MAX_FAILURES) {
-    throw new RateLimitedError(Math.ceil((rec.resetAt - Date.now()) / 1000));
+  if (rec !== undefined && rec.resetAt > now && rec.count >= MAX_FAILURES) {
+    throw new RateLimitedError(Math.ceil((rec.resetAt - now) / 1000));
+  }
+  const window = loginFailWindow(now);
+  let count = 0;
+  try {
+    count = parseFailCount(await env.QPROXY_KV.get(loginFailKey(await hashLoginIp(ip), window)));
+  } catch {
+    return;
+  }
+  if (count >= MAX_FAILURES) {
+    throw new RateLimitedError(Math.ceil(((window + 1) * FAILURE_WINDOW_MS - now) / 1000));
   }
 }
 
-export function recordLoginFailure(ip: string): void {
+export async function recordLoginFailure(env: Env, ip: string): Promise<void> {
   const now = Date.now();
   const rec = failures.get(ip);
   if (rec === undefined || rec.resetAt <= now) {
@@ -77,8 +112,29 @@ export function recordLoginFailure(ip: string): void {
       failures.delete(oldest);
     }
   }
+  try {
+    const key = loginFailKey(await hashLoginIp(ip), loginFailWindow(now));
+    const next = parseFailCount(await env.QPROXY_KV.get(key)) + 1;
+    await env.QPROXY_KV.put(key, String(next), { expirationTtl: LOGIN_FAIL_TTL_SECONDS });
+  } catch {
+    return;
+  }
 }
 
 export function clearLoginFailures(ip: string): void {
   failures.delete(ip);
+}
+
+export async function clearLoginThrottle(env: Env, ip: string): Promise<void> {
+  failures.delete(ip);
+  try {
+    const hash = await hashLoginIp(ip);
+    const window = loginFailWindow(Date.now());
+    await Promise.all([
+      env.QPROXY_KV.delete(loginFailKey(hash, window)),
+      env.QPROXY_KV.delete(loginFailKey(hash, window - 1)),
+    ]);
+  } catch {
+    return;
+  }
 }
