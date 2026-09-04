@@ -33,11 +33,15 @@ function cacheGet(key: string): string[] | null {
     cache.delete(key);
     return null;
   }
+  cache.delete(key);
+  cache.set(key, entry);
   return entry.value;
 }
 
 function cachePut(key: string, value: string[]): void {
-  if (cache.size >= CACHE_MAX_ENTRIES) {
+  if (cache.has(key)) {
+    cache.delete(key);
+  } else if (cache.size >= CACHE_MAX_ENTRIES) {
     const oldest = cache.keys().next();
     if (!oldest.done) cache.delete(oldest.value);
   }

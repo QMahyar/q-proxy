@@ -239,3 +239,79 @@ describe("createDnsPacketRelay", () => {
     expect(await relay(packet)).toBeNull();
   });
 });
+
+describe("resolver cache eviction", () => {
+  it("keeps a recently used entry when a burst of unique names overflows the cache", async () => {
+    clearResolverCache();
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        buildDnsResponse("hot.example", [
+          { type: DNS_TYPE_A, rdata: new Uint8Array([1, 2, 3, 4]) },
+        ]),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const resolver = createResolver("https://dns.example/dns-query");
+    await resolver.resolveA("hot.example");
+    for (let i = 0; i < 255; i++) {
+      await resolver.resolveA(`fill-${i}.example`);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(256);
+    await resolver.resolveA("hot.example");
+    expect(fetchMock).toHaveBeenCalledTimes(256);
+    await resolver.resolveA("evictor.example");
+    expect(fetchMock).toHaveBeenCalledTimes(257);
+    await resolver.resolveA("hot.example");
+    expect(fetchMock).toHaveBeenCalledTimes(257);
+    await resolver.resolveA("fill-0.example");
+    expect(fetchMock).toHaveBeenCalledTimes(258);
+  });
+
+  it("evicts expired entries on the next lookup", async () => {
+    clearResolverCache();
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        buildDnsResponse("stale.example", [
+          { type: DNS_TYPE_A, rdata: new Uint8Array([5, 6, 7, 8]) },
+        ]),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const nowSpy = vi.spyOn(Date, "now");
+    try {
+      let now = 1000000;
+      nowSpy.mockImplementation(() => now);
+      const resolver = createResolver("https://dns.example/dns-query");
+      await resolver.resolveA("stale.example");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await resolver.resolveA("stale.example");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      now += 300001;
+      await resolver.resolveA("stale.example");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("respects the entry cap under unique-name load", async () => {
+    clearResolverCache();
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        buildDnsResponse("cap.example", [
+          { type: DNS_TYPE_A, rdata: new Uint8Array([9, 9, 9, 9]) },
+        ]),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const resolver = createResolver("https://dns.example/dns-query");
+    for (let i = 0; i < 300; i++) {
+      await resolver.resolveA(`cap-${i}.example`);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(300);
+    await resolver.resolveA("cap-299.example");
+    expect(fetchMock).toHaveBeenCalledTimes(300);
+    await resolver.resolveA("cap-0.example");
+    expect(fetchMock).toHaveBeenCalledTimes(301);
+  });
+});
