@@ -60,6 +60,8 @@ export interface AddressSetting {
   host?: string;
   sni?: string;
   enabled?: boolean;
+  country?: string;
+  city?: string;
 }
 
 export interface Settings {

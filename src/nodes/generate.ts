@@ -14,6 +14,23 @@ interface AddressEntry {
   tags: NodeTag[];
   port: number;
   label?: string;
+  country: string | null;
+}
+
+function parseCountryFilter(request: Request): Set<string> | null {
+  let raw: string | null = null;
+  try {
+    raw = new URL(request.url).searchParams.get("country");
+  } catch {
+    return null;
+  }
+  if (raw === null) return null;
+  const set = new Set<string>();
+  for (const part of raw.split(",")) {
+    const code = part.trim().toUpperCase();
+    if (/^[A-Z]{2}$/.test(code)) set.add(code);
+  }
+  return set.size > 0 ? set : null;
 }
 
 interface ProtoSpec {
@@ -68,7 +85,9 @@ function collectAddresses(s: Settings, hostname: string): AddressEntry[] {
       tags = ["custom-domain"];
     }
     const label = a.label && a.label.trim().length > 0 ? a.label.trim() : undefined;
-    out.push({ address: bracketIpv6(connectHost), host, sni, tags, port, label });
+    const countryRaw = typeof a.country === "string" ? a.country.trim().toUpperCase() : "";
+    const country = /^[A-Z]{2}$/.test(countryRaw) ? countryRaw : null;
+    out.push({ address: bracketIpv6(connectHost), host, sni, tags, port, label, country });
   }
   return out;
 }
@@ -209,7 +228,10 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
   const country = typeof cf?.country === "string" ? cf.country : null;
   const fragOn = s.fragment.mode !== "off";
   const fragQ = fragOn ? fragmentQuery(s.fragment) : "";
-  const addresses = collectAddresses(s, ctx.hostname);
+  const countryFilter = parseCountryFilter(ctx.request);
+  const addresses = collectAddresses(s, ctx.hostname).filter(
+    (e) => countryFilter === null || e.country === null || countryFilter.has(e.country),
+  );
 
   const protos: ProtoSpec[] = [
     { kind: "vless", enabled: s.vlessEnabled, cred: s.vlessUuid },

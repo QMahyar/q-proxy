@@ -247,6 +247,36 @@ function addressListField(
       }
       entry.sni = sniField;
     }
+    const countryRaw = rec.country;
+    if (countryRaw !== undefined && countryRaw !== null) {
+      if (typeof countryRaw !== "string") {
+        fail(fields, key, `entry ${i + 1} country must be a 2-letter country code`);
+        continue;
+      }
+      const normalized = countryRaw.trim().toUpperCase();
+      if (normalized.length > 0) {
+        if (!/^[A-Z]{2}$/.test(normalized)) {
+          fail(fields, key, `entry ${i + 1} country must be a 2-letter country code`);
+          continue;
+        }
+        entry.country = normalized;
+      }
+    }
+    const cityRaw = rec.city;
+    if (cityRaw !== undefined && cityRaw !== null) {
+      if (typeof cityRaw !== "string") {
+        fail(fields, key, `entry ${i + 1} city must be a string`);
+        continue;
+      }
+      const trimmed = cityRaw.trim();
+      if (trimmed.length > 0) {
+        if (trimmed.length > 64) {
+          fail(fields, key, `entry ${i + 1} city is too long`);
+          continue;
+        }
+        entry.city = trimmed;
+      }
+    }
     const dedupeKey = `${entry.address}:${entry.port ?? "auto"}`.toLowerCase();
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
