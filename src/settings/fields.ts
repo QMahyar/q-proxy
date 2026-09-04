@@ -110,6 +110,7 @@ export const SETTING_FIELD_DESCRIPTORS: readonly SettingFieldDescriptor[] = [
   { path: "profileTitle", spec: { kind: "str", maxLen: 64, trim: true } },
   { path: "subUpdateIntervalHours", spec: { kind: "int", min: 1, max: 168 } },
   { path: "maxNodesPerFormat", spec: { kind: "int", min: 1, max: 2000 } },
+  { path: "remoteNodes", spec: { kind: "custom" } },
   { path: "remoteSubUrls", spec: { kind: "urlList", maxItems: 16 } },
   { path: "sourceUrls", spec: { kind: "urlList", maxItems: 16 } },
   { path: "killSwitch", spec: { kind: "bool" } },

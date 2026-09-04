@@ -1,14 +1,19 @@
 import type {
   AddressSetting,
+  Fingerprint,
+  RemoteNodeSetting,
   Settings,
 } from "../types/settings";
-import { CF_PLAIN_PORTS, CF_TLS_PORTS, DEFAULT_SETTINGS } from "../types/settings";
+import { CF_PLAIN_PORTS, CF_TLS_PORTS, DEFAULT_SETTINGS, MAX_REMOTE_NODES } from "../types/settings";
 import {
+  FINGERPRINTS,
   HOST_TOKEN_RE,
   SETTING_FIELD_DESCRIPTORS,
+  VLESS_FLOWS,
   type SettingFieldSpec,
 } from "./fields";
 import { isPlainObject } from "./migrate";
+import { decodeBase64Url } from "../utils/base64";
 import { bracketIpv6, isIpLiteral, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
 
 export type ValidationResult =
@@ -20,6 +25,9 @@ const CF_TLS_PORT_SET = new Set<number>(CF_TLS_PORTS);
 const KNOWN_ALPN = ["h2", "http/1.1", "h3"];
 
 const TG_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{35}$/;
+const REMOTE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const REMOTE_SID_RE = /^[0-9a-fA-F]{1,8}$/;
+const HY2_OBFS_MODES = ["", "salamander"] as const;
 const TG_CHAT_ID_RE = /^(?:@[A-Za-z0-9_]{4,64}|-?\d{1,20})?$/;
 const TOTP_SECRET_RE = /^[A-Z2-7]{16,128}$/;
 const TOTP_RECOVERY_RE = /^[0-9a-f]{64}$/;
@@ -395,6 +403,9 @@ function applyCustomField(
   fields: Record<string, string>,
 ): void {
   switch (path) {
+    case "remoteNodes":
+      validateRemoteNodes(patch, out, fields);
+      return;
     case "allowedIps": {
       const allowV = patch["allowedIps"];
       if (allowV === undefined) return;
@@ -606,6 +617,141 @@ function applyCustomField(
       return;
     }
   }
+}
+
+function remoteHostOk(host: string): boolean {
+  const bare = host.replace(/^\[|\]$/g, "");
+  if (isIpLiteral(bare)) return true;
+  return HOSTNAME_RE.test(bare) && bare.length <= 253 && !bare.includes(":");
+}
+
+function remoteDomainOk(value: string): boolean {
+  return value.length > 0 && value.length <= 253 && HOSTNAME_RE.test(value);
+}
+
+function validateRemoteNodes(
+  patch: Record<string, unknown>,
+  out: Settings,
+  fields: Record<string, string>,
+): void {
+  const v = patch["remoteNodes"];
+  if (v === undefined) return;
+  if (!Array.isArray(v)) {
+    fail(fields, "remoteNodes", "must be an array of remote nodes");
+    return;
+  }
+  if (v.length > MAX_REMOTE_NODES) {
+    fail(fields, "remoteNodes", `too many entries (max ${MAX_REMOTE_NODES})`);
+    return;
+  }
+  const result: RemoteNodeSetting[] = [];
+  for (let i = 0; i < v.length; i++) {
+    const label = `entry ${i + 1}`;
+    const item = v[i];
+    if (!isPlainObject(item)) {
+      fail(fields, "remoteNodes", `${label} must be an object`);
+      continue;
+    }
+    const rec = item as Record<string, unknown>;
+    if (rec.kind !== "reality" && rec.kind !== "hy2") {
+      fail(fields, "remoteNodes", `${label} kind must be reality or hy2`);
+      continue;
+    }
+    const name = typeof rec.name === "string" ? rec.name.trim() : "";
+    if (name.length === 0 || name.length > 64) {
+      fail(fields, "remoteNodes", `${label} name must be 1-64 characters`);
+      continue;
+    }
+    const addrRaw = typeof rec.address === "string" ? rec.address.trim() : "";
+    const hp = parseHostPort(addrRaw, 0);
+    if (hp === null || hp.host.length === 0 || !remoteHostOk(hp.host)) {
+      fail(fields, "remoteNodes", `${label} address must be an IP or hostname`);
+      continue;
+    }
+    const bareHost = hp.host.replace(/^\[|\]$/g, "");
+    if (isLocalOrPrivateTarget(bareHost)) {
+      fail(fields, "remoteNodes", `${label} address must not target a local or private address`);
+      continue;
+    }
+    const port = typeof rec.port === "number" ? rec.port : hp.port > 0 ? hp.port : 0;
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      fail(fields, "remoteNodes", `${label} port must be 1-65535`);
+      continue;
+    }
+    const sni = typeof rec.sni === "string" ? rec.sni.trim() : "";
+    if (!remoteDomainOk(sni)) {
+      fail(fields, "remoteNodes", `${label} sni must be a hostname`);
+      continue;
+    }
+    if (rec.kind === "reality") {
+      const uuid = typeof rec.uuid === "string" ? rec.uuid.trim() : "";
+      if (!REMOTE_UUID_RE.test(uuid)) {
+        fail(fields, "remoteNodes", `${label} uuid must be a UUID`);
+        continue;
+      }
+      const pbk = typeof rec.pbk === "string" ? rec.pbk.trim() : "";
+      const decoded = pbk.length > 0 ? decodeBase64Url(pbk) : null;
+      if (decoded === null || !decoded.ok || decoded.value.length !== 32) {
+        fail(fields, "remoteNodes", `${label} pbk must decode to a 32-byte public key`);
+        continue;
+      }
+      const sid = typeof rec.sid === "string" ? rec.sid.trim() : "";
+      if (sid.length > 0 && !REMOTE_SID_RE.test(sid)) {
+        fail(fields, "remoteNodes", `${label} sid must be hex of at most 8 characters`);
+        continue;
+      }
+      const flow = rec.flow === undefined || rec.flow === null ? "xtls-rprx-vision" : rec.flow;
+      if (typeof flow !== "string" || !(VLESS_FLOWS as readonly string[]).includes(flow)) {
+        fail(fields, "remoteNodes", `${label} flow must be empty or xtls-rprx-vision`);
+        continue;
+      }
+      const spx = rec.spx === undefined || rec.spx === null ? "/" : rec.spx;
+      if (typeof spx !== "string" || spx.length > 64) {
+        fail(fields, "remoteNodes", `${label} spx must be at most 64 characters`);
+        continue;
+      }
+      const fp = rec.fp === undefined || rec.fp === null || rec.fp === "" ? "chrome" : rec.fp;
+      if (typeof fp !== "string" || !(FINGERPRINTS as readonly string[]).includes(fp)) {
+        fail(fields, "remoteNodes", `${label} fp must be a known fingerprint`);
+        continue;
+      }
+      result.push({
+        kind: "reality",
+        name,
+        address: bracketIpv6(hp.host),
+        port,
+        uuid,
+        sni,
+        pbk,
+        sid,
+        flow,
+        spx,
+        fp: fp as Fingerprint,
+      });
+      continue;
+    }
+    const password = typeof rec.password === "string" ? rec.password : "";
+    if (password.length === 0 || password.length > 128) {
+      fail(fields, "remoteNodes", `${label} password must be 1-128 characters`);
+      continue;
+    }
+    const obfs = rec.obfs === undefined || rec.obfs === null ? "" : rec.obfs;
+    if (typeof obfs !== "string" || !(HY2_OBFS_MODES as readonly string[]).includes(obfs)) {
+      fail(fields, "remoteNodes", `${label} obfs must be empty or salamander`);
+      continue;
+    }
+    const obfsPassword = rec.obfsPassword === undefined || rec.obfsPassword === null ? "" : rec.obfsPassword;
+    if (typeof obfsPassword !== "string" || obfsPassword.length > 128) {
+      fail(fields, "remoteNodes", `${label} obfsPassword must be at most 128 characters`);
+      continue;
+    }
+    if (obfs.length > 0 && obfsPassword.length === 0) {
+      fail(fields, "remoteNodes", `${label} obfsPassword is required when obfs is set`);
+      continue;
+    }
+    result.push({ kind: "hy2", name, address: bracketIpv6(hp.host), port, password, sni, obfs, obfsPassword });
+  }
+  setField(out, "remoteNodes" as keyof Settings & string, result);
 }
 
 function validateProxyIps(out: Settings, fields: Record<string, string>): void {

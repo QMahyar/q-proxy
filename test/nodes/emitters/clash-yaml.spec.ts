@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emitClashYaml } from "../../../src/nodes/emitters/clash-yaml";
 import type { EmitOptions } from "../../../src/nodes/emitters/registry";
-import type { ProxyNode, SSNode, TrojanNode, VlessNode, VMessNode } from "../../../src/types/node";
+import type { Hy2Node, ProxyNode, RealityNode, SSNode, TrojanNode, VlessNode, VMessNode } from "../../../src/types/node";
 
 const OPTS: EmitOptions = {
   remoteDns: "https://8.8.8.8/dns-query",
@@ -296,5 +296,105 @@ describe("emitClashYaml vision flow and direct-ss", () => {
 
   it("emits byte-identical legacy output when direct is false", () => {
     expect(emitClashYaml([{ ...ss(), direct: false }], OPTS)).toBe(emitClashYaml([ss()], OPTS));
+  });
+});
+describe("emitClashYaml remote nodes", () => {
+  const PBK = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
+
+  function reality(): RealityNode {
+    return {
+      kind: "reality",
+      name: "VPS Reality",
+      address: "203.0.113.10",
+      port: 443,
+      security: "tls",
+      sni: "www.microsoft.com",
+      host: "www.microsoft.com",
+      path: "",
+      earlyData: 0,
+      fingerprint: "chrome",
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
+      pbk: PBK,
+      sid: "6ba85179",
+      flow: "xtls-rprx-vision",
+      spx: "/",
+    };
+  }
+
+  function hy2(): Hy2Node {
+    return {
+      kind: "hy2",
+      name: "VPS Hy2",
+      address: "203.0.113.11",
+      port: 4443,
+      security: "tls",
+      sni: "example.com",
+      host: "example.com",
+      path: "",
+      earlyData: 0,
+      fingerprint: null,
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      password: "hy2secret",
+      obfs: "",
+      obfsPassword: "",
+    };
+  }
+
+  it("emits a vless tcp reality-opts proxy for reality nodes", () => {
+    const out = emitClashYaml([reality()], OPTS);
+    for (const line of [
+      '  - name: "VPS Reality"',
+      "    type: vless",
+      "    server: 203.0.113.10",
+      "    port: 443",
+      "    uuid: d342d11e-d424-4583-b36e-524ab1f0afa4",
+      "    tls: true",
+      "    servername: www.microsoft.com",
+      "    client-fingerprint: chrome",
+      "    flow: xtls-rprx-vision",
+      "    network: tcp",
+      "    reality-opts:",
+      `      public-key: ${PBK}`,
+      "      short-id: 6ba85179",
+    ]) {
+      expect(out).toContain(line);
+    }
+    expect(out).not.toContain("ws-opts");
+  });
+
+  it("omits short-id when the sid is empty", () => {
+    const out = emitClashYaml([{ ...reality(), sid: "" }], OPTS);
+    expect(out).toContain("reality-opts:");
+    expect(out).not.toContain("short-id");
+  });
+
+  it("emits a hysteria2 outbound with sni and skip-cert-verify", () => {
+    const out = emitClashYaml([hy2()], OPTS);
+    for (const line of [
+      '  - name: "VPS Hy2"',
+      "    type: hysteria2",
+      "    server: 203.0.113.11",
+      "    port: 4443",
+      "    password: hy2secret",
+      "    sni: example.com",
+      "    skip-cert-verify: true",
+    ]) {
+      expect(out).toContain(line);
+    }
+    expect(out).not.toContain("obfs");
+    expect(out).not.toContain("ws-opts");
+  });
+
+  it("emits obfs keys only when obfs is set", () => {
+    const out = emitClashYaml([{ ...hy2(), obfs: "salamander", obfsPassword: "obf" }], OPTS);
+    expect(out).toContain("    obfs: salamander");
+    expect(out).toContain("    obfs-password: obf");
   });
 });

@@ -1,4 +1,4 @@
-import type { ProxyNode } from "../../types/node";
+import type { Hy2Node, ProxyNode, RealityNode } from "../../types/node";
 import { TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 import type { YamlObject } from "./yaml-writer";
@@ -51,7 +51,7 @@ function proxyEntry(node: ProxyNode): YamlObject {
       p.sni = node.sni ?? node.host;
       if (nodeHasEch(node)) p["ech-opts"] = echOpts(node);
     }
-  } else {
+  } else if (node.kind === "ss") {
     p.udp = true;
     p.cipher = node.method;
     p.password = node.password;
@@ -62,6 +62,8 @@ function proxyEntry(node: ProxyNode): YamlObject {
     }
     return p;
   }
+  if (node.kind === "reality") return realityEntry(node);
+  if (node.kind === "hy2") return hy2Entry(node);
   if (isTls) {
     p["skip-cert-verify"] = true;
     if (nodeHasFingerprint(node) && node.fingerprint !== null) p["client-fingerprint"] = node.fingerprint;
@@ -69,6 +71,44 @@ function proxyEntry(node: ProxyNode): YamlObject {
   }
   p.network = "ws";
   p["ws-opts"] = wsOpts(node);
+  return p;
+}
+
+function realityEntry(node: RealityNode): YamlObject {
+  const p: YamlObject = {
+    name: node.name,
+    type: "vless",
+    server: bareServer(node.address),
+    port: node.port,
+    udp: true,
+    uuid: node.uuid,
+    tls: true,
+    servername: node.sni ?? node.host,
+  };
+  if (node.flow.length > 0) p.flow = node.flow;
+  if (node.fingerprint !== null) p["client-fingerprint"] = node.fingerprint;
+  p.network = "tcp";
+  const realityOpts: YamlObject = { "public-key": node.pbk };
+  if (node.sid.length > 0) realityOpts["short-id"] = node.sid;
+  p["reality-opts"] = realityOpts;
+  return p;
+}
+
+function hy2Entry(node: Hy2Node): YamlObject {
+  const p: YamlObject = {
+    name: node.name,
+    type: "hysteria2",
+    server: bareServer(node.address),
+    port: node.port,
+    udp: true,
+    password: node.password,
+    sni: node.sni ?? node.host,
+    "skip-cert-verify": true,
+  };
+  if (node.obfs.length > 0) {
+    p.obfs = node.obfs;
+    p["obfs-password"] = node.obfsPassword;
+  }
   return p;
 }
 

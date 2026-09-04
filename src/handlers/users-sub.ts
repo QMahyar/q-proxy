@@ -7,6 +7,7 @@ import { htmlResponse } from "../core/respond";
 import { handleCamouflage } from "./camouflage";
 import { infoPageHtml } from "./subscribe";
 import { generateNodes } from "../nodes/generate";
+import { isRemoteNode } from "../types/node";
 import { subscriptionHeaders } from "../subscription/headers";
 import {
   makeEdgeCacheKey,
@@ -82,7 +83,7 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
   const nodeSettings: Settings =
     override === null ? s : { ...s, addresses: [override], defaultPort: override.port ?? s.defaultPort };
   const ctx = { settings: nodeSettings, hostname: resolveHostname(s, url), request: req };
-  const allNodes = generateNodes(ctx);
+  const allNodes = generateNodes(ctx).filter((n) => !isRemoteNode(n));
   const scoped =
     user.protocols === "all" ? allNodes : allNodes.filter((n) => user.protocols.includes(n.kind));
   const nodes = selectVariantNodes(scoped, isFragmentMode ? "fragment" : "normal");

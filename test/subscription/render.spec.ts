@@ -37,7 +37,18 @@ function node(variant: "normal" | "fragment", kind: ProxyNode["kind"]): ProxyNod
   if (kind === "vmess")
     return { ...base, kind, uuid: "1386f85e-657b-4d6e-9d56-78badb75e1fd", cipher: "auto" as const, alterId: 0 as const };
   if (kind === "trojan") return { ...base, kind, password: "pass123456" };
-  return { ...base, kind, method: "aes-128-gcm" as const, password: "sspass12345" };
+  if (kind === "reality")
+    return {
+      ...base,
+      kind,
+      uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
+      pbk: "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0",
+      sid: "",
+      flow: "xtls-rprx-vision",
+      spx: "/",
+    };
+  if (kind === "hy2") return { ...base, kind, password: "pass123456", obfs: "", obfsPassword: "" };
+  return { ...base, kind: "ss" as const, method: "aes-128-gcm" as const, password: "sspass12345" };
 }
 
 afterEach(() => {

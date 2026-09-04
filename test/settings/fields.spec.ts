@@ -251,3 +251,46 @@ describe("allowedIps", () => {
     }
   });
 });
+
+describe("remoteNodes", () => {
+  it("declares remoteNodes as a custom list defaulting to empty", () => {
+    const row = SETTING_FIELD_DESCRIPTORS.find((d) => d.path === "remoteNodes");
+    expect(row).toBeDefined();
+    expect(row!.spec).toEqual({ kind: "custom" });
+    expect(DEFAULT_SETTINGS.remoteNodes).toEqual([]);
+  });
+
+  it("binds the remote-node editor in the panel with i18n in both languages", () => {
+    const { dict, fields } = buildPanelRegistry();
+    expect(flPathsOf(fields)).toContain("remoteNodes");
+    for (const key of [
+      "remote.nodes.title",
+      "remote.nodes.label",
+      "remote.nodes.hint",
+      "remote.nodes.help",
+      "remote.nodes.empty",
+      "remote.nodes.add",
+      "remote.nodes.max",
+      "remote.nodes.kind",
+      "remote.nodes.kind.reality",
+      "remote.nodes.kind.hy2",
+      "remote.nodes.name",
+      "remote.nodes.address",
+      "remote.nodes.port",
+      "remote.nodes.uuid",
+      "remote.nodes.sni",
+      "remote.nodes.pbk",
+      "remote.nodes.sid",
+      "remote.nodes.flow",
+      "remote.nodes.spx",
+      "remote.nodes.fp",
+      "remote.nodes.password",
+      "remote.nodes.obfs",
+      "remote.nodes.obfs.none",
+      "remote.nodes.obfsPassword",
+    ]) {
+      expect(dict.en[key]).toBeTruthy();
+      expect(dict.fa[key]).toBeTruthy();
+    }
+  });
+});

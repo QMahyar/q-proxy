@@ -90,3 +90,75 @@ describe("handleUserSub", () => {
     expect(res.headers.get("profile-update-interval")).toBe("60");
   });
 });
+
+describe("handleUserSub remote-node exclusion", () => {
+  const PBK = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
+
+  function remoteSettings(): Settings {
+    const s = settings();
+    s.remoteNodes = [
+      {
+        kind: "reality",
+        name: "VPS Reality",
+        address: "203.0.113.10",
+        port: 443,
+        uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
+        sni: "www.microsoft.com",
+        pbk: PBK,
+        sid: "6ba85179",
+        flow: "xtls-rprx-vision",
+        spx: "/",
+        fp: "chrome",
+      },
+      {
+        kind: "hy2",
+        name: "VPS Hy2",
+        address: "203.0.113.11",
+        port: 4443,
+        password: "hy2secret",
+        sni: "example.com",
+        obfs: "",
+        obfsPassword: "",
+      },
+    ];
+    return s;
+  }
+
+  async function subText(s: Settings): Promise<string> {
+    const res = await handleUserSub(
+      request(`https://w.test/sp12345678/sub/u/${TOKEN}?target=base64`, "v2rayNG/1.8.14"),
+      kvStub(await userRows()),
+      s,
+    );
+    expect(res.status).toBe(200);
+    const decoded = decodeBase64(await res.text());
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) throw new Error("unreachable");
+    return new TextDecoder().decode(decoded.value);
+  }
+
+  it("excludes remote kinds even when the user allows all protocols", async () => {
+    const text = await subText(remoteSettings());
+    expect(text).toContain("vless://");
+    expect(text).not.toContain("VPS Reality");
+    expect(text).not.toContain("VPS Hy2");
+    expect(text).not.toContain("security=reality");
+    expect(text).not.toContain("hysteria2://");
+    expect(text).not.toContain("203.0.113.10");
+    expect(text).not.toContain("203.0.113.11");
+  });
+
+  it("excludes remote kinds from clash output too", async () => {
+    const res = await handleUserSub(
+      request(`https://w.test/sp12345678/sub/u/${TOKEN}`, "clash-verge/v2.0"),
+      kvStub(await userRows()),
+      remoteSettings(),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).not.toContain("VPS Reality");
+    expect(body).not.toContain("VPS Hy2");
+    expect(body).not.toContain("reality-opts");
+    expect(body).not.toContain("hysteria2");
+  });
+});

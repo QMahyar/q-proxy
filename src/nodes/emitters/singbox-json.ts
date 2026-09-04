@@ -64,11 +64,35 @@ export interface SingBoxShadowsocksOutbound {
   plugin_opts?: string;
 }
 
+export interface SingBoxVlessRealityOutbound {
+  type: "vless";
+  tag: string;
+  server: string;
+  server_port: number;
+  uuid: string;
+  flow?: string;
+  packet_encoding: "xudp";
+  tls: SingBoxTls & { reality: { enabled: boolean; public_key: string; short_id: string } };
+  transport: { type: "tcp" };
+}
+
+export interface SingBoxHy2Outbound {
+  type: "hysteria2";
+  tag: string;
+  server: string;
+  server_port: number;
+  password: string;
+  tls: SingBoxTls & { insecure: boolean };
+  obfs?: { type: string; password: string };
+}
+
 export type SingBoxOutbound =
   | SingBoxVlessOutbound
   | SingBoxVmessOutbound
   | SingBoxTrojanOutbound
-  | SingBoxShadowsocksOutbound;
+  | SingBoxShadowsocksOutbound
+  | SingBoxVlessRealityOutbound
+  | SingBoxHy2Outbound;
 
 function tlsObject(node: ProxyNode, serverName: string): SingBoxTls {
   const t: SingBoxTls = { enabled: true, server_name: serverName };
@@ -129,6 +153,37 @@ function outboundOf(node: ProxyNode): SingBoxOutbound {
       password: node.password,
       ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
       transport: transportObject(node),
+    };
+  }
+  if (node.kind === "reality") {
+    return {
+      type: "vless",
+      tag: node.name,
+      server,
+      server_port: node.port,
+      uuid: node.uuid,
+      ...(node.flow.length > 0 ? { flow: node.flow } : {}),
+      packet_encoding: "xudp",
+      tls: {
+        enabled: true,
+        server_name: node.sni ?? node.host,
+        ...(node.fingerprint !== null
+          ? { utls: { enabled: true, fingerprint: node.fingerprint } }
+          : {}),
+        reality: { enabled: true, public_key: node.pbk, short_id: node.sid },
+      },
+      transport: { type: "tcp" },
+    };
+  }
+  if (node.kind === "hy2") {
+    return {
+      type: "hysteria2",
+      tag: node.name,
+      server,
+      server_port: node.port,
+      password: node.password,
+      tls: { enabled: true, server_name: node.sni ?? node.host, insecure: true },
+      ...(node.obfs.length > 0 ? { obfs: { type: node.obfs, password: node.obfsPassword } } : {}),
     };
   }
   if (node.direct === true) {

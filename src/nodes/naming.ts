@@ -6,6 +6,8 @@ const PROTO_LABEL: Record<ProxyNode["kind"], string> = {
   vmess: "VMESS",
   trojan: "TROJAN",
   ss: "SS",
+  reality: "REALITY",
+  hy2: "HY2",
 };
 
 const PROTO_TAG: Record<ProxyNode["kind"], string> = {
@@ -13,6 +15,8 @@ const PROTO_TAG: Record<ProxyNode["kind"], string> = {
   vmess: "vmess",
   trojan: "trojan",
   ss: "ss",
+  reality: "reality",
+  hy2: "hy2",
 };
 
 const TAG_LABEL: Partial<Record<NodeTag, string>> = {
