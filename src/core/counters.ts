@@ -123,9 +123,22 @@ async function readStored(env: Env): Promise<StoredUsage> {
 export async function recordConnection(env: Env, bytes?: ConnectionBytes): Promise<void> {
   buffer.todayDelta += 1;
   buffer.totalDelta += 1;
+  buffer.connectionsSinceFlush += 1;
+  ingestBytes(bytes);
+  await maybeFlush(env);
+}
+
+export async function recordBytes(env: Env, bytes: ConnectionBytes): Promise<void> {
+  ingestBytes(bytes);
+  await maybeFlush(env);
+}
+
+function ingestBytes(bytes: ConnectionBytes | undefined): void {
   buffer.bytesUpDelta += bytes?.bytesUp ?? 0;
   buffer.bytesDownDelta += bytes?.bytesDown ?? 0;
-  buffer.connectionsSinceFlush += 1;
+}
+
+async function maybeFlush(env: Env): Promise<void> {
   const stale = Date.now() - buffer.lastFlushMs >= FLUSH_INTERVAL_MS;
   if (!stale && buffer.connectionsSinceFlush < FLUSH_EVERY_CONNECTIONS) return;
   if (flushing) return;

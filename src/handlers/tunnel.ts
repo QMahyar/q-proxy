@@ -1,8 +1,10 @@
 import type { RouteHandler } from "../types/context";
 import type { Settings } from "../types/settings";
 import type { DialTarget, DnsPacketRelay } from "../types/tunnel";
+import type { Env } from "../types/env";
 import { NotFoundError } from "../core/errors";
 import { log } from "../core/log";
+import { recordBytes } from "../core/counters";
 import { identifyTunnel, type TunnelKind } from "../core/routes";
 import { ByteAccumulator } from "../protocols/common";
 import type {
@@ -68,14 +70,14 @@ function createInbound(kind: TunnelKind, s: Settings): ProtocolInbound<TunnelPar
   }
 }
 
-export const handleTunnel: RouteHandler = async (req, _env, s) => {
+export const handleTunnel: RouteHandler = async (req, env, s) => {
   const kind = identifyTunnel(new URL(req.url).pathname, s);
   if (kind === null) throw new NotFoundError("unknown tunnel path");
   const accepted = acceptTunnelSocket(req, {
     earlyDataEnabled: kind === "ss" ? false : s.earlyDataEnabled,
     earlyDataMaxBytes: s.earlyDataMaxBytes,
   });
-  const session = driveSession(accepted.ws, kind, s, accepted.earlyData).catch((err: unknown) => {
+  const session = driveSession(accepted.ws, kind, s, accepted.earlyData, env).catch((err: unknown) => {
     log.error("tunnel", "driveSession unhandled", String(err));
     try {
       if (accepted.ws.readyState !== 3) accepted.ws.close(1011);
@@ -92,6 +94,7 @@ async function driveSession(
   kind: TunnelKind,
   s: Settings,
   earlyData: Uint8Array | null,
+  env: Env,
 ): Promise<void> {
   const inbound = createInbound(kind, s);
   const acc = new ByteAccumulator();
@@ -194,10 +197,19 @@ async function driveSession(
           retry: () => opener.retry(target, packet),
         },
       );
-      void relayHandle.run(established).catch((err: unknown) => {
-        log.error("tunnel", "relay crashed", String(err));
-        safeClose(1011);
-      });
+      const handle = relayHandle;
+      void relayHandle.run(established).then(
+        () => {
+          void recordBytes(env, { bytesUp: handle.bytesUp, bytesDown: handle.bytesDown }).catch(
+            (err: unknown) => log.error("counters", "record bytes failed", String(err)),
+          );
+        },
+        (err: unknown) => {
+          log.error("tunnel", "relay crashed", String(err));
+          void recordBytes(env, { bytesUp: handle.bytesUp, bytesDown: handle.bytesDown }).catch(() => {});
+          safeClose(1011);
+        },
+      );
     } catch (err) {
       cleanupHandshake();
       log.debug("tunnel", "egress failed", { kind, reason: String(err) });

@@ -299,4 +299,36 @@ describe("byte accounting", () => {
     expect(put.bytesUpTotal).toBe(39);
     expect(put.bytesDownTotal).toBe(72);
   });
+
+  it("recordBytes accumulates bytes without counting requests", async () => {
+    const { readUsage, recordBytes } = await loadCounters();
+    const kv = new MockKV();
+    const env = kv.asEnv() as never;
+    kv.seedStored({ day: dayKeyUtc(), requestsToday: 3, requestsTotal: 10, bytesUpTotal: 50, bytesDownTotal: 60 });
+    await recordBytes(env, { bytesUp: 5, bytesDown: 6 });
+    expect(kv.puts).toEqual([]);
+    const usage = await readUsage(env);
+    expect(usage).toMatchObject({
+      requestsToday: 3,
+      requestsTotal: 10,
+      bytesUpTotal: 55,
+      bytesDownTotal: 66,
+    });
+  });
+
+  it("recordBytes flushes on the staleness interval", async () => {
+    const { recordBytes } = await loadCounters();
+    const kv = new MockKV();
+    const env = kv.asEnv() as never;
+    kv.seedStored({ day: dayKeyUtc(), requestsToday: 3, requestsTotal: 10, bytesUpTotal: 50, bytesDownTotal: 60 });
+    now += 61_000;
+    await recordBytes(env, { bytesUp: 5, bytesDown: 6 });
+    expect(kv.puts.length).toBe(1);
+    expect(kv.lastPut()).toMatchObject({
+      requestsToday: 3,
+      requestsTotal: 10,
+      bytesUpTotal: 55,
+      bytesDownTotal: 66,
+    });
+  });
 });
