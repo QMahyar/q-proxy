@@ -1,6 +1,8 @@
 import type { RouteHandler } from "../types/context";
+import type { Settings } from "../types/settings";
 import type { SubFormat } from "../core/ua";
 import { NotFoundError } from "../core/errors";
+import { settingsEtag } from "../settings/store";
 import { afterResponse, readUsage } from "../core/counters";
 import { htmlResponse } from "../core/respond";
 import { resolveHostname, resolveSecureRoute } from "../core/routes";
@@ -23,6 +25,18 @@ const FORMAT_LABELS: Record<SubFormat, string> = {
   surge: "Surge",
   loon: "Loon",
 };
+
+const SUB_EDGE_CACHE_SECONDS = 300;
+
+function settingsCacheStamp(s: Settings): string {
+  return settingsEtag() ?? `v${s.version}`;
+}
+
+function versionedEdgeCacheKey(base: Request, s: Settings): Request {
+  const keyUrl = new URL(base.url);
+  keyUrl.searchParams.set("_v", settingsCacheStamp(s));
+  return new Request(keyUrl.toString(), { method: "GET" });
+}
 
 export function infoPageHtml(subUrls: Array<{ format: SubFormat; url: string }>, title: string): string {
   const rows = subUrls
@@ -84,7 +98,7 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
     return htmlResponse(infoPageHtml(subUrls, s.profileTitle), 200, { "Cache-Control": "no-store" });
   }
 
-  const cacheKey = makeEdgeCacheKey(req, format, isFragmentMode);
+  const cacheKey = versionedEdgeCacheKey(makeEdgeCacheKey(req, format, isFragmentMode), s);
   const cached = await matchEdgeCache(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -104,6 +118,8 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
     webPageUrl: `${url.origin}/${s.securePath}/panel`,
   });
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
+  headers["Cache-Control"] = `public, max-age=${SUB_EDGE_CACHE_SECONDS}, s-maxage=${SUB_EDGE_CACHE_SECONDS}`;
+  headers["Expires"] = new Date(Date.now() + SUB_EDGE_CACHE_SECONDS * 1000).toUTCString();
   const res = new Response(body, { status: 200, headers });
   if (typeof caches !== "undefined") afterResponse(caches.default.put(cacheKey, res.clone()));
   return res;
