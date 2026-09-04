@@ -19,5 +19,6 @@ export function fillIdentity(s: Settings): Settings {
   s.trojanPassword ||= randomString(24, TROJAN_PASSWORD_CHARSET);
   s.ssPassword ||= randomString(24);
   s.sessionSecret ||= randomHex(64);
+  if (s.seededAt === 0) s.seededAt = Date.now();
   return s;
 }

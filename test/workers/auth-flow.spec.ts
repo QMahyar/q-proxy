@@ -518,3 +518,208 @@ describe("totp two-factor login", () => {
     expect(saw429).toBe(true);
   });
 });
+
+describe("onboarding bootstrap password", () => {
+  const BOOTSTRAP_PASSWORD = "bootstrap-pass-11";
+  const PERSONAL_PASSWORD = "personal-pass-99";
+  const BOOTSTRAP_TOTP_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+  function put(json: unknown, extra: Record<string, string> = {}): RequestInit {
+    return {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...extra },
+      body: JSON.stringify(json),
+    };
+  }
+
+  function b32dec(s: string): Uint8Array {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    const clean = s.trim().toUpperCase().replace(/[\s-]+/g, "").replace(/=+$/, "");
+    const out: number[] = [];
+    let acc = 0;
+    let bits = 0;
+    for (const ch of clean) {
+      acc = (acc << 5) | alphabet.indexOf(ch);
+      bits += 5;
+      if (bits >= 8) {
+        bits -= 8;
+        out.push((acc >>> bits) & 0xff);
+      }
+    }
+    return new Uint8Array(out);
+  }
+
+  async function totpNow(secret: string): Promise<string> {
+    const key = b32dec(secret);
+    const counter = Math.floor(Math.floor(Date.now() / 1000) / 30);
+    const msg = new Uint8Array(8);
+    let c = counter;
+    for (let i = 7; i >= 0; i--) {
+      msg[i] = c % 256;
+      c = Math.floor(c / 256);
+    }
+    const cryptoKey = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+    const sig = new Uint8Array(await crypto.subtle.sign("HMAC", cryptoKey, msg));
+    const o = sig[sig.length - 1]! & 15;
+    const v = ((sig[o]! & 127) << 24) | (sig[o + 1]! << 16) | (sig[o + 2]! << 8) | sig[o + 3]!;
+    return String(v % 10 ** 6).padStart(6, "0");
+  }
+
+  async function seedBootstrapAccount(overrides: Record<string, unknown> = {}): Promise<void> {
+    resetThrottle();
+    const { hashPassword } = await import("../../src/auth/password");
+    const { hash, salt } = await hashPassword(BOOTSTRAP_PASSWORD);
+    await seed(kv, SP, {
+      passwordHash: hash,
+      passwordSalt: salt,
+      passwordIsBootstrap: true,
+      ...overrides,
+    });
+  }
+
+  async function loginBootstrap(): Promise<string> {
+    const res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }));
+    expect(res.status).toBe(200);
+    return (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+  }
+
+  it("reports mustChangePassword on a successful bootstrap login and stays absent otherwise", async () => {
+    await seedBootstrapAccount();
+    const res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }));
+    expect(res.status).toBe(200);
+    expect((await body(res)).data).toEqual({ hasPassword: true, mustChangePassword: true });
+
+    resetThrottle();
+    await seed(kv, SP);
+    const plain = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
+    expect(plain.status).toBe(200);
+    const normal = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    expect(normal.status).toBe(200);
+    expect((await body(normal)).data).toEqual({ hasPassword: true });
+  });
+
+  it("keeps the pending totpRequired shape clean and flags only full-auth responses", async () => {
+    await seedBootstrapAccount({ totp: { enabled: true, secret: BOOTSTRAP_TOTP_SECRET, recoveryCodes: [] } });
+    let res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }));
+    expect(res.status).toBe(200);
+    expect((await body(res)).data).toEqual({ totpRequired: true });
+    const pre = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+    expect(pre).toContain("q_totp=");
+
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ totp: await totpNow(BOOTSTRAP_TOTP_SECRET) }, { Cookie: pre }));
+    expect(res.status).toBe(200);
+    expect((await body(res)).data).toEqual({ hasPassword: true, mustChangePassword: true });
+
+    res = await SELF.fetch(
+      `${BASE}/api/auth/login`,
+      post({ password: BOOTSTRAP_PASSWORD, totp: await totpNow(BOOTSTRAP_TOTP_SECRET) }),
+    );
+    expect(res.status).toBe(200);
+    expect((await body(res)).data).toEqual({ hasPassword: true, mustChangePassword: true });
+  });
+
+  it("gates authed api routes with PASSWORD_CHANGE_REQUIRED and keeps the allowlist open", async () => {
+    await seedBootstrapAccount();
+    const cookie = await loginBootstrap();
+    const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
+    const cookieOnly = { Cookie: cookie };
+
+    let res = await SELF.fetch(`${BASE}/api/status`);
+    expect(res.status).toBe(401);
+    expect((await body(res)).error.code).toBe("UNAUTHORIZED");
+
+    const gatedReads = [
+      `${BASE}/api/status`,
+      `${BASE}/api/suburls`,
+      `${BASE}/api/version/check`,
+      `${BASE}/api/settings/export`,
+      `${BASE}/api/users`,
+      `${BASE}/api/warp/presets`,
+    ];
+    for (const url of gatedReads) {
+      const gated = await SELF.fetch(url, { headers: cookieOnly });
+      expect(gated.status, url).toBe(403);
+      expect((await body(gated)).error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+    }
+
+    res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: true }, csrfHeaders));
+    expect(res.status).toBe(403);
+    expect((await body(res)).error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+
+    res = await SELF.fetch(`${BASE}/api/users`, post({ name: "Blocked" }, csrfHeaders));
+    expect(res.status).toBe(403);
+
+    res = await SELF.fetch(`${BASE}/api/settings`, put({ profileTitle: "Blocked" }, csrfHeaders));
+    expect(res.status).toBe(403);
+    expect((await body(res)).error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+
+    res = await SELF.fetch(`${BASE}/api/auth/password`, post({ currentPassword: "wrong", newPassword: PERSONAL_PASSWORD }, csrfHeaders));
+    expect(res.status).toBe(401);
+
+    res = await SELF.fetch(`${BASE}/api/settings`, { headers: cookieOnly });
+    expect(res.status).toBe(200);
+    expect((await body(res)).data.passwordIsBootstrap).toBe(true);
+
+    res = await SELF.fetch(`${BASE}/api/bootstrap`, { headers: cookieOnly });
+    expect(res.status).toBe(200);
+    expect((await body(res)).data.settings.passwordIsBootstrap).toBe(true);
+
+    res = await SELF.fetch(`${BASE}/api/auth/logout`, { method: "POST", headers: { "X-Q-Panel": "1" } });
+    expect(res.status).toBe(200);
+  });
+
+  it("clears the bootstrap flag on password change and unlocks the gated routes", async () => {
+    await seedBootstrapAccount();
+    const cookie = await loginBootstrap();
+    const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
+
+    let res = await SELF.fetch(`${BASE}/api/status`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(403);
+
+    res = await SELF.fetch(
+      `${BASE}/api/auth/password`,
+      post({ currentPassword: BOOTSTRAP_PASSWORD, newPassword: PERSONAL_PASSWORD }, csrfHeaders),
+    );
+    expect(res.status).toBe(200);
+    expect((await body(res)).data.changed).toBe(true);
+    const freshCookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+
+    const stored = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as {
+      data: { passwordIsBootstrap: boolean; passwordHash: string };
+    };
+    expect(stored.data.passwordIsBootstrap).toBe(false);
+    expect(stored.data.passwordHash).not.toBeNull();
+
+    res = await SELF.fetch(`${BASE}/api/status`, { headers: { Cookie: freshCookie } });
+    expect(res.status).toBe(200);
+
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PERSONAL_PASSWORD }));
+    expect(res.status).toBe(200);
+    expect((await body(res)).data).toEqual({ hasPassword: true });
+
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }));
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("setup window", () => {
+  it("allows setup on a fresh boot and shortly after seeding", async () => {
+    resetThrottle();
+    await seed(kv, SP);
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
+    expect(res.status).toBe(200);
+
+    resetThrottle();
+    await seed(kv, SP, { seededAt: Date.now() - 60 * 60 * 1000 });
+    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "within-window-1" }, { "X-Q-Panel": "1" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects setup with SETUP_WINDOW_EXPIRED after 24 hours", async () => {
+    resetThrottle();
+    await seed(kv, SP, { seededAt: Date.now() - 25 * 60 * 60 * 1000 });
+    const res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
+    expect(res.status).toBe(409);
+    expect((await body(res)).error.code).toBe("SETUP_WINDOW_EXPIRED");
+  });
+});

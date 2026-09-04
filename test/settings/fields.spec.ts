@@ -28,7 +28,7 @@ interface Dict {
 const VERSION_PATH = "version";
 const PSEUDO_UI_PATHS = ["__privateDoh"];
 const NON_REGISTRY_UI_PATHS = ["sourceUrls"];
-const API_MANAGED_PATHS = ["passwordHash", "passwordSalt", "sessionSecret", "totp.enabled", "totp.secret", "totp.recoveryCodes"];
+const API_MANAGED_PATHS = ["passwordHash", "passwordSalt", "sessionSecret", "totp.enabled", "totp.secret", "totp.recoveryCodes", "passwordIsBootstrap", "seededAt"];
 
 function settingLeafPaths(value: unknown, prefix = ""): string[] {
   if (prefix.length > 0 && (value === null || typeof value !== "object" || Array.isArray(value))) {
@@ -197,6 +197,30 @@ describe("totp settings", () => {
       expect(dict.en[key]).toBeTruthy();
       expect(dict.fa[key]).toBeTruthy();
     }
+  });
+});
+
+describe("onboarding bootstrap fields", () => {
+  it("declares passwordIsBootstrap and seededAt with safe defaults", () => {
+    expect(DEFAULT_SETTINGS.passwordIsBootstrap).toBe(false);
+    expect(DEFAULT_SETTINGS.seededAt).toBe(0);
+    const bootstrapRow = SETTING_FIELD_DESCRIPTORS.find((d) => d.path === "passwordIsBootstrap");
+    expect(bootstrapRow).toBeDefined();
+    expect(bootstrapRow!.spec).toEqual({ kind: "bool" });
+    const seededRow = SETTING_FIELD_DESCRIPTORS.find((d) => d.path === "seededAt");
+    expect(seededRow).toBeDefined();
+    expect(seededRow!.spec).toEqual({ kind: "int", min: 0, max: 4_102_444_800_000 });
+  });
+
+  it("keeps both fields out of the panel registry as API-managed state", () => {
+    const { fields } = buildPanelRegistry();
+    const paths = flPathsOf(fields);
+    expect(paths).not.toContain("passwordIsBootstrap");
+    expect(paths).not.toContain("seededAt");
+    const tablePaths = SETTING_FIELD_DESCRIPTORS.map((d) => d.path);
+    const unbound = tablePaths.filter((p) => !new Set(paths).has(p));
+    expect(unbound).toContain("passwordIsBootstrap");
+    expect(unbound).toContain("seededAt");
   });
 });
 

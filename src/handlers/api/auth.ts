@@ -36,6 +36,7 @@ export const PRE_AUTH_COOKIE_NAME = "q_totp";
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const PRE_AUTH_VERSION = "tp1";
 const PRE_AUTH_COOKIE_RE = /(?:^|;\s*)q_totp=([^;\s]+)/;
+const SETUP_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export function base32Decode(input: string): Uint8Array | null {
   const clean = input.trim().toUpperCase().replace(/[\s-]+/g, "").replace(/=+$/, "");
@@ -187,6 +188,11 @@ async function upgradeLegacyHash(env: Env, password: string, pepper: string): Pr
   }
 }
 
+function loginSuccessData(s: Settings): { hasPassword: boolean; mustChangePassword?: true } {
+  if (s.passwordIsBootstrap) return { hasPassword: true, mustChangePassword: true };
+  return { hasPassword: true };
+}
+
 export const handleLogin: RouteHandler = async (req, env, s) => {
   const ip = clientIp(req);
   await assertLoginAllowed(env, ip);
@@ -217,7 +223,7 @@ export const handleLogin: RouteHandler = async (req, env, s) => {
     await clearLoginThrottle(env, ip);
     const floor = await getSessionFloor(env);
     const res = jsonOk(
-      { hasPassword: true },
+      loginSuccessData(s),
       { "Set-Cookie": await issuedSessionCookieWithIat(s.sessionSecret, Math.max(unixNow(), floor + 1)) },
     );
     if (totpOn) res.headers.append("Set-Cookie", clearedPreAuthCookie());
@@ -236,7 +242,7 @@ export const handleLogin: RouteHandler = async (req, env, s) => {
     await clearLoginThrottle(env, ip);
     const floor = await getSessionFloor(env);
     const res = jsonOk(
-      { hasPassword: true },
+      loginSuccessData(s),
       { "Set-Cookie": await issuedSessionCookieWithIat(s.sessionSecret, Math.max(unixNow(), floor + 1)) },
     );
     res.headers.append("Set-Cookie", clearedPreAuthCookie());
@@ -264,6 +270,9 @@ export const handleSetup: RouteHandler = async (req, env, s) => {
   const fresh = await loadSettingsFresh(env);
   if (fresh.passwordHash !== null) {
     return jsonError(409, "ALREADY_SET", "admin password is already configured");
+  }
+  if (fresh.seededAt > 0 && Date.now() - fresh.seededAt > SETUP_WINDOW_MS) {
+    return jsonError(409, "SETUP_WINDOW_EXPIRED", "setup window has expired");
   }
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
   if (newPassword.length < 8) {
@@ -303,7 +312,12 @@ export const handlePasswordChange: RouteHandler = async (req, env, _s) => {
     throw new ValidationError({ newPassword: "must be at least 8 characters" });
   }
   const { hash, salt } = await hashPassword(newPassword, fresh.sessionSecret);
-  const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+  const v = validateSettings({
+    ...structuredClone(fresh),
+    passwordHash: hash,
+    passwordSalt: salt,
+    passwordIsBootstrap: false,
+  });
   if (!v.ok) throw new ValidationError(v.fields);
   await saveSettings(env, v.value);
   await bumpSessionFloor(env);

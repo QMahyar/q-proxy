@@ -754,6 +754,12 @@ function validateRemoteNodes(
   setField(out, "remoteNodes" as keyof Settings & string, result);
 }
 
+function validateBootstrapConsistency(out: Settings, fields: Record<string, string>): void {
+  if (out.passwordHash === null && out.passwordIsBootstrap) {
+    fail(fields, "passwordIsBootstrap", "requires an existing admin password");
+  }
+}
+
 function validateProxyIps(out: Settings, fields: Record<string, string>): void {
   for (const entry of out.proxyIps) {
     const token = entry.trim().replace(/^["']+|["']+$/g, "").toLowerCase();
@@ -827,6 +833,7 @@ export function validateSettings(input: unknown): ValidationResult {
 
   validateProxyIps(out, fields);
   validateFragmentOrdering(patch, out, fields);
+  validateBootstrapConsistency(out, fields);
 
   if (Object.keys(fields).length > 0) return { ok: false, fields };
   out.version = DEFAULT_SETTINGS.version;
