@@ -10,7 +10,7 @@
 | Language | TypeScript strict (`ES2023`) | `tsconfig.json` (strict, `workers-types`) |
 | Build | esbuild single-file `dist/q-proxy.js` | `scripts/build-single-file.mjs` — `format: esm`, `platform: browser`, loader `.html → text`, `define __APP_VERSION__` |
 | Deps | Zero runtime deps | `package.json` devDeps only; build asserts no bare imports except `cloudflare:*` |
-| Storage | One KV namespace (`QPROXY_KV`) | `wrangler.toml`, `src/types/env.ts` — no D1/DO |
+| Storage | KV (`QPROXY_KV`) for settings/WARP/throttle/session/ratelimit + D1 (`QPROXY_DB`, `migrations/0001_init.sql`) for write-hot state | `wrangler.toml`, `src/types/env.ts`, `src/users/store.ts:bootstrapD1` |
 | Tests | vitest 2 projects | `vitest.config.ts` — `unit` (node) + `workers` (`@cloudflare/vitest-pool-workers`) |
 
 Ground rules (`ARCHITECTURE.md §0`): compat `2026-08-01` forces `binaryType = "arraybuffer"` on every server socket; parsers never throw (`Result` convention); named exports only; no comments in impl — rationale lives here.
@@ -36,11 +36,13 @@ Gotcha: `wrangler dev` serves `dist/q-proxy.js` (per `wrangler.toml main=`). Sou
 
 ```ts
 projects: [
-  { name: 'unit',    environment: 'node', include: ['test/**/*.spec.ts'], exclude: ['test/workers/**'] },
-  { name: 'workers', include: ['test/workers/**/*.spec.ts'],
-    miniflare: { compatibilityDate: '2026-08-01', kvNamespaces: ['QPROXY_KV'] } }
+  { name: 'unit',    environment: 'node', include: ['test/**/*.spec.ts'], exclude: ['test/workers/**', 'test/d1/**'] },
+  { name: 'workers', include: ['test/workers/**/*.spec.ts', 'test/d1/**/*.spec.ts'],
+    miniflare: { compatibilityDate: '2026-08-01', kvNamespaces: ['QPROXY_KV'], d1Databases: ['QPROXY_DB'] } }
 ]
 ```
+
+D1-backed specs live in `test/d1/` (KV→D1 migration, D1 store paths) and run in the `workers` project against a provisioned `QPROXY_DB`. Helpers in `test/helpers/seed.ts`: `applyD1Schema(db)`, `resetD1(db)` (empties all seven tables), `seedLegacyKvForMigration(kv)` / `clearLegacyKvForMigration(kv)` for migration fixtures.
 
 | Command | What runs |
 |---------|-----------|
@@ -60,6 +62,7 @@ Layout rule: specs mirror `src/` — `src/protocols/vless.ts` ⇔ `test/protocol
 | WARP parsers/formatters, x25519 keypairs | unit | `test/warp/*` |
 | Settings migrate/validate/seed, UA, proxyIP/NAT64, failover planner | unit | Mocked `fetch` for DoH/TXT |
 | Router/auth/KV/sub/tunnel smoke (injectable `dialImpl`) | workers | `test/workers/core/router.spec.ts`, `test/workers/handlers/*` |
+| D1 stores + KV→D1 migration (provisioned `QPROXY_DB`) | workers | `test/d1/migrate.spec.ts`, `test/helpers/seed.ts` fixtures |
 
 ### 3.3 Testing Protocol Changes
 
@@ -148,7 +151,7 @@ flowchart TD
     H --> RESP[Response<br/>edge Cache API 60s keyed format+mode+settings-version]
 ```
 
-Routing-rule settings inject Clash/sing-box rule sections at emit time (bypass-LAN, block QUIC/ads/malware, custom suffix lists). URI grammars live in `src/nodes/share-uri.ts`; remark naming in `src/nodes/naming.ts`. Flow/direct stamping: `generateNodes` copies `settings.vlessFlow` onto TLS VLESS nodes only (`flow: null` on plain nodes, legacy output byte-identical when the setting is empty) and marks every SS node `direct` when `settings.ssDirect` is on; `buildVlessShareUri` appends `flow=` after the transport params, `buildSSShareUri` emits a plugin-free `ss://` URI when direct; clash/sing-box emitters add `flow` / drop the v2ray-plugin keys accordingly (surge/loon untouched).
+Routing-rule settings inject Clash/sing-box rule sections at emit time (bypass-LAN, block QUIC/ads/malware, custom suffix lists). URI grammars live in `src/nodes/share-uri.ts`; remark naming in `src/nodes/naming.ts`. Flow/direct stamping: `generateNodes` copies `settings.vlessFlow` onto TLS VLESS nodes only (`flow: null` on plain nodes, legacy output byte-identical when the setting is empty) and marks every SS node `direct` when `settings.ssDirect` is on; `buildVlessShareUri` appends `flow=` after the transport params, `buildSSShareUri` emits a plugin-free `ss://` URI when direct; clash/sing-box emitters add `flow` / drop the v2ray-plugin keys accordingly (surge/loon untouched). sing-box DNS is typed servers by default: `proxy-dns` `{type, server, detour: "PROXY"}` with `domain_resolver: "local-dns"` for domain-hosted upstreams, non-default `server_port`/`path` preserved, `local-dns` `{type: "local"}` — no `address` keys remain (see `dnsServerEntry` in `src/nodes/emitters/singbox-json.ts`).
 
 Node-generation caveats: a `cleanIps` entry with an explicit `:port` pins that port only, and its security is inferred purely from `CF_TLS_PORTS` membership — a pinned port outside both CF port families still emits (as `security: "none"`) but is unreachable in practice; keep pinned ports inside {443,2053,2083,2087,2096,8443} ∪ {80,8080,8880,2052,2082,2086,2095}.
 
@@ -170,6 +173,22 @@ Namespace binding `QPROXY_KV`.
 | `qproxy:warp:account:{id}` / `qproxy:warp:token:{token}` / `qproxy:warp:presets` / `qproxy:warp:global` | WARP device + preset state | `src/warp/store.ts` | Two-key write with rollback |
 
 Sessions are stateless HMAC cookies — no session records in KV. Sensitive paths `passwordHash`, `passwordSalt`, `sessionSecret` (plus write-only `telegram.botToken`) never leave authenticated views.
+
+### D1 database (binding `QPROXY_DB`)
+
+Write-hot state lives in D1, schema in `migrations/0001_init.sql` (mirrored by exported `D1_SCHEMA` in `src/users/store.ts`):
+
+| Table | Rows | Writer |
+|-------|------|--------|
+| `users` | User directory (≤50): id, name, token_hash (unique), token_hint, enabled, expires_at, daily_req_limit, protocols (JSON), address_override (JSON), created_at | `src/users/store.ts` (D1-first, KV fallback when unbound) |
+| `user_totals` | Lifetime hits per token_hash | same (single UPSERT) |
+| `user_usage` | Daily hits per (day, token_hash) | same (single UPSERT — quota check + increment in one statement) |
+| `user_activity` | Daily `{requests, bytes_up, bytes_down}` per (day, token_hash) | same (buffered deltas, flushed as one UPSERT) |
+| `counters` | Single row (`id = 1`): day, requests_today/total, bytes_up/down | `src/core/counters.ts:flushD1` (SELECT + UPSERT batch; KV fallback on error) |
+| `audit_log` | `{ts, ip, action, detail}` rows | `src/core/log.ts:audit` (via `waitUntil`; context bound through `bindCounterContext`) |
+| `meta` | Migration guard `kv_migrated_v1` | `bootstrapD1` |
+
+Rules: all increments are single-statement `ON CONFLICT … DO UPDATE` UPSERTs (no read-modify-write, race-free across isolates). On boot, `ensureInitialized` → `bootstrapD1` runs `ensureD1Schema` then copies any legacy KV user/counter keys into D1 exactly once (guard row `meta.kv_migrated_v1`) and deletes the legacy keys. `StoreEnv` (`{QPROXY_KV, QPROXY_DB?}`) is the store-layer env type so unit-adjacent callers stay D1-optional; the production `Env` requires `QPROXY_DB`.
 
 ### Migrations
 
@@ -239,8 +258,8 @@ Handshake bounded: 16 KiB accumulated + 10 s timeout → WS close 1008. Reasons 
 ## 11. Observability
 
 - log.ts: debug-gated structured logging with request id; redaction deny-list asserted in tests.
-- counters.ts: `readUsage`/`recordConnection` with isolate-buffered flush; the `Subscription-Userinfo` estimate derives from it (`download ≈ requestsTotal × 1 MiB`).
-- audit trail: `audit(action, detail)` in `src/core/log.ts` emits a JSON `info` line (`scope:"audit"`) via the `log.info` seam. Allowlist design — only caller-supplied fields are serialized (`settings.save|reset|import` → `{ip, keys}`, `killswitch` → `{ip, enabled}`, `warp.account.*`/`warp.preset.*` → `{ip, id}`, `warp.amnezia.update` → `{ip}`); never pass values or secrets, only key names/ids/booleans.
+- counters.ts: `readUsage`/`recordConnection` with isolate-buffered flush — D1-first (`flushD1` batch), KV fallback on error; the `Subscription-Userinfo` estimate derives from it (`download ≈ requestsTotal × 1 MiB`).
+- audit trail: `audit(action, detail, env?)` in `src/core/log.ts` emits a JSON `info` line (`scope:"audit"`) via the `log.info` seam and persists to the D1 `audit_log` table when `env.QPROXY_DB` is present (fire-and-forget through `waitUntil`; wire the context with `bindCounterContext`). Allowlist design — only caller-supplied fields are serialized (`settings.save|reset|import` → `{ip, keys}`, `killswitch` → `{ip, enabled}`, `warp.account.*`/`warp.preset.*` → `{ip, id}`, `warp.amnezia.update` → `{ip}`); never pass values or secrets, only key names/ids/booleans.
 - per-user activity: `recordUserActivity(env, tokenOrHash, delta)` buffers `{requests, bytesUp, bytesDown}` per day-key (merges pending + stored on read); `getUserActivity(env, hash, days)` clamps 1–31 (default 7), returns chronological rows with zeros for gaps; `flushPendingUserActivity` + token-regen migration included.
 
 ## 12. Local Development Tips
@@ -254,10 +273,12 @@ Handshake bounded: 16 KiB accumulated + 10 s timeout → WS close 1008. Reasons 
 
 `scripts/build-single-file.mjs` bundles `src/worker.ts` with esbuild (bundle, esm, browser, es2023, minify, `.html`→text, `__APP_VERSION__` define). Post-build asserts no bare imports except `cloudflare:*` and writes `dist/q-proxy.js` (~400 KB). Same artifact for dashboard paste and wrangler deploy.
 
+Panel assembly runs first in the same script: `src/ui/panel/` sources (`shell.html` + 3 markers `<!--panel:head-js-->/<!--panel:css-->/<!--panel:js-->`, `head.js`, `app.css`, 9 JS parts concatenated in fixed order dict→lib→qr→home→warp→users→chrome→settings→actions) are string-spliced into `src/ui/panel.html`, which is git-kept generated output — edit the sources, never the output (see `src/ui/panel/README.md`). The build fails on missing/duplicated/leftover markers and `node --check`s the script blocks; `panel.html` is rewritten only when bytes change. `test/ui/assets.spec.ts` pins this: no markers in the shipped panel, deterministic assembly, committed output in sync with sources. `login.html`/`camo.html` are untouched by this flow.
+
 ## 14. FAQ for Contributors
 
 - Why no comments in impl? Rationale lives in `ARCHITECTURE.md`; impl stays auditable without annotation drift.
-- Why no D1/DO? Owner decision — KV-only keeps the single-file story; eventual consistency is documented where it matters (login throttle, kill-switch propagation ≤ cache window).
+- Why D1 alongside KV? Write-hot state (user hits, counters, audit rows) raced under KV read-modify-write across isolates; single-statement D1 UPSERTs are race-free. The settings blob stays on KV (single-key read + 60 s isolate cache fits it), as do the WARP store and throttle/session/ratelimit keys.
 - Adding a route? Requires an architecture revision: update `ARCHITECTURE.md §3` + `src/core/router.ts` + `test/workers/router.spec.ts`.
 
 ## 15. File Ownership (ARCHITECTURE.md §9)
@@ -269,7 +290,7 @@ Handshake bounded: 16 KiB accumulated + 10 s timeout → WS close 1008. Reasons 
 | C | Tunnel | tunnel/*, handlers/tunnel, doh |
 | D | Subs | nodes/*, subscription/*, handlers/subscribe |
 | E | Glue | worker.ts, core/router.ts, settings/*, auth/*, handlers/api/*, users/, warp/ |
-| F | UI | ui/assets.ts, *.html |
+| F | UI | ui/assets.ts, *.html, ui/panel/* sources (panel.html is generated output) |
 
 Cross-imports only via frozen symbols. Adding a file outside ownership requires an architecture revision.
 
