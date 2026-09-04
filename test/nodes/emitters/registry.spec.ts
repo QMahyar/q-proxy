@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMITTERS } from "../../../src/nodes/emitters/registry";
+import { EMITTERS, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls } from "../../../src/nodes/emitters/registry";
 import { renderSubscriptionBody } from "../../../src/subscription/render";
 import { DEFAULT_SETTINGS } from "../../../src/types/settings";
 import type { ProxyNode } from "../../../src/types/node";
@@ -43,6 +43,28 @@ function decodeBody(body: string): string {
 describe("EMITTERS registry", () => {
   it("covers exactly the four sync SubFormats (base64 renders async via renderSubscriptionBody)", () => {
     expect(Object.keys(EMITTERS).sort()).toEqual(["clash", "loon", "singbox", "surge"]);
+  });
+});
+
+describe("node presence helpers", () => {
+  it("classifies tls, ech, early-data, fingerprint, and alpn presence", () => {
+    const tls = vless();
+    expect(nodeHasTls(tls)).toBe(true);
+    expect(nodeHasEarlyData(tls)).toBe(true);
+    expect(nodeHasFingerprint(tls)).toBe(false);
+    expect(nodeHasAlpn(tls)).toBe(false);
+    expect(nodeHasEch(tls)).toBe(false);
+    const plain: ProxyNode = { ...tls, port: 80, security: "none", sni: null };
+    expect(nodeHasTls(plain)).toBe(false);
+    const ech: ProxyNode = { ...tls, ech: "crypto.example.com" };
+    expect(nodeHasEch(ech)).toBe(true);
+    expect(nodeHasEch({ ...tls, ech: "" })).toBe(false);
+    const fp: ProxyNode = { ...tls, fingerprint: "chrome" };
+    expect(nodeHasFingerprint(fp)).toBe(true);
+    const alpn: ProxyNode = { ...tls, alpn: ["h2"] };
+    expect(nodeHasAlpn(alpn)).toBe(true);
+    const idle: ProxyNode = { ...tls, earlyData: 0 };
+    expect(nodeHasEarlyData(idle)).toBe(false);
   });
 });
 

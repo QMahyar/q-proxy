@@ -37,6 +37,26 @@ export function tlsRequiredNodes(nodes: readonly ProxyNode[], isFragment: boolea
   );
 }
 
+export function nodeHasTls(node: ProxyNode): boolean {
+  return node.security === "tls";
+}
+
+export function nodeHasEch(node: ProxyNode): boolean {
+  return node.ech !== null && node.ech.length > 0;
+}
+
+export function nodeHasEarlyData(node: ProxyNode): boolean {
+  return node.earlyData > 0;
+}
+
+export function nodeHasFingerprint(node: ProxyNode): boolean {
+  return node.fingerprint !== null;
+}
+
+export function nodeHasAlpn(node: ProxyNode): boolean {
+  return node.alpn.length > 0;
+}
+
 export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;
 
 export type SyncSubFormat = Exclude<SubFormat, "base64">;

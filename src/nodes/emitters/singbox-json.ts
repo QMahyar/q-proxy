@@ -1,5 +1,5 @@
-import type { ProxyNode } from "../../types/node";
-import { TEST_URL, bareServer, tlsRequiredNodes } from "./registry";
+import type { ProxyNode, SSNode, VMessNode } from "../../types/node";
+import { TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 
 interface SingBoxTls {
@@ -18,11 +18,62 @@ interface SingBoxTransport {
   early_data_header_name?: string;
 }
 
-function tlsObject(serverName: string, fingerprint: string | null, alpn: string[], ech: string | null): SingBoxTls {
+export interface SingBoxVlessOutbound {
+  type: "vless";
+  tag: string;
+  server: string;
+  server_port: number;
+  uuid: string;
+  packet_encoding: "xudp";
+  tls?: SingBoxTls;
+  transport: SingBoxTransport;
+}
+
+export interface SingBoxVmessOutbound {
+  type: "vmess";
+  tag: string;
+  server: string;
+  server_port: number;
+  uuid: string;
+  security: VMessNode["cipher"];
+  alter_id: VMessNode["alterId"];
+  packet_encoding: "xudp";
+  tls?: SingBoxTls;
+  transport: SingBoxTransport;
+}
+
+export interface SingBoxTrojanOutbound {
+  type: "trojan";
+  tag: string;
+  server: string;
+  server_port: number;
+  password: string;
+  tls?: SingBoxTls;
+  transport: SingBoxTransport;
+}
+
+export interface SingBoxShadowsocksOutbound {
+  type: "shadowsocks";
+  tag: string;
+  server: string;
+  server_port: number;
+  method: SSNode["method"];
+  password: string;
+  plugin: "v2ray-plugin";
+  plugin_opts: string;
+}
+
+export type SingBoxOutbound =
+  | SingBoxVlessOutbound
+  | SingBoxVmessOutbound
+  | SingBoxTrojanOutbound
+  | SingBoxShadowsocksOutbound;
+
+function tlsObject(node: ProxyNode, serverName: string): SingBoxTls {
   const t: SingBoxTls = { enabled: true, server_name: serverName };
-  if (alpn.length > 0) t.alpn = [...alpn];
-  if (fingerprint !== null) t.utls = { enabled: true, fingerprint };
-  if (ech !== null && ech.length > 0) t.ech = { enabled: true, query_server_name: ech };
+  if (nodeHasAlpn(node)) t.alpn = [...node.alpn];
+  if (nodeHasFingerprint(node) && node.fingerprint !== null) t.utls = { enabled: true, fingerprint: node.fingerprint };
+  if (nodeHasEch(node) && node.ech !== null && node.ech.length > 0) t.ech = { enabled: true, query_server_name: node.ech };
   return t;
 }
 
@@ -32,52 +83,67 @@ function transportObject(node: ProxyNode): SingBoxTransport {
     path: node.path,
     headers: { Host: node.host },
   };
-  if (node.earlyData > 0) {
+  if (nodeHasEarlyData(node)) {
     t.max_early_data = node.earlyData;
     t.early_data_header_name = "Sec-WebSocket-Protocol";
   }
   return t;
 }
 
-function outboundOf(node: ProxyNode): Record<string, unknown> {
-  const base: Record<string, unknown> = {
-    type: node.kind === "ss" ? "shadowsocks" : node.kind,
-    tag: node.name,
-    server: bareServer(node.address),
-    server_port: node.port,
-  };
+function outboundOf(node: ProxyNode): SingBoxOutbound {
+  const server = bareServer(node.address);
   if (node.kind === "vless") {
-    base.uuid = node.uuid;
-    base.packet_encoding = "xudp";
-    if (node.security === "tls") base.tls = tlsObject(node.sni ?? node.host, node.fingerprint, node.alpn, node.ech);
-    base.transport = transportObject(node);
-    return base;
+    return {
+      type: "vless",
+      tag: node.name,
+      server,
+      server_port: node.port,
+      uuid: node.uuid,
+      packet_encoding: "xudp",
+      ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
+      transport: transportObject(node),
+    };
   }
   if (node.kind === "vmess") {
-    base.uuid = node.uuid;
-    base.security = node.cipher;
-    base.alter_id = node.alterId;
-    base.packet_encoding = "xudp";
-    if (node.security === "tls") base.tls = tlsObject(node.sni ?? node.host, node.fingerprint, node.alpn, node.ech);
-    base.transport = transportObject(node);
-    return base;
+    return {
+      type: "vmess",
+      tag: node.name,
+      server,
+      server_port: node.port,
+      uuid: node.uuid,
+      security: node.cipher,
+      alter_id: node.alterId,
+      packet_encoding: "xudp",
+      ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
+      transport: transportObject(node),
+    };
   }
   if (node.kind === "trojan") {
-    base.password = node.password;
-    if (node.security === "tls") base.tls = tlsObject(node.sni ?? node.host, node.fingerprint, node.alpn, node.ech);
-    base.transport = transportObject(node);
-    return base;
+    return {
+      type: "trojan",
+      tag: node.name,
+      server,
+      server_port: node.port,
+      password: node.password,
+      ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
+      transport: transportObject(node),
+    };
   }
-  base.method = node.method;
-  base.password = node.password;
-  base.plugin = "v2ray-plugin";
-  base.plugin_opts = [
-    "mode=websocket",
-    ...(node.security === "tls" ? ["tls"] : []),
-    `host=${node.host}`,
-    `path=${node.path}`,
-  ].join(";");
-  return base;
+  return {
+    type: "shadowsocks",
+    tag: node.name,
+    server,
+    server_port: node.port,
+    method: node.method,
+    password: node.password,
+    plugin: "v2ray-plugin",
+    plugin_opts: [
+      "mode=websocket",
+      ...(nodeHasTls(node) ? ["tls"] : []),
+      `host=${node.host}`,
+      `path=${node.path}`,
+    ].join(";"),
+  };
 }
 
 export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions): string {

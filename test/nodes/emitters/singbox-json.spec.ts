@@ -290,4 +290,15 @@ describe("emitSingBoxJson golden", () => {
     expect("max_early_data" in t).toBe(false);
     expect(t.path).toBe("/vm/abcd1234");
   });
+
+  it("emits typed ech, alpn, and utls tls blocks for tls nodes", () => {
+    const echNode: VlessNode = { ...vless(), ech: "crypto.example.com" };
+    const parsed = JSON.parse(emitSingBoxJson([echNode], OPTS)) as {
+      outbounds: Array<{ tls?: { ech?: { query_server_name: string }; alpn?: string[]; utls?: { fingerprint: string } } }>;
+    };
+    const tls = parsed.outbounds[0]!.tls!;
+    expect(tls.ech?.query_server_name).toBe("crypto.example.com");
+    expect(tls.alpn).toEqual(["http/1.1"]);
+    expect(tls.utls?.fingerprint).toBe("chrome");
+  });
 });
