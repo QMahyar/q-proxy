@@ -120,6 +120,13 @@ describe("renderSubscriptionBody", () => {
 
 describe("SUB_CONTENT_TYPES", () => {
   it("covers every subscription format", () => {
-    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual(["base64", "clash", "loon", "singbox", "surge"]);
+    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual([
+      "base64",
+      "clash",
+      "loon",
+      "quantumult",
+      "singbox",
+      "surge",
+    ]);
   });
 });

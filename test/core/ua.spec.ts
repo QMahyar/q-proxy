@@ -36,6 +36,12 @@ describe("classifyUA", () => {
     expect(classifyUA("Loon/3.2.4")).toBe("loon");
   });
 
+  it("quantumult x family", () => {
+    expect(classifyUA("Quantumult X/1.5.4 (iPhone; iOS 17.0.3; Scale/3.00)")).toBe("quantumult");
+    expect(classifyUA("quantumult/2.0")).toBe("quantumult");
+    expect(classifyUA("QuanX/1.0")).toBe("quantumult");
+  });
+
   it("base64 clients", () => {
     expect(classifyUA("v2rayNG/1.8.23")).toBe("base64");
     expect(classifyUA("Shadowrocket/1956 CFNetwork/1404")).toBe("base64");

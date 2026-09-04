@@ -2,7 +2,7 @@ import type { SubFormat } from "../core/ua";
 import { classifyUA } from "../core/ua";
 import { BadRequestError } from "../core/errors";
 
-export const SUB_FORMATS: readonly SubFormat[] = ["base64", "clash", "singbox", "surge", "loon"];
+export const SUB_FORMATS: readonly SubFormat[] = ["base64", "clash", "singbox", "surge", "loon", "quantumult"];
 
 export function pickSubFormat(req: Request, pathTarget?: string): SubFormat | null {
   const url = new URL(req.url);

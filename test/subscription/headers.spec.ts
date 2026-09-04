@@ -38,6 +38,7 @@ describe("subscriptionHeaders", () => {
     expect(mk("singbox")["Content-Disposition"]).toContain("T.json");
     expect(mk("surge")["Content-Disposition"]).toContain("T.conf");
     expect(mk("loon")["Content-Disposition"]).toContain("T.conf");
+    expect(mk("quantumult")["Content-Disposition"]).toContain("T.conf");
     expect(mk("clash")["Content-Disposition"]).toContain("T.yaml");
   });
 
