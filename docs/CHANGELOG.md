@@ -2,11 +2,19 @@
 
 ## Unreleased
 
+### Added
+- Surge emitter: VLESS + Shadowsocks lines (Surge 5 grammar); Loon emitter: Shadowsocks + `tls-profile` fingerprint + `ech=` lines; Clash TLS proxies: `skip-cert-verify: true`.
+- KV-backed login throttle (`qproxy:login-fail:<sha256-ip>:<minute>`, 120s TTL, fail-open); VMess chunk-nonce wrap guard; 2MB relay downlink cap (1009).
+- Subscription edge-cache keys versioned by settings etag (`_v`); remote-sub fetch parallelized (10s total budget).
+- Specs: share-uri `type=ws` regression, counters/errors/fragments/protocols-common/address suites, vmess-crypto boundary, relay downlink cap, KV throttle (mock-KV, window rollover, fail-open).
+
 ### Fixed
 - Review sweep (5 rounds, ~70 findings): tunnel lifecycle (origin socket closed when client disconnects mid-dial; chain handshake deadline with proper timer cleanup), VLESS UDP/53 now length-framed per Xray `LengthPacketReader` (was forwarded raw, broken both directions), VMess rejects unknown security types (7-15) and plain+authenticated-length at handshake, fatal uplink corruption closes the tunnel (1011/1008) instead of hanging silently.
 - WARP `storeAccount` no longer deletes a pre-existing account record when the token-index write fails on update; `parseWgUri` no longer throws on malformed percent-encoding; S1-S4 cap raised to 65535.
 - Per-user daily quota moved to per-hash KV keys (`qproxy:user-usage:{day}:{hash}`) to bound the cross-isolate last-write-wins race; settings saves no longer shadowed by an isolate-local last-write dedupe.
 - Auth: `/api/auth/setup` requires the `X-Q-Panel: 1` CSRF header; login/setup cookies use `iat = floor+1` so logout no longer poisons same-second logins; Telegram `setWebhook` registers `secret_token` (webhook accepts the header credential too).
+- Settings export keeps protocol credentials by design (round-trip import); panel warns the file is sensitive.
+- Wave 1 Docs: `resolveHostname` implements the documented hostname rule; panel a11y batch (nav/accent labels, skip link, 401-dirty confirm, 10s error toasts, tab overflow fade, `qp_lang` sync from `settings.language`); oversize early-data now closes 1009; Telegram `@username` match case-insensitive; counters flush attaches settlement handler (no unhandled rejection without bound context).
 
 ### Changed
 - Subscription base64 output drops `ss://` and plain-security VLESS/Trojan URIs (Xray-family clients cannot run them); ss-only per-user scopes keep their nodes.

@@ -145,7 +145,7 @@ flowchart TD
     REM --> EMI
 
     EMI[registry: clash-yaml · singbox-json · surge-conf · loon-conf<br/>base64 renders in subscription/render.ts] --> H[subscriptionHeaders<br/>Profile-Title · Subscription-Userinfo · Content-Disposition]
-    H --> RESP[Response<br/>edge Cache API 60s keyed format+mode]
+    H --> RESP[Response<br/>edge Cache API 60s keyed format+mode+settings-version]
 ```
 
 Routing-rule settings inject Clash/sing-box rule sections at emit time (bypass-LAN, block QUIC/ads/malware, custom suffix lists). URI grammars live in `src/nodes/share-uri.ts`; remark naming in `src/nodes/naming.ts`.
@@ -268,7 +268,8 @@ Cross-imports only via frozen symbols. Adding a file outside ownership requires 
 
 Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},fields?}`. Key endpoints (session unless noted):
 
-- `POST api/auth/login` `{password}` → sets `q_session`; `POST api/auth/setup` accepted only while password unset
+- `POST api/auth/login` `{password}` → sets `q_session`; `POST api/auth/setup` accepted only while password unset; `POST api/auth/password` (session+CSRF) → `{changed:true}`
+- `GET /healthz` → `{ok:true, version, colo}` (no auth, `no-store`)
 - `GET api/settings` → redacted view; `PUT api/settings` (CSRF) → `{saved:true}` or 422 `{fields}`; `POST api/settings/reset`
 - `GET api/settings/export` → secrets-stripped JSON; `POST api/settings/import`
 - `GET api/bootstrap` → `{settings, status, subUrls}` aggregate with ETag/304
@@ -300,7 +301,7 @@ Both funnel into the same 422 envelope `{ok:false,error:{code:"VALIDATION"},fiel
 
 - Settings: 60 s isolate cache + KV `cacheTtl:60` + write-through with no-op skip — typical request ≤1 KV read.
 - Counters buffered 60 s / 32 connections; usage reads memoized 15 s.
-- Subscription responses edge-cached 60 s via Cache API, keyed by format+mode; WARP subs purged on account/preset/amnezia changes.
+- Subscription responses edge-cached 60 s via Cache API, keyed by format+mode+settings-version (`_v` stamp); WARP subs purged on account/preset/amnezia changes.
 - DoH resolver caches proxyIP A/AAAA/TXT expansions 10 min per isolate.
 
 ## 19. Versioning

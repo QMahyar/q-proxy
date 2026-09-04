@@ -104,10 +104,12 @@ All fields from `src/types/settings.ts:41` grouped below. Saving is `PUT /{sp}/a
 | Protocols | `vlessEnabled`/`vmessEnabled`/`trojanEnabled`/`ssEnabled`, `vlessUuid`/`vmessUuid`/`trojanPassword`/`ssPassword`, `ssMethod` (`aes-128-gcm`/`aes-256-gcm`), `vlessPath`/`vmessPath`/`trojanPath`/`ssPath` (`vl`/`vm`/`tr`/`ss` defaults) | Per-protocol enable + creds + WS path suffix |
 | Egress | `earlyDataEnabled`+`earlyDataMaxBytes` (2048), `proxyIpMode` (`proxyip`/`nat64`), `proxyIps[]`, `nat64Prefixes[]`, `chainProxy {enabled, uri}` (`socks5://`/`http://`/`https://`), `enableUdp53` | Tunnel egress chain |
 | Routing | `hostnameOverride`, `customDomains[]`, `cleanIps[]`, `tlsPorts[]` (443,2053,2083,2087,2096,8443), `plainPorts[]` (80,8080,...), `plainPortPolicy` (`always`/`workers-dev`/`never`), `cdn {enabled, addresses[], host, sni}` | Address pool + port matrix |
-| TLS | `fingerprint` (chrome/firefox/safari/ios/android/edge/360/qq/random/randomized), `randomizeSniCase`, `alpn` (`["http/1.1"]`) | Emitted node TLS hygiene |
+| TLS | `fingerprint` (chrome/firefox/safari/ios/android/edge/360/qq/random/randomized), `randomizeSniCase`, `alpn` (`["http/1.1"]`), `echEnabled`, `echServerName` | Emitted node TLS hygiene + ECH |
 | Fragment | `fragment {mode (off/low/medium/high/severe/custom), packets (tlshello/1-1…1-5), lengthMin/Max, delayMin/Max, maxSplitMin/Max}` | Xray fragment subs |
 | DNS | `dohUpstream` (`https://cloudflare-dns.com/dns-query`), `remoteDns` (`https://8.8.8.8/dns-query`), `localDns` (`localhost`) | DoH + resolver |
 | Privacy | `camouflage {mode (off/static/proxy), url}`, `killSwitch`, `speedtestIntercept`, `remoteSubUrls[]`, `urlTestIntervalSec` (300) | Camouflage + merging |
+| Routing rules | `routingRules {bypassLan, blockAds, blockMalware, blockQuic, customBypass[], customBlock[]}` | Clash/sing-box rule-section injection |
+| Telegram | `telegram {enabled, chatId}` (`botToken` write-only, never returned) | Bot management |
 
 Per-field validation errors return `422 { fields: { "proxyIps[0]": "…" } }`. Reset is `POST /{sp}/api/settings/reset` (keeps identity fields).
 
@@ -299,7 +301,7 @@ GET /{sp}/api/settings returns PublicSettings (src/types/settings.ts:156 omits p
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "securePath": "a1b2c3d4e5f6",
   "language": "fa",
   "vlessEnabled": true,

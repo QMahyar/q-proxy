@@ -121,11 +121,10 @@ Protocol changes: validate against Xray-core fixtures first (`docs/research/04-p
 - Server-side validation messages are English-only even in the FA UI
 - cleanIps entries pinning ports outside the CF port families are silently dropped (zero nodes emitted for that address) — documented behavior
 - SSRF guards (`isLocalOrPrivateTarget` on dohUpstream/remoteDns/camouflage/remoteSubUrls/egress targets) are host-literal only: a DNS name resolving to a private address is not pre-resolved (Workers egress does not route RFC1918/link-local, and DoH pre-resolution would introduce a TOCTOU window)
-- Early-data oversize drops silently instead of closing 1009
-- Login throttle is per-isolate memory (best-effort)
+- Login throttle is KV-backed (`qproxy:login-fail:<sha256-ip>:<minute>`, 120s TTL, fail-open on KV error) with an isolate-memory fast path
 - Counters are estimates (`download = requestsTotal × 1 MiB`)
 - SS salt-replay registry bounded to 2048 entries/isolate; VMess replay registry bounded to 1024 (`src/utils/bounded.ts`)
-- `settings.language` is saved but the UI reads only the `qp_lang` cookie
+- `settings.language` seeds the `qp_lang` cookie on first load when the cookie is absent
 - Stale-cache read-modify-write: `handleKillSwitch`/`handleSaveSettings` merge from the 60s cached settings — concurrent edits in another isolate can be reverted within the TTL window
 - User quota and MAX_USERS are KV read-modify-write and therefore approximate across isolates: daily hits now live in per-user keys (`qproxy:user-usage:<day>:<hash>`) so a race loses at most one increment per concurrent request instead of the whole row
 - KV colo edge cache (60s, not bypassable via `cacheTtl`) means `loadSettingsFresh` setup-race re-check and the session revocation floor can lag up to ~60s; a losing concurrent setup may briefly retain a valid session
