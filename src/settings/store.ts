@@ -2,6 +2,7 @@ import type { Env } from "../types/env";
 import type { Settings } from "../types/settings";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../types/settings";
 import { migrateSettings } from "./migrate";
+import { bootstrapD1 } from "../users/store";
 import { fillIdentity, hasIdentity } from "./seed";
 import { validateSettings } from "./validate";
 
@@ -139,6 +140,7 @@ async function doInitialize(env: Env): Promise<void> {
         JSON.stringify({ createdAt: Date.now(), installedVersion: appVersion() }),
       );
     }
+    await bootstrapD1(env);
   } catch (err) {
     initPromise = null;
     throw err;
