@@ -4,7 +4,24 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 import { execSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import vm from "node:vm";
+
+const KV_POLL_INTERVAL_MS = 2000;
+const KV_POLL_TIMEOUT_MS = 90000;
+
+function generatePassword() {
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  for (;;) {
+    let chars = "";
+    while (chars.length < 8) {
+      const b = randomBytes(1)[0];
+      if (b >= Math.floor(256 / alphabet.length) * alphabet.length) continue;
+      chars += alphabet[b % alphabet.length];
+    }
+    if (/[A-Z]/.test(chars) && /\d/.test(chars)) return "qproxy-" + chars;
+  }
+}
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKER_NAME = "q-proxy";
@@ -327,7 +344,8 @@ What it does:
   3. Creates KV namespace QPROXY_KV (or reuses)
   4. Creates D1 database q-proxy (or reuses) + applies migrations/0001_init.sql
   5. Uploads dist/q-proxy.js via direct CF API (no wrangler) with KV + D1 bindings
-  6. Fetches https://<worker>.workers.dev/ to seed, reads KV via API, prints Panel URL
+  6. Fetches https://<worker>.workers.dev/ to seed, polls KV for the seeded settings (2s interval, 90s cap),
+     sets the first password (generated if not supplied) and prints the panel credentials
 `);
     process.exit(0);
   }
@@ -382,8 +400,9 @@ What it does:
     console.log(`[dry] Would create D1 database "${D1_DB_NAME}" in ${accountId || "<accountId>"}`);
     console.log(`[dry] Would apply ${D1_MIGRATIONS_FILE} via the D1 query API`);
     console.log(`[dry] Would upload Worker "${WORKER_NAME}" with KV binding ${KV_BINDING} + D1 binding ${D1_BINDING}`);
-    console.log(`[dry] Would fetch https://<subdomain>.workers.dev/ to seed and read securePath`);
+    console.log(`[dry] Would fetch https://<subdomain>.workers.dev/ to seed, then poll KV for securePath (up to 90s)`);
     if (password) console.log(`[dry] Would set first password via POST /<sp>/api/auth/setup`);
+    else console.log(`[dry] Would generate a random password (qproxy-XXXXXXXX), set it via POST /<sp>/api/auth/setup and print it`);
     rl.close();
     process.exit(0);
   }
@@ -398,13 +417,12 @@ What it does:
     }
   }
 
+  let passwordGenerated = false;
   if (!password) {
-    const ans = await ask(rl, "First panel password (8+ chars, letter + digit) [empty to set later in panel]: ");
-    password = ans;
-    if (password && password.length < 8) {
-      console.error("Password too short (8+ chars)");
-      process.exit(1);
-    }
+    password = generatePassword();
+    passwordGenerated = true;
+    console.log(`\nGenerated admin password: ${password}`);
+    console.log("(Pass --password <pw> to choose your own. It is also printed again after deploy.)");
   }
 
   rl.close();
@@ -454,39 +472,44 @@ What it does:
   } catch (e) {
     console.warn(`Seed fetch failed: ${String(e.message).slice(0, 200)} — KV may still seed on next visit`);
   }
-  // KV is eventually consistent — wait 2s for propagation before reading securePath
-  await new Promise((r) => setTimeout(r, 2000));
 
-  console.log("Reading securePath from KV via API...");
+  const kvHeaders = isGlobalKey(token)
+    ? { "X-Auth-Email": email, "X-Auth-Key": token }
+    : { Authorization: `Bearer ${token}` };
+  const kvUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/qproxy:settings`;
+
+  console.log(`Polling KV for seeded settings (every ${KV_POLL_INTERVAL_MS / 1000}s, up to ${KV_POLL_TIMEOUT_MS / 1000}s)...`);
+  const deadline = Date.now() + KV_POLL_TIMEOUT_MS;
   let securePath = "";
-  try {
-    const headers = isGlobalKey(token) ? { "X-Auth-Email": email, "X-Auth-Key": token } : { Authorization: `Bearer ${token}` };
-    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/qproxy:settings`, { headers });
-    if (res.ok) {
-      const txt = await res.text();
-      const parsed = JSON.parse(txt);
-      securePath = parsed?.data?.securePath || parsed?.securePath || "";
-    } else {
-      console.warn(`KV read status ${res.status}, trying alternative...`);
-      const data = await cfFetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/qproxy:settings`, token, email);
-      securePath = data?.data?.securePath || "";
-    }
-  } catch (e) {
-    console.warn(`KV read failed: ${e.message.slice(0, 300)}`);
+  let attempts = 0;
+  while (Date.now() < deadline) {
+    attempts++;
+    try {
+      const res = await fetch(kvUrl, { headers: kvHeaders });
+      if (res.ok) {
+        const txt = await res.text();
+        const parsed = JSON.parse(txt);
+        const sp = parsed?.data?.securePath || parsed?.securePath || "";
+        if (typeof sp === "string" && sp.length > 0) {
+          securePath = sp;
+          break;
+        }
+      } else {
+        await res.text().catch(() => {});
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, KV_POLL_INTERVAL_MS));
   }
 
   if (!securePath) {
-    console.log("\nCould not auto-read securePath (KV eventual consistency).");
-    console.log(`Try manually: curl ${workerUrl}/ && then:`);
-    if (isGlobalKey(token)) {
-      console.log(`  curl "https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/qproxy:settings" -H "X-Auth-Email: ${email}" -H "X-Auth-Key: ${redact(token)}"`);
-    } else {
-      console.log(`  curl "https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/qproxy:settings" -H "Authorization: Bearer ${redact(token)}"`);
-    }
-    console.log(`Or: npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV --remote`);
-    process.exit(0);
+    console.error(`\n[deploy-direct] FAILED: KV did not contain a seeded "qproxy:settings" with securePath after ${KV_POLL_TIMEOUT_MS / 1000}s (${attempts} attempts).`);
+    console.error(`The worker may not have seeded yet. Open ${workerUrl}/ once in a browser, then re-run this deploy.`);
+    console.error(`You can also inspect the key manually: npx wrangler kv key get "qproxy:settings" --binding=${KV_BINDING} --remote`);
+    process.exit(1);
   }
+  console.log(`KV seeded after ${attempts} attempt(s) — securePath found.`);
 
+  let setupNote = "skipped";
   if (password) {
     console.log(`\nSetting first password...`);
     try {
@@ -496,9 +519,26 @@ What it does:
         body: JSON.stringify({ newPassword: password }),
       });
       const txt = await res.text();
-      if (txt.includes('"ok":true')) console.log("Password set");
-      else console.log(`Password set response: ${txt.slice(0, 300)} (you can set it in panel)`);
+      let j = null;
+      try {
+        j = JSON.parse(txt);
+      } catch {}
+      if (j && j.ok === true) {
+        setupNote = "ok";
+        console.log("Password set");
+      } else if (j && j.error && j.error.code === "ALREADY_SET") {
+        setupNote = "already_set";
+        console.log("Password already configured on this deployment — the generated one was NOT applied.");
+      } else if (j && j.error && j.error.code === "SETUP_WINDOW_EXPIRED") {
+        setupNote = "expired";
+        console.log("Setup window expired (settings were seeded more than 24h ago without a password).");
+        console.log("Delete the qproxy:settings KV key (or redeploy with a fresh KV) and run this deploy again.");
+      } else {
+        setupNote = "failed";
+        console.log(`Password setup failed (${res.status}): ${txt.slice(0, 300)}`);
+      }
     } catch (e) {
+      setupNote = "failed";
       console.log(`Password set failed (set it in panel): ${String(e.message).slice(0, 200)}`);
     }
   }
@@ -512,8 +552,23 @@ What it does:
   console.log(`  securePath: ${securePath}`);
   console.log(`  KV: ${kvId}  Account: ${accountId}`);
   console.log("=".repeat(62));
-  if (password) console.log("\nPassword already set — open Panel and log in.");
-  else console.log("\nNext: open the Panel URL and set a password (8+ chars, letter + digit).");
+  if (passwordGenerated && setupNote === "ok") {
+    console.log("");
+    console.log("  ADMIN PASSWORD (generated — shown once, change it after first login):");
+    console.log("");
+    console.log(`      ${password}`);
+    console.log("");
+  } else if (passwordGenerated && setupNote === "already_set") {
+    console.log("\n  A password already existed; the generated one above was NOT applied.");
+  } else if (passwordGenerated && (setupNote === "failed" || setupNote === "expired")) {
+    console.log("\n  WARNING: password setup did not complete — see the message above.");
+  } else if (setupNote === "ok") {
+    console.log("\nPassword set — open Panel and log in.");
+  } else if (setupNote === "already_set") {
+    console.log("\nPassword already set previously — log in with the existing passphrase.");
+  } else if (setupNote === "failed" || setupNote === "expired") {
+    console.log("\nWARNING: automatic password setup did not complete — see the message above.");
+  }
 }
 
 main().catch((e) => {

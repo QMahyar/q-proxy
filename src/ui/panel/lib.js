@@ -28,6 +28,7 @@ if(r.status===401&&!o.keep401){if(S.dirty&&S.dirty.size>0&&!confirm(t('common.un
 if(r.status===304){try{const c=JSON.parse(sessionStorage.getItem('qpc:'+p)||'null');if(c){c.t=Date.now();sessionStorage.setItem('qpc:'+p,JSON.stringify(c));return c.d}}catch(e){}
 return api(p,Object.assign({},o,{fresh:true}))}
 let j=null;try{j=await r.json()}catch(e){}
+if(r.status===403&&j&&j.error&&j.error.code==='PASSWORD_CHANGE_REQUIRED'&&!o.keep401){showForceChange();throw{status:403,code:'PASSWORD_CHANGE_REQUIRED',message:'',handled:true}}
 if(!r.ok||!j||j.ok!==true)throw{status:r.status,code:j&&j.error?j.error.code:'',message:j&&j.error?j.error.message:'',fields:j&&j.fields||null,retryAfter:Number(r.headers.get('Retry-After'))||0};
 if(!o.method||o.method==='GET'){const et=r.headers.get('ETag');if(et)sessionStorage.setItem('qpe:'+p,et);try{sessionStorage.setItem('qpc:'+p,JSON.stringify({t:Date.now(),d:j.data}))}catch(e){}}
 return j.data})();
@@ -35,6 +36,8 @@ if(isGet){apiInflight.set(p,prom);const fin=(d)=>{apiInflight.delete(p);return d
 return prom}
 function copyText(s){if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(s).catch(()=>fallbackCopy(s));return Promise.resolve(fallbackCopy(s))}
 function fallbackCopy(s){const ta=document.createElement('textarea');ta.value=s;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}ta.remove()}
+const toastErrDirect=toastErr;
+toastErr=function(e){if(e&&e.handled)return;toastErrDirect(e)}
 
 let modalReturnFocus=null;
 function openModal(id){modalReturnFocus=document.activeElement;const m=$(id);m.hidden=false;const f=m.querySelector('button,input,[href],[tabindex]');if(f)f.focus()}

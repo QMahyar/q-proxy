@@ -4,7 +4,7 @@ import { buildSubUrls } from "../../src/handlers/api/status";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { execFileSync } from "node:child_process";
 
-const TOTAL_BUDGET_BYTES = 288 * 1024;
+const TOTAL_BUDGET_BYTES = 289 * 1024;
 
 describe("ui/assets", () => {
   it("exports exactly panel, login and camo as non-empty strings", () => {

@@ -226,7 +226,13 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  try{
  await api('api/auth/password',{method:'POST',body:{currentPassword:cur.value,newPassword:nw.value},keep401:true});
  toast(t('security.changed'),'ok');
- cur.value='';nw.value='';cf.value=''}
+ cur.value='';nw.value='';cf.value='';
+ try{sessionStorage.removeItem('qproxy_force_change')}catch(e){}
+ try{sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
+ try{sessionStorage.removeItem('qpe:api/bootstrap')}catch(e){}
+ hideForceChange();
+ boot()
+ }
  catch(err){
  if(err&&err.status===401)setFw('fw-sec-cur',t('security.wrong_current'));
  else if(err&&err.fields&&err.fields.newPassword)setFw('fw-sec-new',String(err.fields.newPassword));
@@ -284,6 +290,43 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  totpReset()}
  catch(err){toastErr(err)}
  finally{el.disabled=false}})()}};
+function forceFlagged(){
+if(S.set&&S.set.passwordIsBootstrap===true)return true;
+try{return sessionStorage.getItem('qproxy_force_change')==='1'}catch(e){return false}}
+function showForceChange(){
+if(S.forceChange)return;
+S.forceChange=true;
+try{sessionStorage.setItem('qproxy_force_change','1')}catch(e){}
+const tb=document.querySelector('header.topbar');
+if(tb)tb.hidden=true;
+const mn=$('main');
+if(mn)mn.hidden=true;
+const ab=$('applybar');
+if(ab)ab.hidden=true;
+const sec=$('force-change');
+if(!sec)return;
+const host=$('fc-fields');
+if(host&&!host.dataset.built){
+host.dataset.built='1';
+host.innerHTML=securityCardHtml()}
+const ti=$('fc-title');
+if(ti)ti.textContent=t('onboarding.forcechange.title');
+const ex=$('fc-explainer');
+if(ex)ex.textContent=t('onboarding.forcechange.explainer');
+sec.hidden=false;
+sec.style.display='flex';
+const cur=$('sec-cur');
+if(cur)cur.focus()}
+function hideForceChange(){
+S.forceChange=false;
+const sec=$('force-change');
+if(sec){sec.hidden=true;sec.style.display=''}
+const tb=document.querySelector('header.topbar');
+if(tb)tb.hidden=false;
+const mn=$('main');
+if(mn)mn.hidden=false;
+const ab=$('applybar');
+if(ab&&!(S.dirty&&S.dirty.size>0))ab.hidden=true}
 function onDocClick(e){
 const el=e.target.closest('[data-action]');
 if(el){
@@ -379,7 +422,10 @@ if(!msg&&fw&&fw.classList.contains('field--error')){fw.classList.remove('field--
 updateCharCount(bind)}
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()
 markDirty()}
+let eventsWired=false;
 function wireEvents(){
+if(eventsWired)return;
+eventsWired=true;
 document.addEventListener('click',onDocClick);
 document.addEventListener('change',onChange);
 document.addEventListener('input',onInput);
@@ -477,15 +523,18 @@ S.status=d.status||null;
 S.subs=(d.subUrls&&d.subUrls.urls)||[]}
 catch(e){
 if(e&&e.status===401)return;
+if(e&&e.code==='PASSWORD_CHANGE_REQUIRED')return;
 S.set={};
 toastErr(e);
 return}
 try{if(!/(?:^|;\s*)qp_lang=(en|fa)/.test(document.cookie)&&S.set&&(S.set.language==='en'||S.set.language==='fa')){LANG=S.set.language;setLangCookie(LANG);document.documentElement.lang=LANG;document.documentElement.dir=LANG==='fa'?'rtl':'ltr';buildShell()}}catch(e){}
+if(forceFlagged())showForceChange();
+if(S.forceChange)return;
 renderSettings();
 renderHome();
 navigate();
 maybeBackupBanner();
-maybeWizard()}
+if(!S.forceChange)maybeWizard()}
 function maybeWizard(){
 try{if(localStorage.getItem('qp_wizard_done'))return}catch(e){}
 const protoCount=['vlessEnabled','vmessEnabled','trojanEnabled','ssEnabled'].filter(k=>S.set&&S.set[k]).length;
