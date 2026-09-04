@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SELF, env } from "cloudflare:test";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
-import { resetThrottle, seed, testKv } from "../helpers/seed";
+import { SETTINGS_KEY, resetThrottle, seed, testKv } from "../helpers/seed";
 
 const kv = testKv(env);
 
@@ -295,5 +295,46 @@ describe("change password", () => {
 
     res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: NEW_PASSWORD }));
     expect(res.status).toBe(200);
+  });
+});
+
+describe("legacy hash upgrade", () => {
+  const PEPPER = "ab".repeat(64);
+
+  it("upgrades an unpeppered hash to peppered on login and re-logs in on the peppered path", async () => {
+    resetThrottle();
+    const { hashPassword, verifyPassword } = await import("../../src/auth/password");
+    const legacy = await hashPassword(PASSWORD);
+    await seed(kv, SP, {
+      sessionSecret: PEPPER,
+      passwordHash: legacy.hash,
+      passwordSalt: legacy.salt,
+    });
+
+    let res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    expect(res.status).toBe(200);
+    expect((res.headers.get("Set-Cookie") ?? "").split(";")[0]).toContain("q_session=");
+
+    const raw = await kv.get(SETTINGS_KEY);
+    const stored = (JSON.parse(raw!) as { data: Record<string, unknown> }).data;
+    expect(typeof stored.passwordHash).toBe("string");
+    expect(stored.passwordHash).not.toBe(legacy.hash);
+    expect(await verifyPassword(
+      PASSWORD,
+      stored.passwordHash as string,
+      stored.passwordSalt as string,
+      PEPPER,
+    )).toEqual({ ok: true, tier: "current" });
+    expect(await verifyPassword(
+      PASSWORD,
+      stored.passwordHash as string,
+      stored.passwordSalt as string,
+    )).toEqual({ ok: false, tier: "current" });
+
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    expect(res.status).toBe(200);
+
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: "wrong-password" }));
+    expect(res.status).toBe(401);
   });
 });
