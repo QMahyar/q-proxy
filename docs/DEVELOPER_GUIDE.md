@@ -309,7 +309,7 @@ Both funnel into the same 422 envelope `{ok:false,error:{code:"VALIDATION"},fiel
 - Settings: 60 s isolate cache + KV `cacheTtl:60` + write-through with no-op skip — typical request ≤1 KV read.
 - Counters buffered 60 s / 32 connections; usage reads memoized 15 s.
 - Subscription responses edge-cached 60 s via Cache API, keyed by format+mode+settings-version (`_v` stamp); WARP subs purged on account/preset/amnezia changes.
-- DoH resolver caches proxyIP A/AAAA/TXT expansions 10 min per isolate with LRU eviction (hits refresh recency; 256-entry cap).
+- DoH resolver caches proxyIP A/AAAA/TXT expansions 5 min per isolate with LRU eviction (hits refresh recency; 256-entry cap).
 
 ## 19. Versioning
 

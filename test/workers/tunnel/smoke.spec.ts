@@ -1,6 +1,10 @@
 /// <reference path="../../../node_modules/@cloudflare/vitest-pool-workers/types/cloudflare-test.d.ts" />
 import { describe, expect, it } from "vitest";
-import { SELF } from "cloudflare:test";
+import { SELF, env } from "cloudflare:test";
+import { ratelimitKey } from "../../../src/users/ratelimit";
+import { seed, testKv } from "../../helpers/seed";
+
+const kv = testKv(env);
 
 const UPGRADE_HEADERS: Record<string, string> = {
   Upgrade: "websocket",
@@ -45,5 +49,18 @@ describe("tunnel upgrade smoke", () => {
     const res = await SELF.fetch("https://example.com/vl/abcd1234efgh5678");
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/html");
+  });
+
+  it("returns 429 with Retry-After when the per-IP tunnel bucket is exhausted", async () => {
+    await seed(kv, "smokepath");
+    await kv.put(
+      ratelimitKey("tunnel:unknown", Date.now()),
+      JSON.stringify({ tokens: 0, updatedAt: Date.now() }),
+    );
+    const res = await SELF.fetch("https://example.com/vl/abcd1234efgh5678", {
+      headers: UPGRADE_HEADERS,
+    });
+    expect(res.status).toBe(429);
+    expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
 });

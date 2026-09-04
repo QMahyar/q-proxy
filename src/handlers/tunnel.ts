@@ -2,9 +2,11 @@ import type { RouteHandler } from "../types/context";
 import type { Settings } from "../types/settings";
 import type { DialTarget, DnsPacketRelay } from "../types/tunnel";
 import type { Env } from "../types/env";
-import { NotFoundError } from "../core/errors";
+import { NotFoundError, RateLimitedError } from "../core/errors";
 import { log } from "../core/log";
 import { recordBytes } from "../core/counters";
+import { clientIp } from "../auth/guard";
+import { tryConsume } from "../users/ratelimit";
 import { identifyTunnel, type TunnelKind } from "../core/routes";
 import { ByteAccumulator } from "../protocols/common";
 import type {
@@ -73,6 +75,8 @@ function createInbound(kind: TunnelKind, s: Settings): ProtocolInbound<TunnelPar
 export const handleTunnel: RouteHandler = async (req, env, s) => {
   const kind = identifyTunnel(new URL(req.url).pathname, s);
   if (kind === null) throw new NotFoundError("unknown tunnel path");
+  const gate = await tryConsume(env, `tunnel:${clientIp(req)}`);
+  if (!gate.allowed) throw new RateLimitedError(Math.ceil(gate.retryAfterMs / 1000));
   const accepted = acceptTunnelSocket(req, {
     earlyDataEnabled: kind === "ss" ? false : s.earlyDataEnabled,
     earlyDataMaxBytes: s.earlyDataMaxBytes,
