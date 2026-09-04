@@ -7,6 +7,10 @@
 - KV-backed login throttle (`qproxy:login-fail:<sha256-ip>:<minute>`, 120s TTL, fail-open); VMess chunk-nonce wrap guard; 2MB relay downlink cap (1009).
 - Subscription edge-cache keys versioned by settings etag (`_v`); remote-sub fetch parallelized (10s total budget).
 - Specs: share-uri `type=ws` regression, counters/errors/fragments/protocols-common/address suites, vmess-crypto boundary, relay downlink cap, KV throttle (mock-KV, window rollover, fail-open).
+- ECH auto-configuration: new `echAuto` setting (default off); when on with no manual `echServerName`, the ECH query name is derived per node from its SNI, with a live panel preview and an English warning when unresolvable (manual name always wins; unresolvable nodes emit without ECH).
+- Settings writes now return a monotonic blob `rev` — `PUT api/settings`, `POST api/settings/reset`, `POST api/settings/import`, and `POST api/killswitch` include `rev` in success data.
+- Egress dials are capped by a 15 s total budget (`TOTAL_DIAL_BUDGET_MS`, overridable per opener via `totalBudgetMs`), and chain/direct dials start speculatively before proxyIP/NAT64 expansion finishes (`openEgressWithSpeculativeDirect`).
+- New `isBlockedEgressHost(host)` guard combining local/private, cloud-metadata, and Cloudflare-IP checks.
 
 ### Fixed
 - Review sweep (5 rounds, ~70 findings): tunnel lifecycle (origin socket closed when client disconnects mid-dial; chain handshake deadline with proper timer cleanup), VLESS UDP/53 now length-framed per Xray `LengthPacketReader` (was forwarded raw, broken both directions), VMess rejects unknown security types (7-15) and plain+authenticated-length at handshake, fatal uplink corruption closes the tunnel (1011/1008) instead of hanging silently.
@@ -15,12 +19,18 @@
 - Auth: `/api/auth/setup` requires the `X-Q-Panel: 1` CSRF header; login/setup cookies use `iat = floor+1` so logout no longer poisons same-second logins; Telegram `setWebhook` registers `secret_token` (webhook accepts the header credential too).
 - Settings export keeps protocol credentials by design (round-trip import); panel warns the file is sensitive.
 - Wave 1 Docs: `resolveHostname` implements the documented hostname rule; panel a11y batch (nav/accent labels, skip link, 401-dirty confirm, 10s error toasts, tab overflow fade, `qp_lang` sync from `settings.language`); oversize early-data now closes 1009; Telegram `@username` match case-insensitive; counters flush attaches settlement handler (no unhandled rejection without bound context).
+- SSRF host guards now deny cloud-metadata literals/hostnames (`169.254.169.254/253`, `100.100.100.200`, `fd00:ec2::254/253` in any IPv6 spelling, `metadata.google.internal`/`metadata.goog`/`instance-data*`/`rancher-metadata`/`metadata`) plus any `.internal` hostname.
+- DNS resolver cache is LRU instead of FIFO, so hot entries survive unique-name bursts (256-entry cap and TTL unchanged).
+- Settings save/reset/import/killswitch merge from fresh KV state (`loadSettingsFresh`) instead of the stale 60 s isolate cache — locked by regression specs; concurrent writers can still race on the blob `rev` (KV read-modify-write is approximate across isolates).
 
 ### Changed
 - Subscription base64 output drops `ss://` and plain-security VLESS/Trojan URIs (Xray-family clients cannot run them); ss-only per-user scopes keep their nodes.
 - Clash emits mihomo's `query-server-name` ECH key (was the invalid `ech_server_name`); Loon emits official `tls-name=` (was `sni=`).
 - Removed dead code: `drainChunks`, AES-CFB helpers, `decodeUtf8Base64`, `TOKEN_HINT_SUFFIX`, `emitBase64List`/`base64-list.ts`, `recordUserHit`, `FailoverStrategy.hasNext`, `resolveAuthAlias` (matcher folded into `resolveSecureRoute`); shared `hmacSha256Hex` in `src/utils/hmac.ts`; `readJsonObject` streams bodies with the 64 KiB cap enforced mid-read.
 - ProxyIP domain expansion runs DoH lookups in parallel; resolver caches empty answers; users API path parsing fixed for `securePath="users"`.
+- `dispatchApi` 21-case switch replaced by a declarative `API_ROUTES` method/auth/handler table — dispatch semantics unchanged.
+- Sing-box/clash emitters share typed `SingBoxOutbound` outbounds and `nodeHas*` helpers — emitted configs byte-identical.
+- Test-only coverage: warp emitter goldens, subscription pipeline, and relay-failover specs (no `src/` changes).
 
 ## 1.2.0 - 2026-08-27
 

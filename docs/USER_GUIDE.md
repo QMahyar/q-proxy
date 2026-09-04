@@ -104,7 +104,7 @@ All fields from `src/types/settings.ts:41` grouped below. Saving is `PUT /{sp}/a
 | Protocols | `vlessEnabled`/`vmessEnabled`/`trojanEnabled`/`ssEnabled`, `vlessUuid`/`vmessUuid`/`trojanPassword`/`ssPassword`, `ssMethod` (`aes-128-gcm`/`aes-256-gcm`), `vlessPath`/`vmessPath`/`trojanPath`/`ssPath` (`vl`/`vm`/`tr`/`ss` defaults) | Per-protocol enable + creds + WS path suffix |
 | Egress | `earlyDataEnabled`+`earlyDataMaxBytes` (2048), `proxyIpMode` (`proxyip`/`nat64`), `proxyIps[]`, `nat64Prefixes[]`, `chainProxy {enabled, uri}` (`socks5://`/`http://`/`https://`), `enableUdp53` | Tunnel egress chain |
 | Routing | `hostnameOverride`, `customDomains[]`, `cleanIps[]`, `tlsPorts[]` (443,2053,2083,2087,2096,8443), `plainPorts[]` (80,8080,...), `plainPortPolicy` (`always`/`workers-dev`/`never`), `cdn {enabled, addresses[], host, sni}` | Address pool + port matrix |
-| TLS | `fingerprint` (chrome/firefox/safari/ios/android/edge/360/qq/random/randomized), `randomizeSniCase`, `alpn` (`["http/1.1"]`), `echEnabled`, `echServerName` | Emitted node TLS hygiene + ECH |
+| TLS | `echEnabled`, `echAuto` (derive ECH name from node SNI), `echServerName` (manual override, always wins), `fingerprint` (chrome/firefox/safari/ios/android/edge/360/qq/random/randomized), `randomizeSniCase`, `alpn` (`["http/1.1"]`) | Emitted node TLS hygiene + ECH |
 | Fragment | `fragment {mode (off/low/medium/high/severe/custom), packets (tlshello/1-1…1-5), lengthMin/Max, delayMin/Max, maxSplitMin/Max}` | Xray fragment subs |
 | DNS | `dohUpstream` (`https://cloudflare-dns.com/dns-query`), `remoteDns` (`https://8.8.8.8/dns-query`), `localDns` (`localhost`) | DoH + resolver |
 | Privacy | `camouflage {mode (off/static/proxy), url}`, `killSwitch`, `speedtestIntercept`, `remoteSubUrls[]`, `urlTestIntervalSec` (300) | Camouflage + merging |
@@ -251,6 +251,7 @@ Fragment forces TLS ports and excludes CDN hosts (src/types/node.ts). Use ?mode=
 - TLS ports tlsPorts: [443,2053,2083,2087,2096,8443] -> security=tls; plain plainPorts: [80,8080,8880,2052,2082,2086,2095] -> security=none (src/types/settings.ts:119). Mismatch never emitted — property test over generator.
 - plainPortPolicy: workers-dev (default) = plain nodes only when hostname is *.workers.dev; always / never override. Enable always if using custom domain with HTTP allowed.
 - Emitted nodes: sni = randomized-uppercase hostname per remark seed, alpn=http/1.1, fingerprint selectable (chrome default, 10 values + random/randomized), allowInsecure=false always.
+- ECH (Encrypted ClientHello): enable `echEnabled`, then either set a manual `echServerName` (always wins) or turn on `echAuto` to derive the query name per node from its SNI — the panel previews the effective name live. Nodes whose SNI is not a usable domain name emit without ECH rather than failing.
 - Remarks encode protocol + port + address class + flags (F= fragment, D= custom domain, chain indicator) — unique and stable per src/nodes/naming.ts.
 
 ## 9. Security Checklist
