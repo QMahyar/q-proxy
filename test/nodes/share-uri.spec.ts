@@ -64,6 +64,13 @@ describe("buildVlessShareUri", () => {
     const node = { ...vlessTls(), address: "2001:db8::1", name: "V6" };
     expect(buildVlessShareUri(node)).toContain("@[2001:db8::1]:443?");
   });
+
+  it("emits type=ws as the first transport param", () => {
+    const uri = buildVlessShareUri(vlessTls());
+    expect(uri).toContain("type=ws&host=");
+    expect(uri.indexOf("type=ws")).toBeLessThan(uri.indexOf("host="));
+    expect(uri.indexOf("type=ws")).toBeLessThan(uri.indexOf("path="));
+  });
 });
 
 describe("buildVMessShareUri", () => {
@@ -193,6 +200,30 @@ describe("buildTrojanShareUri", () => {
     expect(uri).toBe(
       "trojan://abc@[2001:db8::25]:8080?security=none&type=ws&host=worker.test&path=%2Ftr%2Fp#TP",
     );
+  });
+
+  it("emits type=ws as the first transport param", () => {
+    const node: TrojanNode = {
+      kind: "trojan",
+      name: "T",
+      address: "example.com",
+      port: 443,
+      security: "tls",
+      sni: "example.com",
+      host: "example.com",
+      path: "/tr",
+      earlyData: 0,
+      fingerprint: null,
+      alpn: [],
+      ech: null,
+      variant: "normal",
+      tags: [],
+      password: "p",
+    };
+    const uri = buildTrojanShareUri(node);
+    expect(uri).toContain("type=ws&host=");
+    expect(uri.indexOf("type=ws")).toBeLessThan(uri.indexOf("host="));
+    expect(uri.indexOf("type=ws")).toBeLessThan(uri.indexOf("path="));
   });
 });
 
