@@ -101,7 +101,7 @@ All fields from `src/types/settings.ts:41` grouped below. Saving is `PUT /{sp}/a
 | Group | Fields (`src/types/settings.ts`) | What it does |
 |-------|----------------------------------|--------------|
 | General | `language` (`en`/`fa`, RTL), `debugLogging`, `profileTitle`, `subUpdateIntervalHours`, `maxNodesPerFormat` | UI + subscription headers |
-| Protocols | `vlessEnabled`/`vmessEnabled`/`trojanEnabled`/`ssEnabled`, `vlessUuid`/`vmessUuid`/`trojanPassword`/`ssPassword`, `ssMethod` (`aes-128-gcm`/`aes-256-gcm`), `vlessPath`/`vmessPath`/`trojanPath`/`ssPath` (`vl`/`vm`/`tr`/`ss` defaults) | Per-protocol enable + creds + WS path suffix |
+| Protocols | `vlessEnabled`/`vmessEnabled`/`trojanEnabled`/`ssEnabled`, `vlessUuid`/`vmessUuid`/`trojanPassword`/`ssPassword`, `ssMethod` (`aes-128-gcm`/`aes-256-gcm`), `vlessFlow` (off / `xtls-rprx-vision`, TLS nodes only), `ssDirect` (plain `ss://` without v2ray-plugin), `vlessPath`/`vmessPath`/`trojanPath`/`ssPath` (`vl`/`vm`/`tr`/`ss` defaults) | Per-protocol enable + creds + WS path suffix; flow/direct details in §4.8 |
 | Egress | `earlyDataEnabled`+`earlyDataMaxBytes` (2048), `proxyIpMode` (`proxyip`/`nat64`), `proxyIps[]`, `nat64Prefixes[]`, `chainProxy {enabled, uri}` (`socks5://`/`http://`/`https://`), `enableUdp53` | Tunnel egress chain |
 | Routing | `hostnameOverride`, `customDomains[]`, `cleanIps[]`, `tlsPorts[]` (443,2053,2083,2087,2096,8443), `plainPorts[]` (80,8080,...), `plainPortPolicy` (`always`/`workers-dev`/`never`), `cdn {enabled, addresses[], host, sni}` | Address pool + port matrix |
 | TLS | `echEnabled`, `echAuto` (derive ECH name from node SNI), `echServerName` (manual override, always wins), `fingerprint` (chrome/firefox/safari/ios/android/edge/360/qq/random/randomized), `randomizeSniCase`, `alpn` (`["http/1.1"]`) | Emitted node TLS hygiene + ECH |
@@ -151,6 +151,13 @@ Settings saves/resets/imports, kill-switch toggles, and WARP account/preset/Amne
 - **Traffic chart** — the Home status card renders an SVG sparkline from the `qp_traffic` browser-local history (accumulated from the bootstrap usage counters on each visit); it shows an empty state until enough visits have built history. History never leaves the browser.
 - **Backup nudge** — if no settings export has happened in over 30 days, a banner offers a one-click export (dismissable). Export via Settings → Backup regularly regardless.
 - **Mobile** — below 500 px the layout stacks (tables collapse to labeled rows, modals go near-full-width); on touch devices help triggers are 44 px targets.
+
+### 4.8 VLESS Vision Flow + Direct Shadowsocks
+
+Settings → Protocols → VLESS / Shadowsocks (`vlessFlow`, `ssDirect` in `src/types/settings.ts`; both off by default, legacy output byte-identical when off).
+
+- **Vision flow (`vlessFlow: xtls-rprx-vision`)** — set it when your clients configure `flow=xtls-rprx-vision` on the VLESS node. The worker detects the flow from the handshake and decodes the length-prefixed body framing; the response header stays `[version, 0x00]` and non-vision clients keep working unchanged. `generateNodes` stamps the flow onto TLS VLESS nodes only — plain-port (`security: none`) nodes never carry it, so enabling the setting cannot break plain-port subs. Emitted share URIs gain `flow=xtls-rprx-vision` after the transport params; Clash adds `flow: xtls-rprx-vision` and sing-box adds `"flow": "xtls-rprx-vision"` on the VLESS entry. Surge/Loon output is unchanged. If a client enables vision locally but the setting is off here, only the URI advertisement is missing — the inbound still negotiates vision from the handshake.
+- **Direct Shadowsocks (`ssDirect: true`)** — emits plain `ss://` links (no `plugin=v2ray-plugin;…` segment) plus Clash entries without `plugin`/`plugin-opts` and sing-box outbounds without `plugin`/`plugin_opts`, for clients that speak raw Shadowsocks. Default (`false`) keeps the v2ray-plugin WebSocket wrapping, which is what carries SS over the worker's WebSocket tunnels — switch to direct only if your client handles raw SS itself.
 
 ## 5. Subscriptions
 
@@ -223,6 +230,20 @@ These configs connect straight to Cloudflare's WARP network — their tunnel tra
 **Menu buttons:** `/start` and `/menu` reply with the help text plus an inline keyboard — Status · Usage on row one, Subscription · Expiry on row two, Kill ON · Kill OFF on row three. Tapping a button runs the matching command and edits the same message in place (no chat spam); other commands reply as plain text without buttons. Kill buttons flip the kill switch immediately, so guard chat access accordingly.
 
 Removing the webhook deletes it from BotFather. The bot token is write-only: it is stripped from settings responses and exports.
+
+### 5.6 Transport Support Matrix
+
+All worker-terminated proxy traffic runs over WebSocket tunnels (`/{vl|vm|tr|ss}/` under the secure path). There is deliberately no other inbound transport today:
+
+| Transport | Status | What it means for you |
+|-----------|--------|------------------------|
+| WebSocket (`type=ws`) | ✅ Works | Every emitted node uses it; the only transport clients need to configure |
+| VLESS `xtls-rprx-vision` flow over WS | ✅ Works | Opt-in via `vlessFlow` (see §4.8); framing only, still inside the WS tunnel |
+| gRPC (`type=grpc`) | ❌ Not supported | The worker cannot send gRPC trailers, so native gRPC clients would fail every call — deferred until the platform exposes trailer/h2-stream APIs (ADR-006) |
+| XHTTP | ❌ Not supported (nearest-term candidate) | Needs proof that the edge streams request/response bodies concurrently plus an Xray source pin before any build (ADR-007) |
+| REALITY (`security=reality`, `type=tcp`) | ❌ Never on the worker | REALITY needs raw inbound TCP and handshake control the Cloudflare edge does not grant; a subscription-side remote-reference model (list your own VPS REALITY nodes in admin subs) is specified but parked pending a product decision (ADR-008). The worker will never hold REALITY private keys |
+
+Do not set `type=grpc`, `type=xhttp`, or `security=reality` on worker nodes — no client will connect. Remote-subscription lines using other transports pass through untouched in the base64 merge (§7.4) but are never generated or converted by this worker.
 
 ## 6. Troubleshooting
 
