@@ -42,15 +42,13 @@ export async function bumpSessionFloor(env: Env): Promise<void> {
 
 export async function issueSession(secret: string): Promise<string> {
   const now = unixNow();
-  const jti = crypto.randomUUID();
-  const payload = encodeBase64Url(JSON.stringify({ exp: now + SESSION_TTL_SECONDS, iat: now, jti }));
+  const payload = encodeBase64Url(JSON.stringify({ exp: now + SESSION_TTL_SECONDS, iat: now }));
   const sig = await hmacSha256Hex(payload, secret);
   return `${payload}.${sig}`;
 }
 
 export async function issueSessionWithIat(secret: string, iat: number): Promise<string> {
-  const jti = crypto.randomUUID();
-  const payload = encodeBase64Url(JSON.stringify({ exp: iat + SESSION_TTL_SECONDS, iat, jti }));
+  const payload = encodeBase64Url(JSON.stringify({ exp: iat + SESSION_TTL_SECONDS, iat }));
   const sig = await hmacSha256Hex(payload, secret);
   return `${payload}.${sig}`;
 }

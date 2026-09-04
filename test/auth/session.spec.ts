@@ -4,12 +4,13 @@ import {
   clearSessionFloorCache,
   getSessionFloor,
   issueSession,
+  issueSessionWithIat,
   SESSION_TTL_SECONDS,
   verifySession,
 } from "../../src/auth/session";
 import type { Env } from "../../src/types/env";
 import { bytesToHex, utf8Encode } from "../../src/utils/bytes";
-import { encodeBase64Url } from "../../src/utils/base64";
+import { decodeBase64Url, encodeBase64Url } from "../../src/utils/base64";
 import { unixNow } from "../../src/utils/time";
 
 const SECRET = "unit-test-secret";
@@ -88,6 +89,33 @@ describe("session sign/verify", () => {
     expect(payload!.iat).toBeDefined();
     expect(payload!.iat!).toBeLessThanOrEqual(unixNow());
     expect(payload!.iat!).toBeGreaterThan(unixNow() - 10);
+  });
+
+  it("issues payloads without jti", async () => {
+    const tokens = [await issueSession(SECRET), await issueSessionWithIat(SECRET, unixNow())];
+    for (const token of tokens) {
+      const part = token.split(".")[0]!;
+      const decoded = decodeBase64Url(part);
+      expect(decoded.ok).toBe(true);
+      if (!decoded.ok) continue;
+      const body = JSON.parse(new TextDecoder().decode(decoded.value)) as Record<string, unknown>;
+      expect("jti" in body).toBe(false);
+      expect(Object.keys(body).sort()).toEqual(["exp", "iat"]);
+      expect(body["exp"]).toBe((body["iat"] as number) + SESSION_TTL_SECONDS);
+    }
+  });
+
+  it("accepts legacy sessions that still carry jti", async () => {
+    const now = unixNow();
+    const legacy = encodeBase64Url(
+      JSON.stringify({ exp: now + 1000, iat: now, jti: "00000000-0000-4000-8000-000000000000" }),
+    );
+    const token = `${legacy}.${await sign(legacy)}`;
+    const payload = await verifySession(token, SECRET);
+    expect(payload).not.toBeNull();
+    expect(payload!.exp).toBe(now + 1000);
+    expect(payload!.iat).toBe(now);
+    expect(await verifySession(token, SECRET, now)).toBeNull();
   });
 
   it("rejects tokens issued before the revocation floor", async () => {
