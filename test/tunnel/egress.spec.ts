@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createEgressOpener, makeFailoverStrategy } from "../../src/tunnel/egress";
+import { createEgressOpener, makeFailoverStrategy, openEgressWithSpeculativeDirect } from "../../src/tunnel/egress";
 import { clearResolverCache } from "../../src/tunnel/resolver";
 import type { DialTarget, EgressCandidate, Socket } from "../../src/types/tunnel";
 import { equalsBytes } from "../../src/utils/bytes";
@@ -289,5 +289,116 @@ describe("createEgressOpener", () => {
     );
     await expect(opener.open(TARGET, new Uint8Array([1, 2, 3]))).rejects.toThrow("all egress candidates failed");
     expect(closed).toBe(true);
+  });
+
+  it("caps a walk of hanging dials at the total budget instead of per-candidate timeouts", async () => {
+    const hanging = vi.fn(async (): Promise<Socket> => new Promise<Socket>(() => {}));
+    const opener = createEgressOpener(
+      strategyOf([
+        { via: "direct", label: "first", host: "a", port: 1 },
+        { via: "proxyip", label: "second", host: "b", port: 2 },
+        { via: "proxyip", label: "third", host: "c", port: 3 },
+        { via: "proxyip", label: "fourth", host: "d", port: 4 },
+        { via: "proxyip", label: "fifth", host: "e", port: 5 },
+      ]),
+      hanging,
+      { dialTimeoutMs: 2000, totalBudgetMs: 300 },
+    );
+    const start = Date.now();
+    await expect(opener.open(TARGET, null)).rejects.toThrow("all egress candidates failed");
+    expect(Date.now() - start).toBeLessThan(5000);
+    expect(hanging).not.toHaveBeenCalledTimes(5);
+  });
+
+  it("bounds retry walks with the same total budget", async () => {
+    const good = fakeSocket();
+    const calls: string[] = [];
+    const dialImpl = vi.fn(async (candidate: EgressCandidate): Promise<Socket> => {
+      calls.push(candidate.label);
+      if (candidate.label === "first") return good.socket;
+      return new Promise<Socket>(() => {});
+    });
+    const opener = createEgressOpener(
+      strategyOf([
+        { via: "direct", label: "first", host: "a", port: 1 },
+        { via: "proxyip", label: "second", host: "b", port: 2 },
+        { via: "proxyip", label: "third", host: "c", port: 3 },
+        { via: "proxyip", label: "fourth", host: "d", port: 4 },
+      ]),
+      dialImpl,
+      { dialTimeoutMs: 2000, totalBudgetMs: 200 },
+    );
+    await opener.open(TARGET, null);
+    const start = Date.now();
+    await expect(opener.retry(TARGET, null)).resolves.toBeNull();
+    expect(Date.now() - start).toBeLessThan(5000);
+    expect(calls).toContain("second");
+    expect(calls).not.toContain("fourth");
+  });
+});
+
+describe("openEgressWithSpeculativeDirect", () => {
+  it("starts the direct dial before DNS expansion finishes and still prefers direct", async () => {
+    let resolveFetch!: (res: Response) => void;
+    const fetchGate = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchMock = vi.fn(async () => fetchGate);
+    vi.stubGlobal("fetch", fetchMock);
+    const s = makeTestSettings({ proxyIpMode: "proxyip", proxyIps: ["proxy.example.com"] });
+    const sock = fakeSocket();
+    const seen: string[] = [];
+    const dialImpl = vi.fn(async (candidate: EgressCandidate): Promise<Socket> => {
+      seen.push(`${candidate.via}:${candidate.host}:${candidate.port}`);
+      if (candidate.via === "direct") return sock.socket;
+      return new Promise<Socket>(() => {});
+    });
+    const pending = openEgressWithSpeculativeDirect(s, TARGET, null, dialImpl);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(fetchMock).toHaveBeenCalled();
+    expect(dialImpl).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([`direct:${TARGET.host}:${TARGET.port}`]);
+    resolveFetch(new Response(new Uint8Array([0, 1, 2])));
+    const { established, opener } = await pending;
+    expect(established.via).toBe("direct");
+    expect(established.candidateIndex).toBe(0);
+    expect(established.strategy.candidates[0]).toMatchObject({ via: "direct" });
+    expect(opener).toBeDefined();
+  });
+
+  it("keeps chain first and closes the unused speculative direct socket", async () => {
+    const s = makeTestSettings({
+      chainProxy: { enabled: true, uri: "socks5://u:p@chain.example:1080" },
+      proxyIpMode: "proxyip",
+      proxyIps: ["1.1.1.1"],
+    });
+    const chainSock = fakeSocket();
+    let directClosed = false;
+    const directSock = fakeSocket();
+    directSock.socket.close = async () => {
+      directClosed = true;
+    };
+    const dialImpl = vi.fn(async (candidate: EgressCandidate): Promise<Socket> => {
+      if (candidate.via === "chain") return chainSock.socket;
+      if (candidate.via === "direct") return directSock.socket;
+      throw new Error(`dial refused ${candidate.label}`);
+    });
+    const { established } = await openEgressWithSpeculativeDirect(s, TARGET, null, dialImpl);
+    expect(established.via).toBe("chain");
+    expect(established.candidateIndex).toBe(0);
+    expect(established.strategy.candidates.map((c) => c.via)).toEqual(["chain", "direct", "proxyip"]);
+    await Promise.resolve();
+    expect(directClosed).toBe(true);
+  });
+
+  it("omits direct for blocked hosts and never dials it", async () => {
+    const s = makeTestSettings({ proxyIpMode: "proxyip", proxyIps: ["93.184.216.34"] });
+    const target: DialTarget = { host: "10.0.0.5", port: 80 };
+    const sock = fakeSocket();
+    const dialImpl = vi.fn(async (_candidate: EgressCandidate): Promise<Socket> => sock.socket);
+    const { established } = await openEgressWithSpeculativeDirect(s, target, null, dialImpl);
+    expect(established.strategy.candidates.some((c) => c.via === "direct")).toBe(false);
+    expect(dialImpl.mock.calls.some(([c]) => c?.via === "direct")).toBe(false);
+    expect(established.via).toBe("proxyip");
   });
 });
