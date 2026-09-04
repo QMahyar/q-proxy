@@ -86,6 +86,7 @@ export interface Settings {
   randomizeSniCase: boolean;
   alpn: string[];
   echEnabled: boolean;
+  echAuto: boolean;
   echServerName: string;
   fragment: FragmentSettings;
   proxyIpMode: "proxyip" | "nat64";
@@ -140,6 +141,7 @@ export const DEFAULT_SETTINGS: Settings = {
   randomizeSniCase: true,
   alpn: ["http/1.1"],
   echEnabled: false,
+  echAuto: false,
   echServerName: "",
   fragment: {
     mode: "off",

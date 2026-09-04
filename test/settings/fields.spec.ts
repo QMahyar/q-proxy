@@ -127,3 +127,30 @@ describe("settings single source of truth drift", () => {
     expect(Object.keys(dict.en).sort()).toEqual(Object.keys(dict.fa).sort());
   });
 });
+
+describe("echAuto binding", () => {
+  it("declares echAuto as a boolean setting defaulting to off", () => {
+    const row = SETTING_FIELD_DESCRIPTORS.find((d) => d.path === "echAuto");
+    expect(row).toBeDefined();
+    expect(row!.spec).toEqual({ kind: "bool" });
+    expect(DEFAULT_SETTINGS.echAuto).toBe(false);
+  });
+
+  it("binds the auto toggle and the manual override in the panel with i18n in both languages", () => {
+    const { dict, fields } = buildPanelRegistry();
+    const paths = flPathsOf(fields);
+    expect(paths).toContain("echAuto");
+    expect(paths).toContain("echServerName");
+    for (const key of [
+      "protocols.ech.auto",
+      "protocols.ech.auto_hint",
+      "protocols.ech.auto_help",
+      "protocols.ech.preview_manual",
+      "protocols.ech.preview_auto",
+      "protocols.ech.preview_off",
+    ]) {
+      expect(dict.en[key]).toBeTruthy();
+      expect(dict.fa[key]).toBeTruthy();
+    }
+  });
+});

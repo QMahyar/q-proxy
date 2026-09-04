@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
-import { validateSettings } from "../../src/settings/validate";
+import { resolveEchServerName, validateSettings } from "../../src/settings/validate";
 import { handleCamouflage } from "../../src/handlers/camouflage";
 import { makeFailoverStrategy } from "../../src/tunnel/egress";
 import { ASSETS } from "../../src/ui/assets";
@@ -393,5 +393,94 @@ describe("ssrf guards", () => {
     expect(proxied).not.toContain("10.0.0.5");
     expect(proxied).not.toContain("104.16.132.229");
     expect(proxied).toContain("8.8.8.8");
+  });
+});
+
+describe("echAuto", () => {
+  it("defaults to false and accepts explicit booleans", () => {
+    const d = validateSettings({});
+    expect(d.ok).toBe(true);
+    if (d.ok) expect(d.value.echAuto).toBe(false);
+    expect(validateSettings({ echAuto: true }).ok).toBe(true);
+    expect(validateSettings({ echAuto: false }).ok).toBe(true);
+  });
+
+  it("rejects non-boolean values", () => {
+    expect(fieldsOf({ echAuto: "yes" }).echAuto).toBeTruthy();
+    expect(fieldsOf({ echAuto: 1 }).echAuto).toBeTruthy();
+  });
+
+  it("still validates the manual server name shape when auto is on", () => {
+    expect(validateSettings({ echAuto: true, echServerName: "edge.example.com" }).ok).toBe(true);
+    expect(fieldsOf({ echAuto: true, echServerName: "localhost" }).echServerName).toBeTruthy();
+    expect(validateSettings({ echAuto: true, echServerName: "" }).ok).toBe(true);
+  });
+});
+
+describe("resolveEchServerName", () => {
+  it("returns null when ECH is disabled", () => {
+    expect(
+      resolveEchServerName(makeTestSettings({ echEnabled: false, echAuto: true }), "edge.example.com"),
+    ).toEqual({ name: null, warning: null });
+    expect(
+      resolveEchServerName(
+        makeTestSettings({ echEnabled: false, echServerName: "manual.example.com" }),
+        "edge.example.com",
+      ),
+    ).toEqual({ name: null, warning: null });
+  });
+
+  it("prefers the manual override over auto derivation", () => {
+    const auto = makeTestSettings({
+      echEnabled: true,
+      echAuto: true,
+      echServerName: "manual.example.com",
+    });
+    expect(resolveEchServerName(auto, "edge.example.com")).toEqual({
+      name: "manual.example.com",
+      warning: null,
+    });
+    const legacy = makeTestSettings({
+      echEnabled: true,
+      echAuto: false,
+      echServerName: "manual.example.com",
+    });
+    expect(resolveEchServerName(legacy, "edge.example.com")).toEqual({
+      name: "manual.example.com",
+      warning: null,
+    });
+  });
+
+  it("derives the SNI when auto is on and no manual name is set", () => {
+    const s = makeTestSettings({ echEnabled: true, echAuto: true, echServerName: "" });
+    expect(resolveEchServerName(s, "edge.example.com")).toEqual({
+      name: "edge.example.com",
+      warning: null,
+    });
+  });
+
+  it("warns instead of emitting when auto cannot derive a usable name", () => {
+    const s = makeTestSettings({ echEnabled: true, echAuto: true, echServerName: "" });
+    for (const sni of [null, "", "  ", "127.0.0.1", "localhost", "not a host!"]) {
+      const r = resolveEchServerName(s, sni);
+      expect(r.name).toBeNull();
+      expect(r.warning).toBeTruthy();
+    }
+  });
+
+  it("keeps the legacy SNI fallback without warnings when auto is off", () => {
+    const s = makeTestSettings({ echEnabled: true, echAuto: false, echServerName: "" });
+    expect(resolveEchServerName(s, "edge.example.com")).toEqual({
+      name: "edge.example.com",
+      warning: null,
+    });
+  });
+
+  it("trims surrounding whitespace", () => {
+    const s = makeTestSettings({ echEnabled: true, echAuto: true, echServerName: "  " });
+    expect(resolveEchServerName(s, "  edge.example.com  ")).toEqual({
+      name: "edge.example.com",
+      warning: null,
+    });
   });
 });
