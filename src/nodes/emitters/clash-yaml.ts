@@ -56,9 +56,11 @@ function proxyEntry(node: ProxyNode): YamlObject {
     p.password = node.password;
     p.plugin = "v2ray-plugin";
     p["plugin-opts"] = ssPluginOpts(node);
+    if (isTls) p["skip-cert-verify"] = true;
     return p;
   }
   if (isTls) {
+    p["skip-cert-verify"] = true;
     if (node.fingerprint !== null) p["client-fingerprint"] = node.fingerprint;
     if (node.alpn.length > 0) p.alpn = [...node.alpn];
   }

@@ -87,6 +87,7 @@ describe("emitClashYaml golden", () => {
       "    uuid: d342d11e-d424-4583-b36e-524ab1f0afa4",
       "    tls: true",
       "    servername: example.com",
+      "    skip-cert-verify: true",
       "    client-fingerprint: chrome",
       "    alpn: [http/1.1]",
       "    network: ws",
@@ -103,6 +104,7 @@ describe("emitClashYaml golden", () => {
       "    udp: true",
       "    password: secretpass123",
       "    sni: example.com",
+      "    skip-cert-verify: true",
       "    client-fingerprint: chrome",
       "    network: ws",
       "    ws-opts:",
@@ -124,6 +126,7 @@ describe("emitClashYaml golden", () => {
       "      tls: true",
       "      host: example.com",
       '      path: "/ss/abcd1234"',
+      "    skip-cert-verify: true",
       "proxy-groups:",
       "  - name: PROXY",
       "    type: url-test",
@@ -160,6 +163,7 @@ describe("emitClashYaml golden", () => {
     const out = emitClashYaml([vmessTls], OPTS);
     expect(out).toContain("    alterId: 0\n    cipher: auto");
     expect(out).toContain("    servername: sni.example.com");
+    expect(out).toContain("    skip-cert-verify: true");
     const plain: VMessNode = {
       ...vmessTls,
       port: 80,
@@ -173,6 +177,7 @@ describe("emitClashYaml golden", () => {
     expect(outPlain).not.toContain("servername:");
     expect(outPlain).not.toContain("client-fingerprint:");
     expect(outPlain).not.toContain("max-early-data");
+    expect(outPlain).not.toContain("skip-cert-verify");
   });
 
   it("select group for a single node and DIRECT rule when empty", () => {
