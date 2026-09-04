@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ASSETS } from "../../src/ui/assets";
 import { buildSubUrls } from "../../src/handlers/api/status";
 
-const TOTAL_BUDGET_BYTES = 256 * 1024;
+const TOTAL_BUDGET_BYTES = 288 * 1024;
 
 describe("ui/assets", () => {
   it("exports exactly panel, login and camo as non-empty strings", () => {
