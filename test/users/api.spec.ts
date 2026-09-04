@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleUsersApi } from "../../src/handlers/api/users";
 import {
+  consumeUserHit,
   hashToken,
   listUsers,
   saveUsers,
   tokenHintFor,
   clearUsersMemoForTests,
+  clearUserActivityForTests,
   clearUserTotalsForTests,
   type UserAccount,
 } from "../../src/users/store";
+import { dayKeyUtc } from "../../src/utils/time";
 
 class FakeKV {
   map = new Map<string, string>();
@@ -51,6 +54,7 @@ describe("users api handler", () => {
     kv = new FakeKV();
     env = kv.asEnv() as unknown as { QPROXY_KV: FakeKV };
     clearUsersMemoForTests();
+    clearUserActivityForTests();
     clearUserTotalsForTests();
   });
 
@@ -262,5 +266,60 @@ describe("users api handler", () => {
     const renameRes = (await handleUsersApi(rename, env as never, {} as never)) as Response;
     const renameJ = (await renameRes.json()) as { data: { user: Record<string, unknown> } };
     expect(renameJ.data.user.addressOverride).toEqual({ address: "9.9.9.9" });
+  });
+
+  it("GET activity returns per-day aggregates without leaking the token or its hash", async () => {
+    const create = jsonReq("/api/users", "POST", { name: "Watched" });
+    const createRes = (await handleUsersApi(create, env as never, {} as never)) as Response;
+    const createJ = (await createRes.json()) as { data: { user: { id: string; token: string } } };
+    const { id, token } = createJ.data.user;
+    await consumeUserHit(env as never, token, null);
+    await consumeUserHit(env as never, token, null);
+    const res = (await handleUsersApi(
+      req(`/api/users/${id}/activity?days=1`, { method: "GET" }),
+      env as never,
+      {} as never,
+    )) as Response;
+    expect(res.status).toBe(200);
+    const j = (await res.json()) as { data: { activity: Record<string, unknown>[] } };
+    expect(j.data.activity).toEqual([{ day: dayKeyUtc(), requests: 2, bytesUp: 0, bytesDown: 0 }]);
+    const serialized = JSON.stringify(j);
+    expect(serialized).not.toContain(token);
+    expect(serialized).not.toContain(await hashToken(token));
+    expect(serialized).not.toContain("tokenHash");
+  });
+
+  it("GET activity defaults to 7 days and clamps the window to 1..31", async () => {
+    const create = jsonReq("/api/users", "POST", { name: "Ranged" });
+    const createRes = (await handleUsersApi(create, env as never, {} as never)) as Response;
+    const createJ = (await createRes.json()) as { data: { user: { id: string } } };
+    const id = createJ.data.user.id;
+    const get = async (qs: string) =>
+      ((await handleUsersApi(req(`/api/users/${id}/activity${qs}`, { method: "GET" }), env as never, {} as never)) as Response).json() as Promise<{
+        data: { activity: { day: string; requests: number; bytesUp: number; bytesDown: number }[] };
+      }>;
+    expect(((await get("")).data.activity)).toHaveLength(7);
+    expect(((await get("?days=3")).data.activity)).toHaveLength(3);
+    expect(((await get("?days=0")).data.activity)).toHaveLength(1);
+    expect(((await get("?days=999")).data.activity)).toHaveLength(31);
+    expect(((await get("?days=abc")).data.activity)).toHaveLength(7);
+    const three = (await get("?days=3")).data.activity;
+    expect(three.map((r) => r.day)).toEqual([...three.map((r) => r.day)].sort());
+    for (const row of three) expect(Object.keys(row).sort()).toEqual(["bytesDown", "bytesUp", "day", "requests"]);
+  });
+
+  it("GET activity is 404 for unknown or malformed ids and rejects non-GET methods", async () => {
+    await expect(
+      handleUsersApi(req("/api/users/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/activity", { method: "GET" }), env as never, {} as never),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      handleUsersApi(req("/api/users/not-a-uuid/activity", { method: "GET" }), env as never, {} as never),
+    ).rejects.toMatchObject({ status: 404 });
+    const create = jsonReq("/api/users", "POST", { name: "Method" });
+    const createRes = (await handleUsersApi(create, env as never, {} as never)) as Response;
+    const createJ = (await createRes.json()) as { data: { user: { id: string } } };
+    await expect(
+      handleUsersApi(req(`/api/users/${createJ.data.user.id}/activity`, { method: "POST" }), env as never, {} as never),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });

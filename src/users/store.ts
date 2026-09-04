@@ -20,7 +20,23 @@ export type PublicUser = Omit<UserAccount, "tokenHash"> & { todayHits?: number }
 export const USERS_KEY = "qproxy:users";
 export const USER_USAGE_PREFIX = "qproxy:user-usage:";
 export const USER_TOTAL_PREFIX = "qproxy:user-total:";
+export const USER_ACTIVITY_PREFIX = "qproxy:user-activity:";
+export const USER_ACTIVITY_MAX_DAYS = 31;
+export const USER_ACTIVITY_DEFAULT_DAYS = 7;
 export const MAX_USERS = 50;
+
+export interface UserActivityDay {
+  day: string;
+  requests: number;
+  bytesUp: number;
+  bytesDown: number;
+}
+
+export interface UserActivityDelta {
+  requests?: number;
+  bytesUp?: number;
+  bytesDown?: number;
+}
 
 type KvLike = {
   get(key: string, type: "json"): Promise<unknown>;
@@ -369,6 +385,7 @@ export function consumeUserHit(
       return { allowed: false, hits, total };
     }
     await env.QPROXY_KV.put(usageKey(h), JSON.stringify(hits + 1));
+    await bufferActivity(env, h, { requests: 1 });
     const total = await bumpUserTotal(env, h);
     return { allowed: true, hits: hits + 1, total };
   });
@@ -384,11 +401,219 @@ export async function getUserTotalHits(env: { QPROXY_KV: KvLike }, token: string
   return totalForKey(env, USER_TOTAL_PREFIX + h);
 }
 
+function activityKey(day: string, hash: string): string {
+  return USER_ACTIVITY_PREFIX + day + ":" + hash;
+}
+
+function toNonNegativeInt(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return 0;
+  return Math.floor(value);
+}
+
+function parseActivityValue(raw: unknown, day: string): UserActivityDay {
+  if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+    const r = raw as Record<string, unknown>;
+    return {
+      day,
+      requests: toNonNegativeInt(r.requests),
+      bytesUp: toNonNegativeInt(r.bytesUp),
+      bytesDown: toNonNegativeInt(r.bytesDown),
+    };
+  }
+  if (typeof raw === "number") return { day, requests: toNonNegativeInt(raw), bytesUp: 0, bytesDown: 0 };
+  return { day, requests: 0, bytesUp: 0, bytesDown: 0 };
+}
+
+const activityLocks = new Map<string, Promise<unknown>>();
+
+function withActivityLock<T>(hash: string, fn: () => Promise<T>): Promise<T> {
+  const key = "activity:" + hash;
+  const prev = activityLocks.get(key) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  activityLocks.set(key, next.catch(() => undefined));
+  return next;
+}
+
+interface BufferedActivity {
+  day: string;
+  requests: number;
+  bytesUp: number;
+  bytesDown: number;
+}
+
+const ACTIVITY_FLUSH_MS = 60_000;
+const ACTIVITY_FLUSH_HITS = 32;
+
+const activityPending = new Map<string, BufferedActivity>();
+let activityBufferedOps = 0;
+let activityLastFlushMs = Date.now();
+let activityFlushing = false;
+
+export function clearUserActivityForTests(): void {
+  activityPending.clear();
+  activityBufferedOps = 0;
+  activityLastFlushMs = Date.now();
+  activityFlushing = false;
+}
+
+async function flushActivities(
+  env: { QPROXY_KV: KvLike },
+  captured: Map<string, BufferedActivity>,
+): Promise<void> {
+  if (captured.size === 0) return;
+  try {
+    const entries = [...captured.entries()];
+    const raws = await Promise.all(entries.map(([key]) => env.QPROXY_KV.get(key, "json")));
+    await Promise.all(
+      entries.map(async ([key, delta], i) => {
+        const current = parseActivityValue(raws[i], delta.day);
+        await env.QPROXY_KV.put(
+          key,
+          JSON.stringify({
+            day: delta.day,
+            requests: current.requests + delta.requests,
+            bytesUp: current.bytesUp + delta.bytesUp,
+            bytesDown: current.bytesDown + delta.bytesDown,
+          }),
+        );
+      }),
+    );
+  } catch {
+    return;
+  }
+}
+
+export async function flushPendingUserActivity(env: { QPROXY_KV: KvLike }): Promise<void> {
+  const captured = new Map(activityPending);
+  activityPending.clear();
+  await flushActivities(env, captured);
+}
+
+async function bufferActivity(
+  env: { QPROXY_KV: KvLike },
+  hash: string,
+  delta: UserActivityDelta,
+): Promise<UserActivityDay> {
+  const day = dayKeyUtc();
+  const key = activityKey(day, hash);
+  const gained = {
+    requests: toNonNegativeInt(delta.requests),
+    bytesUp: toNonNegativeInt(delta.bytesUp),
+    bytesDown: toNonNegativeInt(delta.bytesDown),
+  };
+  const stored = parseActivityValue(await env.QPROXY_KV.get(key, "json"), day);
+  const prev = activityPending.get(key);
+  if (gained.requests === 0 && gained.bytesUp === 0 && gained.bytesDown === 0) {
+    return {
+      day,
+      requests: stored.requests + (prev?.requests ?? 0),
+      bytesUp: stored.bytesUp + (prev?.bytesUp ?? 0),
+      bytesDown: stored.bytesDown + (prev?.bytesDown ?? 0),
+    };
+  }
+  const next: BufferedActivity = {
+    day,
+    requests: (prev?.requests ?? 0) + gained.requests,
+    bytesUp: (prev?.bytesUp ?? 0) + gained.bytesUp,
+    bytesDown: (prev?.bytesDown ?? 0) + gained.bytesDown,
+  };
+  activityPending.set(key, next);
+  activityBufferedOps += 1;
+  const merged: UserActivityDay = {
+    day,
+    requests: stored.requests + next.requests,
+    bytesUp: stored.bytesUp + next.bytesUp,
+    bytesDown: stored.bytesDown + next.bytesDown,
+  };
+  const stale = Date.now() - activityLastFlushMs >= ACTIVITY_FLUSH_MS;
+  if (!stale && activityBufferedOps < ACTIVITY_FLUSH_HITS) return merged;
+  if (activityFlushing) return merged;
+  activityFlushing = true;
+  activityBufferedOps = 0;
+  activityLastFlushMs = Date.now();
+  try {
+    const captured = new Map(activityPending);
+    activityPending.clear();
+    await flushActivities(env, captured);
+  } finally {
+    activityFlushing = false;
+  }
+  return merged;
+}
+
+export async function recordUserActivity(
+  env: { QPROXY_KV: KvLike },
+  tokenOrHash: string,
+  delta: UserActivityDelta,
+): Promise<UserActivityDay> {
+  const h = (await toHash(tokenOrHash)).toLowerCase();
+  return withActivityLock(h, () => bufferActivity(env, h, delta));
+}
+
+export async function getUserActivity(
+  env: { QPROXY_KV: KvLike },
+  tokenOrHash: string,
+  days: number,
+): Promise<UserActivityDay[]> {
+  const h = (await toHash(tokenOrHash)).toLowerCase();
+  const count = Number.isFinite(days)
+    ? Math.min(Math.max(Math.floor(days), 1), USER_ACTIVITY_MAX_DAYS)
+    : USER_ACTIVITY_DEFAULT_DAYS;
+  const now = Date.now();
+  const labels: string[] = [];
+  for (let i = count - 1; i >= 0; i--) labels.push(dayKeyUtc(new Date(now - i * 86400000)));
+  const raws = await Promise.all(labels.map((day) => env.QPROXY_KV.get(activityKey(day, h), "json")));
+  return labels.map((day, i) => {
+    const stored = parseActivityValue(raws[i], day);
+    const queued = activityPending.get(activityKey(day, h));
+    if (queued === undefined) return stored;
+    return {
+      day,
+      requests: stored.requests + queued.requests,
+      bytesUp: stored.bytesUp + queued.bytesUp,
+      bytesDown: stored.bytesDown + queued.bytesDown,
+    };
+  });
+}
+
+async function migrateActivityRows(
+  env: { QPROXY_KV: KvLike },
+  oldHash: string,
+  newHash: string,
+): Promise<void> {
+  const now = Date.now();
+  const labels: string[] = [];
+  for (let i = 0; i < USER_ACTIVITY_MAX_DAYS; i++) labels.push(dayKeyUtc(new Date(now - i * 86400000)));
+  await Promise.all(
+    labels.map(async (day) => {
+      const oldKey = activityKey(day, oldHash);
+      const raw = await env.QPROXY_KV.get(oldKey, "json");
+      if (raw === null || raw === undefined) return;
+      const oldRow = parseActivityValue(raw, day);
+      if (oldRow.requests > 0 || oldRow.bytesUp > 0 || oldRow.bytesDown > 0) {
+        const newKey = activityKey(day, newHash);
+        const current = parseActivityValue(await env.QPROXY_KV.get(newKey, "json"), day);
+        await env.QPROXY_KV.put(
+          newKey,
+          JSON.stringify({
+            day,
+            requests: current.requests + oldRow.requests,
+            bytesUp: current.bytesUp + oldRow.bytesUp,
+            bytesDown: current.bytesDown + oldRow.bytesDown,
+          }),
+        );
+      }
+      await env.QPROXY_KV.delete(oldKey);
+    }),
+  );
+}
+
 export async function migrateUserUsage(env: { QPROXY_KV: KvLike }, oldTokenOrHash: string, newTokenOrHash: string): Promise<void> {
   const oldHash = (await toHash(oldTokenOrHash)).toLowerCase();
   const newHash = (await toHash(newTokenOrHash)).toLowerCase();
   if (oldHash === newHash) return;
   await flushPendingUserTotals(env);
+  await flushPendingUserActivity(env);
   totalMemo.delete(USER_TOTAL_PREFIX + oldHash);
   totalMemo.delete(USER_TOTAL_PREFIX + newHash);
   const oldCount = await readUsageCount(env, oldHash);
@@ -435,4 +660,5 @@ export async function migrateUserUsage(env: { QPROXY_KV: KvLike }, oldTokenOrHas
     await env.QPROXY_KV.delete(oldTotalKey);
     totalMemo.delete(newTotalKey);
   }
+  await migrateActivityRows(env, oldHash, newHash);
 }

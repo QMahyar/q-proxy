@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   MAX_USERS,
+  USER_ACTIVITY_DEFAULT_DAYS,
+  USER_ACTIVITY_MAX_DAYS,
+  USER_ACTIVITY_PREFIX,
   USER_USAGE_PREFIX,
   USER_TOTAL_PREFIX,
   USERS_KEY,
   findUserByToken,
   consumeUserHit,
+  getUserActivity,
   getUserHits,
   getUserTotalHits,
   hashToken,
@@ -13,14 +17,18 @@ import {
   migrateUserUsage,
   newUserToken,
   normalizeProtocols,
+  recordUserActivity,
   sanitizeUser,
   saveUsers,
   tokenHintFor,
   clearUsersMemoForTests,
+  clearUserActivityForTests,
   clearUserTotalsForTests,
+  flushPendingUserActivity,
   flushPendingUserTotals,
   type UserAccount,
 } from "../../src/users/store";
+import { dayKeyUtc } from "../../src/utils/time";
 
 class FakeKV {
   map = new Map<string, string>();
@@ -86,6 +94,7 @@ let kv: FakeKV;
 beforeEach(() => {
   kv = new FakeKV();
   clearUsersMemoForTests();
+  clearUserActivityForTests();
   clearUserTotalsForTests();
 });
 
@@ -418,5 +427,123 @@ describe("users store", () => {
     expect(sanitized.tokenHash).toBeUndefined();
     expect(sanitized.token).toBeUndefined();
     expect(typeof sanitized.tokenHint).toBe("string");
+  });
+
+  it("aggregates request and byte deltas into today's activity row", async () => {
+    const env = kv.asEnv();
+    const token = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    const hash = await hashToken(token);
+    const today = dayKeyUtc();
+    const key = USER_ACTIVITY_PREFIX + today + ":" + hash;
+    await recordUserActivity(env, token, { requests: 2, bytesUp: 100, bytesDown: 200 });
+    await recordUserActivity(env, hash, { requests: 3, bytesUp: 50 });
+    await recordUserActivity(env, token, { bytesDown: 25 });
+    expect(kv.map.has(key)).toBe(false);
+    expect(await getUserActivity(env, token, 1)).toEqual([
+      { day: today, requests: 5, bytesUp: 150, bytesDown: 225 },
+    ]);
+    const putsBefore = kv.puts();
+    await flushPendingUserActivity(env);
+    expect(kv.map.get(key)).toBe(JSON.stringify({ day: today, requests: 5, bytesUp: 150, bytesDown: 225 }));
+    expect(await getUserActivity(env, token, 1)).toEqual([
+      { day: today, requests: 5, bytesUp: 150, bytesDown: 225 },
+    ]);
+    await flushPendingUserActivity(env);
+    expect(kv.puts()).toBe(putsBefore + 1);
+  });
+
+  it("keeps per-day rows across the UTC midnight rollover in chronological order", async () => {
+    const env = kv.asEnv();
+    const token = "bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    const hash = await hashToken(token);
+    const today = dayKeyUtc();
+    const yesterday = dayKeyUtc(new Date(Date.now() - 86400000));
+    expect(yesterday).not.toBe(today);
+    kv.map.set(
+      USER_ACTIVITY_PREFIX + yesterday + ":" + hash,
+      JSON.stringify({ day: yesterday, requests: 4, bytesUp: 10, bytesDown: 20 }),
+    );
+    await recordUserActivity(env, token, { requests: 1 });
+    const rows = await getUserActivity(env, token, 2);
+    expect(rows.map((r) => r.day)).toEqual([yesterday, today]);
+    expect(rows[0]).toEqual({ day: yesterday, requests: 4, bytesUp: 10, bytesDown: 20 });
+    expect(rows[1]).toEqual({ day: today, requests: 1, bytesUp: 0, bytesDown: 0 });
+    const week = await getUserActivity(env, token, 7);
+    expect(week).toHaveLength(7);
+    expect(week[6]).toEqual({ day: today, requests: 1, bytesUp: 0, bytesDown: 0 });
+    for (const r of week.slice(0, 5)) expect(r).toEqual({ day: r.day, requests: 0, bytesUp: 0, bytesDown: 0 });
+  });
+
+  it("consumeUserHit bumps the activity row with zero bytes until the tunnel wiring follow-up", async () => {
+    const env = kv.asEnv();
+    const token = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    const today = dayKeyUtc();
+    await consumeUserHit(env, token, null);
+    await consumeUserHit(env, token, null);
+    expect(await getUserActivity(env, token, 1)).toEqual([
+      { day: today, requests: 2, bytesUp: 0, bytesDown: 0 },
+    ]);
+  });
+
+  it("denied quota hits do not bump the activity row", async () => {
+    const env = kv.asEnv();
+    const token = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    const today = dayKeyUtc();
+    expect(await consumeUserHit(env, token, 1)).toMatchObject({ allowed: true });
+    expect(await consumeUserHit(env, token, 1)).toMatchObject({ allowed: false });
+    expect(await getUserActivity(env, token, 1)).toEqual([
+      { day: today, requests: 1, bytesUp: 0, bytesDown: 0 },
+    ]);
+  });
+
+  it("stores activity under hashed keys and parses partial rows migrate-safe", async () => {
+    const env = kv.asEnv();
+    const token = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const hash = await hashToken(token);
+    const today = dayKeyUtc();
+    kv.map.set(USER_ACTIVITY_PREFIX + today + ":" + hash, JSON.stringify({ day: today, requests: 5 }));
+    expect(await getUserActivity(env, token, 1)).toEqual([
+      { day: today, requests: 5, bytesUp: 0, bytesDown: 0 },
+    ]);
+    await recordUserActivity(env, token, { requests: 1, bytesUp: 7, bytesDown: 9 });
+    expect(await getUserActivity(env, token, 1)).toEqual([
+      { day: today, requests: 6, bytesUp: 7, bytesDown: 9 },
+    ]);
+    await flushPendingUserActivity(env);
+    kv.map.set(USER_ACTIVITY_PREFIX + today + ":" + hash, "{not json");
+    expect(await getUserActivity(env, token, 1)).toEqual([
+      { day: today, requests: 0, bytesUp: 0, bytesDown: 0 },
+    ]);
+    for (const key of kv.map.keys()) expect(key).not.toContain(token);
+  });
+
+  it("clamps the activity window to 1..31 days", async () => {
+    const env = kv.asEnv();
+    const token = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    expect(await getUserActivity(env, token, 0)).toHaveLength(1);
+    expect(await getUserActivity(env, token, 1000)).toHaveLength(USER_ACTIVITY_MAX_DAYS);
+    expect(await getUserActivity(env, token, Number.NaN)).toHaveLength(USER_ACTIVITY_DEFAULT_DAYS);
+    expect(USER_ACTIVITY_MAX_DAYS).toBe(31);
+  });
+
+  it("migrates activity rows on token regeneration", async () => {
+    const env = kv.asEnv();
+    const oldPlain = "11111111-1111-4111-8111-111111111111";
+    const newPlain = "22222222-2222-4222-8222-222222222222";
+    const oldHash = await hashToken(oldPlain);
+    const newHash = await hashToken(newPlain);
+    const today = dayKeyUtc();
+    await consumeUserHit(env, oldPlain, null);
+    await consumeUserHit(env, oldPlain, null);
+    await recordUserActivity(env, oldPlain, { bytesUp: 40, bytesDown: 60 });
+    await migrateUserUsage(env, oldHash, newPlain);
+    expect(await getUserActivity(env, newPlain, 1)).toEqual([
+      { day: today, requests: 2, bytesUp: 40, bytesDown: 60 },
+    ]);
+    expect(await getUserActivity(env, oldPlain, 1)).toEqual([
+      { day: today, requests: 0, bytesUp: 0, bytesDown: 0 },
+    ]);
+    expect(kv.map.has(USER_ACTIVITY_PREFIX + today + ":" + oldHash)).toBe(false);
+    expect(kv.map.has(USER_ACTIVITY_PREFIX + today + ":" + newHash)).toBe(true);
   });
 });
