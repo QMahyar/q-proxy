@@ -81,13 +81,14 @@ describe("emitSingBoxJson golden", () => {
   "dns": {
     "servers": [
       {
+        "type": "https",
         "tag": "proxy-dns",
-        "address": "https://8.8.8.8/dns-query",
+        "server": "8.8.8.8",
         "detour": "PROXY"
       },
       {
-        "tag": "local-dns",
-        "address": "local"
+        "type": "local",
+        "tag": "local-dns"
       }
     ],
     "rules": [],
@@ -431,5 +432,92 @@ describe("emitSingBoxJson remote nodes", () => {
   it("emits the salamander obfs object only when obfs is set", () => {
     const o = outbounds([{ ...hy2(), obfs: "salamander", obfsPassword: "obf" }])[0]!;
     expect(o.obfs).toEqual({ type: "salamander", password: "obf" });
+  });
+});
+
+describe("emitSingBoxJson typed dns servers", () => {
+  interface DnsBlock {
+    servers: Array<Record<string, unknown>>;
+    rules: unknown[];
+    final: string;
+  }
+  interface RouteBlock {
+    rules: Array<Record<string, unknown>>;
+    final: string;
+  }
+  interface Doc {
+    dns: DnsBlock;
+    route: RouteBlock;
+  }
+
+  function doc(nodes: ProxyNode[], remoteDns = OPTS.remoteDns): Doc {
+    return JSON.parse(emitSingBoxJson(nodes, { ...OPTS, remoteDns })) as Doc;
+  }
+
+  it("drops every legacy address marker from dns servers", () => {
+    const { dns } = doc([vless(), trojan(), ss()]);
+    expect(JSON.stringify(dns)).not.toContain('"address"');
+    expect(dns.servers).toEqual([
+      { type: "https", tag: "proxy-dns", server: "8.8.8.8", detour: "PROXY" },
+      { type: "local", tag: "local-dns" },
+    ]);
+  });
+
+  it("keeps dns final plus route hijack-dns, private-direct and final semantics", () => {
+    const { dns, route } = doc([vless()]);
+    expect(dns.rules).toEqual([]);
+    expect(dns.final).toBe("proxy-dns");
+    expect(dns.servers.map((s) => s.tag)).toContain(dns.final);
+    for (const s of dns.servers) {
+      expect(typeof s.type).toBe("string");
+      expect(typeof s.tag).toBe("string");
+      if (s.type === "https") expect(typeof s.server).toBe("string");
+    }
+    expect(route.rules[0]).toEqual({ protocol: "dns", action: "hijack-dns" });
+    expect(route.rules).toContainEqual({ ip_is_private: true, action: "route", outbound: "DIRECT" });
+    expect(route.final).toBe("PROXY");
+  });
+
+  it("emits a typed lone server with no detour when no nodes are visible", () => {
+    const { dns, route } = doc([]);
+    expect(dns.servers).toEqual([{ type: "https", tag: "local-dns", server: "8.8.8.8" }]);
+    expect(JSON.stringify(dns)).not.toContain('"detour"');
+    expect(dns.final).toBe("local-dns");
+    expect(route.final).toBe("DIRECT");
+  });
+
+  it("resolves domain-hosted doh through local-dns without a self reference", () => {
+    const proxy = doc([vless()], "https://dns.example.com/dns-query").dns.servers[0]!;
+    expect(proxy).toMatchObject({
+      type: "https",
+      tag: "proxy-dns",
+      server: "dns.example.com",
+      domain_resolver: "local-dns",
+      detour: "PROXY",
+    });
+    const lone = doc([], "https://dns.example.com/dns-query").dns.servers[0]!;
+    expect(lone.tag).toBe("local-dns");
+    expect("domain_resolver" in lone).toBe(false);
+  });
+
+  it("emits non-default port and path while omitting https defaults", () => {
+    const custom = doc([vless()], "https://9.9.9.9:8443/custom-path").dns.servers[0]!;
+    expect(custom).toMatchObject({
+      type: "https",
+      server: "9.9.9.9",
+      server_port: 8443,
+      path: "/custom-path",
+      detour: "PROXY",
+    });
+    const stock = doc([vless()]).dns.servers[0]!;
+    expect("server_port" in stock).toBe(false);
+    expect("path" in stock).toBe(false);
+  });
+
+  it("maps tls urls and bare addresses to their typed servers", () => {
+    const tls = doc([vless()], "tls://1.1.1.1").dns.servers[0]!;
+    expect(tls).toEqual({ type: "tls", tag: "proxy-dns", server: "1.1.1.1", detour: "PROXY" });
+    const bare = doc([vless()], "8.8.4.4").dns.servers[0]!;
+    expect(bare).toEqual({ type: "https", tag: "proxy-dns", server: "8.8.4.4", detour: "PROXY" });
   });
 });
