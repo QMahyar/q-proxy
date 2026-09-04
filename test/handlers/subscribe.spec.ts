@@ -111,7 +111,7 @@ describe("handleSubscribe", () => {
     expect(parsed.outbounds.length).toBeGreaterThan(1);
   });
 
-  it("emits vmess+trojan and omits vless/ss from surge output (vless unsupported by Surge)", async () => {
+  it("emits vmess+trojan+vless+ss in surge output (Surge 5 supports VLESS and SS)", async () => {
     const res = await handleSubscribe(
       request("https://w.test/sp12345678/sub?target=surge"),
       envStub(),
@@ -123,8 +123,8 @@ describe("handleSubscribe", () => {
     expect(body).toContain("[Proxy]");
     expect(body).toContain("= vmess,");
     expect(body).toContain("= trojan,");
-    expect(body).not.toContain("= vless");
-    expect(body).not.toContain("= ss");
+    expect(body).toContain("= vless,");
+    expect(body).toContain("= ss,");
   });
 
   it("throws NotFound when the route is not sub", async () => {
