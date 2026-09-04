@@ -12,6 +12,7 @@ export const FRAGMENT_MODES: readonly FragmentMode[] = ["off", "low", "medium", 
 export const FRAGMENT_PACKETS = ["tlshello", "1-1", "1-2", "1-3", "1-5"] as const;
 export const CAMOUFLAGE_MODES: readonly CamouflageMode[] = ["off", "static", "proxy"];
 export const PROXY_IP_MODES = ["proxyip", "nat64"] as const;
+export const VLESS_FLOWS = ["", "xtls-rprx-vision"] as const;
 export const FINGERPRINTS: readonly Fingerprint[] = [
   "chrome",
   "firefox",
@@ -63,10 +64,12 @@ export const SETTING_FIELD_DESCRIPTORS: readonly SettingFieldDescriptor[] = [
   { path: "trojanEnabled", spec: { kind: "bool" } },
   { path: "ssEnabled", spec: { kind: "bool" } },
   { path: "vlessUuid", spec: { kind: "str", maxLen: 64 } },
+  { path: "vlessFlow", spec: { kind: "enum", allowed: VLESS_FLOWS } },
   { path: "vmessUuid", spec: { kind: "str", maxLen: 64 } },
   { path: "trojanPassword", spec: { kind: "str", maxLen: 128 } },
   { path: "ssPassword", spec: { kind: "str", maxLen: 128 } },
   { path: "ssMethod", spec: { kind: "enum", allowed: SS_METHODS } },
+  { path: "ssDirect", spec: { kind: "bool" } },
   { path: "vlessPath", spec: { kind: "str", maxLen: 32, minLen: 1, pattern: PATH_TOKEN_RE } },
   { path: "vmessPath", spec: { kind: "str", maxLen: 32, minLen: 1, pattern: PATH_TOKEN_RE } },
   { path: "trojanPath", spec: { kind: "str", maxLen: 32, minLen: 1, pattern: PATH_TOKEN_RE } },

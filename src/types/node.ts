@@ -29,6 +29,7 @@ export interface NodeBase {
 export interface VlessNode extends NodeBase {
   kind: "vless";
   uuid: string;
+  flow?: string | null;
 }
 
 export interface VMessNode extends NodeBase {
@@ -47,6 +48,7 @@ export interface SSNode extends NodeBase {
   kind: "ss";
   method: SsMethod;
   password: string;
+  direct?: boolean;
 }
 
 export type ProxyNode = VlessNode | VMessNode | TrojanNode | SSNode;

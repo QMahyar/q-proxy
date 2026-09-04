@@ -276,3 +276,25 @@ describe("emitClashYaml routing rules", () => {
     expect(out).not.toContain("REJECT");
   });
 });
+
+describe("emitClashYaml vision flow and direct-ss", () => {
+  it("emits flow on vless proxies when set", () => {
+    const out = emitClashYaml([{ ...vless(), flow: "xtls-rprx-vision" }], OPTS);
+    expect(out).toContain("    uuid: d342d11e-d424-4583-b36e-524ab1f0afa4\n    flow: xtls-rprx-vision\n    tls: true");
+  });
+
+  it("emits byte-identical legacy output when flow is null", () => {
+    expect(emitClashYaml([{ ...vless(), flow: null }], OPTS)).toBe(emitClashYaml([vless()], OPTS));
+  });
+
+  it("emits a direct ss proxy without plugin keys", () => {
+    const out = emitClashYaml([{ ...ss(), direct: true }], OPTS);
+    expect(out).toContain('  - name: "SS example.com 443"\n    type: ss\n    server: example.com\n    port: 443\n    udp: true\n    cipher: aes-128-gcm\n    password: sspass12345\n');
+    expect(out).not.toContain("plugin");
+    expect(out).not.toContain("skip-cert-verify");
+  });
+
+  it("emits byte-identical legacy output when direct is false", () => {
+    expect(emitClashYaml([{ ...ss(), direct: false }], OPTS)).toBe(emitClashYaml([ss()], OPTS));
+  });
+});

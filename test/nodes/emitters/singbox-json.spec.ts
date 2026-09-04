@@ -302,3 +302,36 @@ describe("emitSingBoxJson golden", () => {
     expect(tls.utls?.fingerprint).toBe("chrome");
   });
 });
+
+describe("emitSingBoxJson vision flow and direct-ss", () => {
+  it("emits flow on vless outbounds when set", () => {
+    const parsed = JSON.parse(emitSingBoxJson([{ ...vless(), flow: "xtls-rprx-vision" }], OPTS)) as {
+      outbounds: Array<{ type: string; flow?: string }>;
+    };
+    expect(parsed.outbounds[0]!.type).toBe("vless");
+    expect(parsed.outbounds[0]!.flow).toBe("xtls-rprx-vision");
+  });
+
+  it("emits byte-identical legacy output when flow is null", () => {
+    expect(emitSingBoxJson([{ ...vless(), flow: null }], OPTS)).toBe(emitSingBoxJson([vless()], OPTS));
+  });
+
+  it("emits a direct ss outbound without plugin keys", () => {
+    const parsed = JSON.parse(emitSingBoxJson([{ ...ss(), direct: true }], OPTS)) as {
+      outbounds: Array<Record<string, unknown>>;
+    };
+    const s = parsed.outbounds[0]!;
+    expect(s).toEqual({
+      type: "shadowsocks",
+      tag: "SS example.com 443",
+      server: "example.com",
+      server_port: 443,
+      method: "aes-128-gcm",
+      password: "sspass12345",
+    });
+  });
+
+  it("emits byte-identical legacy output when direct is false", () => {
+    expect(emitSingBoxJson([{ ...ss(), direct: false }], OPTS)).toBe(emitSingBoxJson([ss()], OPTS));
+  });
+});

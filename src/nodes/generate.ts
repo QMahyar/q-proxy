@@ -194,7 +194,12 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
       };
       let node: ProxyNode;
       if (proto.kind === "vless") {
-        node = { ...base, kind: "vless", uuid: proto.cred } satisfies VlessNode;
+        node = {
+          ...base,
+          kind: "vless",
+          uuid: proto.cred,
+          flow: s.vlessFlow.length > 0 && security === "tls" ? s.vlessFlow : null,
+        } satisfies VlessNode;
       } else if (proto.kind === "vmess") {
         node = {
           ...base,
@@ -211,6 +216,7 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
           kind: "ss",
           method: s.ssMethod,
           password: proto.cred,
+          direct: s.ssDirect,
         } satisfies SSNode;
       }
       node.name = renderName(node, input.country, entry.label, s.nameTemplate, entry.host);

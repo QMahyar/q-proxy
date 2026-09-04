@@ -77,10 +77,12 @@ export interface Settings {
   trojanEnabled: boolean;
   ssEnabled: boolean;
   vlessUuid: string;
+  vlessFlow: string;
   vmessUuid: string;
   trojanPassword: string;
   ssPassword: string;
   ssMethod: SsMethod;
+  ssDirect: boolean;
   vlessPath: string;
   vmessPath: string;
   trojanPath: string;
@@ -134,10 +136,12 @@ export const DEFAULT_SETTINGS: Settings = {
   trojanEnabled: true,
   ssEnabled: true,
   vlessUuid: "",
+  vlessFlow: "",
   vmessUuid: "",
   trojanPassword: "",
   ssPassword: "",
   ssMethod: "aes-128-gcm",
+  ssDirect: false,
   vlessPath: "vl",
   vmessPath: "vm",
   trojanPath: "tr",

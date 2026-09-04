@@ -24,6 +24,7 @@ export interface SingBoxVlessOutbound {
   server: string;
   server_port: number;
   uuid: string;
+  flow?: string;
   packet_encoding: "xudp";
   tls?: SingBoxTls;
   transport: SingBoxTransport;
@@ -59,8 +60,8 @@ export interface SingBoxShadowsocksOutbound {
   server_port: number;
   method: SSNode["method"];
   password: string;
-  plugin: "v2ray-plugin";
-  plugin_opts: string;
+  plugin?: "v2ray-plugin";
+  plugin_opts?: string;
 }
 
 export type SingBoxOutbound =
@@ -99,6 +100,7 @@ function outboundOf(node: ProxyNode): SingBoxOutbound {
       server,
       server_port: node.port,
       uuid: node.uuid,
+      ...(node.flow ? { flow: node.flow } : {}),
       packet_encoding: "xudp",
       ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
       transport: transportObject(node),
@@ -127,6 +129,16 @@ function outboundOf(node: ProxyNode): SingBoxOutbound {
       password: node.password,
       ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
       transport: transportObject(node),
+    };
+  }
+  if (node.direct === true) {
+    return {
+      type: "shadowsocks",
+      tag: node.name,
+      server,
+      server_port: node.port,
+      method: node.method,
+      password: node.password,
     };
   }
   return {
