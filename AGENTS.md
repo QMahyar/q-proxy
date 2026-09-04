@@ -23,7 +23,7 @@ npm test             # vitest run (both projects)
 npx vitest run --project unit     # pure logic, no workerd
 npx vitest run --project workers  # full fetch through src/worker.ts
 npm run dev          # wrangler dev → http://127.0.0.1:8787 (local miniflare KV; use `--remote` for prod KV)
-npm run build        # → dist/q-proxy.js + dist/_worker.js (~380 KB)
+npm run build        # → dist/q-proxy.js + dist/_worker.js (~470 KB)
 npm run deploy       # deploy via scripts/deploy-direct.mjs (CF REST API; creates KV if missing)
 npm run deploy:pages # build + wrangler pages deploy dist --project-name=q-proxy
 node scripts/version.mjs        # print version (from git tag)
