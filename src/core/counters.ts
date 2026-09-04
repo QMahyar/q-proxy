@@ -109,7 +109,11 @@ export async function recordConnection(env: Env): Promise<void> {
       value: { day: writeDay, requestsToday, requestsTotal },
       expiresAt: Date.now() + USAGE_MEMO_MS,
     };
-    waitUntil(put.then(() => undefined));
+    const tracked = put.then(
+      () => undefined,
+      () => undefined,
+    );
+    waitUntil(tracked);
     await put.catch((err: unknown) => log.error("counters", "flush failed", String(err)));
   } finally {
     flushing = false;

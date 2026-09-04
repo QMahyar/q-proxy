@@ -1,11 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  afterResponse,
-  bindCounterContext,
-  getCounterContext,
-  readUsage,
-  recordConnection,
-} from "../../src/core/counters";
 import { dayKeyUtc } from "../../src/utils/time";
 
 const KV_KEY = "qproxy:counters";
@@ -14,6 +7,13 @@ interface StoredCounters {
   day: string;
   requestsToday: number;
   requestsTotal: number;
+}
+
+type CountersModule = typeof import("../../src/core/counters");
+
+async function loadCounters(): Promise<CountersModule> {
+  vi.resetModules();
+  return await import("../../src/core/counters");
 }
 
 class MockKV {
@@ -58,11 +58,12 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  bindCounterContext(null as unknown as ExecutionContext);
+  vi.resetModules();
 });
 
 describe("counter execution context", () => {
-  it("binds, reads back, and unbinds the context", () => {
+  it("binds, reads back, and unbinds the context", async () => {
+    const { bindCounterContext, getCounterContext } = await loadCounters();
     expect(getCounterContext()).toBeNull();
     const ctx = { waitUntil: (_p: Promise<unknown>): void => {} } as unknown as ExecutionContext;
     bindCounterContext(ctx);
@@ -72,6 +73,7 @@ describe("counter execution context", () => {
   });
 
   it("afterResponse forwards settlement to waitUntil when bound", async () => {
+    const { afterResponse, bindCounterContext } = await loadCounters();
     const seen: Promise<unknown>[] = [];
     const ctx = {
       waitUntil: (p: Promise<unknown>): void => {
@@ -86,7 +88,7 @@ describe("counter execution context", () => {
   });
 
   it("afterResponse is a no-op without a bound context", async () => {
-    bindCounterContext(null as unknown as ExecutionContext);
+    const { afterResponse, getCounterContext } = await loadCounters();
     afterResponse(Promise.resolve("ok"));
     await Promise.resolve();
     expect(getCounterContext()).toBeNull();
@@ -95,6 +97,7 @@ describe("counter execution context", () => {
 
 describe("flush batching", () => {
   it("buffers connections and flushes once every 32", async () => {
+    const { recordConnection } = await loadCounters();
     const kv = new MockKV();
     const env = kv.asEnv() as never;
     for (let i = 0; i < 31; i++) await recordConnection(env);
@@ -112,6 +115,7 @@ describe("flush batching", () => {
 
 describe("usage memo", () => {
   it("memoizes the KV read for 15 seconds", async () => {
+    const { readUsage } = await loadCounters();
     const kv = new MockKV();
     const env = kv.asEnv() as never;
     now += 16_000;
@@ -129,9 +133,9 @@ describe("usage memo", () => {
 
 describe("day rollover", () => {
   it("resets the daily count when the stored day is stale", async () => {
+    const { readUsage } = await loadCounters();
     const kv = new MockKV();
     const env = kv.asEnv() as never;
-    now += 16_000;
     kv.seedStored({ day: "2000-01-01", requestsToday: 5, requestsTotal: 10 });
     const usage = await readUsage(env);
     expect(usage.day).toBe(dayKeyUtc());
@@ -140,17 +144,17 @@ describe("day rollover", () => {
   });
 
   it("treats a missing requestsToday as zero", async () => {
+    const { readUsage } = await loadCounters();
     const kv = new MockKV();
     const env = kv.asEnv() as never;
-    now += 16_000;
     kv.seedStored({ day: dayKeyUtc(), requestsTotal: 4 });
     expect(await readUsage(env)).toMatchObject({ requestsToday: 0, requestsTotal: 4 });
   });
 
   it("falls back to zeros for malformed stored values", async () => {
+    const { readUsage } = await loadCounters();
     const kv = new MockKV();
     const env = kv.asEnv() as never;
-    now += 16_000;
     kv.seedStored("garbage");
     expect(await readUsage(env)).toMatchObject({
       day: dayKeyUtc(),
@@ -165,9 +169,9 @@ describe("day rollover", () => {
 
 describe("buffer deltas", () => {
   it("adds unflushed buffer deltas to the memoized snapshot", async () => {
+    const { readUsage, recordConnection } = await loadCounters();
     const kv = new MockKV();
     const env = kv.asEnv() as never;
-    now += 16_000;
     kv.seedStored({ day: dayKeyUtc(), requestsToday: 3, requestsTotal: 10 });
     const before = await readUsage(env);
     await recordConnection(env);
@@ -181,9 +185,9 @@ describe("buffer deltas", () => {
 
 describe("time-based flush", () => {
   it("flushes on the next connection after 60 seconds", async () => {
+    const { readUsage, recordConnection } = await loadCounters();
     const kv = new MockKV();
     const env = kv.asEnv() as never;
-    now += 16_000;
     kv.seedStored({ day: dayKeyUtc(), requestsToday: 3, requestsTotal: 10 });
     const before = await readUsage(env);
     const putsBefore = kv.puts.length;
@@ -197,9 +201,9 @@ describe("time-based flush", () => {
 
 describe("KV failure resilience", () => {
   it("survives a failed flush put and keeps optimistic counts", async () => {
+    const { readUsage, recordConnection } = await loadCounters();
     const kv = new MockKV();
     const env = kv.asEnv() as never;
-    now += 16_000;
     const before = await readUsage(env);
     kv.putFails = true;
     for (let i = 0; i < 32; i++) await recordConnection(env);
@@ -211,10 +215,10 @@ describe("KV failure resilience", () => {
   });
 
   it("rejects reads when KV get fails", async () => {
+    const { readUsage } = await loadCounters();
     const kv = new MockKV();
     const env = kv.asEnv() as never;
     kv.getFails = true;
-    now += 16_000;
     await expect(readUsage(env)).rejects.toThrow("kv down");
     kv.getFails = false;
   });

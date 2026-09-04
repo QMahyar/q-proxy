@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SELF, env } from "cloudflare:test";
-import { DEFAULT_SETTINGS } from "../../src/types/settings";
+import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
 import { telegramWebhookSecret } from "../../src/handlers/api/telegram";
 import { clearUsersMemoForTests, clearUserTotalsForTests } from "../../src/users/store";
 import { seed, SETTINGS_KEY, testKv } from "../helpers/seed";
@@ -56,6 +56,19 @@ async function createUser(
   });
   expect(res.status).toBe(200);
   return (await body(res)).data.user as Record<string, any>;
+}
+
+async function settingsCacheStamp(): Promise<string> {
+  const raw = (await kv.get(SETTINGS_KEY)) as string | null;
+  const updatedAt = (() => {
+    try {
+      const v = (JSON.parse(raw ?? "null") as { updatedAt?: unknown } | null)?.updatedAt;
+      return typeof v === "number" && Number.isFinite(v) ? v : Date.now();
+    } catch {
+      return Date.now();
+    }
+  })();
+  return `W/"${updatedAt}-${SETTINGS_VERSION}"`;
 }
 
 async function waitForEdgeCache(url: string, ms = 4000): Promise<void> {
@@ -755,6 +768,7 @@ describe("router dispatch", () => {
 
     const cacheKeyUrl = new URL(subUrl);
     cacheKeyUrl.searchParams.set("_k", `base64:n:${user.token}`);
+    cacheKeyUrl.searchParams.set("_v", await settingsCacheStamp());
     await waitForEdgeCache(cacheKeyUrl.toString());
 
     res = await SELF.fetch(`${BASE}/api/users/${user.id}`, put({ enabled: false }, csrfHeaders));
@@ -782,6 +796,7 @@ describe("router dispatch", () => {
     await waitForUsage(user.token);
     const cacheKeyUrl = new URL(subUrl);
     cacheKeyUrl.searchParams.set("_k", `clash:n:${user.token}`);
+    cacheKeyUrl.searchParams.set("_v", await settingsCacheStamp());
     await waitForEdgeCache(cacheKeyUrl.toString());
 
     res = await SELF.fetch(subUrl);
