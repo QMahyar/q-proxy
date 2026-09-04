@@ -74,14 +74,19 @@ async function sendTelegramMessage(token: string, chatId: string, text: string):
   } catch {}
 }
 
+export function normalizeTelegramChatId(chatId: string): string {
+  return chatId.startsWith("@") ? chatId.toLowerCase() : chatId;
+}
+
 function chatMatches(update: TelegramUpdate, s: Settings): boolean {
   const wanted = s.telegram.chatId;
   if (wanted.length === 0) return false;
   const id = update.message?.chat?.id;
   if (id !== undefined && id !== null && String(id) === wanted) return true;
-  if (wanted.startsWith("@")) {
+  const wantUsername = normalizeTelegramChatId(wanted);
+  if (wantUsername.startsWith("@")) {
     const username = update.message?.chat?.username;
-    return typeof username === "string" && username.length > 0 && `@${username}` === wanted;
+    return typeof username === "string" && username.length > 0 && `@${username.toLowerCase()}` === wantUsername;
   }
   return false;
 }
@@ -111,7 +116,10 @@ async function buildReply(env: Env, s: Settings, req: Request, text: string): Pr
     case "/kill": {
       if (arg !== "on" && arg !== "off") return lang.help();
       const fresh = await loadSettingsFresh(env);
-      const v = validateSettings({ ...structuredClone(fresh), killSwitch: arg === "on" });
+      const next = structuredClone(fresh);
+      next.telegram.chatId = normalizeTelegramChatId(next.telegram.chatId);
+      next.killSwitch = arg === "on";
+      const v = validateSettings(next);
       if (!v.ok) return "error: kill switch update failed";
       await saveSettings(env, v.value);
       return lang.kill(arg === "on");
