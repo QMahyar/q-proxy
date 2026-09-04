@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Password peppering: PBKDF2 input is HMAC-SHA256(keyed by `sessionSecret`); legacy unpeppered hashes verify once then upgrade to peppered-100k.
 - Surge emitter: VLESS + Shadowsocks lines (Surge 5 grammar); Loon emitter: Shadowsocks + `tls-profile` fingerprint + `ech=` lines; Clash TLS proxies: `skip-cert-verify: true`.
 - KV-backed login throttle (`qproxy:login-fail:<sha256-ip>:<minute>`, 120s TTL, fail-open); VMess chunk-nonce wrap guard; 2MB relay downlink cap (1009).
 - Subscription edge-cache keys versioned by settings etag (`_v`); remote-sub fetch parallelized (10s total budget).
