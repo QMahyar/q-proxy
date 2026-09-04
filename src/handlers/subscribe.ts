@@ -26,8 +26,6 @@ const FORMAT_LABELS: Record<SubFormat, string> = {
   loon: "Loon",
 };
 
-const SUB_EDGE_CACHE_SECONDS = 300;
-
 function settingsCacheStamp(s: Settings): string {
   return settingsEtag() ?? `v${s.version}`;
 }
@@ -118,8 +116,6 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
     webPageUrl: `${url.origin}/${s.securePath}/panel`,
   });
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
-  headers["Cache-Control"] = `public, max-age=${SUB_EDGE_CACHE_SECONDS}, s-maxage=${SUB_EDGE_CACHE_SECONDS}`;
-  headers["Expires"] = new Date(Date.now() + SUB_EDGE_CACHE_SECONDS * 1000).toUTCString();
   const res = new Response(body, { status: 200, headers });
   if (typeof caches !== "undefined") afterResponse(caches.default.put(cacheKey, res.clone()));
   return res;

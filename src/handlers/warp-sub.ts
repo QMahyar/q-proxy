@@ -9,8 +9,6 @@ import { afterResponse, readUsage } from "../core/counters";
 import { encodeUtf8Base64 } from "../utils/base64";
 import { subscriptionUserinfo, throttleHeaders } from "../subscription/headers";
 
-const WARP_EDGE_CACHE_SECONDS = 300;
-
 function settingsCacheStamp(s: Settings): string {
   return settingsEtag() ?? `v${s.version}`;
 }
@@ -58,8 +56,6 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
     "Subscription-Userinfo": subscriptionUserinfo(usage),
     "profile-web-page-url": `${origin}/${s.securePath}/panel`,
     "X-WG-Version": appVersion(),
-    "Cache-Control": `public, max-age=${WARP_EDGE_CACHE_SECONDS}, s-maxage=${WARP_EDGE_CACHE_SECONDS}`,
-    Expires: new Date(Date.now() + WARP_EDGE_CACHE_SECONDS * 1000).toUTCString(),
   };
   const body: BodyInit = typeof result === "string" ? result : new Uint8Array(result);
   const res = new Response(body as BodyInit, { status: 200, headers });
