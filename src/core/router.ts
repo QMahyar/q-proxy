@@ -79,12 +79,42 @@ function authed(handler: RouteHandler): RouteHandler {
   return requireAuth(handler);
 }
 
-const guardedSaveSettings = authedCsrf(handleSaveSettings);
-const guardedResetSettings = authedCsrf(handleResetSettings);
-const guardedStatus = authed(handleStatus);
-const guardedKillSwitch = authedCsrf(handleKillSwitch);
-const guardedSubUrls = authed(handleSubUrls);
+type ApiAuthLevel = "none" | "read" | "write";
+
+interface ApiRouteDescriptor {
+  methods: string[];
+  auth: ApiAuthLevel;
+  handler: RouteHandler;
+}
+
 const guardedMyIp = authed(handleMyIp);
+
+const settingsGetOrSave: RouteHandler = (req, env, s) =>
+  req.method === "GET" ? handleGetSettings(req, env, s) : handleSaveSettings(req, env, s);
+
+const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
+  "auth-login": { methods: ["POST"], auth: "none", handler: handleLogin },
+  "auth-logout": { methods: ["POST"], auth: "none", handler: csrfOnly(handleLogout) },
+  "auth-setup": { methods: ["POST"], auth: "none", handler: csrfOnly(handleSetup) },
+  "auth-password": { methods: ["POST"], auth: "write", handler: handlePasswordChange },
+  "settings-get": { methods: ["GET", "PUT"], auth: "write", handler: settingsGetOrSave },
+  bootstrap: { methods: ["GET"], auth: "read", handler: handleBootstrap },
+  "settings-save": { methods: ["PUT"], auth: "write", handler: handleSaveSettings },
+  "settings-reset": { methods: ["POST"], auth: "write", handler: handleResetSettings },
+  "settings-export": { methods: ["GET"], auth: "read", handler: handleExportSettings },
+  "settings-import": { methods: ["POST"], auth: "write", handler: handleImportSettings },
+  "version-check": { methods: ["GET"], auth: "read", handler: handleVersionCheck },
+  status: { methods: ["GET"], auth: "read", handler: handleStatus },
+  killswitch: { methods: ["POST"], auth: "write", handler: handleKillSwitch },
+  suburls: { methods: ["GET"], auth: "read", handler: handleSubUrls },
+  warp: { methods: [], auth: "write", handler: handleWarpApi },
+  users: { methods: [], auth: "write", handler: handleUsersApi },
+  "proxy-pool": { methods: [], auth: "write", handler: handleProxyPoolApi },
+  "address-probe": { methods: [], auth: "write", handler: handleAddressProbeApi },
+  "telegram-webhook": { methods: ["POST"], auth: "none", handler: handleTelegramWebhook },
+  "telegram-setup": { methods: ["POST"], auth: "write", handler: handleTelegramSetup },
+  "telegram-remove": { methods: ["POST"], auth: "write", handler: handleTelegramRemove },
+};
 
 async function dispatchApi(
   api: ApiRouteName,
@@ -92,72 +122,11 @@ async function dispatchApi(
   env: Env,
   s: Settings,
 ): Promise<Response> {
-  switch (api) {
-    case "auth-login":
-      expectMethods(req, ["POST"]);
-      return handleLogin(req, env, s);
-    case "auth-logout":
-      expectMethods(req, ["POST"]);
-      return csrfOnly(handleLogout)(req, env, s);
-    case "auth-setup":
-      expectMethods(req, ["POST"]);
-      return csrfOnly(handleSetup)(req, env, s);
-    case "auth-password":
-      expectMethods(req, ["POST"]);
-      return authedCsrf(handlePasswordChange)(req, env, s);
-    case "settings-get":
-      if (req.method === "GET") return authed(handleGetSettings)(req, env, s);
-      expectMethods(req, ["PUT"]);
-      return guardedSaveSettings(req, env, s);
-    case "bootstrap":
-      expectMethods(req, ["GET"]);
-      return authed(handleBootstrap)(req, env, s);
-    case "settings-save":
-      expectMethods(req, ["PUT"]);
-      return guardedSaveSettings(req, env, s);
-    case "settings-reset":
-      expectMethods(req, ["POST"]);
-      return guardedResetSettings(req, env, s);
-    case "settings-export":
-      expectMethods(req, ["GET"]);
-      return authed(handleExportSettings)(req, env, s);
-    case "settings-import":
-      expectMethods(req, ["POST"]);
-      return authedCsrf(handleImportSettings)(req, env, s);
-    case "version-check":
-      expectMethods(req, ["GET"]);
-      return authed(handleVersionCheck)(req, env, s);
-    case "status":
-      expectMethods(req, ["GET"]);
-      return guardedStatus(req, env, s);
-    case "killswitch":
-      expectMethods(req, ["POST"]);
-      return guardedKillSwitch(req, env, s);
-    case "suburls":
-      expectMethods(req, ["GET"]);
-      return guardedSubUrls(req, env, s);
-    case "warp":
-      if (req.method === "GET") return authed(handleWarpApi)(req, env, s);
-      return authedCsrf(handleWarpApi)(req, env, s);
-    case "users":
-      if (req.method === "GET") return authed(handleUsersApi)(req, env, s);
-      return authedCsrf(handleUsersApi)(req, env, s);
-    case "proxy-pool":
-      if (req.method === "GET") return authed(handleProxyPoolApi)(req, env, s);
-      return authedCsrf(handleProxyPoolApi)(req, env, s);
-    case "address-probe":
-      if (req.method === "GET") return authed(handleAddressProbeApi)(req, env, s);
-      return authedCsrf(handleAddressProbeApi)(req, env, s);
-    case "telegram-webhook":
-      expectMethods(req, ["POST"]);
-      return handleTelegramWebhook(req, env, s);
-    case "telegram-setup":
-      expectMethods(req, ["POST"]);
-      return authedCsrf(handleTelegramSetup)(req, env, s);
-    case "telegram-remove":
-      expectMethods(req, ["POST"]);
-      return authedCsrf(handleTelegramRemove)(req, env, s);
-  }
+  const route = API_ROUTES[api]!;
+  if (route.methods.length > 0) expectMethods(req, route.methods);
+  if (route.auth === "none") return route.handler(req, env, s);
+  if (route.auth === "read" || req.method === "GET") return authed(route.handler)(req, env, s);
+  return authedCsrf(route.handler)(req, env, s);
 }
 
 async function dispatchSecureRoute(
