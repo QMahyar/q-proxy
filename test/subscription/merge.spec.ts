@@ -90,4 +90,60 @@ describe("fetchRemoteSubLines", () => {
     expect(lines[0]).toBe(`vless://${"é".repeat(524_284)}`);
     expect(new TextEncoder().encode(lines[0]!).byteLength).toBeLessThanOrEqual(1024 * 1024);
   });
+
+  it("fetches urls in parallel while keeping url order and deduping", async () => {
+    let active = 0;
+    let maxActive = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        const u = String(input);
+        if (u.endsWith("1")) await new Promise((r) => setTimeout(r, 20));
+        active -= 1;
+        return okResponse(
+          u.endsWith("1") ? "vless://dup@h:1#D\nvless://one@h:1#1" : "vless://dup@h:1#D\nvless://two@h:1#2",
+        );
+      }),
+    );
+    expect(await fetchRemoteSubLines(["https://r/1", "https://r/2"])).toEqual([
+      "vless://dup@h:1#D",
+      "vless://one@h:1#1",
+      "vless://two@h:1#2",
+    ]);
+    expect(maxActive).toBe(2);
+  });
+
+  it("does not let a hung url block others beyond the shared total budget", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) =>
+        String(input).endsWith("slow") ? new Promise<Response>(() => {}) : okResponse("vless://fast@h:1#F"),
+      ),
+    );
+    const start = Date.now();
+    const lines = await fetchRemoteSubLines(["https://r/slow", "https://r/fast"], 0, {
+      perFetchMs: 5000,
+      totalMs: 100,
+    });
+    expect(lines).toEqual(["vless://fast@h:1#F"]);
+    expect(Date.now() - start).toBeLessThan(2000);
+  });
+
+  it("drops a hung url at the per-fetch timeout without blocking others", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) =>
+        String(input).endsWith("slow") ? new Promise<Response>(() => {}) : okResponse("vless://fast@h:1#F"),
+      ),
+    );
+    const start = Date.now();
+    const lines = await fetchRemoteSubLines(["https://r/slow", "https://r/fast"], 0, {
+      perFetchMs: 50,
+      totalMs: 5000,
+    });
+    expect(lines).toEqual(["vless://fast@h:1#F"]);
+    expect(Date.now() - start).toBeLessThan(2000);
+  });
 });
