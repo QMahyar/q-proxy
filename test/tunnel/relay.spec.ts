@@ -327,6 +327,16 @@ describe("failure handling", () => {
     expect(sink.closedWith).toBe(1011);
   });
 
+  it("closes with 1009 when pending downlink exceeds the 2MB hard cap", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink);
+    const done = relay.run(establishedOf(sock.socket, 0));
+    sock.push(new Uint8Array(2 * 1024 * 1024 + 1));
+    await done;
+    expect(sink.closedWith).toBe(1009);
+  });
+
   it("keeps accepting decoded traffic because the pre-decode counter drains", async () => {
     const sock = manualSocket();
     const sink = new RecordingSink();
