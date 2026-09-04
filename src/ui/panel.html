@@ -310,6 +310,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 .stat-grid{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 12px;align-items:center}
 .stat-grid .lbl{color:var(--text-faint);font-size:var(--fs-sm)}
 .hint-danger{color:var(--danger)}
+#backup-banner{display:flex;align-items:center;gap:12px;border:1px solid rgba(251,191,36,.35);background:var(--warning-bg);border-radius:1rem;padding:12px 16px;margin-block:16px 0}#backup-banner p{flex:1;min-width:0;font-size:var(--fs-md)}#traffic-chart{margin-block-start:12px}#traffic-chart svg{display:block;width:100%;height:72px}.bulkbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-block-end:12px}#users-bulk-expiry{max-width:12rem}@media(max-width:500px){main{padding:12px 12px 96px}.copy-field{flex-wrap:wrap;gap:4px}.copy-field code{flex:1 1 100%;white-space:normal;word-break:break-all}.addr-card{grid-template-columns:1fr}.addr-card__side{justify-content:flex-start}.modal__panel{width:94vw;margin-inline:auto}.view-title{font-size:1.25rem}.bulkbar .btn{flex:1 1 auto}}@media(pointer:coarse){.help-trigger{width:44px;height:44px}.help-trigger svg{width:12px;height:12px}}
 @media(prefers-reduced-motion:reduce){*,.blob-a,.blob-b,.logo-tile::before{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 @media(pointer:coarse),(max-width:767px){.btn{height:44px}.btn--icon{width:44px;height:44px}.chip{height:44px}.seg button{height:38px}.port-cell span{height:44px}.input,.select{height:44px;font-size:16px}}
 @media(max-width:767px){.topbar{flex-wrap:wrap;padding-block:4px 0}.tabs{order:3;width:100%}.stat-grid{grid-template-columns:auto 1fr}.stat-grid .h-cell{display:none}.tbl thead{display:none}.tbl td{display:block;border-block-end:0;padding:3px 8px}.tbl tr{display:block;border-block-end:1px solid var(--border);padding-block:6px}.tbl td::before{content:attr(data-l) ": ";color:var(--text-faint);font-size:var(--fs-xs)}}
@@ -353,10 +354,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 </div>
 <div class="seg" role="group" aria-label="Language" id="langseg"></div>
 <button type="button" class="btn btn--icon btn--ghost" id="theme-toggle" data-action="theme-toggle" aria-label="Toggle theme"><svg aria-hidden="true"><use href="#i-sun"/></svg></button>
+<button type="button" class="btn btn--icon btn--ghost" id="shortcuts-btn" data-action="shortcuts" aria-label="?">?</button>
 <button type="button" class="btn btn--icon btn--ghost-danger" id="logout-btn" data-action="logout"><svg aria-hidden="true"><use href="#i-power"/></svg></button>
 </div>
 </header>
 <main id="main">
+<div id="backup-banner" hidden></div>
 <section id="view-home" hidden>
 <h1 class="view-title" id="home-h1"></h1>
 <div class="home-grid" id="home-body"></div>
@@ -374,6 +377,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 <div class="modal" id="m-warp-import" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wi-title"><div class="modal__title" id="wi-title"></div><p class="field__hint" id="wi-desc" style="margin-block-end:12px"></p><div class="field"><label class="field__label" for="wi-name" id="wi-name-label"></label><input class="input" type="text" id="wi-name" maxlength="100" autocomplete="off"></div><div class="field"><label class="field__label" for="wi-config" id="wi-config-label"></label><textarea class="input textarea textarea--mono" id="wi-config" rows="7" spellcheck="false" dir="ltr"></textarea><p class="field__error" id="wi-error"></p></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wi-cancel" data-action="close-warp-modal" data-modal="m-warp-import"></button><button type="button" class="btn btn--primary" id="wi-go"></button></div></div></div>
 <div class="modal" id="m-warp-preset" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wp-title"><div class="modal__title" id="wp-title"></div><div class="field"><label class="field__label" for="wp-name" id="wp-name-label"></label><input class="input" type="text" id="wp-name" maxlength="100" autocomplete="off"></div><div class="field"><label class="field__label" for="wp-endpoints" id="wp-endpoints-label"></label><textarea class="input textarea textarea--mono" id="wp-endpoints" rows="6" spellcheck="false" dir="ltr" placeholder="162.159.192.1:2408"></textarea><p class="field__hint" id="wp-hint"></p><p class="field__error" id="wp-error"></p></div><div class="field"><label class="field__label" for="wp-dns" id="wp-dns-label"></label><input class="input" type="text" id="wp-dns" maxlength="253" autocomplete="off" dir="ltr"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wp-cancel" data-action="close-warp-modal" data-modal="m-warp-preset"></button><button type="button" class="btn btn--primary" id="wp-go"></button></div></div></div>
 <div class="modal" id="m-user" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="mu-title"><div class="modal__title" id="mu-title"></div><div class="field"><label class="field__label" for="mu-name" id="mu-name-label"></label><input class="input" type="text" id="mu-name" maxlength="100" autocomplete="off"></div><div class="field"><span class="field__label" id="mu-protocols-label"></span><div class="port-cells" id="mu-protocols"><label class="port-cell"><input type="checkbox" value="all" data-user-proto-all><span id="mu-proto-all-label"></span></label><label class="port-cell"><input type="checkbox" value="vless" data-user-proto><span>VLESS</span></label><label class="port-cell"><input type="checkbox" value="vmess" data-user-proto><span>VMess</span></label><label class="port-cell"><input type="checkbox" value="trojan" data-user-proto><span>Trojan</span></label><label class="port-cell"><input type="checkbox" value="ss" data-user-proto><span>SS</span></label></div></div><div class="field"><label class="field__label" for="mu-limit" id="mu-limit-label"></label><input class="input" type="number" id="mu-limit" min="1" step="1" autocomplete="off"><p class="field__hint" id="mu-limit-hint"></p></div><div class="field"><label class="field__label" for="mu-expiry" id="mu-expiry-label"></label><input class="input" type="datetime-local" id="mu-expiry" autocomplete="off"><p class="field__hint" id="mu-expiry-hint"></p></div><div class="field"><span class="field__label" id="mu-ov-label"></span><div class="addr-card" style="grid-template-columns:1fr"><div class="addr-card__main"><div class="addr-card__field"><label id="mu-ov-address-label"></label><input class="input input--mono" type="text" id="mu-ov-address" dir="ltr" spellcheck="false" placeholder="1.2.3.4" list="mu-ov-options"></div><div class="addr-card__field"><label id="mu-ov-port-label"></label><input class="input input--mono" type="text" id="mu-ov-port" dir="ltr" spellcheck="false" placeholder="443"></div><div class="addr-card__field"><label id="mu-ov-label-label"></label><input class="input input--mono" type="text" id="mu-ov-label2" dir="ltr" spellcheck="false" placeholder="US-Blue"></div></div></div><p class="field__hint" id="mu-ov-hint"></p></div><datalist id="mu-ov-options"></datalist><p class="field__error" id="mu-error" style="display:none;margin-block-end:12px"></p><div class="modal__actions"><button type="button" class="btn btn--ghost" id="mu-cancel" data-action="close-user-modal" data-modal="m-user"></button><button type="button" class="btn btn--primary" id="mu-go"></button></div></div></div>
+<div class="modal" id="m-rot" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="rot-title"><div class="modal__title" id="rot-title"></div><div class="copy-field" style="margin-block-end:12px"><code id="rot-token" dir="ltr"></code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-id="rot-token" id="rot-copy"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm" data-action="qr" id="rot-qr" data-qr=""><svg aria-hidden="true"><use href="#i-qr"/></svg></button></div><p class="field__hint" id="rot-hint" style="margin-block-end:12px"></p><div class="modal__actions"><button type="button" class="btn btn--primary" id="rot-close" data-action="close-rot"></button></div></div></div>
+<div class="modal" id="m-keys" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="keys-title"><div class="modal__title" id="keys-title"></div><div id="keys-body"></div><div class="modal__actions" style="margin-block-start:16px"><button type="button" class="btn btn--ghost" id="keys-close" data-action="close-keys"></button></div></div></div>
 <div class="modal" id="m-wizard" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wiz-title"><div class="modal__title" id="wiz-title"></div><div id="wiz-body"></div><div class="modal__actions" style="margin-block-start:16px"><button type="button" class="btn btn--ghost" id="wiz-skip"></button><button type="button" class="btn btn--primary" id="wiz-next"></button></div></div></div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <noscript><p style="padding:24px;text-align:center">JavaScript is required.</p></noscript>
@@ -389,7 +394,13 @@ en:{'app.name':'Q Proxy','nav.home':'Home','nav.settings':'Settings','nav.warp':
 ,'home.users.desc':'Share scoped subscriptions with per-user filters and limits.','home.users.manage':'Manage','home.users.active':'Active'
 ,'warp.detail.custom_eps_title':'Custom endpoints','warp.detail.custom_eps_desc':'Set per-account endpoints (one ip:port per line). Leave empty to use the selected preset.','warp.detail.amnezia_save':'Save account overrides'
 ,'addresses.hostname_badge':'My hostname','addresses.enabled.toggle':'Include this address','addresses.port_preview':'Port','addresses.test':'Test addresses'
-,'egress.pool.source':'Source','egress.pool.updated':'Updated'},
+,'egress.pool.source':'Source','egress.pool.updated':'Updated'
+,'rotation.title':'New subscription token','rotation.hint':'Copy it now — it is shown only once. Re-import the new URL into the client; the old links stop working immediately.','rotation.done':'Done'
+,'shortcuts.title':'Keyboard shortcuts','shortcuts.save':'Apply unsaved settings','shortcuts.search':'Focus search, or go home','shortcuts.home':'Go home (press g then h)','shortcuts.undo':'Undo section change','shortcuts.redo':'Redo section change'
+,'graph.title':'Traffic','graph.empty':'Not enough history yet — this fills in as you revisit the panel.'
+,'backup.remind':'No settings backup in over 30 days. Export a copy so you can recover.','backup.later':'Later'
+,'users.bulk.enable':'Enable','users.bulk.disable':'Disable','users.bulk.delete':'Delete','users.bulk.extend':'Set expiry','users.bulk.selected':'{n} selected','users.bulk.confirm':'Apply to {n} user(s)?','users.bulk.done':'Updated {updated} · deleted {deleted}','users.bulk.unknown':' · unknown {unknown}','users.bulk.empty_expiry':'Pick an expiry date first','users.col.select':'Select'
+,'country.hint':'Append ?country=XX (for example ?country=DE) to prefer nodes from that country.','addresses.field.country':'Country','addresses.field.city':'City'},
 
 fa:{'app.name':'Q Proxy','nav.home':'خانه','nav.settings':'تنظیمات','nav.warp':'WARP','nav.checker':'بررسی آی‌پی','nav.logout':'خروج','nav.views':'بخش‌ها','lang.en':'English','lang.fa':'فارسی','accent.cyan':'فیروزه‌ای','accent.violet':'بنفش','accent.green':'سبز','accent.amber':'کهربایی','accent.label':'رنگ تأکید','common.apply':'اعمال تغییرات','common.applying':'در حال اعمال…','common.save':'ذخیره','common.saved':'ذخیره شد','common.discard':'نادیده گرفتن','common.cancel':'انصراف','common.close':'بستن','common.confirm':'تأیید','common.copy':'کپی','common.copied':'کپی شد','common.generate':'تولید','common.generated':'تولید شد؛ برای ذخیره «اعمال تغییرات» را بزنید.','common.reveal':'نمایش','common.hide':'پنهان','common.add':'افزودن','common.remove':'حذف','common.resetDefaults':'بازگشت به پیش‌فرض‌ها','common.unsaved':'تغییرات ذخیره‌نشده','common.error':'خطایی رخ داد','common.loading':'در حال بارگذاری…','common.yes':'بله','common.no':'خیر','common.qr':'کد QR','common.theme':'تم','common.theme_light':'روشن','common.theme_dark':'تاریک','common.theme_toggle':'تغییر تم','common.edit':'ویرایش','common.delete':'حذف','common.retry':'تلاش دوباره','common.fixErrors':'{count} خطا را برطرف کنید','security.title':'امنیت','security.current':'گذرواژهٔ کنونی','security.new':'گذرواژهٔ جدید','security.confirm':'تکرار گذرواژهٔ جدید','security.hint':'با تغییر گذرواژه، همهٔ دستگاه‌های دیگر خارج می‌شوند','security.change':'تغییر گذرواژه','security.changed':'گذرواژه تغییر کرد؛ سایر دستگاه‌ها خارج شدند','security.wrong_current':'گذرواژهٔ کنونی نادرست است','security.mismatch':'دو گذرواژه یکسان نیستند','security.rule':'حداقل ۸ نویسه وارد کنید.','totp.title':'احراز هویت دو مرحله‌ای','totp.desc':'علاوه بر گذرواژه، هنگام ورود یک کد ۶ رقمی از برنامهٔ احراز هویت لازم باشد.','totp.status_hint':'سرور وضعیت دو مرحله‌ای را اینجا نشان نمی‌دهد. اگر در ورود بعدی کد خواسته شد، یعنی فعال است.','totp.setup':'راه‌اندازی احراز هویت','totp.step_secret':'۱. کد QR را اسکن کنید یا کلید را در برنامهٔ احراز هویت وارد کنید.','totp.secret_label':'کلید','totp.show_qr':'نمایش کد QR','totp.step_verify':'۲. کد ۶ رقمی فعلی را برای تأیید وارد کنید، سپس فعال کنید.','totp.code_label':'کد ۶ رقمی','totp.verify_enable':'تأیید و فعال‌سازی','totp.step_backup':'۳. این کدهای بازیابی را جای امنی نگه دارید — هر کدام فقط یک بار کار می‌کند و فقط همین‌جا نمایش داده می‌شود.','totp.recovery_title':'کدهای بازیابی','totp.disable':'غیرفعال‌سازی دو مرحله‌ای','totp.confirm_disable':'احراز هویت دو مرحله‌ای غیرفعال شود؟','totp.confirm_disable_body':'از این پس ورود فقط با گذرواژه انجام می‌شود.','totp.wrong_code':'کد نادرست است — ساعت دستگاه را بررسی و دوباره امتحان کنید.','totp.enabled_ok':'احراز هویت دو مرحله‌ای فعال شد.','totp.disabled_ok':'احراز هویت دو مرحله‌ای غیرفعال شد.','home.subs.title':'اشتراک‌ها','home.subs.desc':'این نشانی‌ها را در کلاینت خود وارد کنید.','home.subs.mode.normal':'عادی','home.subs.mode.fragment':'فرگمنت','home.chips.protocols':'{n} پروتکل فعال','home.chips.formats':'{n} قالب','home.subs.empty_title':'هنوز اشتراکی نیست','home.subs.empty_msg':'برای ساخت نخستین نشانی اشتراک، یک پروتکل را در تنظیمات فعال کنید.','home.subs.empty_cta':'فعال‌سازی پروتکل','home.subs.warp':'اشتراک‌های WARP','home.stats.title':'آی‌پی من و مسیر خروجی','home.stats.refresh':'بازخوانی','home.stats.via_cf':'از طریق مقصدهای کلادفلر','home.stats.via_other':'از طریق مقصدهای دیگر','home.stats.country':'کشور','home.stats.city':'شهر','home.stats.asn':'ASN','home.stats.colo':'دیتاسنتر کلادفلر','home.stats.idle':'برای دریافت اطلاعات آی‌پی «بازخوانی» را بزنید.','home.stats.failed':'دریافت اطلاعات آی‌پی ممکن نشد.','home.stats.link':'مشاهدهٔ خلاصه','home.kill.title':'کیل سوییچ','home.kill.paused':'ترافیک متوقف است','home.kill.active':'ترافیک فعال است','home.kill.desc_paused':'کلاینت‌ها پاسخ ۵۰۳ می‌گیرند؛ این پنل در دسترس می‌ماند.','home.kill.desc_active':'ترافیک پراکسی به‌طور عادی سرویس می‌شود.','home.status.title':'وضعیت ورکر','home.status.version':'نسخه','home.status.colo':'دیتاسنتر','home.status.today':'درخواست‌های امروز','home.status.total':'مجموع درخواست‌ها','tabs.settings.general':'عمومی','tabs.settings.protocols':'پروتکل‌ها','tabs.settings.ports':'پورت‌ها و دامنه‌ها','tabs.settings.proxyip':'آی‌پی پراکسی','tabs.settings.fragment':'فرگمنت','tabs.settings.chain':'زنجیرهٔ پراکسی','tabs.settings.advanced':'پیشرفته','general.securePath.label':'مسیر امن','general.killSwitch.label':'کیل سوییچ','general.killSwitch.hint':'توقف فوری همهٔ ترافیک پراکسی (کلاینت‌ها ۵۰۳ می‌گیرند).','general.language.label':'زبان پنل','general.profileTitle.label':'عنوان پروفایل','general.profileTitle.hint':'نامی که در کلاینت‌های پراکسی نمایش داده می‌شود.','general.debugLogging.label':'ثبت خطایابی','general.debugLogging.hint':'نوشتن تشخیص‌های مفصل در لاگ ورکر.','general.danger.title':'بخش خطرناک','general.backup.title':'پشتیبان‌گیری و بازیابی','general.backup.export':'برون‌بری تنظیمات','general.backup.import':'درون‌ریزی تنظیمات','general.backup.import_hint':'JSON خروجی تنظیمات را بچسبانید (رمزها و نشانی‌ها هرگز شامل نمی‌شوند).','general.backup.imported':'تنظیمات درون‌ریزی شد','general.backup.badfile':'خروجی معتبر تنظیمات نیست','home.status.checkUpdate':'بررسی به‌روزرسانی','home.status.updateAvailable':'به‌روزرسانی موجود: {v}','home.status.upToDate':'به‌روز است','home.status.updateCheckFailed':'دسترسی به گیت‌هاب ممکن نشد','wizard.title':'به Q Proxy خوش آمدید','wizard.s1_title':'پروتکل‌ها را فعال کنید','wizard.s1_body':'در تنظیمات ← پروتکل‌ها دست‌کم یک پروتکل انتخاب کنید. VLESS روی TLS نقطهٔ شروع معمول است.','wizard.s1_cta':'رفتن به پروتکل‌ها','wizard.s2_title':'اشتراک را وارد کلاینت کنید','wizard.s2_body':'نشانی Base64 زیر را در برنامهٔ پراکسی خود (v2rayNG، Hiddify، Clash…) وارد کنید.','wizard.s3_title':'همه‌چیز آماده است','wizard.s3_body':'هر زمان خواستید از تنظیمات ← WARP حساب بسازید. این راهنما دوباره نمایش داده نمی‌شود.','wizard.done':'پایان','wizard.skip':'رد شدن','protocols.ech.label':'ECH (کلاینت‌هلوی رمزنگاری‌شده)','protocols.ech.server':'نام سرور ECH (بازنویسی دستی)','protocols.ech.server_hint':'بازنویسی دستی؛ خالی باشد از SNI نود استفاده می‌شود.','protocols.ech.auto':'نام خودکار سرور ECH','protocols.ech.auto_hint':'نام سرور ECH به‌طور خودکار از SNI هر نود ساخته می‌شود.','protocols.ech.auto_help':'وقتی روشن است و نامی دستی وارد نشده باشد، نام سرور ECH هنگام ساخت کانفیگ از SNI هر نود گرفته می‌شود. نام دستی واردشده در زیر همیشه بر مقدار خودکار اولویت دارد. نودهای بدون SNI قابل استفاده بدون ECH صادر می‌شوند.','protocols.ech.preview_manual':'نام مؤثر ECH: {name} (دستی)','protocols.ech.preview_auto':'خودکار از SNI هر نود (مثلاً {name})','protocols.ech.preview_off':'نام ECH به SNI نود برمی‌گردد.','protocols.vless.title':'VLESS','protocols.vmess.title':'VMess','protocols.trojan.title':'Trojan','protocols.ss.title':'Shadowsocks','protocols.disabled_hint':'غیرفعال است؛ برای این پروتکل کانفیگی ساخته نمی‌شود.','protocols.uuid':'UUID','protocols.password':'گذرواژه','protocols.cipher':'روش رمزنگاری','protocols.common.title':'گزینه‌های مشترک','protocols.path.label':'مسیر وب‌سوکت','protocols.path.hint':'پیشوند نشانی تونل این پروتکل.','protocols.earlyData.label':'دادهٔ زودهنگام (0-RTT)','protocols.earlyData.hint':'به کلاینت اجازه می‌دهد اولین داده را در پارامتر مسیر دست‌دهی بفرستد.','protocols.earlyData.max':'بیشنهٔ دادهٔ زودهنگام (بایت)','protocols.fingerprint.label':'اثر انگشت TLS','protocols.sniCase.label':'تصادفی‌سازی حروف SNI','protocols.sniCase.hint':'حالت حروف نام میزبان SNI را تصادفی می‌کند.','protocols.alpn.label':'پروتکل‌های ALPN','protocols.alpn.hint':'هر خط یک پروتکل، مثل http/1.1 یا h2.','ports.domains.label':'دامنه‌های سفارشی','ports.domains.hint':'دامنه‌هایی که با رکورد ابری به این ورکر متصل‌اند؛ همهٔ پورت‌های فعال روی آن‌ها سرویس می‌شود.','ports.hostnameOverride.label':'بازنویسی نام میزبان','ports.hostnameOverride.hint':'این نام میزبان به‌جای میزبان درخواست در کانفیگ‌ها گذاشته می‌شود.','ports.matrix.legend_tls':'پورت‌های TLS','ports.matrix.legend_plain':'پورت‌های بدون رمز','ports.matrix.hint':'پورت‌های بدون رمز فقط برای نشانی workers.dev بدون دامنهٔ سفارشی اعمال می‌شوند.','ports.policy.label':'سیاست پورت‌های بدون رمز','ports.policy.always':'همیشه','ports.policy.workersdev':'فقط workers.dev','ports.policy.never':'هرگز','ports.cleanAddrs.label':'آدرس‌های تمیز','ports.remoteSubs.label':'اشتراک‌های خارجی برای ادغام','ports.remoteSubs.hint':'هر خط یک نشانی https؛ هنگام ساخت اشتراک دریافت و به فهرست خام اضافه می‌شود.','ports.cdn.title':'پوشش CDN','ports.cdn.enabled.label':'عبور از CDN','ports.cdn.addresses.label':'نشانی‌های CDN','ports.cdn.host.label':'میزبان CDN','ports.cdn.sni.label':'SNI کلادفلر','proxyip.mode.label':'حالت','proxyip.mode.list':'فهرست ثابت','proxyip.mode.nat64':'پیشوندهای NAT64','proxyip.list.label':'فهرست آی‌پی پراکسی','proxyip.nat64.label':'پیشوندهای NAT64','checker.title':'بررسی آی‌پی پراکسی','checker.desc':'دسترس‌پذیری و تأخیر هر مقصد را از مرورگر شما مقابل نقطهٔ trace کلادفلر می‌سنجد.','checker.targets.label':'مقصدها','checker.targets.hint':'هر خط یک IP یا host:port — فقط پورت‌های TLS، حداکثر ۱۰۰ مورد.','checker.run':'اجرای تست','checker.stop':'توقف','checker.running':'در حال تست…','checker.results':'نتایج','checker.empty':'هنوز نتیجه‌ای نیست.','checker.unsupported_port':'پورت پشتیبانی نمی‌شود — فقط TLS','checker.col.target':'مقصد','checker.col.latency':'میانگین تأخیر','checker.col.rate':'موفقیت','checker.col.status':'وضعیت','checker.status.ok':'سالم','checker.status.partial':'نیمه‌سالم','checker.status.failed':'ناموفق','checker.summary':'{ok} مورد سالم از {total}.','checker.tooMany':'حداکثر ۱۰۰ مقصد.','warp.chips.accounts':'{n} حساب','warp.chips.presets':'{n} پیش‌فرض','warp.generate':'ساخت حساب','warp.import':'درون‌ریزی کانفیگ','warp.settings':'تنظیمات WARP','warp.accounts':'حساب‌ها','warp.back':'بازگشت','warp.empty_title':'هنوز حساب WARP ندارید','warp.empty_msg':'یک دستگاه واقعی WARP کلادفلر بسازید یا یک کانفیگ WireGuard موجود را درون‌ریزی کنید.','warp.detail.token':'توکن اشتراک','warp.detail.regen':'بازتولید','warp.detail.name':'نام حساب','warp.detail.preset':'پیش‌فرض نقاط پایانی','warp.detail.custom_eps':'{n} نقطهٔ پایانی سفارشی','warp.detail.dns':'DNS (اختیاری)','warp.detail.subs':'نشانی‌های اشتراک','warp.detail.subs_desc':'هر نشانی برای یک برنامهٔ کلاینت. نسخه‌های آمنزیا پارامترهای مبهم‌سازی را دارند. این‌ها کانفیگ‌های WireGuard را مستقیم سرو می‌کنند؛ ترافیک تونل هرگز از ورکر عبور نمی‌کند.','warp.detail.amnezia_on':'بازنویسی سفارشی آمنزیا فعال است','warp.detail.amnezia_off':'با پیش‌فرض‌های سراسری آمنزیا','warp.detail.amnezia_reset':'بازگشت به پیش‌فرض سراسری','warp.detail.delete':'حذف حساب','warp.confirm.delete_title':'این حساب حذف شود؟','warp.confirm.delete_body':'حساب و توکن اشتراکش بلافاصله از کار می‌افتد. دستگاه WARP از کلادفلر حذف می‌شود.','warp.confirm.regen_title':'توکن دوباره ساخته شود؟','warp.confirm.regen_body':'نشانی‌های اشتراک قبلی از کار می‌افتند. کلاینت‌ها باید توکن جدید را وارد کنند.','warp.gen.title':'ساخت حساب WARP','warp.gen.desc':'یک دستگاه واقعی WARP کلادفلر از طریق API رسمی می‌سازد. نام اختیاری است.','warp.imp.title':'درون‌ریزی کانفیگ WARP','warp.imp.desc':'یک فایل WireGuard .conf یا نشانی wg:// / wireguard:// بچسبانید.','warp.imp.config':'کانفیگ','warp.toast.generated':'حساب ساخته شد','warp.toast.imported':'حساب درون‌ریزی شد','warp.toast.deleted':'حساب حذف شد','warp.toast.presetDeleted':'پیش‌فرض حذف شد','warp.presets.title':'پیش‌فرض‌های نقاط پایانی','warp.presets.add':'افزودن پیش‌فرض','warp.presets.edit':'ویرایش پیش‌فرض','warp.presets.count':'{n} نقطهٔ پایانی','warp.presets.inuse':'در حال استفاده','warp.amnezia.title':'پیش‌فرض‌های آمنزیا','warp.amnezia.desc':'روی اشتراک‌های آمنزیا اعمال می‌شود مگر آنکه حسابی بازنویسی خاص داشته باشد. صفر یعنی پارامتر حذف می‌شود.','warp.amnezia.save':'ذخیرهٔ پیش‌فرض‌های آمنزیا','warp.amnezia.i1':'I1 (بستهٔ آغازین)','warp.view.accounts':'حساب‌ها','warp.view.settings':'تنظیمات','fragment.enable':'فعال‌سازی فرگمنت','fragment.preset.label':'حالت آماده','fragment.preset.off':'خاموش','fragment.preset.low':'کم','fragment.preset.medium':'متوسط','fragment.preset.high':'زیاد','fragment.preset.severe':'شدید','fragment.preset.custom':'سفارشی','fragment.length':'طول کمینه–بیشنه (بایت)','fragment.delay':'تأخیر کمینه–بیشنه (میلی‌ثانیه)','fragment.split':'بیشینهٔ شکست کمینه–بیشنه','fragment.packets':'الگوی بسته‌ها','chain.enable':'فعال‌سازی زنجیرهٔ پراکسی','chain.uri.label':'نشانی بالادست','chain.uri.hint':'‏socks5://user:pass@host:port یا http://host:port','advanced.doh.label':'بالادست DoH','advanced.doh.private':'نقطهٔ خصوصی DoH شما','advanced.tg.title':'ربات تلگرام','advanced.tg.enabled':'فعال‌سازی ربات','advanced.tg.token':'توکن ربات','advanced.tg.chat_id':'شناسه گفتگو','advanced.tg.setup':'تنظیم وبهوک','advanced.tg.remove':'حذف وبهوک','advanced.tg.hint':'با @BotFather یک ربات بسازید، توکن آن را اینجا وارد و ذخیره کنید، سپس «تنظیم وبهوک» را بزنید. تنها پیام‌های شناسه گفتگوی شما پاسخ می‌گیرند و می‌توانند کلید قطع را تغییر دهند.','tg.setup_ok':'وبهوک تنظیم شد','tg.setup_fail':'تنظیم وبهوک ناموفق بود','tg.remove_ok':'وبهوک حذف شد','tg.remove_fail':'حذف وبهوک ناموفق بود','advanced.remoteDns.label':'DNS از راه دور','advanced.localDns.label':'DNS محلی جایگزین','advanced.udp53.label':'فعال‌سازی رلهٔ UDP 53','advanced.udp53.hint':'پرس‌وجوهای DNS کلاینت را روی UDP با DoH پاسخ می‌دهد.','advanced.behavior.title':'اشتراک‌ها و رفتار','advanced.subInterval.label':'فاصلهٔ به‌روزرسانی اشتراک (ساعت)','advanced.maxNodes.label':'بیشینهٔ نود در هر قالب','advanced.urlTest.label':'فاصلهٔ تست نشانی (ثانیه)','advanced.camouflage.label':'صفحهٔ استتار','advanced.camouflage.none':'بدون استتار (۴۰۴ ساده)','advanced.camouflage.static':'صفحهٔ فرود ثابت','advanced.camouflage.proxy':'پراکسی معکوس نشانی','advanced.camouflage.url':'نشانی صفحهٔ استتار','advanced.speedtest.label':'رهگیری تست سرعت','routing.title':'قواعد مسیریابی','routing.bypassLan.label':'دورزنی شبکهٔ محلی','routing.bypassLan.hint':'محدوده‌های محلی/خصوصی مستقیم و بدون پراکسی (Clash و sing-box).','routing.blockQuic.label':'مسدودسازی QUIC (UDP 443)','routing.blockQuic.hint':'کلاینت‌ها را به TCP/TLS پایدارتر می‌برد.','routing.blockAds.label':'مسدودسازی دامنه‌های تبلیغاتی','routing.blockAds.hint':'قواعد رد دامنه‌های تبلیغاتی به کانفیگ‌های Clash و sing-box اضافه می‌کند.','routing.blockMalware.label':'مسدودسازی دامنه‌های مخرب','routing.blockMalware.hint':'قواعد رد دامنه‌های بدافزاری به کانفیگ‌های Clash و sing-box اضافه می‌کند.','routing.customBypass.label':'دامنه‌های دورزنی سفارشی','routing.customBlock.label':'دامنه‌های مسدودسازی سفارشی','tabs.settings.users':'کاربران','tabs.settings.warp':'WARP','users.title':'کاربران','users.desc':'نشانی‌های اشتراک با فیلتر پروتکل، سقف مصرف و تاریخ انقضا برای هر کاربر.','users.add':'افزودن کاربر','users.edit':'ویرایش کاربر','users.name':'نام','users.protocols':'پروتکل‌ها','users.all':'همه','users.limit':'سقف روزانهٔ درخواست','users.limit_none':'خالی یعنی بدون سقف روزانه','users.expiry':'تاریخ انقضا','users.expiry_none':'خالی یعنی بدون انقضا','users.delete':'حذف کاربر','users.confirm_delete_title':'این کاربر حذف شود؟','users.confirm_delete_body':'نشانی‌های اشتراک او بلافاصله از کار می‌افتند.','users.confirm_regen_title':'توکن دوباره ساخته شود؟','users.confirm_regen_body':'نشانی‌های فعلی این کاربر از کار می‌افتند.','users.toast.created':'کاربر ساخته شد','users.toast.saved':'ذخیره شد','users.toast.deleted':'کاربر حذف شد','users.toast.regen':'توکن جدید آماده شد','users.status.active':'فعال','users.status.expired':'منقضی','users.status.limited':'به سقف رسید','users.status.disabled':'غیرفعال','users.empty':'هنوز کاربری نیست','users.load_failed':'بارگذاری کاربران ممکن نشد.','users.col.name':'نام','users.col.token':'نشانی اشتراک','users.col.status':'وضعیت','users.col.enabled':'فعال','users.col.actions':'عملیات','qr.title':'برای افزودن اسکن کنید','qr.download':'دانلود PNG','qr.hint':'کلاینت خود را باز کنید و اسکن کنید یا لینک را کپی کنید.','confirm.logout_title':'خارج می‌شوید؟','confirm.logout_body':'کوکی نشست این دستگاه پاک می‌شود.','confirm.securepath_title':'مسیر امن تغییر کند؟','confirm.securepath_body':'همهٔ نشانی‌های اشتراک و پنل بلافاصله عوض می‌شوند. نشانی‌های جدید را دوباره در همهٔ کلاینت‌ها وارد کنید.','confirm.reset_title':'بازگشت به پیش‌فرض‌ها؟','confirm.reset_body':'همهٔ بخش‌ها بلافاصله به مقادیر کارخانه‌ای برمی‌گردند. قابل بازگشت نیست.','confirm.killswitch_title':'توقف همهٔ ترافیک؟','confirm.killswitch_body':'همهٔ کلاینت‌ها بلافاصله قطع می‌شوند. پنل در دسترس می‌ماند تا بتوانید این را برگردانید.','confirm.yes':'بله، ادامه','toast.settingsSaved':'تنظیمات ذخیره شد','toast.saveFailed':'ذخیره ناموفق بود','toast.killOn':'ترافیک متوقف شد','toast.killOff':'ترافیک از سر گرفته شد','toast.langChanged':'زبان تغییر کرد','toast.networkError':'خطای شبکه — اتصال خود را بررسی کنید.','toast.tooLong':'نشانی برای کد QR بیش از حد طولانی است.','err.required':'این فیلد الزامی است','err.url':'یک نشانی معتبر https:// وارد کنید','err.domain':'نام دامنه نامعتبر است','err.ip_or_host':'IP یا نام میزبان معتبر نیست','err.ipv6_prefix':'پیشوند IPv6 نامعتبر است','err.port':'پورت باید بین ۱ تا ۶۵۵۳۵ باشد','err.uuid':'UUID نامعتبر است','err.number':'عدد معتبر وارد کنید','err.duplicate':'مورد تکراری: {value}','err.invalid_line':'خط نامعتبر: {line}','common.help':'راهنما','home.subs.quota':'این اشتراک‌ها از طریق همین ورکر تونل می‌شوند و از سهمیهٔ ۱۰۰ هزار درخواست روزانهٔ آن مصرف می‌کنند.','warp.chips.direct':'مستقیم · بدون ترافیک ورکر','protocols.ech.short':'کلاینت‌هلوی TLS را رمز می‌کند.','protocols.ech.help':'کلاینت‌هلوی TLS را برای کلاینت‌های پشتیبان رمز می‌کند؛ به‌صورت ech= روی نودهای TLS صادر می‌شود.','ports.cdn.addresses.short':'هر خط یک نشانی.','ports.cdn.addresses.help':'هر خط یک نشانی؛ وقتی عبور از CDN روشن است به‌عنوان نشانی اتصال استفاده می‌شود.','ports.cleanAddrs.short':'هر خط یک مورد: IP یا نام میزبان، با پورت اختیاری.','ports.cleanAddrs.help':'هر خط یک مورد: IP یا نام میزبان، با پورت اختیاری (ip:port یا [ipv6]:port). موارد دارای پورت فقط همان پورت را می‌سازند؛ موارد بدون پورت از پورت‌های TLS/بدون رمز زیر پیروی می‌کنند. خط‌های نامعتبر هنگام ذخیره حذف می‌شوند.','proxyip.list.short':'هر خط یک مورد؛ host:port مجاز است.','proxyip.list.help':'هر خط یک مورد؛ host:port مجاز است. زمانی که اتصال مستقیم شکست بخورد استفاده می‌شود.','proxyip.nat64.short':'هر خط یک پیشوند IPv6.','proxyip.nat64.help':'هر خط یک پیشوند IPv6 (مثلاً 2a02:898:146:64::).','advanced.doh.short':'مبدل DoH پشت نقطهٔ خصوصی زیر.','advanced.doh.help':'مبدل DoH که پشت نقطهٔ خصوصی زیر استفاده می‌شود.','advanced.speedtest.short':'به سرویس‌های تست سرعت پاسخ ساختگی می‌دهد.','advanced.speedtest.help':'به سرویس‌های تست سرعت پاسخ ساختگی بدهید تا از پراکسی عبور نکنند.','routing.customBypass.short':'هر خط یک دامنه؛ پسوندهای منطبق مستقیم می‌روند.','routing.customBypass.help':'هر خط یک دامنه؛ پسوندهای منطبق مستقیم می‌روند (Clash و sing-box).','routing.customBlock.short':'هر خط یک دامنه؛ پسوندهای منطبق رد می‌شوند.','routing.customBlock.help':'هر خط یک دامنه؛ پسوندهای منطبق رد می‌شوند (Clash و sing-box).','fragment.preset.short':'مقادیر ثابت طول/تأخیر را اعمال می‌کند.','fragment.preset.help':'کم/متوسط/زیاد/شدید مقادیر ثابت طول، تأخیر و شکستن متناسب با شدت سانسور را اعمال می‌کنند. «سفارشی» فیلدهای زیر را برای تنظیم دستی آزاد می‌کند.','general.securePath.short':'پیشوند محرمانهٔ پنل و نشانی‌های اشتراک.','general.securePath.help':'پیشوند محرمانهٔ این پنل و همهٔ نشانی‌های اشتراک. تغییر آن همهٔ نشانی‌ها را باطل می‌کند.','security.allowlist.label':'فهرست مجاز آی‌پی پنل','security.allowlist.hint':'هر خط یک IP یا CIDR؛ خالی یعنی همه مجاز. ورودی اشتباه پنل را قفل می‌کند — با حذف کلید qproxy:settings از KV بازیابی کنید.'
 ,'tabs.settings.addresses':'آدرس‌ها و پورت‌ها','tabs.settings.egress':'مسیر خروجی','tabs.settings.sources':'منابع'
@@ -400,7 +411,13 @@ fa:{'app.name':'Q Proxy','nav.home':'خانه','nav.settings':'تنظیمات','
 ,'home.users.desc':'اشتراک‌های محدود با فیلتر و سقف برای هر کاربر.','home.users.manage':'مدیریت','home.users.active':'فعال'
 ,'warp.detail.custom_eps_title':'نقطه‌های پایانی سفارشی','warp.detail.custom_eps_desc':'نقطه‌های پایانی این حساب را مشخص کنید (هر خط یک ip:port). خالی یعنی از پیش‌فرض انتخاب‌شده استفاده شود.','warp.detail.amnezia_save':'ذخیرهٔ بازنویسی حساب'
 ,'addresses.hostname_badge':'میزبان من','addresses.enabled.toggle':'شامل این آدرس','addresses.port_preview':'پورت','addresses.test':'تست آدرس‌ها'
-,'egress.pool.source':'منبع','egress.pool.updated':'به‌روزرسانی'}
+,'egress.pool.source':'منبع','egress.pool.updated':'به‌روزرسانی'
+,'rotation.title':'توکن اشتراک جدید','rotation.hint':'همین حالا کپی کنید — فقط یک بار نمایش داده می‌شود. نشانی جدید را در کلاینت وارد کنید؛ پیوندهای قبلی بلافاصله از کار می‌افتند.','rotation.done':'انجام شد'
+,'shortcuts.title':'میانبرهای صفحه‌کلید','shortcuts.save':'اعمال تغییرات ذخیره‌نشده','shortcuts.search':'تمرکز جستجو، یا رفتن به خانه','shortcuts.home':'رفتن به خانه (g سپس h)','shortcuts.undo':'بازگردانی تغییر بخش','shortcuts.redo':'تکرار تغییر بخش'
+,'graph.title':'ترافیک','graph.empty':'هنوز سابقهٔ کافی نیست — با بازدیدهای بعدی پر می‌شود.'
+,'backup.remind':'بیش از ۳۰ روز است که از تنظیمات نسخهٔ پشتیبان نگرفته‌اید. یک نسخه برون‌بری کنید تا قابل بازیابی باشد.','backup.later':'بعداً'
+,'users.bulk.enable':'فعال‌سازی','users.bulk.disable':'غیرفعال‌سازی','users.bulk.delete':'حذف','users.bulk.extend':'تعیین انقضا','users.bulk.selected':'{n} انتخاب‌شده','users.bulk.confirm':'روی {n} کاربر اعمال شود؟','users.bulk.done':'به‌روزرسانی {updated} · حذف {deleted}','users.bulk.unknown':' · ناشناخته {unknown}','users.bulk.empty_expiry':'اول تاریخ انقضا را انتخاب کنید','users.col.select':'انتخاب'
+,'country.hint':'برای ترجیح نودهای یک کشور ?country=XX (مثلاً ?country=DE) را به انتهای نشانی اشتراک اضافه کنید.','addresses.field.country':'کشور','addresses.field.city':'شهر'}
 };
 const getLangCookie=()=>{const m=document.cookie.match(/(?:^|;\s*)qp_lang=(en|fa)/);return m&&m[1]||'fa'};
 let LANG=getLangCookie();
@@ -454,7 +471,7 @@ function openModal(id){modalReturnFocus=document.activeElement;const m=$(id);m.h
 function closeModal(id){const m=$(id);m.hidden=true;if(modalReturnFocus&&modalReturnFocus.focus)modalReturnFocus.focus();modalReturnFocus=null}
 function trapFocus(modal,e){const list=[...modal.querySelectorAll('button,input,[href],[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&x.offsetParent!==null);if(!list.length)return;const first=list[0],last=list[list.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
 let confirmResolve=null;
-function confirmDialog(titleKey,bodyKey,danger){$('cf-title').textContent=t(titleKey);$('cf-body').textContent=t(bodyKey);$('cf-cancel').textContent=t('common.cancel');const ok=$('cf-ok');ok.textContent=t('confirm.yes');ok.className='btn '+(danger?'btn--ghost-danger':'btn--primary');openModal('m-confirm');setTimeout(()=>$('cf-cancel').focus(),0);return new Promise(res=>{confirmResolve=res})}
+function confirmDialog(titleKey,bodyKey,danger,params){$('cf-title').textContent=t(titleKey,params);$('cf-body').textContent=t(bodyKey,params);$('cf-cancel').textContent=t('common.cancel');const ok=$('cf-ok');ok.textContent=t('confirm.yes');ok.className='btn '+(danger?'btn--ghost-danger':'btn--primary');openModal('m-confirm');setTimeout(()=>$('cf-cancel').focus(),0);return new Promise(res=>{confirmResolve=res})}
 function settleConfirm(v){if(confirmResolve){const r=confirmResolve;confirmResolve=null;$('m-confirm').hidden=true;if(modalReturnFocus&&modalReturnFocus.focus)modalReturnFocus.focus();modalReturnFocus=null;r(v)}}
 const QR=(()=>{
 const EC=[10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28];
@@ -570,6 +587,8 @@ $('home-h1').textContent=t('nav.home');
 $('settings-h1').textContent=t('nav.settings');
 $('logout-btn').setAttribute('aria-label',t('nav.logout'));
 $('logout-btn').title=t('nav.logout');
+$('shortcuts-btn').setAttribute('aria-label',t('shortcuts.title'));
+$('shortcuts-btn').title=t('shortcuts.title');
 $('dirty-label').textContent=t('common.unsaved');
 $('discard-btn').textContent=t('common.discard');
 $('apply-btn').textContent=t('common.apply');
@@ -648,6 +667,7 @@ sh+='</div></div>';
 const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
 urls.forEach((entry,i)=>{sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(entry.label||entry.format)+'</span>'+copyFieldHtml(subUrlWithMode(entry.url),'sub-u'+i)+'</div>'});
 if(S.warp&&S.warp.accounts.length)sh+=warpSubsHtml();
+if(urls.length)sh+='<p class="field__hint" dir="auto">'+esc(t('country.hint'))+'</p>';
 if(!urls.length&&!(S.warp&&S.warp.accounts.length))sh+='<div class="empty-card"><div class="empty-icon"><svg aria-hidden="true"><use href="#i-qr"/></svg></div><div class="empty-title">'+esc(t('home.subs.empty_title'))+'</div><p class="empty-msg">'+esc(t('home.subs.empty_msg'))+'</p><div class="empty-actions"><a class="btn btn--primary btn--sm" href="#/settings/protocols">'+esc(t('home.subs.empty_cta'))+'</a></div></div>';
 subs.innerHTML=sh;
 body.appendChild(subs);
@@ -668,9 +688,11 @@ right.appendChild(uc);
 if(S.status){
 const st=document.createElement('section');st.className='card';
 const u=S.status.usage||{requestsToday:0,requestsTotal:0};
-st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="check-update">'+esc(t('home.status.checkUpdate'))+'</button></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(String(u.requestsToday!=null?u.requestsToday:'—'))+'</span><span class="mono">'+esc(String(u.requestsTotal!=null?u.requestsTotal:'—'))+'</span></div>';
+st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="check-update">'+esc(t('home.status.checkUpdate'))+'</button></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(String(u.requestsToday!=null?u.requestsToday:'—'))+'</span><span class="mono">'+esc(String(u.requestsTotal!=null?u.requestsTotal:'—'))+'</span></div><div id="traffic-chart"></div>';
 right.appendChild(st)}
 body.appendChild(right);
+recordTraffic();
+renderTraffic();
 loadHomePool();
 loadHomeUsers();
 syncKillUI()}
@@ -850,26 +872,135 @@ const expired=isUserExpired(u);
 const key=!u.enabled?'users.status.disabled':expired?'users.status.expired':(u.dailyReqLimit!=null&&(u.todayHits||0)>=u.dailyReqLimit)?'users.status.limited':'users.status.active';
 return '<span class="chip-status '+(!u.enabled||expired?'bad':'ok')+'">'+esc(t(key))+'</span>'}
 function usersCardHtml(){
-return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('users.desc'))+'</div></div><button type="button" class="btn btn--primary btn--sm" data-action="users-add">'+esc(t('users.add'))+'</button></div><table class="tbl"><thead><tr><th>'+esc(t('users.col.name'))+'</th><th>'+esc(t('users.col.token'))+'</th><th>'+esc(t('users.col.status'))+'</th><th>'+esc(t('users.col.enabled'))+'</th><th></th></tr></thead><tbody id="users-rows"><tr><td colspan="5"><span class="field__hint">'+esc(t('common.loading'))+'</span></td></tr></tbody></table></section>'}
+return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('users.desc'))+'</div></div><button type="button" class="btn btn--primary btn--sm" data-action="users-add">'+esc(t('users.add'))+'</button></div><div class="bulkbar" id="users-bulk" hidden><span class="stat-chip" id="users-bulk-count"></span><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-enable">'+esc(t('users.bulk.enable'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-disable">'+esc(t('users.bulk.disable'))+'</button><input type="datetime-local" class="input" id="users-bulk-expiry" aria-label="'+esc(t('users.expiry'))+'"><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-extend">'+esc(t('users.bulk.extend'))+'</button><button type="button" class="btn btn--ghost-danger btn--sm" data-action="users-bulk-del">'+esc(t('users.bulk.delete'))+'</button></div><table class="tbl"><thead><tr><th><input type="checkbox" id="users-select-all" aria-label="'+esc(t('users.col.select'))+'"></th><th>'+esc(t('users.col.name'))+'</th><th>'+esc(t('users.col.token'))+'</th><th>'+esc(t('users.col.status'))+'</th><th>'+esc(t('users.col.enabled'))+'</th><th>'+esc(t('users.col.actions'))+'</th></tr></thead><tbody id="users-rows"><tr><td colspan="6"><span class="field__hint">'+esc(t('common.loading'))+'</span></td></tr></tbody></table></section>'}
 function userRowHtml(u){
 const url=u.token?userSubUrl(u.token):'';
 const clip=url?('<button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="copy" data-copy-value="'+esc(url)+'" data-qr="'+esc(url)+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="qr" data-qr="'+esc(url)+'" aria-label="'+esc(t('common.qr'))+'"><svg aria-hidden="true"><use href="#i-qr"/></svg></button>'):'';
 const acts='<div class="btn-row">'+clip+'<button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-edit" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.edit'))+'"><svg aria-hidden="true"><use href="#i-edit"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-regen" data-id="'+esc(u.id)+'" aria-label="'+esc(t('warp.detail.regen'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="users-del" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>';
 const sw='<label class="switch"><input type="checkbox" role="switch" data-user-toggle="'+esc(u.id)+'"'+(u.enabled?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span></label>';
-return '<tr><td data-l="'+esc(t('users.col.name'))+'" style="max-width:10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(u.name)+'</td>'
+return '<tr><td data-l="'+esc(t('users.col.select'))+'"><input type="checkbox" data-user-select="'+esc(u.id)+'"'+(BULK.has(u.id)?' checked':'')+' aria-label="'+esc(t('users.col.select'))+'"></td><td data-l="'+esc(t('users.col.name'))+'" style="max-width:10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(u.name)+'</td>'
 +'<td data-l="'+esc(t('users.col.token'))+'" dir="ltr">'+(url?'<code dir="ltr" class="mono" style="font-size:var(--fs-sm);direction:ltr">'+esc(url)+'</code>':'<span class="field__hint">'+esc(t('users.toast.regen'))+'</span>')+'</td>'
 +'<td data-l="'+esc(t('users.col.status'))+'">'+userChip(u)+'</td>'
 +'<td data-l="'+esc(t('users.col.enabled'))+'">'+sw+'</td>'
-+'<td style="text-align:end">'+acts+'</td></tr>'}
++'<td data-l="'+esc(t('users.col.actions'))+'" style="text-align:end">'+acts+'</td></tr>'}
 let usersLoadFailed=false;
+const BULK=new Set();
 async function loadUsers(){
 usersLoadFailed=false;
 try{const d=await api('api/users',{fresh:true});S.users=d.users||[]}catch(e){usersLoadFailed=true}
+for(const id of[...BULK])if(!S.users.some(u=>u.id===id))BULK.delete(id);
 renderUserRows()}
 function renderUserRows(){
 const tb=$('users-rows');if(!tb)return;
-if(usersLoadFailed){tb.innerHTML='<tr><td colspan="5"><p class="field__error" style="display:block">'+esc(t('users.load_failed'))+'</p><button type="button" class="btn btn--ghost btn--sm" data-action="users-reload">'+esc(t('common.retry'))+'</button></td></tr>';return}
-tb.innerHTML=S.users.length?S.users.map(userRowHtml).join(''):'<tr><td colspan="5"><span class="field__hint">'+esc(t('users.empty'))+'</span></td></tr>'}
+if(usersLoadFailed){tb.innerHTML='<tr><td colspan="6"><p class="field__error" style="display:block">'+esc(t('users.load_failed'))+'</p><button type="button" class="btn btn--ghost btn--sm" data-action="users-reload">'+esc(t('common.retry'))+'</button></td></tr>';return}
+tb.innerHTML=S.users.length?S.users.map(userRowHtml).join(''):'<tr><td colspan="6"><span class="field__hint">'+esc(t('users.empty'))+'</span></td></tr>';
+updateBulkBar()}
+function showRotation(tok){
+const url=userSubUrl(tok);
+$('rot-title').textContent=t('rotation.title');
+$('rot-token').textContent=url;
+$('rot-hint').textContent=t('rotation.hint');
+$('rot-close').textContent=t('rotation.done');
+$('rot-copy').setAttribute('aria-label',t('common.copy'));
+const qr=$('rot-qr');if(qr){qr.setAttribute('data-qr',url);qr.setAttribute('aria-label',t('common.qr'))};
+openModal('m-rot')}
+function updateBulkBar(){
+const bar=$('users-bulk');if(!bar)return;
+bar.hidden=BULK.size===0;
+const c=$('users-bulk-count');if(c)c.textContent=t('users.bulk.selected',{n:BULK.size});
+const all=$('users-select-all');
+if(all){const ids=(S.users||[]).map(u=>u.id);all.checked=ids.length>0&&ids.every(id=>BULK.has(id))}}
+async function bulkUsers(patch){
+const ids=[...BULK];
+if(!ids.length)return;
+if(!(await confirmDialog('users.bulk.selected','users.bulk.confirm',true,{n:ids.length})))return;
+try{const d=await api('api/users/bulk',{method:'POST',body:{ids:ids,patch:patch}});
+BULK.clear();
+let msg=t('users.bulk.done',{updated:d.updated,deleted:d.deleted});
+if(d.unknown)msg+=t('users.bulk.unknown',{unknown:d.unknown});
+toast(msg,'ok');await loadUsers()}catch(err){toastErr(err)}}
+const TRAFFIC_KEY='qp_traffic';
+function readTraffic(){try{const a=JSON.parse(localStorage.getItem(TRAFFIC_KEY)||'[]');return Array.isArray(a)?a.filter(x=>x&&typeof x.today==='number'):[]}catch(e){return[]}}
+function recordTraffic(){
+if(!S.status||!S.status.usage)return;
+const today=S.status.usage.requestsToday||0,total=S.status.usage.requestsTotal||0;
+const day=new Date().toISOString().slice(0,10);
+let h=readTraffic();
+const last=h[h.length-1];
+if(last&&last.day===day){last.today=today;last.total=total}
+else h.push({day:day,today:today,total:total});
+h=h.slice(-30);
+try{localStorage.setItem(TRAFFIC_KEY,JSON.stringify(h))}catch(e){}}
+function renderTraffic(){
+const box=$('traffic-chart');if(!box)return;
+const h=readTraffic();
+if(h.length<2){box.innerHTML='<p class="field__hint">'+esc(t('graph.empty'))+'</p>';return}
+const vals=h.map(x=>x.today);
+const max=Math.max.apply(null,vals.concat([1]));
+const w=300,ht=72,n=vals.length;
+const pts=vals.map((v,i)=>[n===1?0:i/(n-1)*(w-8)+4,ht-6-(v/max)*(ht-16)]);
+const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+const area=line+' L'+(w-4)+' '+(ht-6)+' L4 '+(ht-6)+' Z';
+let bars='';
+vals.forEach((v,i)=>{const x=n===1?w/2-6:i/(n-1)*(w-12)+2;const bh=(v/max)*(ht-20);bars+='<rect x="'+x.toFixed(1)+'" y="'+(ht-6-bh).toFixed(1)+'" width="5" height="'+bh.toFixed(1)+'" rx="1.5" style="fill:rgba(var(--accent-rgb),.45)"/>'});
+box.innerHTML='<div class="field__label-row"><span class="field__label">'+esc(t('graph.title'))+'</span></div><svg viewBox="0 0 '+w+' '+ht+'" role="img" aria-label="'+esc(t('graph.title'))+'">'+bars+'<path d="'+area+'" style="fill:rgba(var(--accent-rgb),.12)"/><path d="'+line+'" fill="none" style="stroke:var(--cyan)" stroke-width="2" stroke-linecap="round"/></svg>'}
+const EXPORT_KEY='qp_last_export',BACKUP_DISMISS='qp_backup_dismiss';
+function maybeBackupBanner(){
+const box=$('backup-banner');if(!box)return;
+let last=0,dis=0;
+try{last=Number(localStorage.getItem(EXPORT_KEY)||'0')}catch(e){}
+try{dis=Number(localStorage.getItem(BACKUP_DISMISS)||'0')}catch(e){}
+const now=Date.now();
+if(last&&now-last<30*864e5){box.hidden=true;return}
+if(dis&&now-dis<7*864e5){box.hidden=true;return}
+box.hidden=false;
+box.innerHTML='<p>'+esc(t('backup.remind'))+'</p><a class="btn btn--primary btn--sm" href="'+esc(BASE)+'api/settings/export" download data-action="backup-export">'+esc(t('general.backup.export'))+'</a><button type="button" class="btn btn--ghost btn--sm" data-action="backup-dismiss">'+esc(t('backup.later'))+'</button>'}
+function renderShortcuts(){
+$('keys-title').textContent=t('shortcuts.title');
+$('keys-close').textContent=t('common.close');
+const rows=[['Ctrl / \u2318 + S','shortcuts.save'],['Ctrl / \u2318 + K','shortcuts.search'],['g h','shortcuts.home'],['Ctrl / \u2318 + Z','shortcuts.undo'],['Shift + Ctrl / \u2318 + Z','shortcuts.redo']];
+$('keys-body').innerHTML='<table class="tbl"><tbody>'+rows.map(r=>'<tr><td style="white-space:nowrap"><code dir="ltr" class="mono">'+esc(r[0])+'</code></td><td data-l="'+esc(r[0])+'">'+esc(t(r[1]))+'</td></tr>').join('')+'</tbody></table>'}
+const UR={};
+function urStack(sec){if(!UR[sec])UR[sec]={undo:[],redo:[]};return UR[sec]}
+function pushUndo(sec,state){
+const st=urStack(sec);
+if(st.undo[st.undo.length-1]===state)return;
+st.undo.push(state);if(st.undo.length>20)st.undo.shift();st.redo.length=0}
+let dirtyPushTimer=null;
+function scheduleDirtyPush(){
+clearTimeout(dirtyPushTimer);
+dirtyPushTimer=setTimeout(()=>{for(const sec of[...S.dirty]){try{pushUndo(sec,JSON.stringify(collectSection(sec)))}catch(e){}}},1000)}
+function restoreSection(sec,json){
+let snap={};try{snap=JSON.parse(json)}catch(e){return}
+const panel=$('sp-'+sec);if(!panel)return;
+panel.querySelectorAll('[data-bind]').forEach(el=>{
+writeBind(el,getPath(snap,el.dataset.bind));
+clearFieldErrorEl(el)});
+markDirty();
+refreshShowIf();
+updateEchPreview();
+updatePortMasters();
+applyProtoDim()}
+function undoSection(){
+const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
+const st=urStack(sec);if(!st.undo.length)return;
+st.redo.push(JSON.stringify(collectSection(sec)));
+restoreSection(sec,st.undo.pop())}
+function redoSection(){
+const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
+const st=urStack(sec);if(!st.redo.length)return;
+st.undo.push(JSON.stringify(collectSection(sec)));
+restoreSection(sec,st.redo.pop())}
+let lastG=0;
+function isEditable(el){return el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable)}
+function globalKeys(e){
+const mod=e.ctrlKey||e.metaKey;
+if(mod&&e.key.toLowerCase()==='s'){e.preventDefault();if(S.dirty.size)$('apply-btn').click();return}
+if(isEditable(e.target))return;
+if(mod&&e.key.toLowerCase()==='k'){e.preventDefault();const s=document.querySelector('#settings-search');if(s)s.focus();else location.hash='#/home';return}
+if(mod&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redoSection();else undoSection();return}
+if(e.key==='g'){lastG=Date.now();return}
+if(e.key==='h'&&Date.now()-lastG<800){lastG=0;location.hash='#/home'}}
 function toLocalInputValue(ms){
 const d=new Date(ms);const p=n=>String(n).padStart(2,'0');
 return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())}
@@ -1017,6 +1148,8 @@ function lines(v){return Array.isArray(v)?v.map(x=>String(x)).filter(x=>x.trim()
      +field('label',t('addresses.field.label'),'US-Blue')
      +field('host',t('addresses.field.host'),'cdn.example.net')
      +field('sni',t('addresses.field.sni'),'cdn.example.net')
+     +field('country',t('addresses.field.country'),'DE')
+     +field('city',t('addresses.field.city'),'Frankfurt')
      +'</div>'
      +'<div class="addr-card__side"><span class="addr-dot" data-addr-dot="'+esc(String(get('address')).replace(/^\[|\]$/g,'').toLowerCase())+'" hidden></span>'
      +(isHost?'<span class="addr-badge">'+esc(t('addresses.hostname_badge'))+'</span>':'')
@@ -1101,7 +1234,7 @@ if(card.sources)return sourcesCardHtml();
 if(card.danger&&!card.fields.length){
 return '<section class="card"><div class="card__head"><div class="card__title hint-danger">'+esc(t(card.title))+'</div></div><button type="button" class="btn btn--ghost-danger" data-action="reset-defaults">'+esc(t('common.resetDefaults'))+'</button></section>'}
 if(card.backup&&!card.fields.length){
-return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t(card.title))+'</div></div><div class="btn-row"><a class="btn btn--ghost btn--sm" href="'+esc(BASE)+'api/settings/export" download>'+esc(t('general.backup.export'))+'</a><button type="button" class="btn btn--ghost btn--sm" data-action="settings-import">'+esc(t('general.backup.import'))+'</button></div><input type="file" id="settings-import-file" accept=".json,application/json" hidden><p class="field__hint" id="settings-import-hint">'+esc(t('general.backup.import_hint'))+'</p></section>'}
+return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t(card.title))+'</div></div><div class="btn-row"><a class="btn btn--ghost btn--sm" href="'+esc(BASE)+'api/settings/export" download data-action="backup-export">'+esc(t('general.backup.export'))+'</a><button type="button" class="btn btn--ghost btn--sm" data-action="settings-import">'+esc(t('general.backup.import'))+'</button></div><input type="file" id="settings-import-file" accept=".json,application/json" hidden><p class="field__hint" id="settings-import-hint">'+esc(t('general.backup.import_hint'))+'</p></section>'}
 if(card.security&&!card.fields.length){
 return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t(card.title))+'</div></div><p class="field__hint">'+esc(t('security.hint'))+'</p>'
 +'<div class="field" id="fw-sec-cur"><div class="field__label-row"><label class="field__label" for="sec-cur">'+esc(t('security.current'))+'</label></div><div class="secret-field"><input type="password" class="input input--mono" style="flex:1;min-width:0" id="sec-cur" autocomplete="current-password" spellcheck="false" dir="ltr"><button type="button" class="btn btn--icon btn--ghost" data-action="reveal" data-target="sec-cur" aria-label="'+esc(t('common.reveal'))+'" aria-pressed="false"><svg aria-hidden="true"><use href="#i-eye"/></svg></button></div><p class="field__error"></p></div>'
@@ -1209,6 +1342,8 @@ const p=get('port');if(p)e.port=Number(p);
 const l=get('label');if(l)e.label=l;
 const h=get('host');if(h)e.host=h;
 const sn=get('sni');if(sn)e.sni=sn;
+const co=get('country');if(co)e.country=co;
+const ci=get('city');if(ci)e.city=ci;
 if(c.dataset.addrEnabled==='0')e.enabled=false;
 return e}).filter(Boolean)}
 if(el.dataset.type==='ports'){
@@ -1260,12 +1395,14 @@ function markDirty(){
 S.dirty.clear();
 SECTIONS.forEach(s=>{
 try{if(JSON.stringify(collectSection(s.key))!==S.snap[s.key])S.dirty.add(s.key)}catch(e){}});
+scheduleDirtyPush();
 updateApplyBar()}
 function updateApplyBar(){
 $('applybar').hidden=S.dirty.size===0;
 $('apply-btn').disabled=false;
 $('apply-btn').textContent=t('common.apply');
-document.querySelectorAll('.section-actions__hint').forEach(hint=>{hint.hidden=!S.dirty.has(hint.closest('[id^="sp-"]').id.replace('sp-',''))})}
+document.querySelectorAll('.section-actions__hint').forEach(hint=>{hint.hidden=!S.dirty.has(hint.closest('[id^="sp-"]').id.replace('sp-',''))})
+document.querySelectorAll('#subtabs .subtab').forEach(a=>{const base=a.dataset.label||a.textContent.replace(/ \*$/,'');a.dataset.label=base;a.textContent=base+(S.dirty.has(a.dataset.sec)?' *':'')})}
 async function refreshSubUrls(){
 try{sessionStorage.removeItem('qpe:api/bootstrap');sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
 try{const d=await api('api/bootstrap',{fresh:true});S.subs=(d.subUrls&&d.subUrls.urls)||[];renderHome()}catch(e){}}
@@ -1279,6 +1416,7 @@ if(Object.keys(patch).length===0){markDirty();return}
 if(patch.securePath!==undefined&&!(await confirmDialog('confirm.securepath_title','confirm.securepath_body',true)))return;
 await api('api/settings/save',{method:'PUT',body:patch});
 Object.assign(S.set,JSON.parse(JSON.stringify(cur)));
+pushUndo(sec,S.snap[sec]||'{}');
 S.snap[sec]=JSON.stringify(cur);
 markDirty();
  toast(t('toast.settingsSaved'),'ok');
@@ -1562,7 +1700,16 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  'users-regen'(el){
  confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
  if(!yes)return;
- try{const d=await api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});const tok=d&&d.token;toast(t('users.toast.regen'),'ok');if(tok){const url=userSubUrl(tok);copyText(url);openQr(url)}await loadUsers()}catch(err){toastErr(err)}})},
+ try{const d=await api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});const tok=d&&d.token;toast(t('users.toast.regen'),'ok');if(tok)showRotation(tok);await loadUsers()}catch(err){toastErr(err)}})},
+ 'shortcuts'(){renderShortcuts();openModal('m-keys')},
+ 'close-keys'(){closeModal('m-keys')},
+ 'close-rot'(){closeModal('m-rot')},
+ 'backup-export'(){try{localStorage.setItem(EXPORT_KEY,String(Date.now()))}catch(e){}setTimeout(maybeBackupBanner,500)},
+ 'backup-dismiss'(){try{localStorage.setItem(BACKUP_DISMISS,String(Date.now()))}catch(e){}$('backup-banner').hidden=true},
+ 'users-bulk-enable'(){bulkUsers({enabled:true})},
+ 'users-bulk-disable'(){bulkUsers({enabled:false})},
+ 'users-bulk-del'(){bulkUsers({delete:true})},
+ 'users-bulk-extend'(){const pick=$('users-bulk-expiry');const v=pick?pick.value:'';if(!v){toast(t('users.bulk.empty_expiry'),'err');return}bulkUsers({expiresAt:new Date(v).getTime()})},
  'tg-setup'(el){
  (async()=>{el.disabled=true;
  try{const d=await api('api/telegram/setup',{method:'POST',body:{}});
@@ -1710,6 +1857,9 @@ if(e.target.matches('[data-addr-enabled-input]')){
 const card=e.target.closest('.addr-card');
 if(card){card.dataset.addrEnabled=e.target.checked?'1':'0';card.classList.toggle('addr-card--off',!e.target.checked)}
 markDirty();return}
+const usel=e.target.closest('[data-user-select]');
+if(usel){if(usel.checked)BULK.add(usel.dataset.userSelect);else BULK.delete(usel.dataset.userSelect);updateBulkBar();return}
+if(e.target.id==='users-select-all'){const ids=(S.users||[]).map(u=>u.id);if(e.target.checked)ids.forEach(id=>BULK.add(id));else BULK.clear();renderUserRows();return}
 if(e.target.closest('[data-user-toggle]')){
 const sw=e.target.closest('.switch');sw.classList.add('pending');
 (async()=>{try{await api('api/users/'+e.target.dataset.userToggle,{method:'PUT',body:{enabled:e.target.checked}});toast(t('users.toast.saved'),'ok');await loadUsers()}catch(err){e.target.checked=!e.target.checked;toastErr(err)}finally{sw.classList.remove('pending')}})();
@@ -1762,7 +1912,8 @@ $('cf-cancel').addEventListener('click',()=>settleConfirm(false));
 $('cf-ok').addEventListener('click',()=>settleConfirm(true));
 $('m-qr').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-qr'),e)});
 $('m-confirm').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-confirm'),e)});
-['m-warp-generate','m-warp-import','m-warp-preset','m-user'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($(id),e)}));
+['m-warp-generate','m-warp-import','m-warp-preset','m-user','m-rot','m-keys'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($(id),e)}));
+document.addEventListener('keydown',globalKeys);
 document.addEventListener('keydown',e=>{
 if(e.key==='Escape'){
 if(!$('m-confirm').hidden)settleConfirm(false);
@@ -1770,7 +1921,9 @@ else if(!$('m-qr').hidden)closeModal('m-qr');
 else if(!$('m-warp-generate').hidden)closeModal('m-warp-generate');
 else if(!$('m-warp-import').hidden)closeModal('m-warp-import');
 else if(!$('m-warp-preset').hidden)closeModal('m-warp-preset');
-else if(!$('m-user').hidden)closeModal('m-user')}});
+else if(!$('m-user').hidden)closeModal('m-user');
+else if(!$('m-rot').hidden)closeModal('m-rot');
+else if(!$('m-keys').hidden)closeModal('m-keys')}});
 window.addEventListener('hashchange',navigate);
 window.addEventListener('beforeunload',e=>{
 if(S.dirty.size){e.preventDefault();e.returnValue=''}});
@@ -1851,6 +2004,7 @@ try{if(!/(?:^|;\s*)qp_lang=(en|fa)/.test(document.cookie)&&S.set&&(S.set.languag
 renderSettings();
 renderHome();
 navigate();
+maybeBackupBanner();
 maybeWizard()}
 function maybeWizard(){
 try{if(localStorage.getItem('qp_wizard_done'))return}catch(e){}
