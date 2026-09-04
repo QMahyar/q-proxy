@@ -148,7 +148,7 @@ flowchart TD
     H --> RESP[Response<br/>edge Cache API 60s keyed format+mode+settings-version]
 ```
 
-Routing-rule settings inject Clash/sing-box rule sections at emit time (bypass-LAN, block QUIC/ads/malware, custom suffix lists). URI grammars live in `src/nodes/share-uri.ts`; remark naming in `src/nodes/naming.ts`.
+Routing-rule settings inject Clash/sing-box rule sections at emit time (bypass-LAN, block QUIC/ads/malware, custom suffix lists). URI grammars live in `src/nodes/share-uri.ts`; remark naming in `src/nodes/naming.ts`. Flow/direct stamping: `generateNodes` copies `settings.vlessFlow` onto TLS VLESS nodes only (`flow: null` on plain nodes, legacy output byte-identical when the setting is empty) and marks every SS node `direct` when `settings.ssDirect` is on; `buildVlessShareUri` appends `flow=` after the transport params, `buildSSShareUri` emits a plugin-free `ss://` URI when direct; clash/sing-box emitters add `flow` / drop the v2ray-plugin keys accordingly (surge/loon untouched).
 
 Node-generation caveats: a `cleanIps` entry with an explicit `:port` pins that port only, and its security is inferred purely from `CF_TLS_PORTS` membership — a pinned port outside both CF port families still emits (as `security: "none"`) but is unreachable in practice; keep pinned ports inside {443,2053,2083,2087,2096,8443} ∪ {80,8080,8880,2052,2082,2086,2095}.
 
@@ -211,6 +211,7 @@ Adding a **WARP** format follows the same shape via `src/warp/formats/`: impleme
 - Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) — frozen types, route table (§3), data flows (§4), KV (§5), build (§8)
 - Agent map: [../CONTEXT.md](../CONTEXT.md) — subsystem index + conventions cheat-sheet
 - Research: `docs/research/01-bpb-panel.md` … `04-protocol-formats.md`
+- Transport decisions: `docs/decisions/ADR-006-grpc-feasibility.md` (gRPC DEFER — no trailer/h2 API) · `ADR-007-xhttp-feasibility.md` (XHTTP DEFER — nearest-term, gated on Xray source pin + edge full-duplex probe) · `ADR-008-reality-remote.md` (REALITY termination impossible; remote-reference model specified, parked) · `ADR-009-transport-roadmap.md` (sequence: XHTTP probes → REALITY-remote product call → gRPC parked)
 - Deploy auth: Cloudflare Global API Key env vars (see [../README.md](../README.md))
 
 ## 9. Protocol Internals (src/protocols/)
@@ -218,7 +219,7 @@ Adding a **WARP** format follows the same shape via `src/warp/formats/`: impleme
 | File | Export | Semantics |
 |------|--------|-----------|
 | common.ts | `ProtocolInbound<R>`, `PushOutcome`, `parseAddress` | push(data) → need-more / ready{parsed, rest} / reject; responseHeader() once |
-| vless.ts | `createVlessInbound(uuid)` | Verifies 16-byte UUID; cmd 1 tcp, cmd 2 udp port 53 only → DnsPacketRelay; rejects MUX cmd 3; header `[ver, 0x00]` |
+| vless.ts | `createVlessInbound(uuid)` | Verifies 16-byte UUID; cmd 1 tcp, cmd 2 udp port 53 only → DnsPacketRelay; rejects MUX cmd 3; header `[ver, 0x00]`; vision: substring-matches `xtls-rprx-vision` in the handshake addons (protobuf or raw JSON) on TCP only (UDP keeps the UDP codec) → `bodyCodec()` serves a length-prefixed (`u16be len + payload`) codec — handshake coalesces complete initial frames and seeds the partial tail, 64 KiB buffer cap (overflow resets + null), split frames buffer across `decodeUp` calls, downlink encoder has null header and maps empty/oversize encodes to empty, never throws |
 | trojan.ts | `createTrojanInbound(password)` | First 56 bytes == lowercase hex SHA-224(password) then CRLF; SOCKS-ish addr parse; cmd ≠ 1 rejected |
 | vmess-crypto.ts | auth-id + AEAD helpers | WebCrypto GCM, MD5 KDF chain (pure-JS md5.ts), ±120 s time window |
 | vmess.ts | `createVmessInbound(uuid)` | AEAD-only (alterId 0) over legacy AES-CFB header decode; rejects non-AEAD |
@@ -232,6 +233,7 @@ Handshake bounded: 16 KiB accumulated + 10 s timeout → WS close 1008. Reasons 
 - seed.ts: `randomHex(12)` securePath, `randomUUID()` for empty UUIDs, 24-char passwords.
 - validate.ts: full-schema validation → `{ok:false, fields}` map for 422 responses. ECH server-name resolution is `resolveEchServerName(settings, sni)`: disabled ⇒ null, manual `echServerName` wins, else `echAuto` derives the domain-shaped SNI (warning string when unresolvable).
 - `allowedIps` is a `{kind:"custom"}` descriptor-validated list (trim/dedupe/drop-empty, 64-entry cap; exact IP or v4/v6 CIDR only — hostnames and `ip:port` rejected). Enforcement is `isIpAllowlisted` + a `requireAuth` check after session verification (401 before 403); `s.allowedIps ?? []` keeps old blobs working.
+- `vlessFlow` is an `{kind:"enum", allowed:["", "xtls-rprx-vision"]}` descriptor (`VLESS_FLOWS` in `src/settings/fields.ts`, default `""`) and `ssDirect` a `{kind:"bool"}` descriptor (default `false`); both bound in the panel registry with en/fa dicts (`protocols.flow.*`, `protocols.ssDirect.*`). Unknown flow strings and non-boolean `ssDirect` values fail validation with English field errors.
 - migrate.ts: pure stepwise migrations — see §5.
 
 ## 11. Observability
