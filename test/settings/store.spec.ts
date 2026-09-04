@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SETTINGS_VERSION } from "../../src/types/settings";
+import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
 import {
   ensureInitialized,
   invalidateSettingsCache,
   loadSettings,
   saveSettings,
 } from "../../src/settings/store";
+import {
+  handleImportSettings,
+  handleResetSettings,
+  handleSaveSettings,
+} from "../../src/handlers/api/settings";
+import { handleKillSwitch } from "../../src/handlers/api/status";
 
 class FakeKV {
   map = new Map<string, string>();
@@ -106,5 +112,126 @@ describe("settings store", () => {
     expect(kv.putCalls.get("qproxy:meta")).toBeUndefined();
     const meta = JSON.parse(kv.map.get("qproxy:meta")!);
     expect(meta.installedVersion).toBe("9.9.9");
+  });
+
+  it("saveSettings starts rev at 1 for legacy blobs and increments on every save", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const s = await loadSettings(kv.asEnv() as never);
+    expect(JSON.parse(kv.map.get("qproxy:settings")!).rev).toBe(0);
+    expect(await saveSettings(kv.asEnv() as never, s)).toBe(1);
+    expect(await saveSettings(kv.asEnv() as never, s)).toBe(2);
+    const blob = JSON.parse(kv.map.get("qproxy:settings")!);
+    expect(blob.rev).toBe(2);
+    expect(blob.data.profileTitle).toBe(s.profileTitle);
+  });
+
+  it("saveSettings treats a missing or invalid rev as 0", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const s = await loadSettings(kv.asEnv() as never);
+    const blob = JSON.parse(kv.map.get("qproxy:settings")!);
+    blob.rev = "bogus";
+    kv.map.set("qproxy:settings", JSON.stringify(blob));
+    expect(await saveSettings(kv.asEnv() as never, s)).toBe(1);
+    expect(JSON.parse(kv.map.get("qproxy:settings")!).rev).toBe(1);
+  });
+
+  it("handleSaveSettings merges fresh KV state instead of the stale isolate cache", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const env = kv.asEnv() as never;
+    const stale = await loadSettings(env);
+    const concurrent = JSON.parse(kv.map.get("qproxy:settings")!);
+    concurrent.data.profileTitle = "concurrent-title";
+    kv.map.set("qproxy:settings", JSON.stringify(concurrent));
+    const req = new Request("https://panel.example/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urlTestIntervalSec: 600 }),
+    });
+    const res = await handleSaveSettings(req, env, stale);
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { data: { saved: boolean; rev: number } };
+    expect(payload.data.saved).toBe(true);
+    expect(payload.data.rev).toBe(1);
+    const stored = JSON.parse(kv.map.get("qproxy:settings")!);
+    expect(stored.rev).toBe(1);
+    expect(stored.data.profileTitle).toBe("concurrent-title");
+    expect(stored.data.urlTestIntervalSec).toBe(600);
+  });
+
+  it("handleKillSwitch merges fresh KV state instead of the stale isolate cache", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const env = kv.asEnv() as never;
+    const stale = await loadSettings(env);
+    const concurrent = JSON.parse(kv.map.get("qproxy:settings")!);
+    concurrent.data.profileTitle = "concurrent-title";
+    kv.map.set("qproxy:settings", JSON.stringify(concurrent));
+    const req = new Request("https://panel.example/api/killswitch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Q-Panel": "1" },
+      body: JSON.stringify({ enabled: true }),
+    });
+    const res = await handleKillSwitch(req, env, stale);
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { data: { killSwitch: boolean; rev: number } };
+    expect(payload.data.killSwitch).toBe(true);
+    expect(typeof payload.data.rev).toBe("number");
+    const stored = JSON.parse(kv.map.get("qproxy:settings")!);
+    expect(stored.data.killSwitch).toBe(true);
+    expect(stored.data.profileTitle).toBe("concurrent-title");
+  });
+
+  it("handleResetSettings preserves fresh identity fields instead of the stale isolate cache", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const env = kv.asEnv() as never;
+    const stale = await loadSettings(env);
+    const concurrent = JSON.parse(kv.map.get("qproxy:settings")!);
+    concurrent.data.language = "en";
+    concurrent.data.trojanPassword = "concurrent-trojan-pass-1";
+    kv.map.set("qproxy:settings", JSON.stringify(concurrent));
+    const req = new Request("https://panel.example/api/settings/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const res = await handleResetSettings(req, env, stale);
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { data: { saved: boolean; rev: number } };
+    expect(payload.data.saved).toBe(true);
+    expect(typeof payload.data.rev).toBe("number");
+    const stored = JSON.parse(kv.map.get("qproxy:settings")!);
+    expect(stored.data.language).toBe("en");
+    expect(stored.data.trojanPassword).toBe("concurrent-trojan-pass-1");
+    expect(stored.data.profileTitle).toBe(DEFAULT_SETTINGS.profileTitle);
+  });
+
+  it("handleImportSettings preserves fresh identity fields instead of the stale isolate cache", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    const env = kv.asEnv() as never;
+    const stale = await loadSettings(env);
+    const concurrent = JSON.parse(kv.map.get("qproxy:settings")!);
+    concurrent.data.trojanPassword = "concurrent-trojan-pass-2";
+    kv.map.set("qproxy:settings", JSON.stringify(concurrent));
+    const req = new Request("https://panel.example/api/settings/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: { profileTitle: "imported-title" } }),
+    });
+    const res = await handleImportSettings(req, env, stale);
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      data: { saved: boolean; rev: number; imported: { profileTitle: string } };
+    };
+    expect(payload.data.saved).toBe(true);
+    expect(payload.data.imported.profileTitle).toBe("imported-title");
+    expect(typeof payload.data.rev).toBe("number");
+    const stored = JSON.parse(kv.map.get("qproxy:settings")!);
+    expect(stored.data.profileTitle).toBe("imported-title");
+    expect(stored.data.trojanPassword).toBe("concurrent-trojan-pass-2");
   });
 });

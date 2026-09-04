@@ -22,12 +22,14 @@ export function appVersion(): string {
 interface CacheEntry {
   value: Settings;
   updatedAt: number;
+  rev: number;
   expiresAt: number;
 }
 
 interface StoredBlob {
   version: number;
   updatedAt?: number;
+  rev?: number;
   data?: unknown;
 }
 
@@ -42,9 +44,9 @@ export function invalidateSettingsCache(): void {
   cache = null;
 }
 
-function remember(value: Settings, updatedAt: number): void {
+function remember(value: Settings, updatedAt: number, rev: number): void {
   loadedDebug = value.debugLogging;
-  cache = { value, updatedAt, expiresAt: Date.now() + CACHE_TTL_MS };
+  cache = { value, updatedAt, rev, expiresAt: Date.now() + CACHE_TTL_MS };
 }
 
 export function settingsEtag(): string | null {
@@ -52,10 +54,11 @@ export function settingsEtag(): string | null {
   return `W/"${cache.updatedAt}-${SETTINGS_VERSION}"`;
 }
 
-async function persist(env: Env, value: Settings, updatedAt: number): Promise<void> {
+async function persist(env: Env, value: Settings, updatedAt: number, rev: number): Promise<void> {
   const blob: StoredBlob = {
     version: SETTINGS_VERSION,
     updatedAt,
+    rev,
     data: value,
   };
   const json = JSON.stringify(blob);
@@ -70,47 +73,59 @@ function blobUpdatedAt(raw: unknown): number {
   return Date.now();
 }
 
-export async function loadSettings(env: Env): Promise<Settings> {
-  if (cache !== null && cache.expiresAt > Date.now()) return cache.value;
-  const raw = (await env.QPROXY_KV.get(SETTINGS_KEY, {
+function blobRev(raw: unknown): number {
+  if (raw !== null && typeof raw === "object") {
+    const v = (raw as Record<string, unknown>).rev;
+    if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
+  }
+  return 0;
+}
+
+async function readRawBlob(env: Env): Promise<unknown> {
+  return (await env.QPROXY_KV.get(SETTINGS_KEY, {
     type: "json",
     cacheTtl: KV_CACHE_TTL,
   })) as unknown;
+}
+
+export async function loadSettings(env: Env): Promise<Settings> {
+  if (cache !== null && cache.expiresAt > Date.now()) return cache.value;
+  const raw = await readRawBlob(env);
   let next = migrateSettings(raw);
   const v = validateSettings(next);
   if (!v.ok) next = structuredClone(DEFAULT_SETTINGS);
   else next = v.value;
   const updatedAt = blobUpdatedAt(raw);
+  const rev = blobRev(raw);
   if (!hasIdentity(next)) {
     next = fillIdentity(next);
-    await persist(env, next, updatedAt);
+    await persist(env, next, updatedAt, rev);
   }
-  remember(next, updatedAt);
+  remember(next, updatedAt, rev);
   return next;
 }
 
 export async function loadSettingsFresh(env: Env): Promise<Settings> {
-  const raw = (await env.QPROXY_KV.get(SETTINGS_KEY, {
-    type: "json",
-    cacheTtl: KV_CACHE_TTL,
-  })) as unknown;
+  const raw = await readRawBlob(env);
   let next = migrateSettings(raw);
   const v2 = validateSettings(next);
   if (!v2.ok) next = structuredClone(DEFAULT_SETTINGS);
   else next = v2.value;
   if (!hasIdentity(next)) {
     next = fillIdentity(next);
-    await persist(env, next, Date.now());
+    await persist(env, next, Date.now(), blobRev(raw));
   }
   return next;
 }
 
-export async function saveSettings(env: Env, next: Settings): Promise<void> {
+export async function saveSettings(env: Env, next: Settings): Promise<number> {
   const stamped: Settings = cloneSettings(next);
   stamped.version = SETTINGS_VERSION;
   const updatedAt = Date.now();
-  await persist(env, stamped, updatedAt);
-  remember(stamped, updatedAt);
+  const rev = blobRev(await readRawBlob(env)) + 1;
+  await persist(env, stamped, updatedAt, rev);
+  remember(stamped, updatedAt, rev);
+  return rev;
 }
 
 let initPromise: Promise<void> | null = null;
