@@ -109,6 +109,52 @@ function parseAddressOverride(value: unknown): AddressSetting | null {
   return entry;
 }
 
+const BULK_MAX_IDS = 50;
+
+type BulkOp = { kind: "delete" } | { kind: "patch"; enabled?: boolean; expiresAt?: number | null };
+
+function parseBulkIds(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new ValidationError({ ids: "must be an array of user ids" });
+  if (value.length === 0) throw new ValidationError({ ids: "must include at least one id" });
+  if (value.length > BULK_MAX_IDS)
+    throw new ValidationError({ ids: `must include at most ${BULK_MAX_IDS} ids` });
+  for (const item of value) {
+    if (typeof item !== "string") throw new ValidationError({ ids: "must be an array of user ids" });
+  }
+  return [...new Set(value as string[])];
+}
+
+function parseBulkOp(value: unknown): BulkOp {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ValidationError({ patch: "must be an object" });
+  }
+  const rec = value as Record<string, unknown>;
+  for (const key of Object.keys(rec)) {
+    if (key !== "enabled" && key !== "expiresAt" && key !== "delete") {
+      throw new ValidationError({ patch: `unknown field: ${key.slice(0, 30)}` });
+    }
+  }
+  const hasDelete = rec.delete !== undefined;
+  const hasEnabled = rec.enabled !== undefined;
+  const hasExpiry = rec.expiresAt !== undefined;
+  if (hasDelete) {
+    if (rec.delete !== true || hasEnabled || hasExpiry) {
+      throw new ValidationError({ patch: "delete must be used alone as { delete: true }" });
+    }
+    return { kind: "delete" };
+  }
+  if (!hasEnabled && !hasExpiry) {
+    throw new ValidationError({ patch: "must set enabled and/or expiresAt, or { delete: true }" });
+  }
+  const op: Extract<BulkOp, { kind: "patch" }> = { kind: "patch" };
+  if (hasEnabled) {
+    if (typeof rec.enabled !== "boolean") throw new ValidationError({ enabled: "must be a boolean" });
+    op.enabled = rec.enabled;
+  }
+  if (hasExpiry) op.expiresAt = parseExpiry(rec.expiresAt);
+  return op;
+}
+
 async function buildUser(body: Record<string, unknown>): Promise<{ user: UserAccount; plain: string }> {
   const plain = newUserToken();
   const tokenHash = await hashToken(plain);
@@ -162,6 +208,47 @@ export const handleUsersApi: RouteHandler = async (req, env, _s) => {
     fresh.push(user);
     await saveUsers(env, fresh);
     return jsonOk({ user: { ...sanitizeUser(user), token: plain } });
+  }
+  if (rest.length === 1 && rest[0] === "bulk" && method === "POST") {
+    const body = await readJsonObject(req);
+    const ids = parseBulkIds(body.ids);
+    const op = parseBulkOp(body.patch);
+    const users = await listUsers(env);
+    const byId = new Map<string, number>();
+    for (let i = 0; i < users.length; i++) byId.set(users[i]!.id, i);
+    let updated = 0;
+    let deleted = 0;
+    let unknown = 0;
+    if (op.kind === "delete") {
+      const remove = new Set<number>();
+      for (const id of ids) {
+        const index = byId.get(id);
+        if (index === undefined) unknown += 1;
+        else if (!remove.has(index)) {
+          remove.add(index);
+          deleted += 1;
+        }
+      }
+      await saveUsers(
+        env,
+        users.filter((_, i) => !remove.has(i)),
+      );
+      return jsonOk({ updated, deleted, unknown });
+    }
+    for (const id of ids) {
+      const index = byId.get(id);
+      if (index === undefined) {
+        unknown += 1;
+        continue;
+      }
+      const next = { ...users[index]! };
+      if (op.enabled !== undefined) next.enabled = op.enabled;
+      if (op.expiresAt !== undefined) next.expiresAt = op.expiresAt;
+      users[index] = next;
+      updated += 1;
+    }
+    await saveUsers(env, users);
+    return jsonOk({ updated, deleted, unknown });
   }
 
   const id = rest[0];
