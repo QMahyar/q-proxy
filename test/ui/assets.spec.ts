@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ASSETS } from "../../src/ui/assets";
 import { buildSubUrls } from "../../src/handlers/api/status";
+// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
+import { execFileSync } from "node:child_process";
 
 const TOTAL_BUDGET_BYTES = 288 * 1024;
 
@@ -446,5 +448,26 @@ describe("camo html", () => {
     expect(html.toLowerCase()).not.toContain("http://");
     expect(html.toLowerCase()).not.toContain("https://");
     expect(html).toMatch(/<title>[^<]+<\/title>/);
+  });
+});
+
+describe("panel build assembly", () => {
+  const assemble = () =>
+    execFileSync(process.execPath, ["scripts/build-single-file.mjs", "--assemble-only"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+
+  it("leaves no inject markers in the shipped panel", () => {
+    expect(ASSETS.panel).not.toContain("<!--panel:");
+  });
+
+  it("assembles deterministically from src/ui/panel sources", () => {
+    expect(assemble()).toBe(assemble());
+  });
+
+  it("keeps the committed panel.html in sync with its sources", () => {
+    expect(assemble()).toBe(ASSETS.panel);
   });
 });
