@@ -1,6 +1,6 @@
 import type { Env } from "../../types/env";
 import type { RouteHandler } from "../../types/context";
-import type { Settings } from "../../types/settings";
+import type { Language, Settings } from "../../types/settings";
 import { jsonOk } from "../../core/respond";
 import { assertCsrf } from "../../auth/guard";
 import { constantTimeEqual } from "../../utils/random";
@@ -10,6 +10,9 @@ import { appVersion, loadSettingsFresh, saveSettings } from "../../settings/stor
 import { validateSettings } from "../../settings/validate";
 import { resolveHostname } from "../../core/routes";
 import { buildSubUrls } from "./status";
+import { getUserHits, listUsers } from "../../users/store";
+import type { UserAccount } from "../../users/store";
+import { dayKeyUtc } from "../../utils/time";
 
 const TG_API_BASE = "https://api.telegram.org/bot";
 const SEND_TIMEOUT_MS = 5000;
@@ -32,21 +35,33 @@ function silentOk(): Response {
 const MSG = {
   en: {
     help: () =>
-      "Commands:\n/status — version, kill switch, usage\n/sub — subscription URLs\n/kill on|off — toggle kill switch\n/usage — request counts",
+      "Commands:\n/status — version, kill switch, usage\n/sub — subscription URLs\n/kill on|off — toggle kill switch\n/usage — request counts\n/expiry — users expiring soon or over quota",
     status: (version: string, killOn: boolean, today: number, total: number) =>
       `Version: ${version}\nKill switch: ${killOn ? "ON" : "OFF"}\nToday: ${today} requests\nTotal: ${total} requests`,
     sub: (urls: string) => urls,
     kill: (on: boolean) => `Kill switch ${on ? "enabled" : "disabled"}`,
     usage: (today: number, total: number) => `Today: ${today} requests\nTotal: ${total} requests`,
+    expiringSoon: (name: string, days: number) =>
+      days <= 0 ? `User "${name}" expires today` : `User "${name}" expires in ${days} day${days === 1 ? "" : "s"}`,
+    quotaExhausted: (name: string) => `User "${name}" has exhausted the daily quota`,
+    quotaWarning: (name: string, hits: number, limit: number) =>
+      `User "${name}" quota usage ${hits}/${limit} (over 80%)`,
+    expiryEmpty: () => "No users expiring within 7 days or over 80% of quota.",
   },
   fa: {
     help: () =>
-      "دستورها:\n/status — نسخه، کلید قطع، مصرف\n/sub — نشانی‌های اشتراک\n/kill on|off — کلید قطع\n/usage — شمارنده درخواست‌ها",
+      "دستورها:\n/status — نسخه، کلید قطع، مصرف\n/sub — نشانی‌های اشتراک\n/kill on|off — کلید قطع\n/usage — شمارنده درخواست‌ها\n/expiry — کاربران در آستانه انقضا یا پرمصرف",
     status: (version: string, killOn: boolean, today: number, total: number) =>
       `نسخه: ${version}\nکلید قطع: ${killOn ? "روشن" : "خاموش"}\nامروز: ${today} درخواست\nمجموع: ${total} درخواست`,
     sub: (urls: string) => urls,
     kill: (on: boolean) => `کلید قطع ${on ? "فعال شد" : "غیرفعال شد"}`,
     usage: (today: number, total: number) => `امروز: ${today} درخواست\nمجموع: ${total} درخواست`,
+    expiringSoon: (name: string, days: number) =>
+      days <= 0 ? `کاربر "${name}" امروز منقضی می‌شود` : `کاربر "${name}" تا ${days} روز دیگر منقضی می‌شود`,
+    quotaExhausted: (name: string) => `کاربر "${name}" سقف مصرف روزانه را تمام کرد`,
+    quotaWarning: (name: string, hits: number, limit: number) =>
+      `مصرف کاربر "${name}": ${hits} از ${limit} (بالای ۸۰٪)`,
+    expiryEmpty: () => "کاربری در ۷ روز آینده منقضی نمی‌شود و مصرف هیچ کاربری بالای ۸۰٪ نیست.",
   },
 };
 
@@ -54,6 +69,99 @@ type TgLang = typeof MSG.en;
 
 function langFor(s: Settings): TgLang {
   return MSG[s.language] ?? MSG.en;
+}
+
+const EXPIRY_WINDOW_MS = 7 * 86400 * 1000;
+const QUOTA_WARN_RATIO = 0.8;
+const DAY_MS = 86400 * 1000;
+const NOTIFY_PREFIX = "qproxy:notify-sent:";
+const NOTIFY_TTL_SEC = 48 * 3600;
+
+export interface ExpirySweepResult {
+  sent: number;
+  skipped: number;
+}
+
+export function userExpiringSoon(
+  user: Pick<UserAccount, "name">,
+  daysLeft: number,
+  language: Language = "en",
+): string {
+  return (MSG[language] ?? MSG.en).expiringSoon(user.name, daysLeft);
+}
+
+export function userQuotaExhausted(user: Pick<UserAccount, "name">, language: Language = "en"): string {
+  return (MSG[language] ?? MSG.en).quotaExhausted(user.name);
+}
+
+function isExpiringSoon(expiresAt: number | null, now: number): boolean {
+  return expiresAt !== null && expiresAt > now && expiresAt - now <= EXPIRY_WINDOW_MS;
+}
+
+function daysUntil(expiresAt: number, now: number): number {
+  return Math.max(0, Math.ceil((expiresAt - now) / DAY_MS));
+}
+
+async function quotaLine(
+  env: Env,
+  s: Settings,
+  user: UserAccount,
+  warnOnly: boolean,
+): Promise<string | null> {
+  if (user.dailyReqLimit === null || user.dailyReqLimit <= 0) return null;
+  const hits = await getUserHits(env, user.tokenHash);
+  if (hits >= user.dailyReqLimit) return userQuotaExhausted(user, s.language);
+  if (warnOnly && hits / user.dailyReqLimit >= QUOTA_WARN_RATIO)
+    return langFor(s).quotaWarning(user.name, hits, user.dailyReqLimit);
+  return null;
+}
+
+async function buildExpiryReport(env: Env, s: Settings): Promise<string> {
+  const now = Date.now();
+  const users = await listUsers(env);
+  const lines: string[] = [];
+  for (const u of users) {
+    const exp = u.expiresAt;
+    if (isExpiringSoon(exp, now) && exp !== null) lines.push(userExpiringSoon(u, daysUntil(exp, now), s.language));
+    const quota = await quotaLine(env, s, u, true);
+    if (quota !== null) lines.push(quota);
+  }
+  if (lines.length === 0) return langFor(s).expiryEmpty();
+  return lines.join("\n");
+}
+
+export async function runExpirySweep(env: Env, s: Settings, now: number = Date.now()): Promise<ExpirySweepResult> {
+  const result: ExpirySweepResult = { sent: 0, skipped: 0 };
+  if (!s.telegram.enabled || s.telegram.chatId.length === 0 || s.telegram.botToken.length === 0) return result;
+  const day = dayKeyUtc(new Date(now));
+  const users = await listUsers(env);
+  for (const u of users) {
+    const alerts: Array<{ kind: string; text: string }> = [];
+    const exp = u.expiresAt;
+    if (isExpiringSoon(exp, now) && exp !== null)
+      alerts.push({ kind: "expiry", text: userExpiringSoon(u, daysUntil(exp, now), s.language) });
+    const quota = await quotaLine(env, s, u, false);
+    if (quota !== null) alerts.push({ kind: "quota", text: quota });
+    for (const alert of alerts) {
+      const key = NOTIFY_PREFIX + day + ":" + u.id + ":" + alert.kind;
+      let seen = false;
+      try {
+        seen = (await env.QPROXY_KV.get(key, "json")) !== null;
+      } catch {
+        seen = false;
+      }
+      if (seen) {
+        result.skipped += 1;
+        continue;
+      }
+      await sendTelegramMessage(s.telegram.botToken, s.telegram.chatId, alert.text);
+      try {
+        await env.QPROXY_KV.put(key, JSON.stringify(1), { expirationTtl: NOTIFY_TTL_SEC });
+      } catch {}
+      result.sent += 1;
+    }
+  }
+  return result;
 }
 
 interface TelegramUpdate {
@@ -104,6 +212,9 @@ async function buildReply(env: Env, s: Settings, req: Request, text: string): Pr
     case "/usage": {
       const usage = await readUsage(env);
       return lang.usage(usage.requestsToday, usage.requestsTotal);
+    }
+    case "/expiry": {
+      return buildExpiryReport(env, s);
     }
     case "/sub": {
       const hostname = resolveHostname(s, new URL(req.url));
