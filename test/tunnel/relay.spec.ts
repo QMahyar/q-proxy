@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRelay } from "../../src/tunnel/relay";
+import {
+  RATELIMIT_BURST,
+  RATELIMIT_MAX_CONNECTIONS,
+  RATELIMIT_PREFIX,
+  RATELIMIT_TTL_SECONDS,
+  RATELIMIT_WINDOW_MS,
+  consumeBucket,
+  ratelimitKey,
+  tryConsume,
+} from "../../src/users/ratelimit";
 import type { RelayOptions, RelayClientSink } from "../../src/tunnel/relay";
 import type { EstablishedEgress, EgressVia, Socket } from "../../src/types/tunnel";
 import { concatBytes, utf8Decode, utf8Encode } from "../../src/utils/bytes";
@@ -487,5 +497,180 @@ describe("byte accounting", () => {
     expect(relay.bytesUp).toBe(8);
     expect(relay.bytesDown).toBe(7);
     expect(sink.closedWith).toBe(1000);
+  });
+});
+
+describe("user connection ratelimit", () => {
+  class RateLimitFakeKV {
+    map = new Map<string, string>();
+    ttls: number[] = [];
+    failGet = false;
+    failPut = false;
+    async get(key: string): Promise<unknown> {
+      if (this.failGet) throw new Error("kv unavailable");
+      const raw = this.map.get(key);
+      if (raw === undefined) return null;
+      return JSON.parse(raw) as unknown;
+    }
+    async put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void> {
+      if (this.failPut) throw new Error("kv unavailable");
+      this.map.set(key, value);
+      this.ttls.push(options?.expirationTtl ?? -1);
+    }
+    asEnv(): { QPROXY_KV: RateLimitFakeKV } {
+      return { QPROXY_KV: this };
+    }
+  }
+
+  it("allows a full burst then denies with a retry hint", async () => {
+    const kv = new RateLimitFakeKV();
+    const env = kv.asEnv();
+    for (let i = 0; i < RATELIMIT_BURST; i++) {
+      const decision = await tryConsume(env, "user-a");
+      expect(decision.allowed).toBe(true);
+      expect(decision.retryAfterMs).toBe(0);
+    }
+    const denied = await tryConsume(env, "user-a");
+    expect(denied.allowed).toBe(false);
+    expect(denied.retryAfterMs).toBeGreaterThan(0);
+    expect((await tryConsume(env, "user-b")).allowed).toBe(true);
+  });
+
+  it("refills tokens as time passes", async () => {
+    const kv = new RateLimitFakeKV();
+    const env = kv.asEnv();
+    for (let i = 0; i < RATELIMIT_BURST; i++) await tryConsume(env, "user-c");
+    expect((await tryConsume(env, "user-c")).allowed).toBe(false);
+    await vi.advanceTimersByTimeAsync(Math.ceil(RATELIMIT_WINDOW_MS / RATELIMIT_MAX_CONNECTIONS) + 100);
+    const refilled = await tryConsume(env, "user-c");
+    expect(refilled.allowed).toBe(true);
+    expect(refilled.retryAfterMs).toBe(0);
+  });
+
+  it("starts a fresh window after the window rolls over", async () => {
+    const kv = new RateLimitFakeKV();
+    const env = kv.asEnv();
+    for (let i = 0; i < RATELIMIT_BURST; i++) await tryConsume(env, "user-d");
+    expect((await tryConsume(env, "user-d")).allowed).toBe(false);
+    await vi.advanceTimersByTimeAsync(RATELIMIT_WINDOW_MS);
+    for (let i = 0; i < RATELIMIT_BURST; i++) {
+      expect((await tryConsume(env, "user-d")).allowed).toBe(true);
+    }
+  });
+
+  it("keys state per window with a short TTL", async () => {
+    const kv = new RateLimitFakeKV();
+    const env = kv.asEnv();
+    await tryConsume(env, "deadbeef");
+    expect(ratelimitKey("deadbeef", 0)).toBe(`${RATELIMIT_PREFIX}deadbeef:0`);
+    expect([...kv.map.keys()]).toEqual([ratelimitKey("deadbeef", Date.now())]);
+    expect(kv.ttls).toEqual([RATELIMIT_TTL_SECONDS]);
+  });
+
+  it("fails open when the KV read throws", async () => {
+    const kv = new RateLimitFakeKV();
+    kv.failGet = true;
+    const decision = await tryConsume(kv.asEnv(), "user-e");
+    expect(decision).toEqual({ allowed: true, retryAfterMs: 0 });
+  });
+
+  it("fails open when the KV write throws", async () => {
+    const kv = new RateLimitFakeKV();
+    kv.failPut = true;
+    const decision = await tryConsume(kv.asEnv(), "user-f");
+    expect(decision.allowed).toBe(true);
+  });
+
+  it("drives the pure bucket through allow, deny, and refill", () => {
+    const start = 1_000_000;
+    let slot = consumeBucket(null, start);
+    expect(slot.allowed).toBe(true);
+    expect(slot.state.tokens).toBe(RATELIMIT_BURST - 1);
+    for (let i = 1; i < RATELIMIT_BURST; i++) slot = consumeBucket(slot.state, start);
+    expect(slot.state.tokens).toBe(0);
+    const denied = consumeBucket(slot.state, start);
+    expect(denied.allowed).toBe(false);
+    expect(denied.retryAfterMs).toBeGreaterThan(0);
+    const refilled = consumeBucket(denied.state, start + 10_000);
+    expect(refilled.allowed).toBe(true);
+    expect(refilled.retryAfterMs).toBe(0);
+  });
+});
+
+describe("relay admission gate", () => {
+  it("invokes the gate once and relays normally when allowed", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const gate = vi.fn(async (): Promise<boolean> => true);
+    const relay = createRelay(sink, { gate });
+    const done = relay.run(establishedOf(sock.socket, 0));
+    sock.push(utf8Encode("hello"));
+    sock.closeRemote();
+    await done;
+    expect(gate).toHaveBeenCalledTimes(1);
+    expect(utf8Decode(sink.sent[0]!)).toBe("hello");
+    expect(sink.closedWith).toBe(1000);
+  });
+
+  it("closes with 1008 without sending the header when the gate denies", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const gate = vi.fn(async (): Promise<boolean> => false);
+    const relay = createRelay(sink, { responseHeader: new Uint8Array([7, 0]), gate });
+    const done = relay.run(establishedOf(sock.socket, 0));
+    await done;
+    expect(gate).toHaveBeenCalledTimes(1);
+    expect(sink.sent).toHaveLength(0);
+    expect(sink.closedWith).toBe(1008);
+  });
+
+  it("denies on an object decision from a tryConsume-style gate", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink, {
+      gate: async () => ({ allowed: false, retryAfterMs: 2000 }),
+    });
+    const done = relay.run(establishedOf(sock.socket, 0));
+    await done;
+    expect(sink.sent).toHaveLength(0);
+    expect(sink.closedWith).toBe(1008);
+  });
+
+  it("fails open when the gate throws", async () => {
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink, {
+      gate: async (): Promise<boolean> => {
+        throw new Error("kv down");
+      },
+    });
+    const done = relay.run(establishedOf(sock.socket, 0));
+    sock.push(utf8Encode("hello"));
+    sock.closeRemote();
+    await done;
+    expect(utf8Decode(sink.sent[0]!)).toBe("hello");
+    expect(sink.closedWith).toBe(1000);
+  });
+
+  it("denies a new connection once the user bucket is exhausted", async () => {
+    const store = new Map<string, string>();
+    const kv = {
+      async get(key: string): Promise<unknown> {
+        const raw = store.get(key);
+        return raw === undefined ? null : (JSON.parse(raw) as unknown);
+      },
+      async put(key: string, value: string): Promise<void> {
+        store.set(key, value);
+      },
+    };
+    const env = { QPROXY_KV: kv };
+    for (let i = 0; i < RATELIMIT_BURST; i++) await tryConsume(env, "token-hash");
+    const sock = manualSocket();
+    const sink = new RecordingSink();
+    const relay = createRelay(sink, {
+      gate: async (): Promise<boolean> => (await tryConsume(env, "token-hash")).allowed,
+    });
+    await relay.run(establishedOf(sock.socket, 0));
+    expect(sink.closedWith).toBe(1008);
   });
 });

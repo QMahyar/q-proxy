@@ -10,11 +10,16 @@ const UPLINK_HARD_CAP_BYTES = 1 * 1024 * 1024;
 const HALF_OPEN_GRACE_MS = 5000;
 const IDLE_CEILING_MS = 300_000;
 
+export type RelayGateDecision = boolean | { allowed: boolean; retryAfterMs?: number };
+
+export type RelayGate = () => Promise<RelayGateDecision>;
+
 export interface RelayOptions {
   responseHeader?: Uint8Array | null;
   uplinkDecode?: ((chunk: Uint8Array) => Promise<Uint8Array | null>) | null;
   downlinkEncode?: ((chunk: Uint8Array) => Promise<Uint8Array>) | null;
   retry?: (() => Promise<EstablishedEgress | null>) | null;
+  gate?: RelayGate | null;
 }
 
 export interface RelayClientSink {
@@ -289,6 +294,20 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
   };
 
   const run = async (initial: EstablishedEgress): Promise<void> => {
+    const gate = opts.gate;
+    if (gate !== undefined && gate !== null) {
+      let decision: RelayGateDecision;
+      try {
+        decision = await gate();
+      } catch {
+        decision = true;
+      }
+      const allowed = typeof decision === "boolean" ? decision : decision.allowed;
+      if (!allowed) {
+        finish(1008);
+        return;
+      }
+    }
     slot = {
       socket: initial.socket,
       reader: initial.socket.readable.getReader(),
