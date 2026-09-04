@@ -212,17 +212,68 @@ export function isCloudflareIp(ip: string): boolean {
   return false;
 }
 
+const METADATA_IPV4 = new Set(["169.254.169.254", "169.254.169.253", "100.100.100.200"]);
+const METADATA_IPV6 = ["fd00:ec2::254", "fd00:ec2::253"];
+const METADATA_HOSTNAMES = new Set([
+  "instance-data",
+  "metadata",
+  "rancher-metadata",
+  "instance-data.compute.internal",
+  "metadata.google.internal",
+  "metadata.goog",
+]);
+
+let metadataV6Values: bigint[] | null = null;
+
+function getMetadataV6Values(): bigint[] {
+  if (metadataV6Values) return metadataV6Values;
+  metadataV6Values = METADATA_IPV6.map((ip) => ipv6ToBigInt(ip)!);
+  return metadataV6Values;
+}
+
+function stripTrailingDots(host: string): string {
+  let end = host.length;
+  while (end > 0 && host.charCodeAt(end - 1) === 46) end--;
+  return host.slice(0, end);
+}
+
+function isMetadataIp(host: string): boolean {
+  if (isIPv4(host)) return METADATA_IPV4.has(host);
+  if (!host.includes(":")) return false;
+  const bare = host.replace(/%.*$/, "");
+  if (!isIPv6(bare)) return false;
+  const value = ipv6ToBigInt(bare);
+  if (value === null) return false;
+  return getMetadataV6Values().some((m) => m === value);
+}
+
+function isMetadataHostname(host: string): boolean {
+  const name = stripTrailingDots(host);
+  if (name.length === 0) return false;
+  if (METADATA_HOSTNAMES.has(name)) return true;
+  return name.endsWith(".internal");
+}
+
 const PRIVATE_V4 = ["0.0.0.0/8", "10.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16"];
 const PRIVATE_V6 = ["::1/128", "::/128", "fc00::/7", "fe80::/10", "::ffff:0:0/96", "64:ff9b::/96"];
 
 export function isLocalOrPrivateTarget(host: string): boolean {
   const h = host.trim().toLowerCase().replace(/^\[|\]$/g, "");
   if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local")) return true;
+  if (isMetadataIp(h) || isMetadataHostname(h)) return true;
   if (isIPv4(h)) return PRIVATE_V4.some((r) => cidrContains(h, r));
   if (h.includes(":") && isIPv6(h)) {
     const bare = h.replace(/%.*$/, "");
     return PRIVATE_V6.some((r) => cidrContains(bare, r));
   }
+  return false;
+}
+
+export function isBlockedEgressHost(host: string): boolean {
+  const bare = host.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (isLocalOrPrivateTarget(bare)) return true;
+  if (isIPv4(bare) && isCloudflareIp(bare)) return true;
+  if (bare.includes(":") && isCloudflareIp(bare)) return true;
   return false;
 }
 
