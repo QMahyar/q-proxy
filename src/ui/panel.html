@@ -38,6 +38,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-si
 :focus-visible{outline:2px solid rgba(var(--accent-rgb),.7);outline-offset:3px;border-radius:inherit;transition:outline-color .2s var(--ease)}
 [hidden]{display:none!important}
 .visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip-link:focus{position:fixed;top:8px;inset-inline-start:8px;z-index:200;width:auto;height:auto;margin:0;padding:8px 12px;overflow:visible;clip:auto;white-space:normal;background:var(--bg-raised);color:var(--text);border:1px solid var(--border-strong);border-radius:var(--r-md);box-shadow:var(--shadow-pop);text-decoration:none}
 .mono{font-family:var(--font-mono)}
 .texture-wrap{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 .dotgrid{position:absolute;inset:0;background-image:radial-gradient(rgba(148,163,184,.11) 1px,transparent 1px);background-size:26px 26px;-webkit-mask-image:radial-gradient(ellipse 80% 70% at 55% 25%,black 22%,transparent 76%);mask-image:radial-gradient(ellipse 80% 70% at 55% 25%,black 22%,transparent 76%)}
@@ -203,6 +204,9 @@ main{max-width:1080px;margin-inline:auto;padding:16px 16px 96px}
 .pool-cell{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .subtabs{display:flex;gap:6px;overflow-x:auto;padding-block:12px;margin-block:-4px;scrollbar-width:none}
 .subtabs::-webkit-scrollbar{display:none}
+.tabs{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%)}
+.subtabs{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%)}
+[dir=rtl] .tabs,[dir=rtl] .subtabs{-webkit-mask-image:linear-gradient(to left,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(to left,#000 calc(100% - 28px),transparent 100%)}
 .subtab{flex:none;display:inline-flex;align-items:center;height:32px;padding-inline:14px;border-radius:.65rem;border:1px solid transparent;background:rgba(255,255,255,.04);color:var(--text-dim);text-decoration:none;font-size:var(--fs-md);font-weight:500;cursor:pointer;transition:color .2s,background-color .2s,box-shadow .2s}
 .subtab:hover{color:var(--text-mid)}
 .subtab[aria-selected=true]{color:var(--cyan-pale);background:var(--accent-bg);box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.18)}
@@ -313,6 +317,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 
 </head>
 <body>
+<a class="visually-hidden skip-link" href="#main">Skip to content</a>
 <div class="texture-wrap" aria-hidden="true"><div class="dotgrid"></div><div class="noise"></div><div class="blob blob-a"></div><div class="blob blob-b"></div></div>
 <svg hidden xmlns="http://www.w3.org/2000/svg">
 <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -335,12 +340,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 </svg>
 <header class="topbar">
 <div class="brand"><span class="logo-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m15.5 15.5 5 5"/></svg></span> Q Proxy</div>
-<nav class="tabs" role="tablist" aria-label="" id="nav">
+<nav class="tabs" role="tablist" aria-label="Navigation" id="nav">
 <a class="tab" role="tab" id="tab-home" href="#/home" data-view="home"></a>
 <a class="tab" role="tab" id="tab-settings" href="#/settings/general" data-view="settings"></a>
 </nav>
 <div class="topbar__end">
-<div class="swatches" role="group" aria-label="">
+<div class="swatches" role="group" aria-label="Accent color">
 <button type="button" class="swatch swatch--cyan" data-action="accent" data-accent="cyan" aria-pressed="true"></button>
 <button type="button" class="swatch swatch--violet" data-action="accent" data-accent="violet" aria-pressed="false"></button>
 <button type="button" class="swatch swatch--green" data-action="accent" data-accent="green" aria-pressed="false"></button>
@@ -409,7 +414,7 @@ try{const mq=window.matchMedia('(prefers-color-scheme: light)');if(mq&&mq.addEve
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BASE=location.pathname.replace(/panel\/?$/,'');
-const TOAST_MS=3500,TOAST_ERR_MS=6000,PROBE_TIMEOUT=5000,PROBE_TRIES=3,MAX_TARGETS=100;
+const TOAST_MS=3500,TOAST_ERR_MS=10000,PROBE_TIMEOUT=5000,PROBE_TRIES=3,MAX_TARGETS=100;
 function setLangCookie(l){document.cookie='qp_lang='+l+'; Path=/; Max-Age=31536000; SameSite=Lax'}
 function toast(msg,kind){const box=$('toasts');const el=document.createElement('div');el.className='toast'+(kind==='err'?' toast--err':'');if(kind==='err')el.setAttribute('role','alert');
 el.innerHTML='<svg class="ticon" aria-hidden="true"><use href="#'+(kind==='err'?'i-x':'i-check')+'"/></svg><span class="toast__msg"></span><button type="button" class="toast__close" aria-label="'+esc(t('common.close'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button><i class="toast-bar"></i>';
@@ -432,7 +437,7 @@ const prom=(async()=>{
 let r;const h=o.body!==undefined?{'Content-Type':'application/json','X-Q-Panel':'1'}:(o.mutate?{'X-Q-Panel':'1'}:{});
 if((!o.method||o.method==='GET')){const et=sessionStorage.getItem('qpe:'+p);if(et)h['If-None-Match']=et}
 try{r=await fetch(BASE+p,{credentials:'same-origin',method:o.method||'GET',headers:Object.assign(h,o.headers||{}),body:o.body!==undefined?JSON.stringify(o.body):undefined,signal:o.signal})}catch(e){if(e&&e.name==='AbortError')throw e;throw{status:0,code:'',message:''}}
-if(r.status===401&&!o.keep401){location.replace(BASE+'login');throw{status:401,code:'',message:''}}
+if(r.status===401&&!o.keep401){if(S.dirty&&S.dirty.size>0&&!confirm(t('common.unsaved')))throw{status:401,code:'',message:''};location.replace(BASE+'login');throw{status:401,code:'',message:''}}
 if(r.status===304){try{const c=JSON.parse(sessionStorage.getItem('qpc:'+p)||'null');if(c){c.t=Date.now();sessionStorage.setItem('qpc:'+p,JSON.stringify(c));return c.d}}catch(e){}
 return api(p,Object.assign({},o,{fresh:true}))}
 let j=null;try{j=await r.json()}catch(e){}
@@ -1775,6 +1780,7 @@ if(e&&e.status===401)return;
 S.set={};
 toastErr(e);
 return}
+try{if(!/(?:^|;\s*)qp_lang=(en|fa)/.test(document.cookie)&&S.set&&(S.set.language==='en'||S.set.language==='fa')){LANG=S.set.language;setLangCookie(LANG);document.documentElement.lang=LANG;document.documentElement.dir=LANG==='fa'?'rtl':'ltr';buildShell()}}catch(e){}
 renderSettings();
 renderHome();
 navigate();
