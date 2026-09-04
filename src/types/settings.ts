@@ -47,6 +47,12 @@ export interface TelegramSettings {
   chatId: string;
 }
 
+export interface TotpSettings {
+  enabled: boolean;
+  secret: string;
+  recoveryCodes: string[];
+}
+
 export interface AddressSetting {
   address: string;
   port?: number;
@@ -109,6 +115,7 @@ export interface Settings {
   camouflage: CamouflageSettings;
   routingRules: RoutingRules;
   telegram: TelegramSettings;
+  totp: TotpSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -173,9 +180,10 @@ export const DEFAULT_SETTINGS: Settings = {
   camouflage: { mode: "static", url: "" },
   routingRules: { bypassLan: false, blockAds: false, blockMalware: false, blockQuic: false, customBypass: [], customBlock: [] },
   telegram: { enabled: false, botToken: "", chatId: "" },
+  totp: { enabled: false, secret: "", recoveryCodes: [] },
 };
 
-export const SENSITIVE_SETTING_PATHS = ["passwordHash", "passwordSalt", "sessionSecret"] as const;
+export const SENSITIVE_SETTING_PATHS = ["passwordHash", "passwordSalt", "sessionSecret", "totp"] as const;
 
 export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number]> & {
   telegram: Omit<TelegramSettings, "botToken">;

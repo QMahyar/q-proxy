@@ -21,6 +21,9 @@ const KNOWN_ALPN = ["h2", "http/1.1", "h3"];
 
 const TG_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{35}$/;
 const TG_CHAT_ID_RE = /^(?:@[A-Za-z0-9_]{4,64}|-?\d{1,20})?$/;
+const TOTP_SECRET_RE = /^[A-Z2-7]{16,128}$/;
+const TOTP_RECOVERY_RE = /^[0-9a-f]{64}$/;
+const TOTP_MAX_RECOVERY_CODES = 16;
 
 function fail(fields: Record<string, string>, key: string, msg: string): void {
   if (!(key in fields)) fields[key] = msg;
@@ -482,6 +485,48 @@ function applyCustomField(
         if (!TG_CHAT_ID_RE.test(trimmed)) fail(fields, "chatId", "must be a numeric chat id or @channelname");
         else out.telegram.chatId = trimmed;
       }
+      return;
+    }
+    case "totp.secret": {
+      const secret = strField(patch, "secret", fields, { maxLen: 128 });
+      if (secret !== undefined) {
+        const normalized = secret.trim().replace(/[\s-]+/g, "").toUpperCase();
+        if (normalized.length > 0 && !TOTP_SECRET_RE.test(normalized))
+          fail(fields, "secret", "must be base32 (A-Z and 2-7)");
+        else out.totp.secret = normalized;
+      }
+      if (out.totp.enabled && out.totp.secret.length === 0)
+        fail(fields, "secret", "a secret is required to enable two-factor authentication");
+      return;
+    }
+    case "totp.recoveryCodes": {
+      const codes = patch["recoveryCodes"];
+      if (codes === undefined) return;
+      if (!Array.isArray(codes)) {
+        fail(fields, "recoveryCodes", "must be an array of strings");
+        return;
+      }
+      const seen = new Set<string>();
+      const cleaned: string[] = [];
+      for (const raw of codes) {
+        if (typeof raw !== "string") {
+          fail(fields, "recoveryCodes", "entries must be strings");
+          return;
+        }
+        const item = raw.trim().toLowerCase();
+        if (!TOTP_RECOVERY_RE.test(item)) {
+          fail(fields, "recoveryCodes", "entries must be SHA-256 hex digests");
+          return;
+        }
+        if (seen.has(item)) continue;
+        seen.add(item);
+        cleaned.push(item);
+      }
+      if (cleaned.length > TOTP_MAX_RECOVERY_CODES) {
+        fail(fields, "recoveryCodes", `at most ${TOTP_MAX_RECOVERY_CODES} recovery codes`);
+        return;
+      }
+      out.totp.recoveryCodes = cleaned;
       return;
     }
   }
