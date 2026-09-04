@@ -111,6 +111,7 @@ export interface Settings {
   remoteSubUrls: string[];
   sourceUrls: string[];
   killSwitch: boolean;
+  allowedIps: string[];
   speedtestIntercept: boolean;
   camouflage: CamouflageSettings;
   routingRules: RoutingRules;
@@ -176,6 +177,7 @@ export const DEFAULT_SETTINGS: Settings = {
   remoteSubUrls: [],
   sourceUrls: [],
   killSwitch: false,
+  allowedIps: [],
   speedtestIntercept: true,
   camouflage: { mode: "static", url: "" },
   routingRules: { bypassLan: false, blockAds: false, blockMalware: false, blockQuic: false, customBypass: [], customBlock: [] },

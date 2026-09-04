@@ -9,6 +9,7 @@ import {
   clearLoginThrottle,
   getSession,
   hashLoginIp,
+  isIpAllowlisted,
   loginFailKey,
   loginFailWindow,
   recordLoginFailure,
@@ -285,5 +286,87 @@ describe("login rate limiter", () => {
     await expect(assertLoginAllowed(w.env, wip)).resolves.toBeUndefined();
     clearLoginFailures(ip);
     clearLoginFailures(wip);
+  });
+});
+
+describe("ip allowlist matcher", () => {
+  it("allows every ip when the list is empty", () => {
+    expect(isIpAllowlisted("1.2.3.4", [])).toBe(true);
+    expect(isIpAllowlisted("2001:db8::1", [])).toBe(true);
+    expect(isIpAllowlisted("unknown", [])).toBe(true);
+  });
+
+  it("matches exact ipv4 and ipv6 addresses", () => {
+    expect(isIpAllowlisted("1.2.3.4", ["1.2.3.4"])).toBe(true);
+    expect(isIpAllowlisted("1.2.3.5", ["1.2.3.4"])).toBe(false);
+    expect(isIpAllowlisted("2001:db8::1", ["2001:db8::1"])).toBe(true);
+    expect(isIpAllowlisted("2001:db8::2", ["2001:db8::1"])).toBe(false);
+  });
+
+  it("matches cidr ranges without crossing address families", () => {
+    expect(isIpAllowlisted("10.1.2.3", ["10.0.0.0/8"])).toBe(true);
+    expect(isIpAllowlisted("11.0.0.1", ["10.0.0.0/8"])).toBe(false);
+    expect(isIpAllowlisted("2001:db8::1", ["2001:db8::/32"])).toBe(true);
+    expect(isIpAllowlisted("2001:db9::1", ["2001:db8::/32"])).toBe(false);
+    expect(isIpAllowlisted("1.2.3.4", ["::/0"])).toBe(false);
+    expect(isIpAllowlisted("2001:db8::1", ["0.0.0.0/0"])).toBe(false);
+  });
+
+  it("compares case-insensitively and tolerates brackets", () => {
+    expect(isIpAllowlisted("2001:DB8::1", ["[2001:db8::1]"])).toBe(true);
+    expect(isIpAllowlisted(" 1.2.3.4 ", ["1.2.3.4"])).toBe(true);
+  });
+
+  it("fails closed on malformed entries instead of matching them", () => {
+    expect(isIpAllowlisted("1.2.3.4", ["example.com"])).toBe(false);
+    expect(isIpAllowlisted("1.2.3.4", ["1.2.3.4/"])).toBe(false);
+    expect(isIpAllowlisted("1.2.3.4", ["1.2.3.4/abc"])).toBe(false);
+    expect(isIpAllowlisted("9.9.9.9", ["10.0.0.0/8", "garbage"])).toBe(false);
+    expect(isIpAllowlisted("unknown", ["203.0.113.0/24"])).toBe(false);
+  });
+});
+
+describe("requireAuth ip allowlist", () => {
+  const inner = async (): Promise<Response> => jsonOk({ ok: true });
+
+  function authedReq(ip: string, token: string): Request {
+    return reqWith({ Cookie: `q_session=${token}`, "CF-Connecting-IP": ip });
+  }
+
+  it("passes listed client ips through to the handler", async () => {
+    const token = await issueSession(SECRET);
+    const handler = requireAuth(inner);
+    const settings = { sessionSecret: SECRET, allowedIps: ["203.0.113.0/24"] } as never;
+    const res = await handler(authedReq("203.0.113.9", token), stubEnv() as never, settings);
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects non-listed client ips with 403", async () => {
+    const token = await issueSession(SECRET);
+    const handler = requireAuth(inner);
+    const settings = { sessionSecret: SECRET, allowedIps: ["203.0.113.0/24"] } as never;
+    try {
+      await handler(authedReq("198.51.100.7", token), stubEnv() as never, settings);
+      throw new Error("should have thrown");
+    } catch (err) {
+      expect(err instanceof ForbiddenError).toBe(true);
+      expect((err as ForbiddenError).status).toBe(403);
+    }
+  });
+
+  it("allows every client ip when the list is empty", async () => {
+    const token = await issueSession(SECRET);
+    const handler = requireAuth(inner);
+    const settings = { sessionSecret: SECRET, allowedIps: [] } as never;
+    const res = await handler(authedReq("198.51.100.7", token), stubEnv() as never, settings);
+    expect(res.status).toBe(200);
+  });
+
+  it("still rejects missing sessions with 401 before the allowlist check", async () => {
+    const handler = requireAuth(inner);
+    const settings = { sessionSecret: SECRET, allowedIps: ["203.0.113.0/24"] } as never;
+    await expect(
+      handler(reqWith({ "CF-Connecting-IP": "203.0.113.9" }), stubEnv() as never, settings),
+    ).rejects.toThrow(UnauthorizedError);
   });
 });

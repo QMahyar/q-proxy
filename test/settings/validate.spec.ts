@@ -536,3 +536,37 @@ describe("totp settings block", () => {
     if (result.ok) expect(result.value).toEqual(makeTestSettings());
   });
 });
+
+describe("allowedIps", () => {
+  it("defaults to an empty list that allows all", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.allowedIps).toEqual([]);
+  });
+
+  it("accepts exact ips and cidr ranges in v4 and v6", () => {
+    const list = ["203.0.113.9", "10.0.0.0/8", "2001:db8::1", "2001:db8::/32"];
+    const result = validateSettings({ allowedIps: list });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.allowedIps).toEqual(list);
+  });
+
+  it("trims, dedupes and drops empty entries", () => {
+    const result = validateSettings({ allowedIps: ["  203.0.113.9 ", "203.0.113.9", "", "   "] });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.allowedIps).toEqual(["203.0.113.9"]);
+  });
+
+  it("rejects hostnames, malformed cidrs and non-string entries", () => {
+    expect(fieldsOf({ allowedIps: ["example.com"] }).allowedIps).toBeTruthy();
+    expect(fieldsOf({ allowedIps: ["1.2.3.4/33"] }).allowedIps).toBeTruthy();
+    expect(fieldsOf({ allowedIps: ["1.2.3.4/"] }).allowedIps).toBeTruthy();
+    expect(fieldsOf({ allowedIps: ["1.2.3.4/24/5"] }).allowedIps).toBeTruthy();
+    expect(fieldsOf({ allowedIps: ["1.2.3.4/abc"] }).allowedIps).toBeTruthy();
+    expect(fieldsOf({ allowedIps: ["2001:db8::/129"] }).allowedIps).toBeTruthy();
+    expect(fieldsOf({ allowedIps: ["not an ip"] }).allowedIps).toBeTruthy();
+    expect(fieldsOf({ allowedIps: ["1.2.3.4:443"] }).allowedIps).toBeTruthy();
+    expect(fieldsOf({ allowedIps: "1.2.3.4" }).allowedIps).toBeTruthy();
+    expect(fieldsOf({ allowedIps: [42] }).allowedIps).toBeTruthy();
+  });
+});

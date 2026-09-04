@@ -9,7 +9,7 @@ import {
   type SettingFieldSpec,
 } from "./fields";
 import { isPlainObject } from "./migrate";
-import { bracketIpv6, isIpLiteral, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
+import { bracketIpv6, isIpLiteral, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
 
 export type ValidationResult =
   | { ok: true; value: Settings }
@@ -341,6 +341,23 @@ function applyGenericField(
   }
 }
 
+const ALLOWLIST_MAX_ITEMS = 64;
+
+function isAllowlistEntry(value: string): boolean {
+  const entry = value.trim();
+  if (entry.length === 0) return false;
+  const slash = entry.indexOf("/");
+  if (slash === -1) return isIpLiteral(entry);
+  if (entry.indexOf("/", slash + 1) !== -1) return false;
+  const base = entry.slice(0, slash).replace(/^\[|\]$/g, "");
+  const prefix = entry.slice(slash + 1);
+  if (!/^\d+$/.test(prefix)) return false;
+  const n = Number(prefix);
+  if (isIPv4(base)) return n <= 32;
+  if (isIPv6(base)) return n <= 128;
+  return false;
+}
+
 function applyCustomField(
   path: string,
   patch: Record<string, unknown>,
@@ -348,6 +365,35 @@ function applyCustomField(
   fields: Record<string, string>,
 ): void {
   switch (path) {
+    case "allowedIps": {
+      const allowV = patch["allowedIps"];
+      if (allowV === undefined) return;
+      if (!Array.isArray(allowV)) {
+        fail(fields, "allowedIps", "must be an array of strings");
+        return;
+      }
+      const seen = new Set<string>();
+      const cleaned: string[] = [];
+      for (const raw of allowV) {
+        if (typeof raw !== "string") {
+          fail(fields, "allowedIps", "entries must be strings");
+          return;
+        }
+        const item = raw.trim();
+        if (item.length === 0) continue;
+        const key = item.toLowerCase();
+        if (seen.has(key)) continue;
+        if (!isAllowlistEntry(item)) {
+          fail(fields, "allowedIps", `"${item}" is not a valid IP or CIDR`);
+          return;
+        }
+        seen.add(key);
+        cleaned.push(item);
+        if (cleaned.length >= ALLOWLIST_MAX_ITEMS) break;
+      }
+      out.allowedIps = cleaned;
+      return;
+    }
     case "addresses":
       addressListField(patch, out, "addresses", fields, 64);
       return;
