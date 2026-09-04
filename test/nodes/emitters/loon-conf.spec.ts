@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emitLoonConf } from "../../../src/nodes/emitters/loon-conf";
 import type { EmitOptions } from "../../../src/nodes/emitters/registry";
-import type { ProxyNode, TrojanNode, VlessNode, VMessNode } from "../../../src/types/node";
+import type { ProxyNode, SSNode, TrojanNode, VlessNode, VMessNode } from "../../../src/types/node";
 
 const OPTS: EmitOptions = {
   remoteDns: "https://8.8.8.8/dns-query",
@@ -55,6 +55,27 @@ function vless(): VlessNode {
   return { ...vmess(), kind: "vless", name: "VLESS example.com 443", uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4" };
 }
 
+function ss(): SSNode {
+  return {
+    kind: "ss",
+    name: "SS example.com 443",
+    address: "example.com",
+    port: 443,
+    security: "tls",
+    sni: "example.com",
+    host: "example.com",
+    path: "/ss/abcd1234",
+    earlyData: 0,
+    fingerprint: "chrome",
+    alpn: [],
+    ech: null,
+    variant: "normal",
+    tags: [],
+    method: "aes-128-gcm",
+    password: "sspassword123",
+  };
+}
+
 describe("emitLoonConf golden", () => {
   it("emits exact INI for vless+vmess+trojan with loon parameter style", () => {
     const nodes: ProxyNode[] = [vless(), vmess(), trojan()];
@@ -63,9 +84,9 @@ describe("emitLoonConf golden", () => {
       "loglevel = notify",
       "",
       "[Proxy]",
-      'VLESS example.com 443 = vless, example.com, 443, "d342d11e-d424-4583-b36e-524ab1f0afa4", udp=true, over-tls=true, tls-name=example.com, transport=ws, path=/vm/abcd1234?ed=2048, host=example.com',
-      'VMESS example.com 443 = vmess, example.com, 443, auto, "1386f85e-657b-4d6e-9d56-78badb75e1fd", alterId=0, udp=true, over-tls=true, tls-name=example.com, transport=ws, path=/vm/abcd1234?ed=2048, host=example.com',
-      'TROJAN example.com 443 = trojan, example.com, 443, "secretpass123", udp=true, tls-name=example.com, over-tls=true, transport=ws, path=/tr/abcd1234?ed=2048, host=example.com',
+      'VLESS example.com 443 = vless, example.com, 443, "d342d11e-d424-4583-b36e-524ab1f0afa4", udp=true, over-tls=true, tls-name=example.com, tls-profile=chrome, transport=ws, path=/vm/abcd1234?ed=2048, host=example.com',
+      'VMESS example.com 443 = vmess, example.com, 443, auto, "1386f85e-657b-4d6e-9d56-78badb75e1fd", alterId=0, udp=true, over-tls=true, tls-name=example.com, tls-profile=chrome, transport=ws, path=/vm/abcd1234?ed=2048, host=example.com',
+      'TROJAN example.com 443 = trojan, example.com, 443, "secretpass123", udp=true, tls-name=example.com, over-tls=true, tls-profile=chrome, transport=ws, path=/tr/abcd1234?ed=2048, host=example.com',
       "",
       "[Proxy Group]",
       "PROXY = url-test, VLESS example.com 443, VMESS example.com 443, TROJAN example.com 443, url=https://www.gstatic.com/generate_204, interval=300, tolerance=50, timeout=5",
@@ -127,5 +148,66 @@ describe("emitLoonConf golden", () => {
     const inner = m![1]!;
     const unescaped = inner.replace(/\\\\/g, "\u0000").replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\u0000/g, "\\");
     expect(unescaped).toBe(pwd);
+  });
+
+  it("emits exact INI for tls+plain Shadowsocks with v2ray-plugin WS transport", () => {
+    const plain: SSNode = { ...ss(), port: 80, security: "none", sni: null, name: "SS example.com 80" };
+    const expected = [
+      "[General]",
+      "loglevel = notify",
+      "",
+      "[Proxy]",
+      'SS example.com 443 = Shadowsocks, example.com, 443, aes-128-gcm, "sspassword123", plugin=v2ray-plugin, plugin-opts="mode=websocket;tls;host=example.com;path=/ss/abcd1234", udp=true',
+      'SS example.com 80 = Shadowsocks, example.com, 80, aes-128-gcm, "sspassword123", plugin=v2ray-plugin, plugin-opts="mode=websocket;host=example.com;path=/ss/abcd1234", udp=true',
+      "",
+      "[Proxy Group]",
+      "PROXY = url-test, SS example.com 443, SS example.com 80, url=https://www.gstatic.com/generate_204, interval=300, tolerance=50, timeout=5",
+      "",
+      "[Rule]",
+      "FINAL,PROXY",
+      "",
+    ].join("\n");
+    expect(emitLoonConf([ss(), plain], OPTS)).toBe(expected);
+  });
+
+  it("maps known UTLS fingerprints to tls-profile and omits the rest", () => {
+    const line = (fingerprint: VMessNode["fingerprint"]): string =>
+      emitLoonConf([{ ...vmess(), name: "N", fingerprint }], OPTS)
+        .split("\n")
+        .find((l) => l.startsWith("N ="))!;
+    expect(line("chrome")).toContain(", tls-profile=chrome,");
+    expect(line("safari")).toContain(", tls-profile=safari,");
+    expect(line("ios")).toContain(", tls-profile=ios26,");
+    expect(line("firefox")).not.toContain("tls-profile");
+    expect(line("android")).not.toContain("tls-profile");
+    expect(line("random")).not.toContain("tls-profile");
+    expect(line(null)).not.toContain("tls-profile");
+  });
+
+  it("emits ech only on TLS lines where it is set", () => {
+    const withEch = emitLoonConf([{ ...vless(), name: "E", ech: "ech.example.com" }], OPTS)
+      .split("\n")
+      .find((l) => l.startsWith("E ="))!;
+    expect(withEch).toContain(", tls-profile=chrome, ech=ech.example.com, transport=ws,");
+    expect(emitLoonConf([vless()], OPTS)).not.toContain("ech=");
+    const plain = emitLoonConf([{ ...vmess(), name: "P", security: "none", sni: null, ech: "ech.example.com" }], OPTS)
+      .split("\n")
+      .find((l) => l.startsWith("P ="))!;
+    expect(plain).not.toContain("ech=");
+    expect(plain).not.toContain("tls-profile");
+  });
+
+  it("never emits tls-profile or ech on Shadowsocks lines", () => {
+    const out = emitLoonConf([{ ...ss(), ech: "ech.example.com" }], OPTS);
+    const line = out.split("\n").find((l) => l.includes("Shadowsocks"))!;
+    expect(line).toContain('plugin-opts="mode=websocket;tls;host=example.com;path=/ss/abcd1234"');
+    expect(line).not.toContain("tls-profile");
+    expect(line).not.toContain("ech=");
+  });
+
+  it("escapes quotes in Shadowsocks password", () => {
+    const node: SSNode = { ...ss(), password: 'p"ass\\word' };
+    const out = emitLoonConf([node], OPTS);
+    expect(out).toContain('"p\\"ass\\\\word"');
   });
 });
