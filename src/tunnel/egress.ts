@@ -72,7 +72,8 @@ export async function makeFailoverStrategy(
   if (settings.proxyIpMode === "proxyip") {
     const pool = await expandProxyIps(settings.proxyIps, { resolver: createResolver(settings.dohUpstream) });
     const shuffled = shuffleDeterministic(pool, hashSeed(target.host));
-    for (const entry of shuffled.slice(0, MAX_PROXYIP_CANDIDATES)) {
+    const filtered = shuffled.filter((entry) => !isBlockedDirectHost(entry.host));
+    for (const entry of filtered.slice(0, MAX_PROXYIP_CANDIDATES)) {
       candidates.push({
         via: "proxyip",
         label: `proxyip:${entry.label}`,
