@@ -233,21 +233,25 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  else toastErr(err)}
  finally{el.disabled=false}})()},
  'totp-start'(el){
- el.disabled=true;
  (async()=>{
+ if(TOTP.started&&!TOTP.confirmed){
+ if(!(await confirmDialog('totp.setup','totp.warn.restart',true)))return}
+ el.disabled=true;
  try{
  const raw=new Uint8Array(20);crypto.getRandomValues(raw);
  const secret=totpB32Encode(raw);
  const plain=[];const hashes=[];
  const ABC='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
  for(let i=0;i<10;i++){const b=new Uint8Array(8);crypto.getRandomValues(b);let s='';for(let j=0;j<8;j++)s+=ABC[b[j]%ABC.length];const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));hashes.push([...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,'0')).join(''));plain.push(s.slice(0,4)+'-'+s.slice(4))}
- TOTP={secret:secret,hashes:hashes,plain:plain};
+ TOTP={secret:secret,hashes:hashes,plain:plain,started:true,confirmed:false};
  renderTotpSetup()}
  catch(err){toastErr(err)}
  finally{el.disabled=false}})()},
  'totp-qr'(el){
  if(TOTP.secret)openQr(totpIssuerUrl(TOTP.secret))},
  'totp-confirm'(el){
+ const saved=$('totp-saved');
+ if(saved&&!saved.checked){el.disabled=true;return}
  (async()=>{
  const inp=$('totp-code');if(!inp)return;
  const fw=$('fw-totp-code');const perr=fw?fw.querySelector('.field__error'):null;
@@ -256,10 +260,20 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  try{
  if(!(await totpCheck(TOTP.secret,inp.value))){if(fw)fw.classList.add('field--error');if(perr)perr.textContent=t('totp.wrong_code');inp.focus();inp.select();return}
  await api('api/settings/save',{method:'PUT',body:{totp:{enabled:true,secret:TOTP.secret,recoveryCodes:TOTP.hashes}}});
+ TOTP.confirmed=true;
  toast(t('totp.enabled_ok'),'ok');
  renderTotpDone()}
  catch(err){toastErr(err)}
  finally{el.disabled=false}})()},
+ 'totp-codes-download'(){
+ try{
+ const blob=new Blob([totpCodesFile()],{type:'text/plain;charset=utf-8'});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ a.href=url;a.download='q-proxy-recovery-codes.txt';
+ document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000)}
+ catch(err){toastErr(err)}},
  'totp-disable'(el){
  (async()=>{
  if(!(await confirmDialog('totp.confirm_disable','totp.confirm_disable_body',true)))return;
@@ -307,6 +321,12 @@ applyFragmentPresetUi(chip.dataset.preset)}
 refreshShowIf();
 validateAllLineEditors()}
 function onChange(e){
+if(e.target.matches('[data-totp-saved]')){
+TOTP.confirmed=e.target.checked;
+const body=$('totp-body');
+const btn=body?body.querySelector('[data-action="totp-confirm"]'):null;
+if(btn)btn.disabled=!e.target.checked;
+return}
 if(e.target.matches('[data-remote-field="kind"]')){
 const card=e.target.closest('.remote-card');
 if(card){const cur=readRemoteCard(card);cur.kind=e.target.value;card.outerHTML=remoteNodeCardHtml(cur,Number(card.dataset.remoteIndex||0))}
