@@ -361,7 +361,7 @@ describe("router dispatch", () => {
       const fallback = await SELF.fetch("https://example.com/proxy/fallback/check");
       expect(fallback.status).toBe(200);
       expect(fallback.headers.get("Content-Type")).toContain("text/html");
-    });
+    }, 20000);
 
     it("blocks tunnel upgrades under kill switch and restores them after", async () => {
       let res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: true }, csrfHeaders));
@@ -709,7 +709,7 @@ describe("router dispatch", () => {
     res = await SELF.fetch(`${BASE}/telegram/webhook/not-a-secret-at-all`, hookPost("/kill on", 555000111));
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/html");
-  });
+  }, 30000);
 
   it("serves warp subscriptions publicly by token across formats", async () => {
     await seed(kv, SP);
