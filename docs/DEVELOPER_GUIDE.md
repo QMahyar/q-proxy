@@ -144,7 +144,7 @@ flowchart TD
     MERG -- no --> EMI
     REM --> EMI
 
-    EMI[registry: clash-yaml · singbox-json · surge-conf · loon-conf<br/>base64 renders in subscription/render.ts] --> H[subscriptionHeaders<br/>Profile-Title · Subscription-Userinfo · Content-Disposition]
+    EMI[registry: clash-yaml · singbox-json · surge-conf · loon-conf · quantumult-conf<br/>base64 renders in subscription/render.ts] --> H[subscriptionHeaders<br/>Profile-Title · Subscription-Userinfo · Content-Disposition]
     H --> RESP[Response<br/>edge Cache API 60s keyed format+mode+settings-version]
 ```
 
@@ -184,14 +184,15 @@ Bump `SETTINGS_VERSION` and add one migration entry per settings shape change.
 
 ## 6. Adding a New Emitter
 
-Example: adding a `quantumult` Worker-subscription format:
+Reference (as-built): the `quantumult` format shipped exactly through this pipeline — use it as the template for the next emitter:
 
-1. **Types:** extend `SubFormat` in `src/core/ua.ts`; add tokens to `classifyUA` if needed.
+1. **Types:** extend `SubFormat` in `src/core/ua.ts`; add tokens to `classifyUA` if needed (`quantumult` uses `quantumult`/`quanx`, sniffed after surge, before loon).
 2. **Emitter:** create `src/nodes/emitters/quantumult-conf.ts` exporting `(nodes, opts: EmitOptions): string`; use `opts.isFragment` to filter variant nodes; bracket IPv6.
-3. **Registry:** register in `src/nodes/emitters/registry.ts`.
+3. **Registry:** register in `src/nodes/emitters/registry.ts` (`EMITTERS` now covers five sync formats).
 4. **Negotiation:** add the format to `SUB_FORMATS` in `src/subscription/negotiate.ts` — the single source of the format list, consumed by both `handlers/subscribe.ts` and `handlers/users-sub.ts`. There is no separate `FORMATS` table anymore.
-5. **Tests:** golden snapshot in `test/nodes/emitters/quantumult-conf.spec.ts`, UA case in `test/core/ua.spec.ts`, workers sub test asserting `Content-Type` + `Content-Disposition: attachment`.
-6. **Verify:** `npm run typecheck && npm test` — both projects green; no new runtime dep.
+5. **Serving one-liners:** add the content type in `SUB_CONTENT_TYPES` (`src/subscription/render.ts`), the file extension in `EXTENSIONS` (`src/subscription/headers.ts`), the display label in `FORMAT_LABELS` (`src/handlers/subscribe.ts`), and a `?target=` entry in `buildSubUrls` (`src/handlers/api/status.ts`).
+6. **Tests:** golden snapshot in `test/nodes/emitters/quantumult-conf.spec.ts`, UA case in `test/core/ua.spec.ts`, registry-key assertion in `test/nodes/emitters/registry.spec.ts`, content-type/extension cases in `test/subscription/render.spec.ts` + `headers.spec.ts`, suburls count in `test/workers/auth-flow.spec.ts`.
+7. **Verify:** `npm run typecheck && npm test` — both projects green; no new runtime dep.
 
 Keep emitters pure — no KV, no `fetch`, no `cloudflare:*` imports, so they stay in the `unit` project. Wire-format changes alter emitter output on purpose: goldens break; get owner sign-off first.
 
@@ -281,7 +282,7 @@ Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},f
 - `GET api/bootstrap` → `{settings, status, subUrls}` aggregate with ETag/304
 - `GET api/status`; `POST api/killswitch {enabled}` → `{killSwitch, rev}`; `GET api/suburls`; `GET api/version/check`
 - `ANY api/warp/{…}` → accounts/presets/amnezia sub-dispatch
-- `ANY api/users/{…}` → user CRUD + token regeneration; `GET api/users/{id}/activity?days=` → `{activity: [{day, requests, bytesUp, bytesDown}]}` (default 7, clamp 1–31; 404 on unknown id)
+- `ANY api/users/{…}` → user CRUD + token regeneration; `GET api/users/{id}/activity?days=` → `{activity: [{day, requests, bytesUp, bytesDown}]}` (default 7, clamp 1–31; 404 on unknown id); `POST api/users/bulk` `{ids (1–50), patch: {enabled?, expiresAt?} | {delete: true}}` → `{updated, deleted, unknown}` (unknown ids skipped, tokens never returned)
 - `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated; also handles `callback_query` with `tg:*` data via `telegramMenuKeyboard()` — `/start`+`/menu` attach it, taps answer + `editMessageText` in place)
 
 Method guards live in the declarative `API_ROUTES` table in `src/core/router.ts` (`Record<ApiRouteName, {methods, auth: none|read|write, handler}>` + a 5-line dispatcher: method gate, then none⇒direct / read⇒authed / write⇒authed on GET else authedCsrf); `OPTIONS` on APIs → 405.
