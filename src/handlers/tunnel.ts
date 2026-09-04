@@ -14,7 +14,7 @@ import { createVlessInbound } from "../protocols/vless";
 import { createTrojanInbound } from "../protocols/trojan";
 import { createVmessInbound } from "../protocols/vmess";
 import { createSSInbound } from "../protocols/shadowsocks";
-import { createEgressOpener, makeFailoverStrategy } from "../tunnel/egress";
+import { openEgressWithSpeculativeDirect } from "../tunnel/egress";
 import { createRelay } from "../tunnel/relay";
 import { createDnsPacketRelay } from "../tunnel/resolver";
 import { matchesSpeedtestHost, speedtestResponseBytes } from "../tunnel/speedtest";
@@ -175,10 +175,8 @@ async function driveSession(
       return;
     }
     try {
-      const strategy = await makeFailoverStrategy(s, target);
-      const opener = createEgressOpener(strategy);
       const packet = firstPacket.length > 0 ? firstPacket : null;
-      const established = await opener.open(target, packet);
+      const { established, opener } = await openEgressWithSpeculativeDirect(s, target, packet);
       if (clientGone) {
         void established.socket.close().catch(() => {});
         return;

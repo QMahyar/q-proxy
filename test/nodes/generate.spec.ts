@@ -268,3 +268,52 @@ describe("generateNodes naming enrichment", () => {
     expect(generateNodes(ctx(s2)).find((n) => n.security === "tls")!.name).toContain("Clean-IP");
   });
 });
+
+describe("generateNodes ECH wiring", () => {
+  it("emits null ech when ECH is disabled", () => {
+    const nodes = generateNodes(ctx(settings()));
+    expect(nodes.length).toBeGreaterThan(0);
+    expect(nodes.every((n) => n.ech === null)).toBe(true);
+  });
+
+  it("emits the manual server name on TLS nodes when set", () => {
+    const s = settings();
+    s.echEnabled = true;
+    s.echServerName = "ech.example.com";
+    const nodes = generateNodes(ctx(s));
+    const tls = nodes.filter((n) => n.security === "tls");
+    expect(tls.length).toBeGreaterThan(0);
+    expect(tls.every((n) => n.ech === "ech.example.com")).toBe(true);
+  });
+
+  it("falls back to the SNI without echAuto (legacy behavior)", () => {
+    const s = settings();
+    s.echEnabled = true;
+    s.echAuto = false;
+    const nodes = generateNodes(ctx(s));
+    const tls = nodes.filter((n) => n.security === "tls");
+    expect(tls.length).toBeGreaterThan(0);
+    expect(tls.every((n) => n.ech === HOST)).toBe(true);
+  });
+
+  it("derives the ECH name from the SNI with echAuto", () => {
+    const s = settings();
+    s.echEnabled = true;
+    s.echAuto = true;
+    const nodes = generateNodes(ctx(s));
+    const tls = nodes.filter((n) => n.security === "tls");
+    expect(tls.length).toBeGreaterThan(0);
+    expect(tls.every((n) => n.ech === HOST)).toBe(true);
+  });
+
+  it("emits null ech on non-TLS nodes even when ECH is enabled", () => {
+    const s = settings();
+    s.echEnabled = true;
+    s.echAuto = true;
+    s.addresses = [{ address: "5.6.7.8", port: 2052 }];
+    const nodes = generateNodes(ctx(s));
+    const plain = nodes.filter((n) => n.security === "none");
+    expect(plain.length).toBeGreaterThan(0);
+    expect(plain.every((n) => n.ech === null)).toBe(true);
+  });
+});

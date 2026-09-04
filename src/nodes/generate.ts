@@ -3,6 +3,7 @@ import type { NodeTag, ProxyNode, SSNode, TrojanNode, VMessNode, VlessNode } fro
 import type { AddressSetting } from "../types/settings";
 import { CF_PLAIN_PORTS, CF_TLS_PORTS, type Settings } from "../types/settings";
 import { fragmentQuery } from "./fragments";
+import { resolveEchServerName } from "./ech";
 import { renderName } from "./naming";
 import { bracketIpv6, isIpLiteral, parseHostPort } from "../utils/net";
 
@@ -168,7 +169,7 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
         earlyData,
         fingerprint: security === "tls" ? s.fingerprint : null,
         alpn: security === "tls" ? [...s.alpn] : [],
-        ech: security === "tls" && s.echEnabled ? (s.echServerName.length > 0 ? s.echServerName : sni) : null,
+        ech: security === "tls" ? resolveEchServerName(s, sni).name : null,
         variant,
         tags,
       };
