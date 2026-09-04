@@ -244,8 +244,11 @@ export function deriveChacha20BodyKey(base16: Uint8Array): Uint8Array {
 }
 
 export function buildChunkNonce(iv16: Uint8Array, counter: number): Uint8Array {
+  if (!Number.isInteger(counter) || counter < 0 || counter > 0xffff) {
+    throw new Error("vmess chunk nonce counter overflow");
+  }
   const nonce = new Uint8Array(12);
-  writeU16BE(nonce, 0, counter & 0xffff);
+  writeU16BE(nonce, 0, counter);
   nonce.set(iv16.subarray(2, 12), 2);
   return nonce;
 }
