@@ -253,3 +253,169 @@ describe("createVlessInbound", () => {
     }
   });
 });
+
+describe("vless xtls-rprx-vision", () => {
+  const VISION_FLOW = "xtls-rprx-vision";
+
+  function visionAddonsProto(): Uint8Array {
+    const flow = utf8Encode(VISION_FLOW);
+    return concatBytes(new Uint8Array([0x0a, flow.length]), flow);
+  }
+
+  function visionFrame(payload: Uint8Array): Uint8Array {
+    return concatBytes(u16be(payload.length), payload);
+  }
+
+  function visionHandshake(opts: {
+    port?: number;
+    host?: string;
+    payload?: Uint8Array;
+    addons?: Uint8Array;
+  } = {}): Uint8Array {
+    return domainFrame({
+      addons: opts.addons ?? visionAddonsProto(),
+      port: opts.port,
+      host: opts.host,
+      payload: opts.payload,
+    });
+  }
+
+  it("parses a handshake with protobuf vision addons and enables a body codec", async () => {
+    const inbound = createVlessInbound(UUID);
+    const frame = visionHandshake();
+    const half = Math.floor(frame.length / 2);
+    let outcome = await inbound.push(frame.subarray(0, half));
+    expect(outcome.state).toBe("need-more");
+    outcome = await inbound.push(frame.subarray(half));
+    expect(outcome.state).toBe("ready");
+    if (outcome.state !== "ready") return;
+    expect(outcome.parsed.command).toBe("tcp");
+    expect(outcome.parsed.target).toEqual({ host: "example.com", port: 443 });
+    expect(inbound.bodyCodec()).not.toBeNull();
+    expect(Array.from(inbound.responseHeader()!)).toEqual([0, 0]);
+  });
+
+  it("detects the flow in raw JSON addons too", async () => {
+    const inbound = createVlessInbound(UUID);
+    const outcome = await inbound.push(
+      visionHandshake({ addons: utf8Encode('{"flow":"xtls-rprx-vision"}') }),
+    );
+    expect(outcome.state).toBe("ready");
+    expect(inbound.bodyCodec()).not.toBeNull();
+  });
+
+  it("leaves plain tcp handshakes without a body codec", async () => {
+    const inbound = createVlessInbound(UUID);
+    const outcome = await inbound.push(ipv4Frame(1, 443));
+    expect(outcome.state).toBe("ready");
+    expect(inbound.bodyCodec()).toBeNull();
+  });
+
+  it("roundtrips bodies through the vision codec", async () => {
+    const inbound = createVlessInbound(UUID);
+    const outcome = await inbound.push(visionHandshake());
+    if (outcome.state !== "ready") throw new Error("expected ready");
+    const codec = inbound.bodyCodec()!;
+    const hello = utf8Encode("hello vision");
+    expect(await codec.decodeUp(visionFrame(hello))).toEqual(hello);
+    const big = new Uint8Array(4096);
+    for (let i = 0; i < big.length; i++) big[i] = i & 0xff;
+    expect(await codec.decodeUp(visionFrame(big))).toEqual(big);
+    const both = concatBytes(visionFrame(hello), visionFrame(big));
+    expect(await codec.decodeUp(both)).toEqual(concatBytes(hello, big));
+    const downlink = codec.beginDownlink();
+    expect(downlink.header()).toBeNull();
+    const framed = await downlink.encode(hello);
+    expect(framed.subarray(0, 2)).toEqual(u16be(hello.length));
+    expect(await codec.decodeUp(framed)).toEqual(hello);
+    expect(await downlink.encode(new Uint8Array(0))).toEqual(new Uint8Array(0));
+    expect(await downlink.encode(new Uint8Array(70000))).toEqual(new Uint8Array(0));
+  });
+
+  it("buffers split vision frames across decodeUp calls", async () => {
+    const inbound = createVlessInbound(UUID);
+    const outcome = await inbound.push(visionHandshake());
+    if (outcome.state !== "ready") throw new Error("expected ready");
+    const codec = inbound.bodyCodec()!;
+    const payload = utf8Encode("split-payload");
+    const framed = visionFrame(payload);
+    expect(await codec.decodeUp(framed.subarray(0, 3))).toEqual(new Uint8Array(0));
+    expect(await codec.decodeUp(framed.subarray(3))).toEqual(payload);
+    expect(await codec.decodeUp(new Uint8Array(0))).toEqual(new Uint8Array(0));
+  });
+
+  it("decodes the coalesced initial payload at handshake time", async () => {
+    const hello = utf8Encode("hello");
+    const rest = concatBytes(visionFrame(hello), u16be(5), utf8Encode("ab"));
+    const inbound = createVlessInbound(UUID);
+    const outcome = await inbound.push(visionHandshake({ payload: rest }));
+    expect(outcome.state).toBe("ready");
+    if (outcome.state !== "ready") return;
+    expect(outcome.rest).toEqual(hello);
+    expect(inbound.takeInitialPayload()).toEqual(hello);
+    expect(inbound.takeInitialPayload()).toBeNull();
+    const codec = inbound.bodyCodec()!;
+    expect(await codec.decodeUp(utf8Encode("cde"))).toEqual(utf8Encode("abcde"));
+  });
+
+  it("keeps the udp codec when vision is requested with a udp command", async () => {
+    const inbound = createVlessInbound(UUID);
+    const outcome = await inbound.push(
+      domainFrame({ cmd: 2, port: 53, addons: visionAddonsProto(), payload: new Uint8Array(0) }),
+    );
+    expect(outcome.state).toBe("ready");
+    if (outcome.state !== "ready") return;
+    expect(outcome.parsed.command).toBe("udp");
+    const codec = inbound.bodyCodec()!;
+    expect(await codec.decodeUp(concatBytes(u16be(5), utf8Encode("qdata")))).toEqual(
+      utf8Encode("qdata"),
+    );
+  });
+
+  it("rejects malformed vision bodies as null and never throws", async () => {
+    const inbound = createVlessInbound(UUID);
+    const outcome = await inbound.push(visionHandshake());
+    if (outcome.state !== "ready") throw new Error("expected ready");
+    const codec = inbound.bodyCodec()!;
+    const hungry = concatBytes(u16be(0xffff), new Uint8Array(65534));
+    expect(await codec.decodeUp(hungry)).toEqual(new Uint8Array(0));
+    expect(await codec.decodeUp(new Uint8Array([0x01]))).toBeNull();
+    const payload = utf8Encode("recovered");
+    expect(await codec.decodeUp(visionFrame(payload))).toEqual(payload);
+  });
+
+  it("never throws on adversarial vision input (fuzz)", async () => {
+    for (let trial = 0; trial < 40; trial++) {
+      const inbound = createVlessInbound(UUID);
+      const outcome = await inbound.push(visionHandshake());
+      if (outcome.state !== "ready") throw new Error("expected ready");
+      const codec = inbound.bodyCodec()!;
+      const len = 1 + ((trial * 7919) % 200);
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = (i * 37 + trial * 11) & 0xff;
+      const cut = trial % (len + 1);
+      let first: Uint8Array | null = null;
+      let second: Uint8Array | null = null;
+      try {
+        first = await codec.decodeUp(bytes.subarray(0, cut));
+        second = await codec.decodeUp(bytes.subarray(cut));
+      } catch {
+        throw new Error(`vision decodeUp threw on trial ${trial}`);
+      }
+      expect(first === null || first instanceof Uint8Array).toBe(true);
+      expect(second === null || second instanceof Uint8Array).toBe(true);
+    }
+  });
+
+  it("tolerates a malformed tail coalesced with the handshake", async () => {
+    const inbound = createVlessInbound(UUID);
+    const outcome = await inbound.push(
+      visionHandshake({ payload: new Uint8Array([0xff, 0xff, 0x68, 0x69]) }),
+    );
+    expect(outcome.state).toBe("ready");
+    if (outcome.state !== "ready") return;
+    expect(outcome.rest).toEqual(new Uint8Array(0));
+    const codec = inbound.bodyCodec()!;
+    expect(await codec.decodeUp(new Uint8Array(0))).toEqual(new Uint8Array(0));
+  });
+});
