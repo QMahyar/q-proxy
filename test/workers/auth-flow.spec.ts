@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SELF, env } from "cloudflare:test";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { SETTINGS_KEY, resetThrottle, seed, testKv } from "../helpers/seed";
+import { invalidateSettingsCache } from "../../src/settings/store";
 
 const kv = testKv(env);
 
@@ -19,6 +20,14 @@ function post(json: unknown, extra: Record<string, string> = {}): RequestInit {
     headers: { "Content-Type": "application/json", ...extra },
     body: JSON.stringify(json),
   };
+}
+
+async function clearBootstrapFlag(): Promise<void> {
+  const raw = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { updatedAt?: number; data: Record<string, unknown> };
+  raw.data.passwordIsBootstrap = false;
+  raw.updatedAt = Date.now();
+  await kv.put(SETTINGS_KEY, JSON.stringify(raw));
+  invalidateSettingsCache();
 }
 
 describe("panel auth lifecycle", () => {
@@ -39,9 +48,11 @@ describe("panel auth lifecycle", () => {
 
     res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
     const setupBody = await body(res);
     expect(setupBody.ok).toBe(true);
     expect(setupBody.data.hasPassword).toBe(true);
+    await clearBootstrapFlag();
     const setCookie = res.headers.get("Set-Cookie") ?? "";
     expect(setCookie).toContain("q_session=");
     expect(setCookie).toContain("HttpOnly");
@@ -171,6 +182,7 @@ describe("panel auth lifecycle", () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
 
     res = await SELF.fetch(`${BASE}/api/status`, { headers: { Cookie: cookie } });
@@ -191,6 +203,7 @@ describe("panel auth lifecycle", () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
 
     res = await SELF.fetch(`${BASE}/api/auth/logout`, { method: "POST", headers: { "X-Q-Panel": "1" } });
@@ -209,6 +222,7 @@ describe("panel auth lifecycle", () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
 
     let saw429 = false;
     for (let i = 0; i < 9; i++) {
@@ -231,6 +245,7 @@ describe("change password", () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
 
     res = await SELF.fetch(
@@ -269,6 +284,7 @@ describe("change password", () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
     const setupCookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     await new Promise((resolve) => setTimeout(resolve, 1100));
 
@@ -387,6 +403,7 @@ describe("totp two-factor login", () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: TOTP_PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const hashes: string[] = [];
     for (const plain of recoveryPlain) {
@@ -493,6 +510,7 @@ describe("totp two-factor login", () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: TOTP_PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     res = await SELF.fetch(`${BASE}/api/settings/save`, {
       method: "PUT",
@@ -595,7 +613,7 @@ describe("onboarding bootstrap password", () => {
     expect(plain.status).toBe(200);
     const normal = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
     expect(normal.status).toBe(200);
-    expect((await body(normal)).data).toEqual({ hasPassword: true });
+    expect((await body(normal)).data).toEqual({ hasPassword: true, mustChangePassword: true });
   });
 
   it("keeps the pending totpRequired shape clean and flags only full-auth responses", async () => {
@@ -708,11 +726,13 @@ describe("setup window", () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
 
     resetThrottle();
     await seed(kv, SP, { seededAt: Date.now() - 60 * 60 * 1000 });
     res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "within-window-1" }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    await clearBootstrapFlag();
   });
 
   it("rejects setup with SETUP_WINDOW_EXPIRED after 24 hours", async () => {

@@ -279,7 +279,7 @@ export const handleSetup: RouteHandler = async (req, env, s) => {
     throw new ValidationError({ newPassword: "must be at least 8 characters" });
   }
   const { hash, salt } = await hashPassword(newPassword, fresh.sessionSecret);
-  const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt });
+  const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt, passwordIsBootstrap: true, seededAt: fresh.seededAt > 0 ? fresh.seededAt : Date.now() });
   if (!v.ok) throw new ValidationError(v.fields);
   await saveSettings(env, v.value);
   return jsonOk(

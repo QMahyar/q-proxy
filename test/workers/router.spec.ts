@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
 import { telegramWebhookSecret } from "../../src/handlers/api/telegram";
 import { clearUsersMemoForTests, clearUserTotalsForTests } from "../../src/users/store";
 import { seed, SETTINGS_KEY, testKv } from "../helpers/seed";
+import { invalidateSettingsCache } from "../../src/settings/store";
 
 const env: Env = cfEnv as unknown as Env;
 const kv = testKv(env);
@@ -43,6 +44,16 @@ function put(json: unknown, extra: Record<string, string> = {}): RequestInit {
 async function setupAdmin(): Promise<{ cookie: string; csrfHeaders: Record<string, string> }> {
   const res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
   expect(res.status).toBe(200);
+    const __raw = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { updatedAt?: number; data: Record<string, unknown> };
+    __raw.data.passwordIsBootstrap = false;
+    __raw.updatedAt = Date.now();
+    await kv.put(SETTINGS_KEY, JSON.stringify(__raw));
+    invalidateSettingsCache();
+  const raw = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { updatedAt?: number; data: Record<string, unknown> };
+  raw.data.passwordIsBootstrap = false;
+  raw.updatedAt = Date.now();
+  await kv.put(SETTINGS_KEY, JSON.stringify(raw));
+  invalidateSettingsCache();
   const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
   return { cookie, csrfHeaders: { Cookie: cookie, "X-Q-Panel": "1" } };
 }
@@ -152,6 +163,11 @@ describe("router dispatch", () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "alias-pass-1" }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    const __raw = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { updatedAt?: number; data: Record<string, unknown> };
+    __raw.data.passwordIsBootstrap = false;
+    __raw.updatedAt = Date.now();
+    await kv.put(SETTINGS_KEY, JSON.stringify(__raw));
+    invalidateSettingsCache();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
 
     res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: "wrong" }));
@@ -474,6 +490,11 @@ describe("router dispatch", () => {
 
     res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
+    const __raw = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { updatedAt?: number; data: Record<string, unknown> };
+    __raw.data.passwordIsBootstrap = false;
+    __raw.updatedAt = Date.now();
+    await kv.put(SETTINGS_KEY, JSON.stringify(__raw));
+    invalidateSettingsCache();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const headers = { Cookie: cookie, "X-Q-Panel": "1" };
 
@@ -591,6 +612,11 @@ describe("router dispatch", () => {
     expect(res.status).toBe(401);
 
     res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
+    const __raw = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { updatedAt?: number; data: Record<string, unknown> };
+    __raw.data.passwordIsBootstrap = false;
+    __raw.updatedAt = Date.now();
+    await kv.put(SETTINGS_KEY, JSON.stringify(__raw));
+    invalidateSettingsCache();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
 
@@ -764,6 +790,11 @@ describe("router dispatch", () => {
   it("serves warp subscriptions publicly by token across formats", async () => {
     await seed(kv, SP);
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
+    const __raw = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { updatedAt?: number; data: Record<string, unknown> };
+    __raw.data.passwordIsBootstrap = false;
+    __raw.updatedAt = Date.now();
+    await kv.put(SETTINGS_KEY, JSON.stringify(__raw));
+    invalidateSettingsCache();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
     const priv = btoa(String.fromCharCode(...Array.from({ length: 32 }, (_, i) => (i * 7 + 3) % 256)));
@@ -819,6 +850,11 @@ describe("router dispatch", () => {
     expect(res.status).toBe(401);
 
     res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
+    const __raw = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { updatedAt?: number; data: Record<string, unknown> };
+    __raw.data.passwordIsBootstrap = false;
+    __raw.updatedAt = Date.now();
+    await kv.put(SETTINGS_KEY, JSON.stringify(__raw));
+    invalidateSettingsCache();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
     const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
 
