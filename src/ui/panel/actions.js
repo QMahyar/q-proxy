@@ -350,7 +350,7 @@ if(wrapper){
 const qrBtn=wrapper.querySelector('[data-qr]');
 if(qrBtn) qrBtn.setAttribute('data-qr',newUrl);
 }
-});
+})
 return}}
 function handleChip(chip){
 const group=chip.closest('[data-type="chips"]');
