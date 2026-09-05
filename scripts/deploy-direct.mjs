@@ -443,6 +443,10 @@ What it does:
   await uploadWorker(token, email, accountId, kvId, script, d1Id);
   console.log("Worker uploaded");
 
+  const kvHeaders = isGlobalKey(token)
+    ? { "X-Auth-Email": email, "X-Auth-Key": token }
+    : { Authorization: `Bearer ${token}` };
+
   let subdomain = await getSubdomain(token, email, accountId);
   if (!subdomain) {
     console.log("Enabling workers.dev subdomain...");
@@ -460,6 +464,16 @@ What it does:
       subdomain = data.result?.subdomain;
     } catch {}
   }
+  try {
+    await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${WORKER_NAME}/subdomain`, {
+      method: "POST",
+      headers: { ...kvHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: true }),
+    });
+    console.log("workers.dev route enabled for this worker");
+  } catch {
+    console.log("Note: could not enable the per-worker subdomain route (it may already be enabled).");
+  }
 
   const workerUrl = subdomain ? `https://${WORKER_NAME}.${subdomain}.workers.dev` : `https://${WORKER_NAME}.workers.dev`;
   console.log(`\nWorker URL: ${workerUrl}`);
@@ -473,9 +487,6 @@ What it does:
     console.warn(`Seed fetch failed: ${String(e.message).slice(0, 200)} — KV may still seed on next visit`);
   }
 
-  const kvHeaders = isGlobalKey(token)
-    ? { "X-Auth-Email": email, "X-Auth-Key": token }
-    : { Authorization: `Bearer ${token}` };
   const kvUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/qproxy:settings`;
 
   console.log(`Polling KV for seeded settings (every ${KV_POLL_INTERVAL_MS / 1000}s, up to ${KV_POLL_TIMEOUT_MS / 1000}s)...`);
