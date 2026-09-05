@@ -478,13 +478,23 @@ What it does:
   const workerUrl = subdomain ? `https://${WORKER_NAME}.${subdomain}.workers.dev` : `https://${WORKER_NAME}.workers.dev`;
   console.log(`\nWorker URL: ${workerUrl}`);
 
-  console.log(`Seeding ${workerUrl}/ ...`);
-  try {
-    const res = await fetch(`${workerUrl}/`, { headers: { "User-Agent": "q-proxy/deploy-direct" }, signal: AbortSignal.timeout(8000) });
-    console.log(`Seed: ${res.status} ${res.statusText}`);
-    await res.text().catch(() => {});
-  } catch (e) {
-    console.warn(`Seed fetch failed: ${String(e.message).slice(0, 200)} — KV may still seed on next visit`);
+  console.log(`Seeding ${workerUrl}/ (retrying until routable, up to 30s)...`);
+  {
+    const seedDeadline = Date.now() + 30_000;
+    let seeded = false;
+    while (Date.now() < seedDeadline && !seeded) {
+      try {
+        const res = await fetch(`${workerUrl}/`, { headers: { "User-Agent": "q-proxy/deploy-direct" }, signal: AbortSignal.timeout(8000) });
+        await res.text().catch(() => {});
+        if (res.status === 200) {
+          console.log(`Seed: ${res.status} ${res.statusText}`);
+          seeded = true;
+          break;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    if (!seeded) console.warn(`Seed fetch did not reach 200 — KV may still seed on next visit`);
   }
 
   const kvUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvId}/values/qproxy:settings`;
