@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.0 - 2026-09-04
 
 ### Added
 - Onboarding v2 server: new settings fields `passwordIsBootstrap` (default `false`) and `seededAt` (default `0`) with descriptor rows and migrate-safe defaults merge; `fillIdentity` stamps `seededAt` on first seed and never refreshes it.
