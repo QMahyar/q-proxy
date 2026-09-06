@@ -8,10 +8,11 @@ Single self-contained Python file, stdlib only (no pip, no node, no wrangler).
 Clone the repo, then:
 
 ```bash
-python deploy.py                                   # interactive: walks you through everything
+python deploy.py                                   # interactive menu: New / Update / Delete / List / Token
 python deploy.py deploy --target workers --name my-panel --password 'S3cure99'   # flag-driven (agents/CI)
+python deploy.py update --name my-panel            # re-upload code, keeps password + data
+python deploy.py delete --kind panel --name my-panel   # remove everything (type-to-confirm)
 python deploy.py list                              # list workers, pages, KV, D1
-python deploy.py delete --kind worker --name my-panel
 python deploy.py mk-token --key <cfk_...> --email you@x.com --account <id>   # mint a scoped token
 ```
 
