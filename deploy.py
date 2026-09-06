@@ -367,6 +367,56 @@ def upload_worker_real(account, token, worker_name, script, kv_id, d1_id):
     return parsed["result"]
 
 
+def get_subdomain(account, token):
+    """Read-only workers.dev subdomain lookup (never enables anything)."""
+    try:
+        r = cf_request("GET", f"/accounts/{account}/workers/subdomain", token)
+        return (r or {}).get("subdomain", "")
+    except CfError:
+        return ""
+
+
+def read_secure_path(account, token, kv_id):
+    try:
+        body = cf_get_raw(token, f"/accounts/{account}/storage/kv/namespaces/{kv_id}/values/qproxy:settings")
+        raw = json.loads(body.decode("utf-8")) if body else None
+        if isinstance(raw, dict):
+            data = raw.get("data")
+            if isinstance(data, dict) and data.get("securePath"):
+                return data["securePath"]
+    except (CfError, ValueError):
+        pass
+    return ""
+
+
+def cmd_urls(args):
+    """Reprint an existing panel's URLs by reading securePath from its KV."""
+    tok = acquire_token(args)
+    account = resolve_account(tok, args.account or env_account())
+    panel = args.name
+    if not panel and is_tty():
+        panel = pick_existing_panel(account, tok)
+    if not panel:
+        raise SystemExit("No --name given and not interactive.")
+    found = resolve_panel(account, tok, panel)
+    if not found or not found.get("kv_id"):
+        raise SystemExit(f"No panel '{panel}' with a readable KV found.")
+    sp = read_secure_path(account, tok, found["kv_id"])
+    if not sp:
+        raise SystemExit(f"Panel '{panel}' has no seeded settings yet — open its worker URL once, then retry.")
+    kind = found["kind"]
+    base = panel_url(account, tok, kind, panel) if kind in ("workers", "pages") else ""
+    if not base:
+        raise SystemExit(f"Could not determine the public URL for '{panel}'.")
+    print()
+    print(base)
+    print(f"{base}/{sp}/login")
+    print(f"{base}/{sp}/sub")
+    print(f"{base}/{sp}/panel")
+    print(f"securePath: {sp}")
+    print()
+
+
 def enable_site_subdomain(account, token):
     try:
         r = cf_request("GET", f"/accounts/{account}/workers/subdomain", token)
@@ -784,32 +834,49 @@ def pause():
 
 
 def acquire_token(args):
-    tok = normalize_token(os.environ.get("CLOUDFLARE_API_TOKEN"))
+    # Precedence: --token flag > CLOUDFLARE_API_TOKEN env > interactive paste > fail fast.
+    tok = normalize_token(getattr(args, "token", None))
+    if not tok:
+        tok = normalize_token(os.environ.get("CLOUDFLARE_API_TOKEN"))
     interactive = is_tty()
     if not tok:
-        if interactive:
-            url = build_token_url(args.account or env_account() or "*")
-            print("First, create a Cloudflare API token with the exact permissions")
-            print("Q Proxy needs (they are pre-filled on the page). Open this URL:\n")
-            print(url + "\n")
-            print("Create the token, then paste it below.")
-            tok = normalize_token(ask("Paste your Cloudflare API token", ""))
-        elif getattr(args, "token", None):
-            tok = normalize_token(args.token)
+        if not interactive:
+            raise SystemExit("No token: set CLOUDFLARE_API_TOKEN, pass --token, or run interactively (`python deploy.py token` prints the creation link).")
+        url = build_token_url(args.account or env_account() or "*")
+        print("First, create a Cloudflare API token with the exact permissions")
+        print("Q Proxy needs (they are pre-filled on the page). Open this URL:\n")
+        print(url + "\n")
+        print("Create the token, then paste it below.")
+        tok = normalize_token(ask("Paste your Cloudflare API token", ""))
     if not tok:
         raise SystemExit("No token provided. Set CLOUDFLARE_API_TOKEN, pass --token, or run interactively.")
     if _SESSION["verified"] and _SESSION["token"] == tok:
         return tok
     try:
-        verify_token(tok)
+        info = verify_token(tok)
     except CfError as e:
         if e.status in (401, 403):
             raise SystemExit("Token rejected (401/403) — wrong token or missing permissions. Create a fresh one with `python deploy.py token`.")
         raise SystemExit(f"Could not verify token (network?): {e}. Retry, or check connectivity.")
+    warn_token_expiry(info)
     print("Token verified.")
     _SESSION["token"] = tok
     _SESSION["verified"] = True
     return tok
+
+
+def warn_token_expiry(info):
+    try:
+        import datetime
+        exp = (info or {}).get("expires_on")
+        if not exp:
+            return
+        dt = datetime.datetime.fromisoformat(exp.replace("Z", "+00:00"))
+        left = dt - datetime.datetime.now(datetime.timezone.utc)
+        if left.days < 7:
+            print(f"(!) Token expires {exp} — mint a fresh one soon (`python deploy.py token`).")
+    except Exception:
+        pass
 
 
 def resolve_account(tok, hint=None):
@@ -941,6 +1008,50 @@ def do_deploy(args):
     print(f"securePath: {secure_path}")
     print(f"Password: {password}")
     print("=" * 60 + "\n")
+    if interactive:
+        deploy_next_steps(base_url, secure_path, panel_name)
+
+
+def deploy_next_steps(base_url, secure_path, panel_name):
+    login_url = f"{base_url}/{secure_path}/login"
+    while True:
+        choice = select_option("Results — what next?", [
+            "Open panel login in browser",
+            "Test health + login page",
+            "Back to main menu",
+            "Exit",
+        ])
+        if choice.startswith("Open panel"):
+            try:
+                webbrowser.open(login_url)
+                print(f"Opened {login_url} (if nothing opened, copy it manually.)")
+            except Exception:
+                print(f"Could not open a browser — copy manually: {login_url}")
+        elif choice.startswith("Test health"):
+            test_panel_health(base_url, login_url)
+        elif choice.startswith("Back"):
+            return
+        else:
+            print("Bye.")
+            raise SystemExit(0)
+
+
+def test_panel_health(base_url, login_url):
+    try:
+        req = urllib.request.Request(base_url + "/healthz", headers={"User-Agent": PANEL_UA})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            info = json.loads(r.read().decode("utf-8"))
+        print(f"Health OK — version {info.get('version')} at {info.get('colo')}")
+    except Exception as e:
+        print(f"Health FAIL: {e} — code is up but the check failed; try Update panel from the menu.")
+        return
+    try:
+        req = urllib.request.Request(login_url, headers={"User-Agent": PANEL_UA})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            ok = r.status == 200
+        print(f"Login page {'OK (200)' if ok else f'unexpected ({r.status})'}")
+    except Exception as e:
+        print(f"Login page FAIL: {e}")
 
 
 def wait_for_seed(account, token, kv_id, base_url, timeout=240):
@@ -1209,7 +1320,7 @@ def panel_url(account, token, kind, panel):
             pass
         return f"https://{panel}.pages.dev"
     try:
-        sub = enable_site_subdomain(account, token)
+        sub = get_subdomain(account, token)
     except CfError:
         sub = ""
     return f"https://{panel}.{sub}.workers.dev" if sub else ""
@@ -1298,6 +1409,12 @@ def main():
     up.add_argument("--token", help="Cloudflare API token")
     up.add_argument("--account", help="32-hex account id")
     up.set_defaults(func=cmd_update)
+
+    urls = sub.add_parser("urls", help="reprint an existing panel's login/panel/sub URLs")
+    urls.add_argument("--name", help="panel name")
+    urls.add_argument("--token", help="Cloudflare API token")
+    urls.add_argument("--account", help="32-hex account id")
+    urls.set_defaults(func=cmd_urls)
 
     t = sub.add_parser("token", help="print the prefilled token URL")
     t.add_argument("--account", help="account id hint for the URL")
