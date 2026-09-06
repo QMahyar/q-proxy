@@ -11,6 +11,7 @@ Clone the repo, then:
 python deploy.py                                   # interactive menu: New / Update / Delete / List / Token
 python deploy.py deploy --target workers --name my-panel --password 'S3cure99'   # flag-driven (agents/CI)
 python deploy.py update --name my-panel            # re-upload code, keeps password + data
+python deploy.py urls --name my-panel              # reprint login/panel/sub links from KV
 python deploy.py delete --kind panel --name my-panel   # remove everything (type-to-confirm)
 python deploy.py list                              # list workers, pages, KV, D1
 python deploy.py mk-token --key <cfk_...> --email you@x.com --account <id>   # mint a scoped token
