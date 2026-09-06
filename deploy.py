@@ -750,15 +750,9 @@ def confirm_type(name):
 # --------------------------------------------------------------------------- #
 def cmd_token(args):
     url = build_token_url(args.account or "*")
-    print("\nOpen this URL in your browser to create a Cloudflare API token with the")
-    print("exact permissions Q Proxy needs (they are pre-filled):\n")
+    print("\nCreate a Cloudflare API token with the exact permissions")
+    print("Q Proxy needs (they are pre-filled on the page). Open this URL:\n")
     print(url + "\n")
-    if is_tty():
-        try:
-            if webbrowser.open(url) is False:
-                print("(Browser did not open — copy the URL above manually.)")
-        except Exception:
-            print("(Could not open a browser — copy the URL above manually.)")
 
 
 def is_tty():
@@ -778,6 +772,17 @@ def prompt_or(args_val, prompt, default=None, interactive=True):
     return default
 
 
+_SESSION = {"token": None, "verified": False}
+
+
+def pause():
+    if is_tty():
+        try:
+            input("\nPress Enter to continue...")
+        except (EOFError, KeyboardInterrupt):
+            print()
+
+
 def acquire_token(args):
     tok = normalize_token(os.environ.get("CLOUDFLARE_API_TOKEN"))
     interactive = is_tty()
@@ -785,19 +790,16 @@ def acquire_token(args):
         if interactive:
             url = build_token_url(args.account or env_account() or "*")
             print("First, create a Cloudflare API token with the exact permissions")
-            print("Q Proxy needs (they are pre-filled on the page). Opening it now:\n")
+            print("Q Proxy needs (they are pre-filled on the page). Open this URL:\n")
             print(url + "\n")
-            try:
-                if webbrowser.open(url) is False:
-                    print("(Browser did not open — copy the URL above manually.)")
-            except Exception:
-                print("(Could not open a browser — copy the URL above manually.)")
             print("Create the token, then paste it below.")
             tok = normalize_token(ask("Paste your Cloudflare API token", ""))
         elif getattr(args, "token", None):
             tok = normalize_token(args.token)
     if not tok:
         raise SystemExit("No token provided. Set CLOUDFLARE_API_TOKEN, pass --token, or run interactively.")
+    if _SESSION["verified"] and _SESSION["token"] == tok:
+        return tok
     try:
         verify_token(tok)
     except CfError as e:
@@ -805,6 +807,8 @@ def acquire_token(args):
             raise SystemExit("Token rejected (401/403) — wrong token or missing permissions. Create a fresh one with `python deploy.py token`.")
         raise SystemExit(f"Could not verify token (network?): {e}. Retry, or check connectivity.")
     print("Token verified.")
+    _SESSION["token"] = tok
+    _SESSION["verified"] = True
     return tok
 
 
@@ -1321,39 +1325,52 @@ def main():
 
 def interactive_menu():
     print("\n=== Q Proxy ===\n")
+    # Token + account once per run: every action below reuses them, never re-prompts.
+    sess = argparse.Namespace(token=None, account=None)
+    tok = acquire_token(sess)
+    os.environ["CLOUDFLARE_API_TOKEN"] = tok
+    acct = resolve_account(tok, env_account() or None)
+    os.environ["CLOUDFLARE_ACCOUNT_ID"] = acct
+    print(f"  Session: account {acct} (token ****{tok[-4:]})\n")
+    actions = {
+        "new": ("New panel — deploy a fresh panel", lambda: do_deploy(argparse.Namespace(
+            target=None, name=None, kv=None, d1=None, password=None,
+            token=None, account=None, subdomain=None, func=do_deploy))),
+        "update": ("Update panel — re-upload code (keeps password + data)", lambda: cmd_update(
+            argparse.Namespace(name=None, target=None, token=None, account=None, func=cmd_update))),
+        "delete": ("Delete — remove a panel or resource", menu_delete),
+        "list": ("List — show workers, pages, KV, D1", lambda: cmd_list(
+            argparse.Namespace(token=None, account=None, func=cmd_list))),
+        "token": ("Get API token — prefilled creation link", lambda: cmd_token(
+            argparse.Namespace(account=None, func=cmd_token))),
+    }
+    order = ["new", "update", "delete", "list", "token"]
     while True:
-        choice = select_option("What do you want to do?", [
-            "New panel — deploy a fresh panel",
-            "Update panel — re-upload code (keeps password + data)",
-            "Delete — remove a panel or resource",
-            "List — show workers, pages, KV, D1",
-            "Get API token — prefilled creation link",
-            "Exit",
-        ])
-        if choice.startswith("New panel"):
-            ns = argparse.Namespace(target=None, name=None, kv=None, d1=None, password=None,
-                                   token=None, account=None, subdomain=None, func=do_deploy)
-            ns.func(ns)
-        elif choice.startswith("Update panel"):
-            ns = argparse.Namespace(name=None, target=None, token=None, account=None, func=cmd_update)
-            ns.func(ns)
-        elif choice.startswith("Delete"):
-            tok = acquire_token(argparse.Namespace(token=None, account=None))
-            account = resolve_account(tok, env_account() or None)
-            ns = argparse.Namespace(kind="panel", name=None, token=tok, account=account,
-                                   yes=False, func=None)
-            ns.name = pick_existing_panel(account, tok)
-            if ns.name:
-                cmd_delete(ns)
-        elif choice.startswith("List"):
-            ns = argparse.Namespace(token=None, account=None, func=cmd_list)
-            ns.func(ns)
-        elif choice.startswith("Get API token"):
-            ns = argparse.Namespace(account=None, func=cmd_token)
-            ns.func(ns)
-        else:
+        labels = [actions[k][0] for k in order] + ["Exit"]
+        choice = select_option("What do you want to do?", labels)
+        if choice == "Exit":
             print("Bye.")
             return
+        key = order[labels.index(choice)]
+        try:
+            actions[key][1]()
+        except SystemExit as e:
+            if e.code not in (None, 0):
+                print(f"\n(!) {e}")
+        except CfError as e:
+            print(f"\n(!) Cloudflare error: {friendly_cf_error(e)}")
+        except Exception as e:  # never let the menu die on a traceback
+            print(f"\n(!) Unexpected error: {e}")
+        pause()
+
+
+def menu_delete():
+    tok = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+    account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+    name = pick_existing_panel(account, tok)
+    if name:
+        cmd_delete(argparse.Namespace(kind="panel", name=name, token=tok,
+                                      account=account, yes=False, func=None))
 
 
 if __name__ == "__main__":
