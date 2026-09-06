@@ -558,7 +558,16 @@ def acquire_token(args):
     interactive = is_tty()
     if not tok:
         if interactive:
-            tok = ask("Paste your Cloudflare API token (create at the URL above)", "")
+            url = build_token_url(args.account or env_account() or "*")
+            print("First, create a Cloudflare API token with the exact permissions")
+            print("Q Proxy needs (they are pre-filled on the page). Opening it now:\n")
+            print(f"  {url}\n")
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
+            print("Create the token, then paste it below.")
+            tok = ask("Paste your Cloudflare API token", "")
         elif args.token:
             tok = args.token
     if not tok:
