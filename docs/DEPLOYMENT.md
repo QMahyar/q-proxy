@@ -2,6 +2,24 @@
 
 All supported deploy paths — pick the one that fits your environment.
 
+## Way 0 — deploy.py (recommended: interactive or flag-driven)
+
+Single self-contained Python file, stdlib only (no pip, no node, no wrangler).
+Clone the repo, then:
+
+```bash
+python deploy.py                                   # interactive: walks you through everything
+python deploy.py deploy --target workers --name my-panel --password 'S3cure99'   # flag-driven (agents/CI)
+python deploy.py list                              # list workers, pages, KV, D1
+python deploy.py delete --kind worker --name my-panel
+python deploy.py mk-token --key <cfk_...> --email you@x.com --account <id>   # mint a scoped token
+```
+
+The script mints (or accepts) a scoped API token, creates KV + D1 named after
+your panel, applies migrations, deploys to Workers **or** Pages Advanced Mode,
+enables routing, waits for seed and sets **your** chosen password with no
+bootstrap/forced-change gate. Prints the login, subscription and panel URLs.
+
 ## Way 1 — Manual (dashboard, no CLI)
 
 1. Download [`q-proxy.js`](https://github.com/QMahyar/q-proxy/releases/latest/download/q-proxy.js)
