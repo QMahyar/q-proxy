@@ -935,6 +935,26 @@ def do_deploy(args):
         print(f"  (using '{slugged}')")
     panel_name = slugged
 
+    existing = compute_exists(acct_id, tok, panel_name)
+    if existing and not getattr(args, "force", False):
+        msg = (f"'{panel_name}' already exists as a {existing} panel. A fresh deploy rebinds "
+               f"new empty KV/D1 — settings, users and quotas on the old bindings go dark. "
+               f"To refresh code instead, use `update` (keeps everything).")
+        if not interactive:
+            raise SystemExit(msg + " Pass --force to deploy over it anyway.")
+        print(f"\n(!) {msg}")
+        choice = select_option("How to proceed?", [
+            "Update it instead (keeps password + data)",
+            "Deploy over it anyway (fresh empty state)",
+            "Abort",
+        ])
+        if choice.startswith("Update"):
+            return cmd_update(argparse.Namespace(name=panel_name, target=existing,
+                                                 token=tok, account=acct_id, func=cmd_update))
+        if choice.startswith("Abort"):
+            print("Aborted — nothing changed.")
+            return
+
     kv_title = prompt_or(args.kv, "KV namespace title", f"{panel_name}-QPROXY_KV", interactive)
     d1_name = prompt_or(args.d1, "D1 database name", f"{panel_name}-db", interactive)
 
@@ -1210,6 +1230,21 @@ def resolve_panel(account, token, panel):
     return None
 
 
+def compute_exists(account, token, panel):
+    """Return 'workers'/'pages' if a compute resource with this name exists, else ''."""
+    try:
+        for w in cf_request("GET", f"/accounts/{account}/workers/scripts", token) or []:
+            if w["id"] == panel:
+                return "workers"
+    except CfError:
+        pass
+    try:
+        cf_request("GET", f"/accounts/{account}/pages/projects/{panel}", token)
+        return "pages"
+    except CfError:
+        return ""
+
+
 def convention_ids(account, token, panel):
     kv_id, d1_id = None, None
     try:
@@ -1383,6 +1418,7 @@ def main():
     d.add_argument("--token", help="Cloudflare API token (or CLOUDFLARE_API_TOKEN)")
     d.add_argument("--account", help="32-hex account id")
     d.add_argument("--subdomain", help="workers.dev subdomain when workers target")
+    d.add_argument("--force", action="store_true", help="allow deploying over an existing worker/project name")
     d.set_defaults(func=do_deploy)
 
     l = sub.add_parser("list", help="list workers, pages, KV, D1")
