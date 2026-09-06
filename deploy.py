@@ -302,19 +302,37 @@ def create_d1(account, token, name):
 
 
 def apply_d1_migrations(account, token, db_id, sql):
-    """Apply migrations. Tries single-statement posts (the stable shape);
-    falls back to a joined exec if the API accepts it."""
+    """Apply migrations. Returns (applied, skipped). Idempotent."""
     statements = [s.strip() for s in sql.split(";") if s.strip()]
+    ok_n, skip_n = 0, 0
     for s in statements:
         try:
             cf_request("POST", f"/accounts/{account}/d1/database/{db_id}/query",
                        token, {"sql": s})
+            ok_n += 1
         except CfError as e:
             msg = str(e)
             if "already exists" in msg.lower() or "duplicate" in msg.lower():
+                skip_n += 1
                 continue
-            print(f"  migration note ({str(e)[:90]})")
-    return True
+            print(f"  migration note: {friendly_cf_error(e)}")
+            skip_n += 1
+    return ok_n, skip_n
+
+
+def friendly_cf_error(e):
+    s = str(e)
+    if "401" in s or "403" in s:
+        return "unauthorized — wrong token or missing permissions (mint a fresh one with `python deploy.py token`)"
+    if "404" in s:
+        return "not found — wrong account, or the name does not exist there"
+    if "already exists" in s.lower() or "409" in s:
+        return "already exists — reusing it"
+    if "429" in s:
+        return "rate-limited — wait a minute and retry"
+    if "timeout" in s.lower() or "transient" in s.lower() or "urlopen" in s.lower():
+        return "network hiccup — retry"
+    return s[:160]
 
 
 # --------------------------------------------------------------------------- #
@@ -438,36 +456,62 @@ def post_json(url, body, cookie=None):
     return parsed, status, set_cookie
 
 
-def set_first_password(base_url, secure_path, password):
+def parse_set_cookie(set_cookie):
+    if not set_cookie:
+        return ""
+    try:
+        from http.cookies import SimpleCookie
+        jar = SimpleCookie()
+        jar.load(set_cookie)
+        return "; ".join(f"{k}={m.value}" for k, m in jar.items())
+    except Exception:
+        return ""
+
+
+def set_first_password(base_url, secure_path, password, account=None, token=None, kv_id=None):
     """Set the user-chosen password with NO bootstrap gate.
-    setup() stamps bootstrap; an immediate same-password change() clears it.
-    Returns True on success."""
+    setup() stamps bootstrap; login (with retries for KV propagation) then a
+    same-password change() clears it. The result is VERIFIED by reading the KV
+    blob back — returns True only when passwordIsBootstrap is actually false."""
     setup_url = f"{base_url}/{secure_path}/api/auth/setup"
     parsed, status, _ = post_json(setup_url, {"newPassword": password})
     if not parsed.get("ok"):
         code = (parsed.get("error") or {}).get("code")
-        if code == "ALREADY_SET":
-            return True
         if code == "SETUP_WINDOW_EXPIRED":
             return False
-        raise CfError(status, [{"message": str(parsed.get("error", parsed))}])
-    # clear bootstrap by changing to the same password (requires a session)
+        if code != "ALREADY_SET":
+            raise CfError(status, [{"message": str(parsed.get("error", parsed))}])
     login_url = f"{base_url}/{secure_path}/api/auth/login"
-    _, _, set_cookie = post_json(login_url, {"password": password})
     cookie = ""
-    if set_cookie:
-        try:
-            from http.cookies import SimpleCookie
-            jar = SimpleCookie()
-            jar.load(set_cookie)
-            cookie = "; ".join(f"{k}={m.value}" for k, m in jar.items())
-        except Exception:
-            cookie = ""
+    for _ in range(12):
+        _, _, set_cookie = post_json(login_url, {"password": password})
+        cookie = parse_set_cookie(set_cookie)
+        if cookie:
+            break
+        time.sleep(5)
     if not cookie:
-        return True  # bootstrap set; user can change once (rare path)
+        print("  ! login after setup kept failing — password may be set but unverified.")
+        print("    Open the login page and sign in; use Change Password once to clear the first-run gate.")
+        return False
     change_url = f"{base_url}/{secure_path}/api/auth/password"
     changed, _, _ = post_json(change_url, {"currentPassword": password, "newPassword": password}, cookie=cookie)
-    return bool(changed.get("ok"))
+    if not changed.get("ok"):
+        print(f"  ! bootstrap-clear change failed: {changed}")
+        return False
+    if account and token and kv_id:
+        kv_path = f"/accounts/{account}/storage/kv/namespaces/{kv_id}/values/qproxy:settings"
+        for _ in range(12):
+            try:
+                body = cf_get_raw(token, kv_path)
+                if body and b'"passwordIsBootstrap":false' in body:
+                    return True
+            except CfError:
+                pass
+            time.sleep(5)
+        print("  ! password set, but the first-run flag is still visible (KV lag or change lost).")
+        print("    Sign in and use Change Password once to clear it.")
+        return False
+    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -506,34 +550,215 @@ def slugify(name):
 
 
 # --------------------------------------------------------------------------- #
-# Interactive helpers
+# Interactive helpers (TTY-only; flag-driven mode never touches these)
 # --------------------------------------------------------------------------- #
+def safe_input(prompt):
+    """input() that turns EOF/Ctrl+C into a clean abort instead of a traceback."""
+    try:
+        return input(prompt)
+    except (EOFError, KeyboardInterrupt):
+        print("\nAborted.")
+        raise SystemExit(130)
+
+
 def ask(prompt, default=None):
     if default is not None:
         prompt = f"{prompt} [{default}]: "
     else:
         prompt += ": "
-    v = input(prompt).strip()
+    v = safe_input(prompt).strip()
     return v or (default or "")
+
+
+def normalize_token(raw):
+    tok = (raw or "").strip()
+    if tok.lower().startswith("bearer "):
+        tok = tok[7:].strip()
+    return tok
+
+
+def arrow_capable():
+    if not is_tty():
+        return False
+    try:
+        if not sys.stdin.fileno() >= 0:
+            return False
+    except Exception:
+        return False
+    if os.name == "nt":
+        try:
+            import msvcrt  # noqa
+            return True
+        except ImportError:
+            return False
+    try:
+        import termios  # noqa
+        return True
+    except ImportError:
+        return False
+
+
+def _read_key():
+    """Return one of: up|down|enter|esc|quit."""
+    if os.name == "nt":
+        import msvcrt
+        ch = msvcrt.getch()
+        if ch in (b"\x00", b"\xe0"):
+            ch2 = msvcrt.getch()
+            if ch2 == b"H":
+                return "up"
+            if ch2 == b"P":
+                return "down"
+            return ""
+        if ch == b"\r":
+            return "enter"
+        if ch == b"\x1b":
+            return "esc"
+        if ch == b"\x03":
+            raise KeyboardInterrupt
+        if ch in (b"q", b"Q"):
+            return "quit"
+        return ""
+    import termios
+    import tty
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+        if ch == "\x1b":
+            seq = sys.stdin.read(2)
+            if seq == "[A":
+                return "up"
+            if seq == "[B":
+                return "down"
+            return "esc"
+        if ch in ("\r", "\n"):
+            return "enter"
+        if ch == "\x03":
+            raise KeyboardInterrupt
+        if ch in ("q", "Q"):
+            return "quit"
+        return ""
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+
+
+def select_numbered(title, options):
+    print(f"\n{title}")
+    for i, opt in enumerate(options):
+        print(f"  {i + 1}. {opt}")
+    while True:
+        raw = safe_input(f"Choice [1-{len(options)}]: ").strip()
+        if not raw:
+            return options[0]
+        try:
+            n = int(raw)
+            if 1 <= n <= len(options):
+                return options[n - 1]
+        except ValueError:
+            pass
+        print(f"Enter a number 1-{len(options)}.")
+
+
+def select_interactive(title, options):
+    idx = 0
+    n = len(options)
+    sys.stdout.write("\x1b[?25l")
+    sys.stdout.flush()
+    try:
+        while True:
+            lines = [f"\n{title}"]
+            for i, opt in enumerate(options):
+                if i == idx:
+                    lines.append(f"\x1b[7m> {opt}\x1b[0m")
+                else:
+                    lines.append(f"  {opt}")
+            lines.append("\x1b[2m↑↓ navigate · Enter select · q cancel\x1b[0m")
+            sys.stdout.write("\n".join(lines))
+            sys.stdout.flush()
+            try:
+                key = _read_key()
+            except KeyboardInterrupt:
+                print("\nAborted.")
+                raise SystemExit(130)
+            if key == "up":
+                idx = (idx - 1) % n
+            elif key == "down":
+                idx = (idx + 1) % n
+            elif key == "enter":
+                print()
+                return options[idx]
+            elif key in ("esc", "quit"):
+                print("\nAborted.")
+                raise SystemExit(130)
+            sys.stdout.write(f"\x1b[{n + 2}A\r\x1b[2K")
+    finally:
+        sys.stdout.write("\x1b[?25h")
+        sys.stdout.flush()
+
+
+def select_option(title, options):
+    """Arrow-key menu on capable TTYs, numbered list otherwise."""
+    if arrow_capable():
+        try:
+            return select_interactive(title, options)
+        except Exception:
+            pass
+    return select_numbered(title, options)
+
+
+def password_problems(pw):
+    problems = []
+    if len(pw) < 8:
+        problems.append("at least 8 characters")
+    if not re.search(r"[A-Za-z]", pw):
+        problems.append("at least one letter")
+    if not re.search(r"\d", pw):
+        problems.append("at least one digit")
+    return problems
 
 
 def ask_password():
     import getpass
+    import warnings
     while True:
-        pw = getpass.getpass("  Panel password (>=8 chars, letter+digit): ")
-        if len(pw) >= 8 and re.search(r"[A-Za-z]", pw) and re.search(r"\d", pw):
-            return pw
-        print("  Password must be >=8 chars with at least one letter and one digit.")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            pw = getpass.getpass("Panel password: ").strip()
+        problems = password_problems(pw)
+        if problems:
+            print("  Needs: " + ", ".join(problems) + ".")
+            continue
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            pw2 = getpass.getpass("Repeat password: ").strip()
+        if pw != pw2:
+            print("  Passwords do not match — try again.")
+            continue
+        return pw
+
+
+def confirm_type(name):
+    """Type-the-name confirmation for destructive actions."""
+    v = safe_input(f"Type '{name}' to confirm deletion: ").strip()
+    return v == name
 
 
 # --------------------------------------------------------------------------- #
 # Commands
 # --------------------------------------------------------------------------- #
 def cmd_token(args):
-    print("\nOpen this URL in your browser to create a Cloudflare API token with the\n"
-          "exact permissions Q Proxy needs (they are pre-filled):\n")
-    print("  " + build_token_url(args.account or "*") + "\n")
-    webbrowser.open(build_token_url(args.account or "*"))
+    url = build_token_url(args.account or "*")
+    print("\nOpen this URL in your browser to create a Cloudflare API token with the")
+    print("exact permissions Q Proxy needs (they are pre-filled):\n")
+    print(url + "\n")
+    if is_tty():
+        try:
+            if webbrowser.open(url) is False:
+                print("(Browser did not open — copy the URL above manually.)")
+        except Exception:
+            print("(Could not open a browser — copy the URL above manually.)")
 
 
 def is_tty():
@@ -554,30 +779,33 @@ def prompt_or(args_val, prompt, default=None, interactive=True):
 
 
 def acquire_token(args):
-    tok = os.environ.get("CLOUDFLARE_API_TOKEN")
+    tok = normalize_token(os.environ.get("CLOUDFLARE_API_TOKEN"))
     interactive = is_tty()
     if not tok:
         if interactive:
             url = build_token_url(args.account or env_account() or "*")
             print("First, create a Cloudflare API token with the exact permissions")
             print("Q Proxy needs (they are pre-filled on the page). Opening it now:\n")
-            print(f"  {url}\n")
+            print(url + "\n")
             try:
-                webbrowser.open(url)
+                if webbrowser.open(url) is False:
+                    print("(Browser did not open — copy the URL above manually.)")
             except Exception:
-                pass
+                print("(Could not open a browser — copy the URL above manually.)")
             print("Create the token, then paste it below.")
-            tok = ask("Paste your Cloudflare API token", "")
-        elif args.token:
-            tok = args.token
+            tok = normalize_token(ask("Paste your Cloudflare API token", ""))
+        elif getattr(args, "token", None):
+            tok = normalize_token(args.token)
     if not tok:
         raise SystemExit("No token provided. Set CLOUDFLARE_API_TOKEN, pass --token, or run interactively.")
     try:
         verify_token(tok)
     except CfError as e:
         if e.status in (401, 403):
-            raise SystemExit(f"Token rejected: {e}")
-    return tok.strip()
+            raise SystemExit("Token rejected (401/403) — wrong token or missing permissions. Create a fresh one with `python deploy.py token`.")
+        raise SystemExit(f"Could not verify token (network?): {e}. Retry, or check connectivity.")
+    print("Token verified.")
+    return tok
 
 
 def resolve_account(tok, hint=None):
@@ -586,81 +814,80 @@ def resolve_account(tok, hint=None):
         return hint
     try:
         accounts = cf_request("GET", "/accounts", tok)
-        if accounts:
-            if len(accounts) == 1:
-                return accounts[0]["id"]
-            if is_tty():
-                print("Multiple accounts found:")
-                for i, a in enumerate(accounts):
-                    print(f"  {i + 1}. {a.get('name')} ({a['id']})")
-                return accounts[int(input("  Account number [1]: ") or "1") - 1]["id"]
-            raise CfError(0, [{"message": "Multiple accounts; pass --account <id>."}])
     except CfError:
-        pass
+        accounts = None
+    if accounts:
+        if len(accounts) == 1:
+            print(f"Account: {accounts[0].get('name')} ({accounts[0]['id']})")
+            return accounts[0]["id"]
+        if is_tty():
+            labels = [f"{a.get('name')} ({a['id']})" for a in accounts]
+            picked = select_option("Choose Cloudflare account", labels)
+            idx = labels.index(picked)
+            return accounts[idx]["id"]
+        raise CfError(0, [{"message": "Multiple accounts; pass --account <id>."}])
     raise CfError(0, [{"message": "Could not resolve account. Provide --account <32-hex id>."}])
 
 
+TARGET_LABELS = {
+    "workers": "Workers — instant <name>.<sub>.workers.dev (dist/q-proxy.js)",
+    "pages": "Pages — Advanced Mode, custom domains OK (dist/_worker.js)",
+}
+
+
 def do_deploy(args):
-    print("\n=== Q Proxy deploy ===\n")
+    print("\n=== Q Proxy — new panel ===\n")
     interactive = is_tty()
 
-    # 1. token
-    print("Step 1/5 — Cloudflare access")
+    print("-- Cloudflare access")
     tok = acquire_token(args)
     acct_id = resolve_account(tok, args.account or env_account())
     print(f"  Account: {acct_id}")
 
-    # 2. target + naming (flag-driven: apply all args; interactive: prompt)
-    print("\nStep 2/5 — Deployment target")
+    print("\n-- Deployment target")
     if args.target:
         target = args.target
     elif interactive:
-        target = ask("Deploy to (workers/pages)", "workers").lower()
-        while target not in ("workers", "pages"):
-            target = ask("Choose workers or pages", "workers").lower()
+        picked = select_option("Choose deploy target", list(TARGET_LABELS.values()))
+        target = next(k for k, v in TARGET_LABELS.items() if v == picked)
     else:
         raise SystemExit("No --target (workers|pages) given and not interactive.")
 
     if args.name:
         panel_name = args.name
     elif interactive:
-        panel_name = ask("Panel name (used for worker/project name)", "q-proxy")
+        panel_name = ask("Panel name (worker/project name, e.g. my-panel)", "q-proxy")
     else:
         raise SystemExit("No --name given and not interactive.")
-    panel_name = slugify(panel_name)
+    slugged = slugify(panel_name)
+    if slugged != panel_name:
+        print(f"  (using '{slugged}')")
+    panel_name = slugged
 
-    kv_title = prompt_or(args.kv, "KV namespace name", f"{panel_name}-QPROXY_KV", interactive)
-    d1_name = prompt_or(args.d1, "D1 database name", f"{panel_name}", interactive)
+    kv_title = prompt_or(args.kv, "KV namespace title", f"{panel_name}-QPROXY_KV", interactive)
+    d1_name = prompt_or(args.d1, "D1 database name", f"{panel_name}-db", interactive)
 
-    # 3. password (never silently default)
-    print("\nStep 3/5 — Panel password (you choose it; no default gating)")
-    password = args.password or (ask_password() if interactive else None)
-    if not password:
-        raise SystemExit("No --password given and not interactive. Password is required (>=8, letter+digit).")
-
-    # 4. load artifact + create resources
-    print("\nStep 4/5 — Provisioning resources on Cloudflare")
+    print("\n-- Provisioning resources on Cloudflare")
     kv = create_kv(acct_id, tok, kv_title)
     print(f"  KV: {kv['id']} ({kv_title})")
     d1 = create_d1(acct_id, tok, d1_name)
     print(f"  D1: {d1['uuid']} ({d1_name})")
     sql_path = Path(__file__).resolve().parent / "migrations" / "0001_init.sql"
     if sql_path.exists():
-        apply_d1_migrations(acct_id, tok, d1["uuid"], sql_path.read_text())
-        print("  D1 migrations applied")
+        ok_n, skip_n = apply_d1_migrations(acct_id, tok, d1["uuid"], sql_path.read_text())
+        print(f"  Migrations: {ok_n} applied / {skip_n} already present")
 
-    # 5. deploy
-    print("\nStep 5/5 — Deploying")
+    print("\n-- Deploying")
     base_url = None
     if target == "workers":
         script, src = load_artifact("worker")
         print(f"  Using {src} ({len(script)} bytes)")
         upload_worker_real(acct_id, tok, panel_name, script, kv["id"], d1["uuid"])
-        sub = enable_site_subdomain(acct_id, tok) or env_subdomain()
+        sub = enable_site_subdomain(acct_id, tok) or env_subdomain() or getattr(args, "subdomain", None)
         enable_worker_route(acct_id, tok, panel_name)
-        if not sub:
+        while not sub or not re.fullmatch(r"[a-z0-9-]+", sub):
             if interactive:
-                sub = ask("Workers subdomain (from dashboard, e.g. qhorror13194)", "")
+                sub = ask("Workers subdomain (dashboard → Workers → your subdomain, e.g. qhorror13194)", "")
             else:
                 raise SystemExit("Could not determine workers subdomain. Pass --subdomain or re-run interactively.")
         base_url = f"https://{panel_name}.{sub}.workers.dev"
@@ -670,7 +897,6 @@ def do_deploy(args):
         print(f"  Using {src} ({len(script)} bytes)")
         create_pages_project(acct_id, tok, panel_name, kv["id"], d1["uuid"])
         deploy_pages(acct_id, tok, panel_name, script)
-        # find project URL
         proj = None
         for p in list_pages_projects(acct_id, tok) or []:
             if p["name"] == panel_name:
@@ -678,29 +904,39 @@ def do_deploy(args):
         base_url = proj.get("url", f"https://{panel_name}.pages.dev") if proj else f"https://{panel_name}.pages.dev"
         print(f"  Pages project deployed: {base_url}")
 
-    # 6. wait for seed, then set password
-    print("\nWaiting for the panel to seed (KV eventual consistency)...")
+    print("\n-- Panel password (you choose it; no default gating)")
+    password = args.password or (ask_password() if interactive else None)
+    if not password:
+        raise SystemExit("No --password given and not interactive. Password is required (>=8, letter+digit).")
+
+    print("\n-- Waiting for first seed (up to 4 min; Ctrl+C aborts — you can also set")
+    print("   the password later via the login page's setup card)")
     secure_path = wait_for_seed(acct_id, tok, kv["id"], base_url)
+    if not secure_path:
+        print("\nSeed not visible yet. The worker is uploaded; open it once in a browser,")
+        print("then re-run this script (it resumes) or set the password via the setup card:")
+        print(base_url + "/")
+        print(f"KV: {kv['id']}  D1: {d1['uuid']}")
+        return
     print(f"  securePath: {secure_path}")
-    if secure_path:
-        ok = set_first_password(base_url, secure_path, password)
-        if not ok:
-            print("  ! Setup window expired / could not set password automatically;")
-            print("    open the login page and use the first-visit setup card instead.")
-        else:
-            print("  Password set to your choice.")
+    ok = set_first_password(base_url, secure_path, password,
+                            account=acct_id, token=tok, kv_id=kv["id"])
+    if not ok:
+        print("  ! Setup window expired / could not set password automatically;")
+        print("    open the login page and use the first-visit setup card instead.")
+    else:
+        print("  Password set to your choice.")
 
     print("\n" + "=" * 60)
-    print("  Q Proxy is live")
+    print("  Q Proxy is live — save these (shown only here)")
     print("=" * 60)
-    print(f"  Worker/Page:  {base_url}")
-    print(f"  Login:        {base_url}/{secure_path}/login")
-    print(f"  Subscription: {base_url}/{secure_path}/sub")
-    print(f"  Panel:        {base_url}/{secure_path}/panel")
-    print(f"  securePath:   {secure_path}")
-    print(f"  Password:     {password}")
-    print("=" * 60)
-    print("  Save the login URL + password — they are shown only here.\n")
+    print(base_url)
+    print(f"{base_url}/{secure_path}/login")
+    print(f"{base_url}/{secure_path}/sub")
+    print(f"{base_url}/{secure_path}/panel")
+    print(f"securePath: {secure_path}")
+    print(f"Password: {password}")
+    print("=" * 60 + "\n")
 
 
 def wait_for_seed(account, token, kv_id, base_url, timeout=240):
@@ -708,6 +944,7 @@ def wait_for_seed(account, token, kv_id, base_url, timeout=240):
     Also nudges the worker root to trigger a seed on first hit."""
     kv_path = f"/accounts/{account}/storage/kv/namespaces/{kv_id}/values/qproxy:settings"
     deadline = time.time() + timeout
+    tick = 0
     while time.time() < deadline:
         try:
             body = cf_get_raw(token, kv_path)
@@ -729,6 +966,9 @@ def wait_for_seed(account, token, kv_id, base_url, timeout=240):
             urllib.request.urlopen(nudge, timeout=8).read()
         except Exception:
             pass
+        tick += 1
+        elapsed = int(time.time() - (deadline - timeout))
+        print(f"  ... {elapsed}s elapsed (poll {tick})", flush=True)
         time.sleep(5)
     return ""
 
@@ -772,21 +1012,39 @@ def cmd_list(args):
         print(f"  (could not list D1: {str(e)[:90]})")
 
 
+def need_confirm(args, name):
+    """Type-the-name confirmation on TTY; --yes on flags; fail-fast otherwise."""
+    if getattr(args, "yes", False):
+        return True
+    if is_tty():
+        print(f"\nThis permanently deletes '{name}' (cannot be undone).")
+        return confirm_type(name)
+    raise SystemExit(f"Refusing to delete '{name}' non-interactively without --yes.")
+
+
 def cmd_delete(args):
     tok = acquire_token(args)
     account = args.account or env_account()
     if not account:
         raise SystemExit("Provide --account <32-hex id>")
     if args.kind == "worker":
+        if not need_confirm(args, args.name):
+            print("Cancelled.")
+            return
         cf_request("DELETE", f"/accounts/{account}/workers/scripts/{args.name}", tok)
         print(f"Deleted worker {args.name}")
     elif args.kind == "page":
+        if not need_confirm(args, args.name):
+            print("Cancelled.")
+            return
         cf_request("DELETE", f"/accounts/{account}/pages/projects/{args.name}", tok)
         print(f"Deleted Pages project {args.name}")
     elif args.kind == "kv":
-        # find id by title
         for ns in cf_request("GET", f"/accounts/{account}/storage/kv/namespaces", tok) or []:
             if ns["title"] == args.name or ns["id"] == args.name:
+                if not need_confirm(args, ns["title"]):
+                    print("Cancelled.")
+                    return
                 cf_request("DELETE", f"/accounts/{account}/storage/kv/namespaces/{ns['id']}", tok)
                 print(f"Deleted KV {ns['title']}")
                 return
@@ -794,12 +1052,188 @@ def cmd_delete(args):
     elif args.kind == "d1":
         for db in cf_request("GET", f"/accounts/{account}/d1/database", tok) or []:
             if db["name"] == args.name or db["uuid"] == args.name:
+                if not need_confirm(args, db["name"]):
+                    print("Cancelled.")
+                    return
                 cf_request("DELETE", f"/accounts/{account}/d1/database/{db['uuid']}", tok)
                 print(f"Deleted D1 {db['name']}")
                 return
         print("D1 not found")
+    elif args.kind == "panel":
+        cmd_delete_panel(tok, account, args)
     else:
-        raise SystemExit("--kind must be worker|page|kv|d1")
+        raise SystemExit("--kind must be worker|page|kv|d1|panel")
+
+
+def resolve_panel(account, token, panel):
+    """Find an existing panel. Returns dict(kind, kv_id, d1_id, source, url?).
+    Compute membership comes from list endpoints; resource IDs from live Pages
+    config, else the {panel}-QPROXY_KV / {panel}(-db) naming convention."""
+    try:
+        for w in cf_request("GET", f"/accounts/{account}/workers/scripts", token) or []:
+            if w["id"] == panel:
+                kv_id, d1_id = convention_ids(account, token, panel)
+                return {"kind": "workers", "kv_id": kv_id, "d1_id": d1_id, "source": "convention"}
+    except CfError:
+        pass
+    try:
+        proj = cf_request("GET", f"/accounts/{account}/pages/projects/{panel}", token)
+        prod = ((proj.get("deployment_configs") or {}).get("production") or {})
+        kv_id = ((prod.get("kv_namespaces") or {}).get(BINDINGS_KV) or {}).get("namespace_id")
+        d1_id = ((prod.get("d1_databases") or {}).get(BINDINGS_D1) or {}).get("id")
+        if not kv_id or not d1_id:
+            ckv, cd1 = convention_ids(account, token, panel)
+            kv_id, d1_id = kv_id or ckv, d1_id or cd1
+        return {"kind": "pages", "kv_id": kv_id, "d1_id": d1_id,
+                "source": "live", "url": proj.get("url")}
+    except CfError:
+        pass
+    kv_id, d1_id = convention_ids(account, token, panel)
+    if kv_id or d1_id:
+        print("(!) compute not found; using naming-convention leftovers")
+        return {"kind": "leftovers", "kv_id": kv_id, "d1_id": d1_id, "source": "convention"}
+    return None
+
+
+def convention_ids(account, token, panel):
+    kv_id, d1_id = None, None
+    try:
+        for ns in cf_request("GET", f"/accounts/{account}/storage/kv/namespaces", token) or []:
+            if ns["title"] == f"{panel}-QPROXY_KV":
+                kv_id = ns["id"]
+    except CfError:
+        pass
+    try:
+        for db in cf_request("GET", f"/accounts/{account}/d1/database", token) or []:
+            if db["name"] in (panel, f"{panel}-db"):
+                d1_id = db["uuid"]
+    except CfError:
+        pass
+    return kv_id, d1_id
+
+
+def cmd_delete_panel(tok, account, args):
+    panel = args.name
+    found = resolve_panel(account, tok, panel)
+    if not found:
+        print(f"No worker, Pages project, or leftover KV/D1 named '{panel}'.")
+        return
+    print(f"\nPanel '{panel}' resolves to:")
+    print(f"  compute: {found['kind']} (source: {found['source']})")
+    if found.get("kv_id"):
+        print(f"  KV: {found['kv_id']}")
+    if found.get("d1_id"):
+        print(f"  D1: {found['d1_id']}")
+    if not need_confirm(args, panel):
+        print("Cancelled.")
+        return
+    if found["kind"] == "workers":
+        cf_request("DELETE", f"/accounts/{account}/workers/scripts/{panel}", tok)
+        print(f"Deleted worker {panel}")
+    elif found["kind"] == "pages":
+        cf_request("DELETE", f"/accounts/{account}/pages/projects/{panel}", tok)
+        print(f"Deleted Pages project {panel}")
+    if found.get("kv_id"):
+        try:
+            cf_request("DELETE", f"/accounts/{account}/storage/kv/namespaces/{found['kv_id']}", tok)
+            print("Deleted bound KV")
+        except CfError as e:
+            print(f"KV delete note: {friendly_cf_error(e)}")
+    if found.get("d1_id"):
+        try:
+            cf_request("DELETE", f"/accounts/{account}/d1/database/{found['d1_id']}", tok)
+            print("Deleted bound D1")
+        except CfError as e:
+            print(f"D1 delete note: {friendly_cf_error(e)}")
+
+
+def cmd_update(args):
+    """Re-upload the bundle onto an existing panel. Never touches settings/password."""
+    print("\n=== Q Proxy — update panel ===")
+    print("(code + migrations only — password, settings and data are untouched)\n")
+    interactive = is_tty()
+    tok = acquire_token(args)
+    account = resolve_account(tok, args.account or env_account())
+    print(f"  Account: {account}")
+    panel = getattr(args, "name", None)
+    if not panel and interactive:
+        panel = pick_existing_panel(account, tok)
+    if not panel:
+        raise SystemExit("No --name given and not interactive.")
+    found = resolve_panel(account, tok, panel)
+    if not found or found["kind"] == "leftovers":
+        raise SystemExit(f"No live worker/project '{panel}'. Leftovers: "
+                         f"KV={found['kv_id'] if found else None} D1={found['d1_id'] if found else None}. "
+                         f"Redeploy with `deploy`, or delete leftovers with `delete --kind kv|d1`.")
+    kind = found["kind"]
+    if getattr(args, "target", None) and args.target != kind:
+        raise SystemExit(f"'{panel}' is a {kind} panel, but --target {args.target} was given.")
+    kv_id, d1_id = found["kv_id"], found["d1_id"]
+    if not kv_id or not d1_id:
+        raise SystemExit(f"Live bindings incomplete for '{panel}' (KV={kv_id} D1={d1_id}).")
+    print(f"  Panel: {panel} ({kind}, bindings from {found['source']})")
+    script, src = load_artifact("worker" if kind == "workers" else "pages")
+    print(f"  Uploading {src} ({len(script)} bytes)...")
+    if kind == "workers":
+        upload_worker_real(account, tok, panel, script, kv_id, d1_id)
+        enable_worker_route(account, tok, panel)
+    else:
+        deploy_pages(account, tok, panel, script)
+    sql_path = Path(__file__).resolve().parent / "migrations" / "0001_init.sql"
+    if sql_path.exists():
+        ok_n, skip_n = apply_d1_migrations(account, tok, d1_id, sql_path.read_text())
+        print(f"  Migrations: {ok_n} applied / {skip_n} already present")
+    base = panel_url(account, tok, kind, panel)
+    print(f"  Health: {base}/healthz")
+    try:
+        req = urllib.request.Request(base + "/healthz", headers={"User-Agent": PANEL_UA})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            info = json.loads(r.read().decode("utf-8"))
+        print(f"  OK — version {info.get('version')} at {info.get('colo')}")
+    except Exception as e:
+        raise SystemExit(f"Update uploaded but healthz failed: {e}")
+    print(f"\n'{panel}' updated. Password and settings untouched.\n")
+
+
+def panel_url(account, token, kind, panel):
+    if kind == "pages":
+        try:
+            proj = cf_request("GET", f"/accounts/{account}/pages/projects/{panel}", token)
+            if proj.get("url"):
+                return proj["url"]
+        except CfError:
+            pass
+        return f"https://{panel}.pages.dev"
+    try:
+        sub = enable_site_subdomain(account, token)
+    except CfError:
+        sub = ""
+    return f"https://{panel}.{sub}.workers.dev" if sub else ""
+
+
+def pick_existing_panel(account, token):
+    names = []
+    labels = []
+    try:
+        for w in cf_request("GET", f"/accounts/{account}/workers/scripts", token) or []:
+            names.append(("workers", w["id"]))
+            labels.append(f"worker: {w['id']}")
+    except CfError:
+        pass
+    try:
+        for p in cf_request("GET", f"/accounts/{account}/pages/projects", token) or []:
+            names.append(("pages", p["name"]))
+            labels.append(f"pages: {p['name']}  {p.get('url', '')}")
+    except CfError:
+        pass
+    if not names:
+        print("No workers or Pages projects on this account.")
+        return ""
+    labels.append("Back")
+    picked = select_option("Choose existing panel", labels)
+    if picked == "Back":
+        return ""
+    return names[labels.index(picked)][1]
 
 
 def cmd_status(args):
@@ -847,11 +1281,19 @@ def main():
     s.set_defaults(func=cmd_status)
 
     rm = sub.add_parser("delete", help="delete a deployment/resource")
-    rm.add_argument("--kind", required=True, choices=["worker", "page", "kv", "d1"])
+    rm.add_argument("--kind", required=True, choices=["worker", "page", "kv", "d1", "panel"])
     rm.add_argument("--name", required=True, help="name or id to delete")
     rm.add_argument("--token", help="Cloudflare API token")
     rm.add_argument("--account", help="32-hex account id")
+    rm.add_argument("--yes", action="store_true", help="skip confirmation (non-interactive)")
     rm.set_defaults(func=cmd_delete)
+
+    up = sub.add_parser("update", help="re-upload code onto an existing panel (keeps password+data)")
+    up.add_argument("--name", help="existing panel name")
+    up.add_argument("--target", choices=["workers", "pages"], help="must match the panel kind")
+    up.add_argument("--token", help="Cloudflare API token")
+    up.add_argument("--account", help="32-hex account id")
+    up.set_defaults(func=cmd_update)
 
     t = sub.add_parser("token", help="print the prefilled token URL")
     t.add_argument("--account", help="account id hint for the URL")
@@ -867,13 +1309,51 @@ def main():
     mk.set_defaults(func=cmd_mk_token)
 
     args = parser.parse_args()
-    # Bare `deploy.py` (no subcommand) = interactive deploy.
+    # Bare `deploy.py` (no subcommand) = interactive main menu.
     if not args.cmd:
-        ns = argparse.Namespace(target=None, name=None, kv=None, d1=None, password=None,
-                               token=None, account=None, subdomain=None, func=do_deploy)
-        ns.func(ns)
+        if not is_tty():
+            parser.print_help()
+            raise SystemExit("\nNo command given and not interactive. Try `deploy.py deploy --help`.")
+        interactive_menu()
         return
     args.func(args)
+
+
+def interactive_menu():
+    print("\n=== Q Proxy ===\n")
+    while True:
+        choice = select_option("What do you want to do?", [
+            "New panel — deploy a fresh panel",
+            "Update panel — re-upload code (keeps password + data)",
+            "Delete — remove a panel or resource",
+            "List — show workers, pages, KV, D1",
+            "Get API token — prefilled creation link",
+            "Exit",
+        ])
+        if choice.startswith("New panel"):
+            ns = argparse.Namespace(target=None, name=None, kv=None, d1=None, password=None,
+                                   token=None, account=None, subdomain=None, func=do_deploy)
+            ns.func(ns)
+        elif choice.startswith("Update panel"):
+            ns = argparse.Namespace(name=None, target=None, token=None, account=None, func=cmd_update)
+            ns.func(ns)
+        elif choice.startswith("Delete"):
+            tok = acquire_token(argparse.Namespace(token=None, account=None))
+            account = resolve_account(tok, env_account() or None)
+            ns = argparse.Namespace(kind="panel", name=None, token=tok, account=account,
+                                   yes=False, func=None)
+            ns.name = pick_existing_panel(account, tok)
+            if ns.name:
+                cmd_delete(ns)
+        elif choice.startswith("List"):
+            ns = argparse.Namespace(token=None, account=None, func=cmd_list)
+            ns.func(ns)
+        elif choice.startswith("Get API token"):
+            ns = argparse.Namespace(account=None, func=cmd_token)
+            ns.func(ns)
+        else:
+            print("Bye.")
+            return
 
 
 if __name__ == "__main__":
