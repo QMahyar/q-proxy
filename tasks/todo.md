@@ -4,12 +4,12 @@ Plan: `tasks/plan.md` (v1.5, from docs/ui-audit.md). Evidence: `.pi/ui-audit/sho
 Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · creds in `.pi/ui-audit/local-*.txt`.
 
 ## Phase 1 — Skeleton & shipstoppers
-- [ ] Task 1 (WS-A): Promote Users + WARP top-level tabs + redirects
-- [ ] Task 2 (WS-B): Users token column + zero state + quota relabel
-- [ ] Task 3 (WS-E): Light-theme WCAG token fix
-- [ ] Task 4 (WS-G): Destructive-action confirmations (import/preset/discard/bulk)
-- [ ] Task 5 (WS-F): securePath dead control removal (+ read-only address line)
-- [ ] Checkpoint 1: typecheck+tests+build + Playwright pass 1
+- [x] Task 1 (WS-A): Promote Users + WARP top-level tabs + redirects ✅ 1369 tests, Playwright phase1/
+- [x] Task 2 (WS-B): Users token column + zero state + quota relabel ✅ tokenHint chip + regen, empty-card, quota relabel, auth-status probe fix
+- [x] Task 3 (WS-E): Light-theme WCAG token fix ✅ AA ratios verified, contrast.spec.ts guard
+- [x] Task 4 (WS-G): Destructive-action confirmations ✅ import/preset/discard/bulk named-op dialogs
+- [x] Task 5 (WS-F): securePath dead control removal ✅ read-only card, clipboard verified
+- [x] Checkpoint 1: typecheck+tests+build + Playwright pass 1 ✅ 1382/1382
 
 ## Phase 2 — Entity surfaces
 - [ ] Task 6 (WS-C): Subscriptions hub #/subs (+ staleness fix + teaser)
