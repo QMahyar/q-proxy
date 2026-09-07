@@ -42,7 +42,11 @@ location.replace(BASE+'login')})},
 apply(){
 (async()=>{for(const sec of[...S.dirty])await applySection(sec)})()},
 discard(){
-[...S.dirty].forEach(sec=>discardSection(sec))},
+const n=S.dirty?S.dirty.size:0;
+if(!n)return;
+confirmDialog('confirm.discard.title','confirm.discard.message',true,{n:n}).then(yes=>{
+if(!yes)return;
+[...S.dirty].forEach(sec=>discardSection(sec))})},
  'settings-import'(){
  const fileInput=$('settings-import-file');
  fileInput.onchange=async()=>{
@@ -51,6 +55,7 @@ discard(){
  try{
  const parsed=JSON.parse(await file.text());
  if(parsed&&parsed.kind==='q-proxy-settings'&&parsed.settings){
+ if(!(await confirmDialog('confirm.import.title','confirm.import.message',true,{name:file.name})))return;
  await api('api/settings/import',{method:'POST',body:{settings:parsed.settings}});
  toast(t('general.backup.imported'),'ok');location.reload()}
  else toast(t('general.backup.badfile'),'err')}
@@ -115,9 +120,11 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  if(!S.warp)S.warp={accounts:[],presets:[],amnezia:null};
  S.warp.amnezia=d.amnezia;toast(t('common.saved'),'ok')}catch(err){toastErr(err)}})()},
   'warp-preset-del'(el){
-  (async()=>{
+  const p=S.warp&&S.warp.presets?S.warp.presets.find(x=>x.id===el.dataset.id):null;
+  confirmDialog('confirm.presetDelete.title','confirm.presetDelete.message',true,{name:p?p.name:'',n:p&&p.endpoints?p.endpoints.length:0}).then(async yes=>{
+  if(!yes)return;
   try{await api('api/warp/presets/'+el.dataset.id,{method:'DELETE',mutate:true});
-  toast(t('warp.toast.presetDeleted'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}catch(err){toastErr(err)}})()},
+  toast(t('warp.toast.presetDeleted'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}catch(err){toastErr(err)}})},
   'warp-custom-eps-save'(el){
   (async()=>{
   const eps=$('warp-custom-eps').value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
@@ -147,10 +154,10 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  'close-rot'(){closeModal('m-rot')},
  'backup-export'(){try{localStorage.setItem(EXPORT_KEY,String(Date.now()))}catch(e){}setTimeout(maybeBackupBanner,500)},
  'backup-dismiss'(){try{localStorage.setItem(BACKUP_DISMISS,String(Date.now()))}catch(e){}$('backup-banner').hidden=true},
- 'users-bulk-enable'(){bulkUsers({enabled:true})},
- 'users-bulk-disable'(){bulkUsers({enabled:false})},
- 'users-bulk-del'(){bulkUsers({delete:true})},
- 'users-bulk-extend'(){const pick=$('users-bulk-expiry');const v=pick?pick.value:'';if(!v){toast(t('users.bulk.empty_expiry'),'err');return}bulkUsers({expiresAt:new Date(v).getTime()})},
+ 'users-bulk-enable'(){runBulkUsers('confirm.bulk.enable',{enabled:true})},
+ 'users-bulk-disable'(){runBulkUsers('confirm.bulk.disable',{enabled:false})},
+ 'users-bulk-del'(){runBulkUsers('confirm.bulk.delete',{delete:true})},
+ 'users-bulk-extend'(){const pick=$('users-bulk-expiry');const v=pick?pick.value:'';if(!v){toast(t('users.bulk.empty_expiry'),'err');return}runBulkUsers('confirm.bulk.extend',{expiresAt:new Date(v).getTime()})},
  'tg-setup'(el){
  (async()=>{el.disabled=true;
  try{const d=await api('api/telegram/setup',{method:'POST',body:{}});
@@ -290,6 +297,16 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  totpReset()}
  catch(err){toastErr(err)}
  finally{el.disabled=false}})()}};
+async function runBulkUsers(titleKey,patch){
+const ids=[...BULK];
+if(!ids.length)return;
+if(!(await confirmDialog(titleKey,'confirm.bulk.message',true,{n:ids.length})))return;
+try{const d=await api('api/users/bulk',{method:'POST',body:{ids:ids,patch:patch}});
+BULK.clear();updateBulkBar();
+let msg=t('users.bulk.done',{updated:d.updated,deleted:d.deleted});
+if(d.unknown)msg+=t('users.bulk.unknown',{unknown:d.unknown});
+toast(msg,'ok');await loadUsers()}
+catch(err){toastErr(err)}}
 function forceFlagged(){
 if(S.set&&S.set.passwordIsBootstrap===true)return true;
 try{return sessionStorage.getItem('qproxy_force_change')==='1'}catch(e){return false}}

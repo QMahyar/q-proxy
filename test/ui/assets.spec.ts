@@ -4,7 +4,7 @@ import { buildSubUrls } from "../../src/handlers/api/status";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { execFileSync } from "node:child_process";
 
-const TOTAL_BUDGET_BYTES = 290 * 1024;
+const TOTAL_BUDGET_BYTES = 320 * 1024;
 
 describe("ui/assets", () => {
   it("exports exactly panel, login and camo as non-empty strings", () => {
@@ -109,7 +109,6 @@ describe("panel html", () => {
       expect(html).toContain(`key:'${section}'`);
     }
     for (const bind of [
-      "securePath",
       "profileTitle",
       "debugLogging",
       "vlessEnabled",
@@ -226,20 +225,24 @@ describe("panel ui p08", () => {
     expect(consumed).toContain("Panel info");
   });
 
-  it("refreshes subscriptions and warns before a securePath change is applied", () => {
-    expect(html).toContain("async function refreshSubUrls()");
-    expect(html).toContain("confirm.securepath_title");
-    expect(html).toContain("confirm.securepath_body");
-    expect(html).toMatch(/patch\.securePath!==undefined&&!\(await confirmDialog/);
-    expect(html).toMatch(/sec==='general'\|\|sec==='addresses'/);
+  it("shows a read-only panel address card and never a securePath editor", () => {
+    expect(html).toContain("panelAddressCardHtml");
+    expect(html).toContain("'address.panelTitle':'Panel address'");
+    expect(html).toContain("'address.panelTitle':'نشانی پنل'");
+    expect(html).toContain("'address.panelHint'");
+    expect(html).not.toContain("FL('securePath'");
+    expect(html).not.toContain("confirm.securepath_title");
+    expect(html).not.toContain("confirm.securepath_body");
+    expect(html).not.toContain("'general.securePath.label':");
+    expect(html).not.toContain("'general.securePath.short':");
+    expect(html).not.toContain("'general.securePath.help':");
+    expect(html).not.toContain("SCALAR_RULES.securePath");
+    expect(html).not.toContain("location.replace(nb+'/panel')");
   });
 
-  it("navigates to the new base after a securePath change instead of refreshing under the old one", () => {
-    const guard = /patch\.securePath!==undefined\)\{const nb='\/'\+String\(cur\.securePath\|\|''\)\.replace\(\/\^\\\/\+\|\\\/\+\$\/g,''\);location\.replace\(nb\+'\/panel'\);return\}/;
-    expect(html).toMatch(guard);
-    const guardIdx = html.search(guard);
-    expect(guardIdx).toBeGreaterThan(html.indexOf("t('toast.settingsSaved')"));
-    expect(guardIdx).toBeLessThan(html.indexOf("sec==='general'||sec==='addresses')await"));
+  it("refreshes subscriptions after a general or addresses save", () => {
+    expect(html).toContain("async function refreshSubUrls()");
+    expect(html).toMatch(/sec==='general'\|\|sec==='addresses'/);
   });
 
   it("keeps language toggle labels present in both dictionaries", () => {

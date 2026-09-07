@@ -30,10 +30,10 @@ const FL=(path,type,label,hint,extra)=>Object.assign({path,type,label,hint:hint|
 const SECTIONS=[
 {key:'general',cards:[
 {title:null,fields:[
-FL('securePath','secret','general.securePath.label','general.securePath.short',{gen:'hex12',copy:true,maxLen:64,help:'general.securePath.help'}),
 FL('profileTitle','str','general.profileTitle.label','general.profileTitle.hint',{maxLen:64}),
 FL('debugLogging','bool','general.debugLogging.label','general.debugLogging.hint'),
 FL('allowedIps','list','security.allowlist.label','security.allowlist.hint')]},
+{title:'address.panelTitle',panelAddr:true,fields:[]},
 {title:'home.kill.title',fields:[
 FL('killSwitch','instantbool','general.killSwitch.label','general.killSwitch.hint'),
 FL('language','lang','general.language.label',null)]},
@@ -266,6 +266,12 @@ return '<section class="card"><div class="card__head"><div class="card__title hi
 if(card.backup&&!card.fields.length){
 return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t(card.title))+'</div></div><div class="btn-row"><a class="btn btn--ghost btn--sm" href="'+esc(BASE)+'api/settings/export" download data-action="backup-export">'+esc(t('general.backup.export'))+'</a><button type="button" class="btn btn--ghost btn--sm" data-action="settings-import">'+esc(t('general.backup.import'))+'</button></div><input type="file" id="settings-import-file" accept=".json,application/json" hidden><p class="field__hint" id="settings-import-hint">'+esc(t('general.backup.import_hint'))+'</p></section>'}
 return cardBodyHtml(card)}
+function panelAddressCardHtml(){
+const sp=String((S.set&&S.set.securePath)||'').replace(/^\/+|\/+$/g,'');
+const loginUrl=location.origin+(sp?'/'+sp+'/':BASE)+'login';
+return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t('address.panelTitle'))+'</div></div>'
++'<div class="copy-field"><code dir="ltr">'+esc(loginUrl)+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-value="'+esc(loginUrl)+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>'
++'<p class="field__hint">'+esc(t('address.panelHint'))+'</p></section>'}
 function securityCardHtml(){
 return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t('security.title'))+'</div></div><p class="field__hint">'+esc(t('security.hint'))+'</p>'
 +'<div class="field" id="fw-sec-cur"><div class="field__label-row"><label class="field__label" for="sec-cur">'+esc(t('security.current'))+'</label></div><div class="secret-field"><input type="password" class="input input--mono" style="flex:1;min-width:0" id="sec-cur" autocomplete="current-password" spellcheck="false" dir="ltr"><button type="button" class="btn btn--icon btn--ghost" data-action="reveal" data-target="sec-cur" aria-label="'+esc(t('common.reveal'))+'" aria-pressed="false"><svg aria-hidden="true"><use href="#i-eye"/></svg></button></div><p class="field__error"></p></div>'
@@ -273,6 +279,7 @@ return '<section class="card"><div class="card__head"><div class="card__title">'
 +'<div class="field" id="fw-sec-cf"><div class="field__label-row"><label class="field__label" for="sec-confirm">'+esc(t('security.confirm'))+'</label></div><div class="secret-field"><input type="password" class="input input--mono" style="flex:1;min-width:0" id="sec-confirm" autocomplete="new-password" spellcheck="false" dir="ltr"><button type="button" class="btn btn--icon btn--ghost" data-action="reveal" data-target="sec-confirm" aria-label="'+esc(t('common.reveal'))+'" aria-pressed="false"><svg aria-hidden="true"><use href="#i-eye"/></svg></button></div><p class="field__error"></p></div>'
 +'<div class="btn-row"><button type="button" class="btn btn--primary" data-action="change-password">'+esc(t('security.change'))+'</button></div></section>'}
 function cardBodyHtml(card){
+if(card.panelAddr&&!card.fields.length){return panelAddressCardHtml()}
 if(card.security&&!card.fields.length){return securityCardHtml()}
 if(card.totpCard&&!card.fields.length){return totpCardHtml()}
 const dim=card.protoCard&&getPath(S.set,card.protoCard)===false;
@@ -471,14 +478,12 @@ clearFieldErrors(sec);
 try{
 const{cur,patch}=diffSection(sec);
 if(Object.keys(patch).length===0){markDirty();return}
-if(patch.securePath!==undefined&&!(await confirmDialog('confirm.securepath_title','confirm.securepath_body',true)))return;
 await api('api/settings/save',{method:'PUT',body:patch});
 Object.assign(S.set,JSON.parse(JSON.stringify(cur)));
 pushUndo(sec,S.snap[sec]||'{}');
 S.snap[sec]=JSON.stringify(cur);
 markDirty();
  toast(t('toast.settingsSaved'),'ok');
- if(patch.securePath!==undefined){const nb='/'+String(cur.securePath||'').replace(/^\/+|\/+$/g,'');location.replace(nb+'/panel');return}
   if(sec==='general'||sec==='addresses')await refreshSubUrls()}
 catch(e){
 if(e&&e.fields&&Object.keys(e.fields).length){
@@ -569,7 +574,6 @@ ps.forEach(p=>{
 if(f.type==='num'&&typeof f.min==='number')SCALAR_RULES[p]={kind:'num',min:f.min,max:f.max};
 else if(f.type==='secret'&&f.gen==='uuid')SCALAR_RULES[p]={kind:'uuid'};
 else if(f.vtype==='domain')SCALAR_RULES[p]={kind:'domain'}})})));
-SCALAR_RULES.securePath={kind:'required'};
 function scalarError(el){
 const rule=SCALAR_RULES[el.dataset.bind];
 if(!rule)return null;
@@ -580,7 +584,6 @@ if(rule.kind==='num'){
 if(raw==='')return 'err.number';
 const n=Number(raw);
 return Number.isInteger(n)&&n>=rule.min&&n<=rule.max?null:'err.number'}
-if(rule.kind==='required')return raw.length>0?null:'err.required';
 return null}
 function blurValidateEl(el){
 const msg=scalarError(el);
@@ -604,14 +607,9 @@ const cs='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const a=new Uint8Array(24);crypto.getRandomValues(a);
 let s='';a.forEach(b=>{s+=cs[b%cs.length]});
 return s}
-function randomHex(nBytes){
-const a=new Uint8Array(nBytes);crypto.getRandomValues(a);
-return[...a].map(b=>b.toString(16).padStart(2,'0')).join('')}
-
 function stripPort(s){
 const m=s.match(/^(.+):(\d+)$/);
 return m?m[1]:s}
 function genFor(kind){
 if(kind==='uuid')return crypto.randomUUID();
-if(kind==='hex12')return randomHex(12);
 return randomPass()}
