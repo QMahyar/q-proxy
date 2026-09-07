@@ -193,6 +193,20 @@ function loginSuccessData(s: Settings): { hasPassword: boolean; mustChangePasswo
   return { hasPassword: true };
 }
 
+export const handleAuthStatus: RouteHandler = async (req, env, s) => {
+  const raw = getSession(req);
+  let hasSession = false;
+  if (raw !== null) {
+    try {
+      const floor = await getSessionFloor(env);
+      hasSession = (await verifySession(raw, s.sessionSecret, floor)) !== null;
+    } catch {
+      hasSession = false;
+    }
+  }
+  return jsonOk({ hasSession });
+};
+
 export const handleLogin: RouteHandler = async (req, env, s) => {
   const ip = clientIp(req);
   await assertLoginAllowed(env, ip);

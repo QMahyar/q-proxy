@@ -31,6 +31,32 @@ async function clearBootstrapFlag(): Promise<void> {
 }
 
 describe("panel auth lifecycle", () => {
+  it("answers auth-status with hasSession=false when logged out and true with a valid session", async () => {
+    await seed(kv, SP);
+
+    let res = await SELF.fetch(`${BASE}/api/auth/status`);
+    expect(res.status).toBe(200);
+    expect((await body(res)).data).toEqual({ hasSession: false });
+
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    expect(res.status).toBe(409);
+    expect((await body(res)).error.code).toBe("SETUP_REQUIRED");
+
+    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
+    expect(res.status).toBe(200);
+    await clearBootstrapFlag();
+    const setCookie = res.headers.get("Set-Cookie") ?? "";
+    const cookie = setCookie.split(";")[0]!;
+
+    res = await SELF.fetch(`${BASE}/api/auth/status`, { headers: { Cookie: cookie } });
+    expect(res.status).toBe(200);
+    expect((await body(res)).data).toEqual({ hasSession: true });
+
+    res = await SELF.fetch(`${BASE}/api/auth/status`, { headers: { Cookie: "q_session=bogus.sig" } });
+    expect(res.status).toBe(200);
+    expect((await body(res)).data).toEqual({ hasSession: false });
+  });
+
   it("walks setup -> login -> settings -> validation -> killswitch -> suburls -> logout -> lockout", async () => {
     await seed(kv, SP);
 

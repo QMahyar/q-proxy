@@ -26,7 +26,7 @@ import { serveLoginPage, servePanelPage } from "../handlers/panel-page";
 import { handleCamouflage } from "../handlers/camouflage";
 import { handleWarpSub } from "../handlers/warp-sub";
 import { handleUserSub } from "../handlers/users-sub";
-import { handleLogin, handleLogout, handlePasswordChange, handleSetup } from "../handlers/api/auth";
+import { handleLogin, handleLogout, handlePasswordChange, handleSetup, handleAuthStatus } from "../handlers/api/auth";
 import {
   handleGetSettings,
   handleResetSettings,
@@ -114,6 +114,7 @@ const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
   "auth-login": { methods: ["POST"], auth: "none", handler: handleLogin },
   "auth-logout": { methods: ["POST"], auth: "none", handler: csrfOnly(handleLogout), bootstrap: "allow" },
   "auth-setup": { methods: ["POST"], auth: "none", handler: csrfOnly(handleSetup) },
+  "auth-status": { methods: ["GET"], auth: "none", handler: handleAuthStatus },
   "auth-password": { methods: ["POST"], auth: "write", handler: handlePasswordChange, bootstrap: "allow" },
   "settings-get": { methods: ["GET", "PUT"], auth: "write", handler: settingsGetOrSave, bootstrap: "read" },
   bootstrap: { methods: ["GET"], auth: "read", handler: handleBootstrap, bootstrap: "allow" },

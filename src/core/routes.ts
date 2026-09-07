@@ -27,6 +27,7 @@ export type ApiRouteName =
   | "auth-login"
   | "auth-logout"
   | "auth-setup"
+  | "auth-status"
   | "auth-password"
   | "bootstrap"
   | "settings-get"
@@ -96,6 +97,7 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
         if (action === "login") return { kind: "api", api: "auth-login" };
         if (action === "logout") return { kind: "api", api: "auth-logout" };
         if (action === "setup") return { kind: "api", api: "auth-setup" };
+        if (action === "status") return { kind: "api", api: "auth-status" };
         if (action === "password") return { kind: "api", api: "auth-password" };
         return null;
       }

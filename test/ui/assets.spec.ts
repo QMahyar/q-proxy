@@ -268,6 +268,36 @@ describe("panel ui p08", () => {
     expect(html).toContain("'common.retry'");
   });
 
+  it("renders a token hint with rotate affordance instead of the dead URL branch", () => {
+    expect(html).not.toContain("u.token?userSubUrl");
+    expect(html).not.toContain("const url=u.token?");
+    expect(html).toContain("esc(u.tokenHint||'')");
+    expect(html).toContain("'users.token.hint_title'");
+    expect(html).toContain("'users.token.hint_title':'فقط چند نویسهٔ نخست");
+    expect(html).toContain("'users.token.regen':'Regenerate token'");
+    expect(html).toContain("'users.col.token':'Subscription token'");
+    expect(html).toContain("'users.col.token':'توکن اشتراک'");
+  });
+
+  it("labels the per-user quota as a subscription fetch limit with a UTC reset note", () => {
+    expect(html).toContain("'users.limit':'Daily subscription fetch limit'");
+    expect(html).toContain("'users.limit':'سقف روزانهٔ دریافت اشتراک'");
+    expect(html.match(/'users\.limit_reset':/g)?.length).toBe(2);
+    expect(html).toContain("resets at 00:00 UTC");
+    expect(html).toContain("t('users.limit_reset')");
+  });
+
+  it("replaces the bare zero-user row with an empty card, capacity note and CTA", () => {
+    expect(html).toContain("'users.empty_msg'");
+    expect(html).toContain("Up to 50 users.");
+    expect(html).toContain("'users.empty_cta':'Create first user'");
+    expect(html).toContain("'users.empty_cta':'ساخت نخستین کاربر'");
+    expect(html).toContain("تا ۵۰ کاربر");
+    expect(html).toContain('id="users-thead"');
+    expect(html).toContain("if(th)th.hidden=empty");
+    expect(html).toContain("function usersEmptyHtml()");
+  });
+
   it("keeps accent swatches visible on mobile and offers QR PNG download", () => {
     expect(html).not.toContain(".swatches{display:none}");
     expect(html).toContain(".swatches{display:flex;flex-wrap:wrap");
@@ -366,11 +396,11 @@ describe("login html", () => {
     expect(html).toContain("Retry-After");
   });
 
-  it("bounces authed visitors via the api/settings ok-envelope before rendering either card", () => {
-    expect(html).toContain("fetch(BASE+'api/settings'");
-    expect(html).toMatch(/if\(d\.ok&&j&&j\.ok&&j\.data\)\{\s*goPanel\(\);\s*return\s*\}/);
+  it("bounces authed visitors via the api/auth/status probe before rendering either card", () => {
+    expect(html).toContain("fetch(BASE+'api/auth/status'");
+    expect(html).toMatch(/if\(d\.ok&&j&&j\.ok&&j\.data&&j\.data\.hasSession\)\{\s*goPanel\(\);\s*return\s*\}/);
     expect(html).toMatch(/catch\(e\)\{\}\s*renderLogin\(\)\}\)\(\)/);
-    expect(html).not.toContain("hasPassword");
+    expect(html).not.toContain("fetch(BASE+'api/settings'");
   });
 
   it("redirects into the panel on success", () => {
