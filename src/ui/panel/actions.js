@@ -92,7 +92,7 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  confirmDialog('warp.confirm.delete_title','warp.confirm.delete_body',true).then(async yes=>{
  if(!yes)return;
  try{await api('api/warp/account/'+el.dataset.id,{method:'DELETE',mutate:true});
- toast(t('warp.toast.deleted'),'ok');invalidateWarp();location.hash='#/settings/warp'}catch(err){toastErr(err)}})},
+ toast(t('warp.toast.deleted'),'ok');invalidateWarp();location.hash='#/warp'}catch(err){toastErr(err)}})},
  'warp-amnezia-reset'(el){
  (async()=>{
  try{await api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:null}});
@@ -393,7 +393,7 @@ if(e.target.closest('[data-user-proto]')&&e.target.checked){
 const allBox=document.querySelector('#mu-protocols input[data-user-proto-all]');
 if(allBox)allBox.checked=false;
 return}
-if(e.target.id==='warp-preset'){const id=(location.hash.match(/^#\/settings\/warp\/([0-9a-f-]+)/i)||[])[1];if(id){(async()=>{try{await api('api/warp/account/'+id,{method:'PUT',body:{endpoint_list:{type:'preset',preset_id:e.target.value}}});toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(id))}catch(err){toastErr(err)}})()}return}
+if(e.target.id==='warp-preset'){const id=(location.hash.match(/^#\/warp\/([0-9a-f-]+)/i)||[])[1];if(id){(async()=>{try{await api('api/warp/account/'+id,{method:'PUT',body:{endpoint_list:{type:'preset',preset_id:e.target.value}}});toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(id))}catch(err){toastErr(err)}})()}return}
 if(e.target.closest('[data-kill]')){setKillSwitch(e.target.checked);return}
 if(e.target.closest('[data-lang-sel]')){setLangCookie(e.target.value);location.reload();return}
 if(e.target.closest('[data-port-master]')){
@@ -458,13 +458,13 @@ wireTabKeys($('subtabs'),'.subtab');
 $('wg-go').addEventListener('click',async()=>{
 const btn=$('wg-go');btn.disabled=true;
 try{const d=await api('api/warp/account/generate',{method:'POST',body:{name:$('wg-name').value.trim()}});
-closeModal('m-warp-generate');toast(t('warp.toast.generated'),'ok');invalidateWarp();location.hash='#/settings/warp/'+d.account.id}
+closeModal('m-warp-generate');toast(t('warp.toast.generated'),'ok');invalidateWarp();location.hash='#/warp/'+d.account.id}
 catch(err){toastErr(err)}
 finally{btn.disabled=false}});
 $('wi-go').addEventListener('click',async()=>{
 const btn=$('wi-go');btn.disabled=true;
 try{const d=await api('api/warp/account/import',{method:'POST',body:{name:$('wi-name').value.trim(),config:$('wi-config').value}});
-closeModal('m-warp-import');toast(t('warp.toast.imported'),'ok');invalidateWarp();location.hash='#/settings/warp/'+d.account.id}
+closeModal('m-warp-import');toast(t('warp.toast.imported'),'ok');invalidateWarp();location.hash='#/warp/'+d.account.id}
 catch(err){if(err&&err.fields&&err.fields.config){$('wi-error').textContent=err.fields.config;$('wi-error').style.display='block'}else toastErr(err)}
 finally{btn.disabled=false}});
 $('wp-go').addEventListener('click',async()=>{

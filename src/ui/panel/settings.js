@@ -120,9 +120,7 @@ FL('routingRules.blockAds','bool','routing.blockAds.label','routing.blockAds.hin
 FL('routingRules.blockMalware','bool','routing.blockMalware.label','routing.blockMalware.hint'),
 FL('routingRules.customBypass','list','routing.customBypass.label','routing.customBypass.short',{help:'routing.customBypass.help'}),
  FL('routingRules.customBlock','list','routing.customBlock.label','routing.customBlock.short',{help:'routing.customBlock.help'})]}]},
-  {key:'sources',cards:[{title:'sources.title',sources:true,fields:[]}]},
-  {key:'users',cards:[{title:'users.title',users:true,fields:[]}]},
-  {key:'warp',cards:[{warpAccounts:true,fields:[]},{warpPresets:true,fields:[]},{warpAmnezia:true,fields:[]}]}
+  {key:'sources',cards:[{title:'sources.title',sources:true,fields:[]}]}
 ];
 function helpTrigger(key){
 return '<span class="help-wrap"><button type="button" class="help-trigger" aria-label="'+esc(t('common.help'))+'"><svg aria-hidden="true"><use href="#i-info"/></svg></button><span class="help-pop" role="tooltip">'+esc(t(key))+'</span></span>'}
@@ -261,8 +259,6 @@ return fieldWrap(id,f.label,f.hint,f.help).replace('{B}',h)}
 default:return ''}
 }
 function cardHtml(card){
-if(card.users)return usersCardHtml();
-if(card.warpAccounts||card.warpPresets||card.warpAmnezia)return warpCardHtml(card);
 if(card.pool)return poolCardHtml();
 if(card.sources)return sourcesCardHtml();
 if(card.danger&&!card.fields.length){

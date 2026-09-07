@@ -4,7 +4,7 @@ import { buildSubUrls } from "../../src/handlers/api/status";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { execFileSync } from "node:child_process";
 
-const TOTAL_BUDGET_BYTES = 289 * 1024;
+const TOTAL_BUDGET_BYTES = 290 * 1024;
 
 describe("ui/assets", () => {
   it("exports exactly panel, login and camo as non-empty strings", () => {
@@ -45,10 +45,24 @@ describe("panel html", () => {
   it("hash-routes the two views with aria tab semantics", () => {
     expect(html).toContain('id="view-home"');
     expect(html).toContain('id="view-settings"');
+    expect(html).toContain('id="view-users"');
+    expect(html).toContain('id="view-warp"');
     expect(html).toContain('role="tablist"');
     expect(html).toContain("role='tabpanel'");
     expect(html).toContain("'sp-'+s.key");
     expect(html).toContain("#/settings/");
+  });
+
+  it("promotes users and warp to top-level tabs with back-compat redirects", () => {
+    expect(html).toContain('id="tab-users"');
+    expect(html).toContain('id="tab-warp"');
+    expect(html).toContain('href="#/users"');
+    expect(html).toContain('href="#/warp"');
+    expect(html).toContain("'nav.users':'Users'");
+    expect(html).toContain("'nav.users':'کاربران'");
+    expect(html).toContain("seg[1]==='users')return{view:'users',redirect:true}");
+    expect(html).toContain("seg[1]==='warp')return seg[2]?");
+    expect(html).toContain("'#/users':'#/warp'");
   });
 
   it("embeds the bilingual dictionary with Persian content", () => {
@@ -90,7 +104,7 @@ describe("panel html", () => {
   });
 
   it("covers settings controls grouped into sections", () => {
-    for (const section of ["general", "protocols", "addresses", "egress", "fragment", "chain", "advanced", "users", "warp", "sources"]) {
+    for (const section of ["general", "protocols", "addresses", "egress", "fragment", "chain", "advanced", "sources"]) {
       expect(html).toContain(`'${section}'`);
       expect(html).toContain(`key:'${section}'`);
     }

@@ -11,8 +11,12 @@ function setPath(o,p,v){const ks=p.split('.');let c=o;for(let i=0;i<ks.length-1;
 function leaves(o,pre,out){for(const k in o){const p=pre?pre+'.'+k:k;const v=o[k];if(v&&typeof v==='object'&&!Array.isArray(v))leaves(v,p,out);else out[p]=v}return out}
 function buildShell(){
 $('tab-home').textContent=t('nav.home');
+$('tab-users').textContent=t('nav.users');
+$('tab-warp').textContent=t('nav.warp');
 $('tab-settings').textContent=t('nav.settings');
 $('home-h1').textContent=t('nav.home');
+$('users-h1').textContent=t('nav.users');
+$('warp-h1').textContent=t('nav.warp');
 $('settings-h1').textContent=t('nav.settings');
 $('logout-btn').setAttribute('aria-label',t('nav.logout'));
 $('logout-btn').title=t('nav.logout');
@@ -56,24 +60,34 @@ function parseRoute(){
 const h=location.hash.replace(/^#\/?/,'');
 const seg=h.split('/');
 if(seg[0]==='settings'){
-if(seg[1]==='warp'&&seg[2])return{view:'settings',sec:'warp',warpId:seg[2]};
-return{view:'settings',sec:SECTIONS.some(s=>s.key===seg[1])?seg[1]:'general'};
-}
+if(seg[1]==='users')return{view:'users',redirect:true};
+if(seg[1]==='warp')return seg[2]?{view:'warp',warpId:seg[2],redirect:true}:{view:'warp',redirect:true};
+return{view:'settings',sec:SECTIONS.some(s=>s.key===seg[1])?seg[1]:'general'}}
+if(seg[0]==='users')return{view:'users'};
+if(seg[0]==='warp')return{view:'warp',warpId:seg[1]||undefined};
+if(seg[0]==='subs')return{view:'settings',sec:'general'};
 return{view:'home'}}
 function navigate(){
 const r=parseRoute();
 const h=location.hash;
+if(r.redirect){history.replaceState(null,'',r.view==='users'?'#/users':'#/warp'+(r.warpId?'/'+r.warpId:''))}
 if(r.view==='home'&&h!==''&&h!=='#'&&h!=='#/home')history.replaceState(null,'','#/home');
 if(r.view==='settings'&&SECTIONS.some(s=>s.key===r.sec))history.replaceState(null,'','#/settings/'+r.sec+(r.warpId?'/'+r.warpId:''));
-['home','settings'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
+['home','settings','users','warp'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
 document.querySelectorAll('#nav .tab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.view===r.view)));
-if(r.view==='settings')showSection(r.sec,r.warpId);
+if(r.view==='settings')showSection(r.sec);
+if(r.view==='users')showUsersView();
+if(r.view==='warp')showWarpView(r.warpId);
 window.scrollTo(0,0)}
-function showSection(sec,warpId){
+function showUsersView(){
+const b=$('users-body');
+if(b&&!b.dataset.built){b.dataset.built='1';b.innerHTML=usersCardHtml()}
+loadUsers()}
+function showWarpView(warpId){
+loadWarpIfNeeded().then(()=>{if(parseRoute().view!=='warp')return;if(warpId)renderWarpDetail(warpId);else renderWarpSection()})}
+function showSection(sec){
 SECTIONS.forEach(s=>{const p=$('sp-'+s.key);if(p)p.hidden=s.key!==sec});
-document.querySelectorAll('#subtabs .subtab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.sec===sec)));
-if(sec==='users')loadUsers();
-if(sec==='warp')loadWarpIfNeeded().then(()=>{if(warpId)renderWarpDetail(warpId);else renderWarpSection()})}
+document.querySelectorAll('#subtabs .subtab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.sec===sec)))}
 function buildSubtabs(){
 const bar=$('subtabs');bar.innerHTML='';
 SECTIONS.forEach(s=>{const a=document.createElement('button');a.type='button';a.className='subtab';a.role='tab';a.id='st-'+s.key;a.dataset.sec=s.key;a.textContent=t('tabs.settings.'+s.key);a.setAttribute('aria-selected','false');a.setAttribute('aria-controls','sp-'+s.key);a.addEventListener('click',()=>{location.hash='#/settings/'+s.key});bar.appendChild(a)})}
@@ -112,7 +126,7 @@ const pool=document.createElement('section');pool.className='card';
 pool.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('egress.pool.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="home-pool-refresh"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="home-pool"><span class="field__hint">'+esc(t('egress.pool.idle'))+'</span></div>';
 right.appendChild(pool);
 const uc=document.createElement('section');uc.className='card';
-uc.innerHTML='<div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('home.users.desc'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/settings/users">'+esc(t('home.users.manage'))+'</a></div><div id="home-users"><span class="field__hint">'+esc(t('common.loading'))+'</span></div>';
+uc.innerHTML='<div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('home.users.desc'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('home.users.manage'))+'</a></div><div id="home-users"><span class="field__hint">'+esc(t('common.loading'))+'</span></div>';
 right.appendChild(uc);
 if(S.status){
 const st=document.createElement('section');st.className='card';
@@ -171,7 +185,7 @@ try{const d=await api('api/users',{fresh:true});S.users=d.users||[];renderHomeUs
 function renderHomeUsers(){
 const box=$('home-users');if(!box)return;
 const all=S.users||[];const active=all.filter(u=>u.enabled&&!isUserExpired(u)).length;
-box.innerHTML='<div class="stat-grid"><span class="lbl">'+esc(t('users.title'))+'</span><span class="mono">'+all.length+'</span><span></span><span class="lbl">'+esc(t('home.users.active'))+'</span><span class="mono">'+active+'</span></div>'}
+box.innerHTML='<div class="stat-grid"><span class="lbl">'+esc(t('users.title'))+'</span><span class="mono">'+all.length+'</span><span></span><span class="lbl">'+esc(t('home.users.active'))+'</span><span class="mono">'+active+'</span></div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('home.users.manage'))+'</a>'}
 async function loadMyIp(){const box=$('ip-body');
 if(!box)return;
 box.innerHTML='<span class="field__hint">'+esc(t('common.loading'))+'</span>';
