@@ -1,0 +1,43 @@
+# UI Audit Remediation — Task Tracker
+
+Plan: `tasks/plan.md` (v1.5, from docs/ui-audit.md). Evidence: `.pi/ui-audit/shots/<phase>/`.
+Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · creds in `.pi/ui-audit/local-*.txt`.
+
+## Phase 1 — Skeleton & shipstoppers
+- [ ] Task 1 (WS-A): Promote Users + WARP top-level tabs + redirects
+- [ ] Task 2 (WS-B): Users token column + zero state + quota relabel
+- [ ] Task 3 (WS-E): Light-theme WCAG token fix
+- [ ] Task 4 (WS-G): Destructive-action confirmations (import/preset/discard/bulk)
+- [ ] Task 5 (WS-F): securePath dead control removal (+ read-only address line)
+- [ ] Checkpoint 1: typecheck+tests+build + Playwright pass 1
+
+## Phase 2 — Entity surfaces
+- [ ] Task 6 (WS-C): Subscriptions hub #/subs (+ staleness fix + teaser)
+- [ ] Task 7 (WS-D): WARP top-level page + detail reorder + error/retry
+- [ ] Task 8 (WS-D): WARP format grouping + preset honesty + warp.fmt.* keys
+- [ ] Task 9 (WS-B): Users read surface + capacity chip + search
+- [ ] Task 10 (WS-A): Settings merge 10→6 (+ Panel access card + Advanced TLS collapsible)
+- [ ] Task 11 (WS-B): ShareSheet component (create/rotate/warp-regen)
+- [ ] Checkpoint 2: full tests + Playwright pass 2 (EN/FA + 375px)
+
+## Phase 3 — Copy, i18n, interaction
+- [ ] Task 12 (WS-F): Dead-key purge (~70×2) + computed unused-key guard
+- [ ] Task 13 (WS-F): Hardcoded strings → dict + home.status.total + dir=auto ECH
+- [ ] Task 14 (WS-G): Wizard funnel + undo/redo fix + withBusy + copy honesty
+- [ ] Task 15 (WS-E): A11y radiogroups + labels + live regions
+- [ ] Task 16 (WS-E): Empty/loading consolidation + retry pairing
+- [ ] Checkpoint 3: tests + Playwright pass 3 (keyboard, FA)
+
+## Phase 4 — Perf, purge, server hygiene
+- [ ] Task 17 (WS-H): Minify + ETag + per-lang dict split
+- [ ] Task 18 (WS-H): Dead code purge (ports/checker/ctrl-k/no-op bars/fossils)
+- [ ] Task 19 (WS-H): Server field deletions (localDns, sourceUrls, city) + derived headers + AGENTS.md 76
+- [ ] Task 20 (WS-H): settings.js split + O(1) dirty tracking
+- [ ] Checkpoint 4: full suite + size report + Playwright pass 4
+
+## Phase 5 — Verification & release
+- [ ] Task 21: scripts/ui-walk.mjs visual regression suite (EN/FA × themes × viewports)
+- [ ] Task 22: CHANGELOG + guides + version bump/tag
+
+## Status log
+- [ ] plan written (this commit)
