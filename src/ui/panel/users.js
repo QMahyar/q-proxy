@@ -82,15 +82,6 @@ if(empty){tb.innerHTML='<tr><td colspan="8" style="padding:0">'+usersEmptyHtml()
 if(!rows.length){tb.innerHTML='<tr><td colspan="8"><span class="field__hint">'+esc(t('users.search.empty'))+'</span></td></tr>';updateBulkBar();return}
 tb.innerHTML=rows.map(userRowHtml).join('');
 updateBulkBar()}
-function showRotation(tok){
-const url=userSubUrl(tok);
-$('rot-title').textContent=t('rotation.title');
-$('rot-token').textContent=url;
-$('rot-hint').textContent=t('rotation.hint');
-$('rot-close').textContent=t('rotation.done');
-$('rot-copy').setAttribute('aria-label',t('common.copy'));
-const qr=$('rot-qr');if(qr){qr.setAttribute('data-qr',url);qr.setAttribute('aria-label',t('common.qr'))};
-openModal('m-rot')}
 function updateBulkBar(){
 const bar=$('users-bulk');if(!bar)return;
 bar.hidden=BULK.size===0;

@@ -112,7 +112,7 @@ describe("panel html", () => {
     expect(html).toContain("0x5412");
     expect(html).toContain("[10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28]");
     expect(html).toContain("[1,1,1,2,2,4,4,4,5,5,5,8,9,9,10,10,11,13,14,16,17,17,18,20,21]");
-    expect(html).toContain("qr-canvas");
+    expect(html).toContain("share-canvas");
   });
 
   it("covers settings controls grouped into sections", () => {
@@ -223,9 +223,9 @@ describe("panel html", () => {
     expect(html).toContain("fields");
   });
 
-  it("renders subscriptions from api/suburls with copy fields and a QR modal", () => {
+  it("renders subscriptions from api/suburls with copy fields and the share sheet", () => {
     expect(html).toContain("copy-field");
-    expect(html).toContain('id="m-qr"');
+    expect(html).toContain('id="m-share"');
     expect(html).toContain("mode=fragment");
     expect(html).toContain("aria-modal=\"true\"");
   });
@@ -358,10 +358,30 @@ describe("panel ui p08", () => {
     expect(html).toContain("function usersEmptyHtml()");
   });
 
+  it("replaces the QR and rotation modals with one ShareSheet component", () => {
+    expect(html).toContain('id="m-share"');
+    expect(html).toContain('id="share-url"');
+    expect(html).toContain('id="share-copy"');
+    expect(html).toContain('id="share-canvas"');
+    expect(html).toContain('id="share-download"');
+    expect(html).toContain('id="share-warning"');
+    expect(html).toContain('id="share-native"');
+    expect(html).toContain("function openShareSheet(");
+    expect(html).not.toContain('id="m-qr"');
+    expect(html).not.toContain('id="m-rot"');
+    expect(html).not.toContain("showRotation");
+    expect(html).not.toContain("copyText(url)");
+    expect(html).toContain("note:'once'");
+    expect(html.match(/'share\.copy':'/g)?.length).toBe(2);
+    expect(html.match(/'share\.warning':'/g)?.length).toBe(2);
+    expect(html.match(/'share\.title_user_created':'/g)?.length).toBe(2);
+    expect(html.match(/'share\.title_rotated':'/g)?.length).toBe(2);
+  });
+
   it("keeps accent swatches visible on mobile and offers QR PNG download", () => {
     expect(html).not.toContain(".swatches{display:none}");
     expect(html).toContain(".swatches{display:flex;flex-wrap:wrap");
-    expect(html).toContain('id="qr-download"');
+    expect(html).toContain('id="share-png"');
     expect(html).toContain("toDataURL('image/png')");
   });
 

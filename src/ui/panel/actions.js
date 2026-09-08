@@ -24,17 +24,7 @@ updateCharCount(inp);
 inp.dispatchEvent(new Event('change',{bubbles:true}));
 toast(t('common.generated'),'ok')},
  qr(el){openQr(el.dataset.qr)},
- 'close-modal'(){closeModal('m-qr')},
- 'download-qr'(){
- const canvas=$('qr-canvas');
- if(!canvas)return;
- const a=document.createElement('a');
- a.href=canvas.toDataURL('image/png');
- a.download='q-proxy-subscription.png';
- document.body.appendChild(a);
- a.click();
- a.remove()},
-logout(){
+ logout(){
 confirmDialog('confirm.logout_title','confirm.logout_body',true).then(async yes=>{
 if(!yes)return;
 try{await api('api/auth/logout',{method:'POST',mutate:true})}catch(err){}
@@ -148,10 +138,9 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  'users-regen'(el){
  confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
  if(!yes)return;
- try{const d=await api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});const tok=d&&d.token;toast(t('users.toast.regen'),'ok');if(tok)showRotation(tok);await loadUsers()}catch(err){toastErr(err)}})},
+ try{const d=await api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});const tok=d&&d.token;if(tok)openShareSheet({title:t('share.title_rotated'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'});else toast(t('users.toast.regen'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
  'shortcuts'(){renderShortcuts();openModal('m-keys')},
  'close-keys'(){closeModal('m-keys')},
- 'close-rot'(){closeModal('m-rot')},
  'backup-export'(){try{localStorage.setItem(EXPORT_KEY,String(Date.now()))}catch(e){}setTimeout(maybeBackupBanner,500)},
  'backup-dismiss'(){try{localStorage.setItem(BACKUP_DISMISS,String(Date.now()))}catch(e){}$('backup-banner').hidden=true},
  'users-bulk-enable'(){runBulkUsers('confirm.bulk.enable',{enabled:true})},
@@ -450,22 +439,22 @@ document.addEventListener('focusout',e=>{
 const el=e.target;
 if(el&&el.dataset&&el.dataset.bind&&el.tagName==='INPUT')blurValidateEl(el)});
 $('m-confirm').addEventListener('click',e=>{if(e.target===$('m-confirm'))settleConfirm(false)});
-$('m-qr').addEventListener('click',e=>{if(e.target===$('m-qr'))closeModal('m-qr')});
+$('m-share').addEventListener('click',e=>{if(e.target===$('m-share'))closeModal('m-share')});
+$('m-share').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-share'),e)});
 $('cf-cancel').addEventListener('click',()=>settleConfirm(false));
 $('cf-ok').addEventListener('click',()=>settleConfirm(true));
-$('m-qr').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-qr'),e)});
+$('m-share').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-share'),e)});
 $('m-confirm').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-confirm'),e)});
-['m-warp-generate','m-warp-import','m-warp-preset','m-user','m-rot','m-keys'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($(id),e)}));
+['m-warp-generate','m-warp-import','m-warp-preset','m-user','m-share','m-keys'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($(id),e)}));
 document.addEventListener('keydown',globalKeys);
 document.addEventListener('keydown',e=>{
 if(e.key==='Escape'){
 if(!$('m-confirm').hidden)settleConfirm(false);
-else if(!$('m-qr').hidden)closeModal('m-qr');
+else if(!$('m-share').hidden)closeModal('m-share');
 else if(!$('m-warp-generate').hidden)closeModal('m-warp-generate');
 else if(!$('m-warp-import').hidden)closeModal('m-warp-import');
 else if(!$('m-warp-preset').hidden)closeModal('m-warp-preset');
 else if(!$('m-user').hidden)closeModal('m-user');
-else if(!$('m-rot').hidden)closeModal('m-rot');
 else if(!$('m-keys').hidden)closeModal('m-keys')}});
 window.addEventListener('hashchange',navigate);
 window.addEventListener('beforeunload',e=>{
@@ -507,7 +496,7 @@ if(ovAddr.length>0){body.addressOverride={address:ovAddr};if(ovPort.length>0)bod
 else body.addressOverride=null;
 try{
 if(editId){await api('api/users/'+editId,{method:'PUT',body});closeModal('m-user');toast(t('users.toast.saved'),'ok')}
-else{const d=await api('api/users',{method:'POST',body});const tok=d&&d.user&&d.user.token;closeModal('m-user');toast(t('users.toast.created'),'ok');if(tok){const url=userSubUrl(tok);copyText(url);openQr(url)}}
+else{const d=await api('api/users',{method:'POST',body});const tok=d&&d.user&&d.user.token;closeModal('m-user');toast(t('users.toast.created'),'ok');if(tok)openShareSheet({title:t('share.title_user_created'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'})}
 await loadUsers()}
 catch(err){if(err&&err.fields){$('mu-error').textContent=Object.values(err.fields)[0]||t('common.error');$('mu-error').style.display='block'}else toastErr(err)}
 finally{btn.disabled=false}})}
@@ -522,9 +511,7 @@ else if(e.key==='Home')next=0;
 else if(e.key==='End')next=tabs.length-1;
 if(next!=null){e.preventDefault();tabs[next].focus();tabs[next].click()}})}
 function openQr(url){
-$('qr-caption').innerHTML='<div class="copy-field"><code dir="ltr">'+esc(url)+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-value="'+esc(url)+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>';
-if(!QR.render($('qr-canvas'),url)){toast(t('toast.tooLong'),'err');return}
-openModal('m-qr')}
+openShareSheet({url:url})}
 function currentSection(){
 const r=parseRoute();
 return r.view==='settings'?r.sec:'general'}

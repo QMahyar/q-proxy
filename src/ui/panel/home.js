@@ -27,9 +27,6 @@ $('shortcuts-btn').title=t('shortcuts.title');
 $('dirty-label').textContent=t('common.unsaved');
 $('discard-btn').textContent=t('common.discard');
 $('apply-btn').textContent=t('common.apply');
-$('qr-title').textContent=t('qr.title');
-$('qr-hint').textContent=t('qr.hint');
-$('qr-close').textContent=t('common.close');
 $('wg-title').textContent=t('warp.gen.title');
 $('wg-desc').textContent=t('warp.gen.desc');
 $('wg-name-label').textContent=t('warp.detail.name');
@@ -54,7 +51,6 @@ $('mu-cancel').textContent=t('common.cancel');
 document.querySelectorAll('.swatch').forEach(b=>{const nm=t('accent.'+(b.dataset.accent||'cyan'));b.setAttribute('aria-label',nm);b.title=nm});
 const _nav=$('nav');if(_nav)_nav.setAttribute('aria-label',t('nav.views'));
 const _sw=document.querySelector('.swatches');if(_sw)_sw.setAttribute('aria-label',t('accent.label'));
-$('qr-download').textContent=t('qr.download');
 document.title='Q Proxy';
 const seg=$('langseg');seg.innerHTML='';
 [['en','lang.en'],['fa','lang.fa']].forEach(([code,label])=>{const b=document.createElement('button');b.type='button';b.textContent=t(label);b.setAttribute('aria-checked',String(LANG===code));b.setAttribute('role','radio');b.addEventListener('click',()=>{if(code!==LANG){setLangCookie(code);location.reload()}});seg.appendChild(b)})}
