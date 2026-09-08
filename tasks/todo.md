@@ -17,7 +17,7 @@ Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · cre
 - [x] Task 8 (WS-D): WARP format grouping + preset honesty ✅ 7 families, amnezia toggle, cache fix
 - [x] Task 9 (WS-B): Users read surface + capacity chip + search ✅ 8-col table, FA digits, dup-id bug fixed
 - [x] Task 10 (WS-A): Settings merge 10->6 ✅ Tunnel/Egress/Routing cards, aliases, P0 readBind textarea fix
-- [ ] Task 11 (WS-B): ShareSheet component (create/rotate/warp-regen)
+- [x] Task 11 (WS-B): ShareSheet component ✅ #m-qr+#m-rot deleted, honest clipboard, TOTP QR routed
 - [ ] Checkpoint 2: full tests + Playwright pass 2 (EN/FA + 375px)
 
 ## Phase 3 — Copy, i18n, interaction
