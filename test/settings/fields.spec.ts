@@ -27,8 +27,9 @@ interface Dict {
 
 const VERSION_PATH = "version";
 const PSEUDO_UI_PATHS = ["__privateDoh"];
-const NON_REGISTRY_UI_PATHS = ["sourceUrls"];
+const NON_REGISTRY_UI_PATHS: string[] = [];
 const READONLY_UI_PATHS = ["securePath"];
+const SHELL_MANAGED_PATHS = ["killSwitch", "language"];
 const API_MANAGED_PATHS = ["passwordHash", "passwordSalt", "sessionSecret", "totp.enabled", "totp.secret", "totp.recoveryCodes", "passwordIsBootstrap", "seededAt"];
 
 function settingLeafPaths(value: unknown, prefix = ""): string[] {
@@ -104,7 +105,7 @@ describe("settings single source of truth drift", () => {
     const { fields } = buildPanelRegistry();
     const flSet = new Set(flPathsOf(fields));
     const unbound = tablePaths.filter((p) => !flSet.has(p));
-    expect(unbound.sort()).toEqual([...NON_REGISTRY_UI_PATHS, ...READONLY_UI_PATHS, ...API_MANAGED_PATHS].sort());
+    expect(unbound.sort()).toEqual([...NON_REGISTRY_UI_PATHS, ...READONLY_UI_PATHS, ...SHELL_MANAGED_PATHS, ...API_MANAGED_PATHS].sort());
     for (const p of NON_REGISTRY_UI_PATHS) {
       expect(panelHtml).toContain(`data-bind="${p}"`);
     }

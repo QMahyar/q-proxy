@@ -116,10 +116,14 @@ describe("panel html", () => {
   });
 
   it("covers settings controls grouped into sections", () => {
-    for (const section of ["general", "protocols", "addresses", "egress", "fragment", "chain", "advanced", "sources"]) {
+    for (const section of ["general", "protocols", "addresses", "egress", "tunnel", "advanced"]) {
       expect(html).toContain(`'${section}'`);
       expect(html).toContain(`key:'${section}'`);
     }
+    for (const removed of ["fragment'", "chain'", "sources'"]) {
+      expect(html).not.toContain(`key:'${removed}`);
+    }
+    expect(html).toContain("SETTINGS_SEC_ALIAS={fragment:'tunnel',chain:'tunnel',sources:'egress'}");
     for (const bind of [
       "profileTitle",
       "debugLogging",
@@ -157,9 +161,54 @@ describe("panel html", () => {
       "speedtestIntercept",
       "camouflage.mode",
       "camouflage.url",
+      "sourceUrls",
+      "routingRules.bypassLan",
+      "routingRules.customBlock",
     ]) {
       expect(html).toContain(`'${bind}'`);
     }
+  });
+
+  it("merges settings to six subtabs with a SECTIONS ↔ tabs.settings 1:1 drift guard", () => {
+    const keys = [...html.matchAll(/key:'([a-z]+)',cards:\[/g)].map((m) => m[1]);
+    expect(keys).toEqual(["general", "protocols", "addresses", "egress", "tunnel", "advanced"]);
+    const dictKeys = [...new Set([...html.matchAll(/'tabs\.settings\.([a-z]+)':'/g)].map((m) => m[1]))].sort();
+    expect(dictKeys).toEqual([...new Set(keys)].sort());
+    for (const k of keys) {
+      expect(html.match(new RegExp(`'tabs\\.settings\\.${k}':'`, "g"))?.length).toBe(2);
+    }
+  });
+
+  it("absorbs the sources subtab into egress with an honest not-yet-consumed note", () => {
+    expect(html).toContain("FL('sourceUrls','list','egress.remoteSubs.label'");
+    expect(html.match(/'egress\.remoteSubs\.hint':'/g)?.length).toBe(2);
+    expect(html.match(/'egress\.remoteSubs\.title':'/g)?.length).toBe(2);
+  });
+
+  it("renders routing rules as their own card inside the advanced subtab", () => {
+    expect(html).toContain("{title:'routing.title',fields:[");
+    expect(html).toContain("FL('routingRules.bypassLan','bool'");
+  });
+
+  it("collapses advanced TLS fields into a details element that still binds", () => {
+    expect(html).toContain("{title:'protocols.advTls.title',advTls:true,fields:[");
+    expect(html).toContain('<details class="adv-tls warp-acc"><summary>');
+    expect(html).toContain("FL('echServerName'");
+    expect(html).toContain("FL('alpn'");
+  });
+
+  it("removes the general kill-switch and language rows (home card and topbar own them)", () => {
+    expect(html).not.toContain("FL('killSwitch'");
+    expect(html).not.toContain("FL('language'");
+    expect(html).not.toContain("case 'instantbool'");
+    expect(html).not.toContain("case 'lang'");
+    expect(html).toContain("'general.killSwitch.label':'Kill switch'");
+    expect(html.match(/'general\.killSwitch\.label':'/g)?.length).toBe(2);
+  });
+
+  it("reads textarea list binds as split lines so list fields dirty and save", () => {
+    expect(html).toMatch(/el\.tagName==='TEXTAREA'\)return el\.value\.split\('\\n'\)\.map\(s=>s\.trim\(\)\)\.filter\(Boolean\)/);
+    expect(html).not.toContain("lines(el.value)");
   });
 
   it("implements dirty-state apply bar, validation errors and confirms", () => {
@@ -236,7 +285,7 @@ describe("panel ui p08", () => {
     expect(html).toContain("'subs.info.title':'صفحهٔ اطلاعات پنل'");
   });
 
-  it("shows a read-only panel address card and never a securePath editor", () => {
+  it("renders a read-only panel address card and never a securePath editor", () => {
     expect(html).toContain("panelAddressCardHtml");
     expect(html).toContain("'address.panelTitle':'Panel address'");
     expect(html).toContain("'address.panelTitle':'نشانی پنل'");

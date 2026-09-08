@@ -34,9 +34,6 @@ FL('profileTitle','str','general.profileTitle.label','general.profileTitle.hint'
 FL('debugLogging','bool','general.debugLogging.label','general.debugLogging.hint'),
 FL('allowedIps','list','security.allowlist.label','security.allowlist.hint')]},
 {title:'address.panelTitle',panelAddr:true,fields:[]},
-{title:'home.kill.title',fields:[
-FL('killSwitch','instantbool','general.killSwitch.label','general.killSwitch.hint'),
-FL('language','lang','general.language.label',null)]},
 {title:'general.danger.title',danger:true,fields:[]},
 {title:'general.backup.title',backup:true,fields:[]},{title:'security.title',security:true,fields:[]},{title:'totp.title',totpCard:true,fields:[]}]},
 {key:'protocols',cards:[
@@ -61,7 +58,8 @@ FL('ssPath','str','protocols.path.label','protocols.path.hint',{mono:true}),
 FL('ssDirect','bool','protocols.ssDirect.label','protocols.ssDirect.hint')]},
 {title:'protocols.common.title',fields:[
 FL('earlyDataEnabled','bool','protocols.earlyData.label','protocols.earlyData.hint'),
-FL('earlyDataMaxBytes','num','protocols.earlyData.max',null,{min:0,max:8192}),
+FL('earlyDataMaxBytes','num','protocols.earlyData.max',null,{min:0,max:8192})]},
+{title:'protocols.advTls.title',advTls:true,fields:[
 FL('fingerprint','select','protocols.fingerprint.label',null,{opts:FPS}),
 FL('randomizeSniCase','bool','protocols.sniCase.label','protocols.sniCase.hint'),
 FL('echEnabled','bool','protocols.ech.label','protocols.ech.short',{help:'protocols.ech.help'}),
@@ -78,21 +76,22 @@ FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
   {title:'remote.nodes.title',fields:[
   FL('remoteNodes','remoteList','remote.nodes.label','remote.nodes.hint',{help:'remote.nodes.help'})]}]},
   {key:'egress',cards:[
+  {title:'egress.remoteSubs.title',fields:[
+  FL('sourceUrls','list','egress.remoteSubs.label','egress.remoteSubs.hint',{validate:'url',help:'egress.remoteSubs.help'})]},
   {title:'egress.mode.title',fields:[
   FL('proxyIpMode','chips','egress.mode.label',null,{opts:[['proxyip','egress.mode.list'],['nat64','egress.mode.nat64']]}),
   FL('proxyIps','list','egress.list.label','egress.list.short',{validate:'host_port',help:'egress.list.help',showIf:v=>getPath(v,'proxyIpMode')!=='nat64'}),
   FL('nat64Prefixes','list','egress.nat64.label','egress.nat64.short',{validate:'ipv6_prefix',help:'egress.nat64.help',showIf:v=>getPath(v,'proxyIpMode')==='nat64'}),
   FL('proxyIpPoolUrl','str','egress.poolUrl.label','egress.poolUrl.hint',{mono:true,vtype:'url'})]},
   {title:'egress.pool.title',pool:true,fields:[]}]},
-{key:'fragment',cards:[
-{title:null,fields:[
+{key:'tunnel',cards:[
+{title:'fragment.card.title',fields:[
 FL('fragment.mode','fpreset','fragment.enable',null),
 FL('fragment.packets','select','fragment.packets',null,{opts:PACKETS}),
 FL(['fragment.lengthMin','fragment.lengthMax'],'range','fragment.length',null),
 FL(['fragment.delayMin','fragment.delayMax'],'range','fragment.delay',null),
-FL(['fragment.maxSplitMin','fragment.maxSplitMax'],'range','fragment.split',null)]}]},
-{key:'chain',cards:[
-{title:null,fields:[
+FL(['fragment.maxSplitMin','fragment.maxSplitMax'],'range','fragment.split',null)]},
+{title:'chain.card.title',fields:[
 FL('chainProxy.enabled','bool','chain.enable',null),
 FL('chainProxy.uri','str','chain.uri.label','chain.uri.hint',{mono:true})]}]},
 {key:'advanced',cards:[
@@ -113,15 +112,15 @@ FL('maxNodesPerFormat','num','advanced.maxNodes.label',null,{min:1,max:2000})]},
 {title:'advanced.camouflage.label',fields:[
 FL('camouflage.mode','select','advanced.camouflage.label',null,{opts:[['off','advanced.camouflage.none'],['static','advanced.camouflage.static'],['proxy','advanced.camouflage.proxy']]}),
 FL('camouflage.url','str','advanced.camouflage.url',null,{mono:true}),
-FL('speedtestIntercept','bool','advanced.speedtest.label','advanced.speedtest.short',{help:'advanced.speedtest.help'}),
+FL('speedtestIntercept','bool','advanced.speedtest.label','advanced.speedtest.short',{help:'advanced.speedtest.help'})]},
+{title:'routing.title',fields:[
 FL('routingRules.bypassLan','bool','routing.bypassLan.label','routing.bypassLan.hint'),
 FL('routingRules.blockQuic','bool','routing.blockQuic.label','routing.blockQuic.hint'),
 FL('routingRules.blockAds','bool','routing.blockAds.label','routing.blockAds.hint'),
 FL('routingRules.blockMalware','bool','routing.blockMalware.label','routing.blockMalware.hint'),
 FL('routingRules.customBypass','list','routing.customBypass.label','routing.customBypass.short',{help:'routing.customBypass.help'}),
  FL('routingRules.customBlock','list','routing.customBlock.label','routing.customBlock.short',{help:'routing.customBlock.help'})]}]},
-  {key:'sources',cards:[{title:'sources.title',sources:true,fields:[]}]}
-];
+  ];
 function helpTrigger(key){
 return '<span class="help-wrap"><button type="button" class="help-trigger" aria-label="'+esc(t('common.help'))+'"><svg aria-hidden="true"><use href="#i-info"/></svg></button><span class="help-pop" role="tooltip">'+esc(t(key))+'</span></span>'}
 function fieldWrap(id,label,hint,helpKey,countMax){
@@ -204,11 +203,6 @@ const on=!!getPath(S.set,paths[0]);
 const label=f.protoLabelKey?esc(t(f.protoLabelKey)):esc(t(f.label));
 const hintTxt=f.protoLabelKey?'<p class="field__hint">'+esc(t('protocols.disabled_hint'))+'</p>':(f.hint?'<p class="field__hint">'+esc(t(f.hint))+'</p>':'');
 return '<div class="field" id="fw-'+id+'"><div class="row"><label class="switch"><input type="checkbox" role="switch" id="'+id+'" data-bind="'+paths[0]+'"'+(on?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+label+'</span></label>'+(f.help?helpTrigger(f.help):'')+'</div>'+hintTxt+'<p class="field__error"></p></div>'}
-case 'instantbool':{
-const on=!!(S.status&&S.status.killSwitch);
-return '<div class="field" id="fw-'+id+'"><div class="row"><label class="switch"><input type="checkbox" role="switch" id="'+id+'" data-kill'+(on?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t(f.label))+'</span></label><span class="chip-status ok" data-kill-chip></span></div>'+(f.hint?'<p class="field__hint">'+esc(t(f.hint))+'</p>':'')+'</div>'}
-case 'lang':{
-return '<div class="field" id="fw-'+id+'"><label class="field__label" for="'+id+'">'+esc(t(f.label))+'</label><select class="select" id="'+id+'" data-lang-sel><option value="en"'+(LANG==='en'?' selected':'')+'>English</option><option value="fa"'+(LANG==='fa'?' selected':'')+'>فارسی</option></select></div>'}
 case 'select':{
 const cur=String(getPath(S.set,paths[0])??'');
 let h='<select class="select" id="'+id+'" data-bind="'+paths[0]+'">'+f.opts.map(o=>{const v=Array.isArray(o)?o[0]:o;const k=Array.isArray(o)?o[1]:null;return '<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(k?t(k):v)+'</option>'}).join('')+'</select>';
@@ -260,7 +254,6 @@ default:return ''}
 }
 function cardHtml(card){
 if(card.pool)return poolCardHtml();
-if(card.sources)return sourcesCardHtml();
 if(card.danger&&!card.fields.length){
 return '<section class="card"><div class="card__head"><div class="card__title hint-danger">'+esc(t(card.title))+'</div></div><button type="button" class="btn btn--ghost-danger" data-action="reset-defaults">'+esc(t('common.resetDefaults'))+'</button></section>'}
 if(card.backup&&!card.fields.length){
@@ -282,6 +275,10 @@ function cardBodyHtml(card){
 if(card.panelAddr&&!card.fields.length){return panelAddressCardHtml()}
 if(card.security&&!card.fields.length){return securityCardHtml()}
 if(card.totpCard&&!card.fields.length){return totpCardHtml()}
+if(card.advTls){
+let h='<section class="card"><details class="adv-tls warp-acc"><summary>'+esc(t(card.title))+'</summary>';
+card.fields.forEach(f=>{h+=bindHtml(f)});
+return h+'</details></section>'}
 const dim=card.protoCard&&getPath(S.set,card.protoCard)===false;
 let h='<section class="card'+(dim?' card--dim':'')+'"'+(card.protoCard?' data-proto-card="'+card.protoCard+'"':'')+'><div class="card__head"><div class="card__title">'+esc(t(card.title))+'</div></div>';
 card.fields.forEach(f=>{h+=bindHtml(f)});
@@ -347,7 +344,7 @@ const checked=[...cells].filter(c=>c.checked).length;
 master.checked=checked===cells.length;
 master.indeterminate=checked>0&&checked<cells.length})}
 function applyFragmentPresetUi(mode){
-const panel=$('sp-fragment');
+const panel=$('sp-tunnel');
 if(!panel)return;
 ['lengthMin','lengthMax','delayMin','delayMax'].forEach((k,idx)=>{
 const el=panel.querySelector('[data-bind="fragment.'+k+'"]');
@@ -411,7 +408,7 @@ return fam.filter(p=>el.querySelector('input[data-port-opt][value="'+p+'"]').che
 if(el.dataset.type==='chips'){
 const c=el.querySelector('.chip[aria-checked="true"]');
 return c?c.dataset.chip:''}
-if(el.tagName==='TEXTAREA')return lines(el.value);
+if(el.tagName==='TEXTAREA')return el.value.split('\n').map(s=>s.trim()).filter(Boolean);
 if(el.type==='checkbox')return el.checked;
 if(el.tagName==='SELECT')return el.value;
 if(el.type==='number'){const n=Number(el.value);return Number.isFinite(n)?n:0}
@@ -613,3 +610,9 @@ return m?m[1]:s}
 function genFor(kind){
 if(kind==='uuid')return crypto.randomUUID();
 return randomPass()}
+const SETTINGS_SEC_ALIAS={fragment:'tunnel',chain:'tunnel',sources:'egress'};
+function normalizeSettingsHash(){
+const m=location.hash.match(/^#\/settings\/(fragment|chain|sources)$/);
+if(m)history.replaceState(null,'','#/settings/'+SETTINGS_SEC_ALIAS[m[1]])}
+window.addEventListener('hashchange',normalizeSettingsHash);
+normalizeSettingsHash();
