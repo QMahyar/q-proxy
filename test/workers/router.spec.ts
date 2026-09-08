@@ -238,7 +238,8 @@ describe("router dispatch", () => {
       res = await SELF.fetch(`${BASE}/panel`);
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toContain("text/html");
-      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(res.headers.get("Cache-Control")).toBe("private, no-cache");
+      expect(res.headers.get("ETag")).toMatch(/^"[0-9a-f]{32}"$/);
       expect(res.headers.get("Content-Security-Policy")).toBe(
         "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self' https:; base-uri 'none'; form-action 'self'",
       );

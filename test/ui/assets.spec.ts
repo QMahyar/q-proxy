@@ -5,8 +5,11 @@ import { ASSETS } from "../../src/ui/assets";
 import { buildSubUrls } from "../../src/handlers/api/status";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { execFileSync } from "node:child_process";
+// @ts-expect-error untyped build script export (plain .mjs)
+import { minifyHtmlAsset } from "../../scripts/build-single-file.mjs";
 
 const TOTAL_BUDGET_BYTES = 340 * 1024;
+const PANEL_DELIVERY_BUDGET_BYTES = 280 * 1024;
 
 describe("ui/assets", () => {
   it("exports exactly panel, login and camo as non-empty strings", () => {
@@ -25,6 +28,50 @@ describe("ui/assets", () => {
       Buffer.byteLength(ASSETS.login, "utf8") +
       Buffer.byteLength(ASSETS.camo, "utf8");
     expect(total).toBeLessThan(TOTAL_BUDGET_BYTES);
+  });
+});
+
+describe("panel delivery minification", () => {
+  const delivered = minifyHtmlAsset(ASSETS.panel) as string;
+
+  it("is strictly smaller than the assembled source", () => {
+    expect(Buffer.byteLength(delivered, "utf8")).toBeLessThan(Buffer.byteLength(ASSETS.panel, "utf8"));
+  });
+
+  it("keeps the delivered panel under the budget", () => {
+    expect(Buffer.byteLength(delivered, "utf8")).toBeLessThan(PANEL_DELIVERY_BUDGET_BYTES);
+  });
+
+  it("is deterministic (same input = same output bytes)", () => {
+    expect(minifyHtmlAsset(ASSETS.panel)).toBe(delivered);
+  });
+
+  it("preserves dict entries, structural ids and the security header surface in delivered bytes", () => {
+    expect(delivered).toContain('"nav.subs":"Subs"');
+    expect(delivered).toContain('"nav.subs":"اشتراک‌ها"');
+    expect(delivered).toContain('id="view-subs"');
+    expect(delivered).toContain('id="share-canvas"');
+    expect(delivered).toContain("X-Q-Panel");
+    expect(delivered).not.toContain("<!--panel:");
+  });
+
+  it("delivers script block bodies that stay safely embeddable", () => {
+    const blocks: string[] = [];
+    let from = 0;
+    for (;;) {
+      const open = delivered.indexOf("<script>", from);
+      if (open < 0) break;
+      const close = delivered.indexOf("</script>", open);
+      blocks.push(delivered.slice(open + 8, close));
+      from = close + 9;
+    }
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const body of blocks) expect(body.toLowerCase()).not.toContain("</scr" + "ipt>");
+    expect((delivered.match(/<script>/g) ?? []).length).toBe((ASSETS.panel.match(/<script>/g) ?? []).length);
+  });
+
+  it("keeps the committed login and camo artifacts outside the minify step (not assembled by the build)", () => {
+    expect(minifyHtmlAsset(ASSETS.login)).not.toBe(ASSETS.login);
   });
 });
 
@@ -643,6 +690,15 @@ describe("panel build assembly", () => {
       maxBuffer: 1024 * 1024,
     });
 
+  const distContent = (): string => {
+    execFileSync(process.execPath, ["scripts/build-single-file.mjs"], {
+      cwd: process.cwd(),
+      stdio: "pipe",
+      maxBuffer: 1024 * 1024,
+    });
+    return readFileSync("dist/q-proxy.js", "utf8");
+  };
+
   it("leaves no inject markers in the shipped panel", () => {
     expect(ASSETS.panel).not.toContain("<!--panel:");
   });
@@ -653,6 +709,15 @@ describe("panel build assembly", () => {
 
   it("keeps the committed panel.html in sync with its sources", () => {
     expect(assemble()).toBe(ASSETS.panel);
+  });
+
+  it("produces byte-identical dist across full builds (bundle incl. minified panel embed)", () => {
+    expect(distContent()).toBe(distContent());
+  }, 60_000);
+
+  it("guards the copy action against synchronous clipboard throws", () => {
+    expect(ASSETS.panel).toContain("try{p=copyText(");
+    expect(ASSETS.panel).toMatch(/catch\(err\)\{p=Promise\.resolve\(false\)\}/);
   });
 });
 

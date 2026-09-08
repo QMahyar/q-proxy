@@ -11,7 +11,9 @@ copy(el){
 const valEl=el.dataset.copyId?$(el.dataset.copyId):null;
 const val=el.dataset.copyValue||(valEl?valEl.textContent:'');
 el.dataset.busy='1';
-copyText(val||'').then(ok=>{
+let p;
+try{p=copyText(val||'')}catch(err){p=Promise.resolve(false)}
+p.then(ok=>{
 delete el.dataset.busy;
 if(!ok){toast(t('toast.networkError'),'err');return}
 el.classList.add('copied');

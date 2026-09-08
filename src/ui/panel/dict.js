@@ -46,6 +46,7 @@ fa:{'app.name':'Q Proxy','nav.home':'خانه','nav.settings':'تنظیمات','
 };
 const getLangCookie=()=>{const m=document.cookie.match(/(?:^|;\s*)qp_lang=(en|fa)/);return m&&m[1]||'fa'};
 let LANG=getLangCookie();
+try{if(/(?:^|;\s*)qp_lang=(en|fa)/.test(document.cookie))DICT[LANG==='en'?'fa':'en']={}}catch(e){}
 const t=(k,p)=>{let s=(DICT[LANG]&&DICT[LANG][k])||(DICT.en[k]||k);if(p)for(const n in p)s=s.split('{'+n+'}').join(String(p[n]));return s};
 const THEME_KEY='qp_theme';
 function getTheme(){try{const s=localStorage.getItem(THEME_KEY);if(s==='light'||s==='dark')return s}catch(e){}try{if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)return'light'}catch(e){}return'dark'}

@@ -3,7 +3,7 @@ import { execFileSync, execSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
@@ -52,6 +52,51 @@ function panelScriptBlocks(html) {
   return blocks;
 }
 
+function minifyJsBlock(code) {
+  return esbuild.transformSync(code, { minify: true, charset: "utf8", target: "es2023", legalComments: "none" }).code.trim();
+}
+
+function minifyCssBlock(code) {
+  return esbuild.transformSync(code, { loader: "css", minify: true, charset: "utf8" }).code.trim();
+}
+
+export function minifyHtmlAsset(html) {
+  let out = "";
+  let pos = 0;
+  for (;;) {
+    const s = html.indexOf("<script>", pos);
+    const c = html.indexOf("<style>", pos);
+    if (s < 0 && c < 0) return out + html.slice(pos);
+    const script = s >= 0 && (c < 0 || s < c);
+    const openTag = script ? "<script>" : "<style>";
+    const closeTag = script ? "</script>" : "</style>";
+    const open = script ? s : c;
+    const close = html.indexOf(closeTag, open);
+    if (close < 0) throw new Error(`minify: unclosed ${script ? "script" : "style"} block`);
+    const body = html.slice(open + openTag.length, close);
+    const min = script ? minifyJsBlock(body) : minifyCssBlock(body);
+    if (script && /<\/script/i.test(min)) throw new Error("minify: script block still contains </script after minify");
+    out += html.slice(pos, open + openTag.length) + min;
+    pos = close;
+  }
+}
+
+const minifyHtmlAssetPlugin = {
+  name: "minify-html-assets",
+  setup(build) {
+    build.onLoad({ filter: /panel\.html$/ }, (args) => {
+      const min = minifyHtmlAsset(readFileSync(args.path, "utf8"));
+      const dir = mkdtempSync(join(tmpdir(), "qproxy-panel-min-"));
+      panelScriptBlocks(min).forEach((code, i) => {
+        const file = join(dir, `min-${i}.js`);
+        writeFileSync(file, code);
+        execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
+      });
+      return { contents: min, loader: "text" };
+    });
+  },
+};
+
 function checkPanelScripts(html) {
   const dir = mkdtempSync(join(tmpdir(), "qproxy-panel-"));
   panelScriptBlocks(html).forEach((code, i) => {
@@ -93,6 +138,7 @@ if (process.argv.includes("--assemble-only")) {
   process.exit(0);
 }
 
+async function main() {
 buildPanelHtml();
 
 function git(args) {
@@ -117,10 +163,12 @@ const result = await esbuild.build({
   target: "es2023",
   outfile: resolve(root, "dist/q-proxy.js"),
   minify: true,
+  charset: "utf8",
    loader: { ".html": "text" },
    define: { __APP_VERSION__: JSON.stringify(version) },
    external: ["cloudflare:*"],
    legalComments: "none",
+   plugins: [minifyHtmlAssetPlugin],
   metafile: true,
   banner: { js: `/* Q Proxy v${version} */` },
 });
@@ -144,3 +192,7 @@ const bytes = result.metafile.outputs["dist/q-proxy.js"]?.bytes ?? "?";
 console.log(`dist/q-proxy.js written (${bytes} bytes)`);
 copyFileSync(resolve(root, "dist/q-proxy.js"), resolve(root, "dist/_worker.js"));
 console.log(`dist/_worker.js written (${bytes} bytes) — Pages Advanced Mode`);
+}
+
+const invokedDirectly = process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+if (invokedDirectly) await main();
