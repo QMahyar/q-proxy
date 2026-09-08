@@ -38,18 +38,28 @@ function renderShortcuts(){
 $('keys-title').textContent=t('shortcuts.title');
 $('keys-close').textContent=t('common.close');
 const rows=[['Ctrl / \u2318 + S','shortcuts.save'],['Ctrl / \u2318 + K','shortcuts.search'],['g h','shortcuts.home'],['Ctrl / \u2318 + Z','shortcuts.undo'],['Shift + Ctrl / \u2318 + Z','shortcuts.redo']];
-$('keys-body').innerHTML='<table class="tbl"><tbody>'+rows.map(r=>'<tr><td style="white-space:nowrap"><code dir="ltr" class="mono">'+esc(r[0])+'</code></td><td data-l="'+esc(r[0])+'">'+esc(t(r[1]))+'</td></tr>').join('')+'</tbody></table>'}
+$('keys-body').innerHTML='<table class="tbl"><tbody>'+rows.map(r=>'<tr><td style="white-space:nowrap"><code dir="ltr" class="mono">'+esc(r[0])+'</code></td><td data-l="'+esc(r[0])+'">'+esc(t(r[1]))+'</td></tr>').join('')+'</tbody></table><div class="btn-row" style="margin-block-start:14px"><button type="button" class="btn btn--ghost btn--sm" data-action="wizard-replay" aria-label="'+esc(t('wizard.title'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('wizard.title'))+'</button></div>'}
 const UR={};
 function urStack(sec){if(!UR[sec])UR[sec]={undo:[],redo:[]};return UR[sec]}
 function pushUndo(sec,state){
 const st=urStack(sec);
 if(st.undo[st.undo.length-1]===state)return;
 st.undo.push(state);if(st.undo.length>20)st.undo.shift();st.redo.length=0}
-let dirtyPushTimer=null;
+let urBase=null;
+function captureUndoBase(el){
+const panel=el&&el.closest?el.closest('[id^="sp-"]'):null;
+if(!panel)return;
+const sec=panel.id.slice(3);
+if(!SECTIONS.some(s=>s.key===sec))return;
+if(urBase&&urBase.sec===sec)return;
+try{urBase={sec:sec,json:JSON.stringify(collectSection(sec))}}catch(e){}}
+function clearUndoBase(){urBase=null}
 function scheduleDirtyPush(){
-clearTimeout(dirtyPushTimer);
-dirtyPushTimer=setTimeout(()=>{for(const sec of[...S.dirty]){try{pushUndo(sec,JSON.stringify(collectSection(sec)))}catch(e){}}},1000)}
+if(!urBase)return;
+pushUndo(urBase.sec,urBase.json);
+urBase=null}
 function restoreSection(sec,json){
+clearUndoBase();
 let snap={};try{snap=JSON.parse(json)}catch(e){return}
 const panel=$('sp-'+sec);if(!panel)return;
 panel.querySelectorAll('[data-bind]').forEach(el=>{
@@ -75,8 +85,8 @@ function isEditable(el){return el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA
 function globalKeys(e){
 const mod=e.ctrlKey||e.metaKey;
 if(mod&&e.key.toLowerCase()==='s'){e.preventDefault();if(S.dirty.size)$('apply-btn').click();return}
+if(mod&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redoSection();else undoSection();return}
 if(isEditable(e.target))return;
 if(mod&&e.key.toLowerCase()==='k'){e.preventDefault();const s=document.querySelector('#settings-search');if(s)s.focus();else location.hash='#/home';return}
-if(mod&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redoSection();else undoSection();return}
 if(e.key==='g'){lastG=Date.now();return}
 if(e.key==='h'&&Date.now()-lastG<800){lastG=0;location.hash='#/home'}}

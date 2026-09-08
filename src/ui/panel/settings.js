@@ -135,7 +135,7 @@ function lines(v){return Array.isArray(v)?v.map(x=>String(x)).filter(x=>x.trim()
    const isHost=a&&a.address&&String(a.address).trim().toLowerCase()===host.toLowerCase();
    const enabled=!(a&&a.enabled===false);
    const get=(k)=>a&&a[k]!=null?String(a[k]):'';
-   const field=(k,label,ph)=>{const dir=(k==='address'||k==='port')?'ltr':'auto';return '<div class="addr-card__field"><label>'+esc(label)+'</label><input class="input input--mono" type="text" data-addr-field="'+k+'" value="'+esc(get(k))+'" placeholder="'+esc(ph)+'" spellcheck="false" dir="'+dir+'"></div>'};
+   const field=(k,label,ph)=>{const dir=(k==='address'||k==='port')?'ltr':'auto';const fid=nextId('addr'+i+'-'+k);return '<div class="addr-card__field"><label for="'+fid+'">'+esc(label)+'</label><input class="input input--mono" id="'+fid+'" type="text" data-addr-field="'+k+'" value="'+esc(get(k))+'" placeholder="'+esc(ph)+'" spellcheck="false" dir="'+dir+'"></div>'};
    const port=get('port');
    const inlinePort=(String(a&&a.address||'').match(/:(\d+)\s*$/i)||[])[1];
    const preview=port||inlinePort||String(S.set.defaultPort||443);
@@ -151,16 +151,16 @@ function lines(v){return Array.isArray(v)?v.map(x=>String(x)).filter(x=>x.trim()
      +'</div>'
      +'<div class="addr-card__side"><span class="addr-dot" data-addr-dot="'+esc(String(get('address')).replace(/^\[|\]$/g,'').toLowerCase())+'" hidden></span>'
      +(isHost?'<span class="addr-badge">'+esc(t('addresses.hostname_badge'))+'</span>':'')
-     +'<label class="switch addr-switch" title="'+esc(t('addresses.enabled.toggle'))+'"><input type="checkbox" data-addr-enabled-input'+(enabled?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span></label>'
+     +'<label class="switch addr-switch" title="'+esc(t('addresses.enabled.toggle'))+'"><input type="checkbox" data-addr-enabled-input aria-label="'+esc(t('addresses.enabled.toggle'))+'"'+(enabled?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span></label>'
      +'<span class="addr-preview">'+esc(t('addresses.port_preview'))+' '+esc(preview)+'</span>'
      +'<button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="addr-del" data-index="'+i+'" aria-label="'+esc(t('common.remove'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>';
  }
 function remoteNodeCardHtml(r,i){
 const kind=r&&r.kind==='hy2'?'hy2':'reality';
 const get=(k)=>r&&r[k]!=null?String(r[k]):'';
-const field=(k,label,ph,tp)=>'<div class="addr-card__field"><label>'+esc(label)+'</label><input class="input input--mono" type="'+(tp||'text')+'" data-remote-field="'+k+'" value="'+esc(get(k))+'" placeholder="'+esc(ph)+'" spellcheck="false" dir="ltr"></div>';
+const field=(k,label,ph,tp)=>{const fid=nextId('rmt'+i+'-'+k);return '<div class="addr-card__field"><label for="'+fid+'">'+esc(label)+'</label><input class="input input--mono" id="'+fid+'" type="'+(tp||'text')+'" data-remote-field="'+k+'" value="'+esc(get(k))+'" placeholder="'+esc(ph)+'" spellcheck="false" dir="ltr"></div>'};
 let h='<div class="addr-card remote-card" data-remote-index="'+i+'"><div class="addr-card__main">';
-h+='<div class="addr-card__field"><label>'+esc(t('remote.nodes.kind'))+'</label><select class="select" data-remote-field="kind"><option value="reality"'+(kind==='reality'?' selected':'')+'>'+esc(t('remote.nodes.kind.reality'))+'</option><option value="hy2"'+(kind==='hy2'?' selected':'')+'>'+esc(t('remote.nodes.kind.hy2'))+'</option></select></div>';
+const kindId=nextId('rmt'+i+'-kind');h+='<div class="addr-card__field"><label for="'+kindId+'">'+esc(t('remote.nodes.kind'))+'</label><select class="select" id="'+kindId+'" data-remote-field="kind"><option value="reality"'+(kind==='reality'?' selected':'')+'>'+esc(t('remote.nodes.kind.reality'))+'</option><option value="hy2"'+(kind==='hy2'?' selected':'')+'>'+esc(t('remote.nodes.kind.hy2'))+'</option></select></div>';
 h+=field('name',t('remote.nodes.name'),'VPS-1');
 h+=field('address',t('remote.nodes.address'),'203.0.113.10');
 h+=field('port',t('remote.nodes.port'),'443','number');
@@ -169,14 +169,14 @@ h+=field('uuid',t('remote.nodes.uuid'),'d342d11e-…');
 h+=field('sni',t('remote.nodes.sni'),'www.microsoft.com');
 h+=field('pbk',t('remote.nodes.pbk'),'jNXH…');
 h+=field('sid',t('remote.nodes.sid'),'6ba85179');
-h+='<div class="addr-card__field"><label>'+esc(t('remote.nodes.flow'))+'</label><select class="select" data-remote-field="flow"><option value=""'+(get('flow')===''?' selected':'')+'>'+esc(t('protocols.flow.off'))+'</option><option value="xtls-rprx-vision"'+(get('flow')==='xtls-rprx-vision'?' selected':'')+'>'+esc(t('protocols.flow.vision'))+'</option></select></div>';
+const flowId=nextId('rmt'+i+'-flow');h+='<div class="addr-card__field"><label for="'+flowId+'">'+esc(t('remote.nodes.flow'))+'</label><select class="select" id="'+flowId+'" data-remote-field="flow"><option value=""'+(get('flow')===''?' selected':'')+'>'+esc(t('protocols.flow.off'))+'</option><option value="xtls-rprx-vision"'+(get('flow')==='xtls-rprx-vision'?' selected':'')+'>'+esc(t('protocols.flow.vision'))+'</option></select></div>';
 h+=field('spx',t('remote.nodes.spx'),'/');
-h+='<div class="addr-card__field"><label>'+esc(t('remote.nodes.fp'))+'</label><select class="select" data-remote-field="fp">'+FPS.map(f=>'<option value="'+esc(f)+'"'+(get('fp')===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select></div>';
+const fpId=nextId('rmt'+i+'-fp');h+='<div class="addr-card__field"><label for="'+fpId+'">'+esc(t('remote.nodes.fp'))+'</label><select class="select" id="'+fpId+'" data-remote-field="fp">'+FPS.map(f=>'<option value="'+esc(f)+'"'+(get('fp')===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select></div>';
 }else{
 h+=field('sni',t('remote.nodes.sni'),'example.com');
-h+='<div class="addr-card__field"><label>'+esc(t('remote.nodes.password'))+'</label><input class="input input--mono" type="password" data-remote-field="password" value="'+esc(get('password'))+'" autocomplete="off" spellcheck="false" dir="ltr"></div>';
-h+='<div class="addr-card__field"><label>'+esc(t('remote.nodes.obfs'))+'</label><select class="select" data-remote-field="obfs"><option value=""'+(get('obfs')===''?' selected':'')+'>'+esc(t('remote.nodes.obfs.none'))+'</option><option value="salamander"'+(get('obfs')==='salamander'?' selected':'')+'>salamander</option></select></div>';
-h+='<div class="addr-card__field"><label>'+esc(t('remote.nodes.obfsPassword'))+'</label><input class="input input--mono" type="password" data-remote-field="obfsPassword" value="'+esc(get('obfsPassword'))+'" autocomplete="off" spellcheck="false" dir="ltr"></div>';
+const pwId=nextId('rmt'+i+'-password');h+='<div class="addr-card__field"><label for="'+pwId+'">'+esc(t('remote.nodes.password'))+'</label><input class="input input--mono" id="'+pwId+'" type="password" data-remote-field="password" value="'+esc(get('password'))+'" autocomplete="off" spellcheck="false" dir="ltr"></div>';
+const obId=nextId('rmt'+i+'-obfs');h+='<div class="addr-card__field"><label for="'+obId+'">'+esc(t('remote.nodes.obfs'))+'</label><select class="select" id="'+obId+'" data-remote-field="obfs"><option value=""'+(get('obfs')===''?' selected':'')+'>'+esc(t('remote.nodes.obfs.none'))+'</option><option value="salamander"'+(get('obfs')==='salamander'?' selected':'')+'>salamander</option></select></div>';
+const opId=nextId('rmt'+i+'-obfsPassword');h+='<div class="addr-card__field"><label for="'+opId+'">'+esc(t('remote.nodes.obfsPassword'))+'</label><input class="input input--mono" id="'+opId+'" type="password" data-remote-field="obfsPassword" value="'+esc(get('obfsPassword'))+'" autocomplete="off" spellcheck="false" dir="ltr"></div>';
 }
 h+='</div><div class="addr-card__side"><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="remote-del" aria-label="'+esc(t('common.remove'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>';
 return h}
@@ -186,7 +186,7 @@ const id='f'+(++UID);
 switch(f.type){
 case 'str':{
 const val=String(getPath(S.set,paths[0])??'');
-const extra=f.preview==='ech'?'<p class="field__hint" data-ech-preview dir="ltr"></p>':'';
+const extra=f.preview==='ech'?'<p class="field__hint" data-ech-preview dir="auto"></p>':'';
 return fieldWrap(id,f.label,f.hint,f.help,f.maxLen||0).replace('{B}','<input type="text" class="input'+(f.mono?' input--mono':'')+'" id="'+id+'" data-bind="'+paths[0]+'" autocomplete="off" spellcheck="false" dir="'+(f.mono?'ltr':'auto')+'" value="'+esc(val)+'">'+extra)}
 case 'num':{
 const val=getPath(S.set,paths[0]);
@@ -453,6 +453,14 @@ const lc=leaves(cur,'',{}),ls=leaves(snap,'',{});
 const patch={};
 for(const p in lc)if(JSON.stringify(lc[p])!==JSON.stringify(ls[p]))setPath(patch,p,lc[p]);
 return{cur,patch}}
+function withBusy(el,fn){
+if(!el||el.dataset.busy==='1')return Promise.resolve(false);
+el.dataset.busy='1';el.setAttribute('aria-busy','true');
+const prev=el.disabled;el.disabled=true;
+const release=()=>{el.dataset.busy='';delete el.dataset.busy;el.removeAttribute('aria-busy');el.disabled=prev};
+let p;
+try{p=typeof fn==='function'?fn():Promise.resolve(fn)}catch(err){release();throw err}
+return Promise.resolve(p).then(v=>{release();return v===undefined?true:v},e=>{release();throw e})}
 function markDirty(){
 S.dirty.clear();
 SECTIONS.forEach(s=>{
@@ -460,17 +468,35 @@ try{if(JSON.stringify(collectSection(s.key))!==S.snap[s.key])S.dirty.add(s.key)}
 scheduleDirtyPush();
 updateApplyBar()}
 function updateApplyBar(){
+const ab=$('apply-btn');
 $('applybar').hidden=S.dirty.size===0;
-$('apply-btn').disabled=false;
-$('apply-btn').textContent=t('common.apply');
-document.querySelectorAll('.section-actions__hint').forEach(hint=>{hint.hidden=!S.dirty.has(hint.closest('[id^="sp-"]').id.replace('sp-',''))})
+if(!ab||ab.dataset.busy==='1'){}
+else{ab.disabled=false;ab.textContent=t('common.apply')}
+const st=urStack(currentSection());
+const ub=$('ur-undo'),rb=$('ur-redo');
+if(ub)ub.disabled=!st.undo.length;
+if(rb)rb.disabled=!st.redo.length;
+document.querySelectorAll('.section-actions__hint').forEach(hint=>{hint.hidden=!S.dirty.has(hint.closest('[id^="sp-"]').id.replace('sp-',''))});
 document.querySelectorAll('#subtabs .subtab').forEach(a=>{const base=a.dataset.label||a.textContent.replace(/ \*$/,'');a.dataset.label=base;a.textContent=base+(S.dirty.has(a.dataset.sec)?' *':'')})}
+function wireApplyBarUr(){
+const bar=$('applybar');
+if(!bar||bar.querySelector('#ur-undo'))return;
+const mk=(id,labelKey,shift)=>{
+const b=document.createElement('button');
+b.type='button';b.id=id;b.className='btn btn--ghost btn--sm';
+b.textContent=t(labelKey);b.setAttribute('aria-label',t(labelKey));
+b.addEventListener('click',()=>{if(shift)redoSection();else undoSection()});
+return b};
+const inner=bar.querySelector('.applybar__inner');
+const ref=$('discard-btn');
+const u=mk('ur-undo','shortcuts.undo',false),r=mk('ur-redo','shortcuts.redo',true);
+if(ref){inner.insertBefore(u,ref);inner.insertBefore(r,ref)}
+else inner.append(u,r);
+updateApplyBar()}
 async function refreshSubUrls(){
 try{sessionStorage.removeItem('qpe:api/bootstrap');sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
 try{const d=await api('api/bootstrap',{fresh:true});S.subs=(d.subUrls&&d.subUrls.urls)||[];renderHome()}catch(e){}}
 async function applySection(sec){
-const btn=$('apply-btn');
-btn.disabled=true;btn.textContent=t('common.applying');
 clearFieldErrors(sec);
 try{
 const{cur,patch}=diffSection(sec);
@@ -490,7 +516,7 @@ showFieldError(path,e.fields[path]);
 n++}
 toast(t('common.fixErrors',{count:n}),'err')}
 else toastErr(e)}
-finally{btn.disabled=false;updateApplyBar()}}
+finally{updateApplyBar()}}
 function discardSection(sec){
 let snap={};
 try{snap=JSON.parse(S.snap[sec]||'{}')}catch(e){}
@@ -515,7 +541,8 @@ if(err)err.textContent=/\s/.test(msg)||!DICT[LANG][msg]&&!DICT.en[msg]?msg:t(msg
 el.setAttribute('aria-invalid','true');
 const errId='err-'+(++UID);
 err.id=errId;
-el.setAttribute('aria-describedby',errId)})}
+el.setAttribute('aria-describedby',errId);
+announce(err.textContent)})}
 function clearFieldErrors(sec){
 const panel=$('sp-'+sec);
 if(!panel)return;
@@ -559,7 +586,7 @@ if(seen.has(l.toLowerCase()))dups.push(l);
 seen.add(l.toLowerCase())});
 if(wrap){
 const cnt=wrap.querySelector('.cnt'),badEl=wrap.querySelector('.bad');
-if(cnt)cnt.textContent=allLines.length+(ta.id.indexOf('checker-targets')===0?' / '+MAX_TARGETS:'');
+if(cnt)cnt.textContent=allLines.length;
 if(badEl)badEl.textContent=[...bad.slice(0,2).map(l=>t('err.invalid_line',{line:l})),...(dups.length?[t('err.duplicate',{value:dups[0]})]:[])].join(' · ');
 ta.setAttribute('aria-invalid',bad.length?'true':'false')}}
 function validateAllLineEditors(){validateLineEditors(document)}

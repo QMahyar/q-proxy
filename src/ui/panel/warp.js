@@ -33,11 +33,11 @@ return '<section class="card"><div class="card__head"><div class="card__title">'
 +'<div class="field"><span class="field__label">'+esc(t('sources.tools.title'))+'</span><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="pool-fetch">'+esc(t('egress.pool.fetch'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="source-doh">'+esc(t('sources.tools.doh'))+'</button></div><p class="field__hint">'+esc(t('sources.tools.hint'))+'</p></div></section>'}
 async function loadPool(probe){
 const box=$('pool-list');if(!box)return;
-box.innerHTML='<span class="field__hint">'+esc(t('common.loading'))+'</span><span class="spin" style="display:inline-block;vertical-align:middle"></span>';
+box.innerHTML=loadingBox({rows:3});
 try{
 const d=await api('api/proxy-pool'+(probe?'?probe=1':''),{fresh:true});
 S.pool=d;S.poolSource=d.source;S.poolAt=Date.now();renderPool()}
-catch(e){if(e&&e.status===401)return;box.innerHTML='<p class="field__error" style="display:block">'+esc(t('egress.pool.failed'))+'</p>'}}
+catch(e){if(e&&e.status===401)return;box.innerHTML=errorCard({title:'egress.pool.failed',retryAction:'data-action="pool-fetch"'})}}
 function renderPool(){
 const box=$('pool-list');if(!box)return;
 const pool=(S.pool&&S.pool.pool)||[];
@@ -67,7 +67,7 @@ if(r){dot.hidden=false;dot.className='addr-dot '+(r.status==='ok'?'dot--ok':'dot
 else dot.hidden=true});
 }
 function warpErrorHtml(id){
-return '<div class="empty-card" role="alert" style="border-color:var(--danger)"><div class="empty-icon" style="color:var(--danger);border-color:var(--danger);background:var(--danger-bg)"><svg aria-hidden="true"><use href="#i-x"/></svg></div><div class="empty-title">'+esc(t('warp.error.title'))+'</div><p class="empty-msg">'+esc(t('warp.error.msg'))+'</p><div class="empty-actions"><button type="button" class="btn btn--primary btn--sm" data-warp-retry="'+esc(id||'')+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('common.retry'))+'</button></div></div>'}
+return errorCard({title:'warp.error.title',msg:'warp.error.msg',retryAction:'data-warp-retry="'+esc(id||'')+'"'})}
 function warpCardHtml(card){
 if(card.warpAccounts)return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('warp.accounts'))+'</div></div><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button><button type="button" class="btn btn--primary btn--sm" data-action="warp-generate-open">'+esc(t('warp.generate'))+'</button></div></div><div id="warp-accounts" class="warp-grid"></div></section>';
 if(card.warpPresets)return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.presets.title'))+'</div><button type="button" class="btn btn--primary btn--sm" data-action="warp-preset-add">'+esc(t('warp.presets.add'))+'</button></div><div id="warp-presets"></div></section>';
@@ -81,7 +81,7 @@ const W=S.warp;
 const ac=$('warp-accounts');
 if(ac){
 ac.innerHTML='<div class="chips-row" style="grid-column:1/-1;margin-block-end:4px"><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('warp.chips.accounts',{n:W.accounts.length}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('warp.chips.presets',{n:W.presets.length}))+'</span><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('home.chips.formats',{n:WARP_W.length}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('warp.chips.direct'))+'</span></div>';
-if(!W.accounts.length){ac.insertAdjacentHTML('beforeend','<div class="empty-card" style="grid-column:1/-1"><div class="empty-icon"><svg aria-hidden="true"><use href="#i-download"/></svg></div><div class="empty-title">'+esc(t('warp.empty_title'))+'</div><p class="empty-msg">'+esc(t('warp.empty_msg'))+'</p><div class="empty-actions"><button type="button" class="btn btn--primary btn--sm" data-action="warp-generate-open">'+esc(t('warp.generate'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button></div></div>')}
+if(!W.accounts.length){ac.insertAdjacentHTML('beforeend',emptyCard({icon:'i-download',title:'warp.empty_title',msg:'warp.empty_msg',cta:'warp.generate',attrs:'data-action="warp-generate-open"',style:'grid-column:1/-1',extraActions:'<button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button>'}))}
 else W.accounts.forEach(function(a,i){const eps=a.endpoint_list&&a.endpoint_list.type==='custom'?t('warp.detail.custom_eps',{n:a.endpoint_list.custom_endpoints.length}):(W.presets.find(function(p){return p.id===(a.endpoint_list&&a.endpoint_list.preset_id)})||{name:a.endpoint_list&&a.endpoint_list.preset_id||''}).name;ac.insertAdjacentHTML('beforeend','<a class="acct-card" href="#/warp/'+esc(a.id)+'"><span class="avatar-tile grad-'+((i%6)+1)+'">'+esc((a.name[0]||'W').toUpperCase())+'</span><span class="acct-info"><span class="acct-name">'+esc(a.name)+'</span><span class="acct-date">'+esc((a.created_at||'').slice(0,10))+' · '+esc(eps)+'</span></span>'+(a.amnezia_overrides?'<span class="amz-tag">AMZ</span>':'')+'</a>')})}
 const pr=$('warp-presets');
 if(pr){let ph='';W.presets.forEach(function(p){const preview=p.endpoints.slice(0,3).map(function(e){return e.ip+':'+e.port}).join(', ')+(p.endpoints.length>3?' +'+(p.endpoints.length-3):'');ph+='<div class="row"><div style="min-width:0"><div class="acct-name">'+esc(p.name)+'</div><div class="acct-date" dir="ltr">'+esc(preview)+'</div></div><div class="btn-row"><span class="stat-chip">'+esc(t('warp.presets.count',{n:p.endpoints.length}))+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="warp-preset-edit" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.edit'))+'"><svg aria-hidden="true"><use href="#i-edit"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="warp-preset-del" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>'});pr.innerHTML=ph}

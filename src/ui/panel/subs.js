@@ -8,7 +8,7 @@ function subsModeSeg(){
 let sh='<div class="seg" role="radiogroup" aria-label="'+esc(t('home.subs.mode.normal'))+'/'+esc(t('home.subs.mode.fragment'))+'">';
 SUBS_MODE_IDS.forEach(m=>{sh+='<button type="button" aria-checked="'+String(S.subMode===m)+'" data-mode="'+m+'">'+esc(t('home.subs.mode.'+m))+'</button>'});
 return sh+'</div>'}
-function subsEmptyHtml(){return '<div class="empty-card"><div class="empty-icon"><svg aria-hidden="true"><use href="#i-qr"/></svg></div><div class="empty-title">'+esc(t('home.subs.empty_title'))+'</div><p class="empty-msg">'+esc(t('home.subs.empty_msg'))+'</p><div class="empty-actions"><a class="btn btn--primary btn--sm" href="#/settings/protocols">'+esc(t('home.subs.empty_cta'))+'</a></div></div>'}
+function subsEmptyHtml(){return emptyCard({icon:'i-qr',title:'home.subs.empty_title',msg:'home.subs.empty_msg',cta:'home.subs.empty_cta',href:'#/settings/protocols'})}
 function subsMainHtml(){
 const rows=mainSubEntries();
 let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.main.title'))+'</div><div class="field__hint">'+esc(t('subs.main.desc'))+'</div></div>'+subsModeSeg()+'</div>';
@@ -29,7 +29,7 @@ sh+='<p class="field__hint" dir="auto" style="margin-block:12px 0">'+esc(t('home
 sh+='</section>';
 return sh}
 function subsUsersHtml(){
-let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.users.title'))+'</div><div class="field__hint">'+esc(t('subs.users.desc'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('subs.users.manage'))+'</a></div><div id="subs-users"><span class="field__hint">'+esc(t('common.loading'))+'</span></div></section>';
+let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.users.title'))+'</div><div class="field__hint">'+esc(t('subs.users.desc'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('subs.users.manage'))+'</a></div><div id="subs-users">'+loadingBox({rows:2})+'</div></section>';
 return sh}
 function subsWarpHtml(){
 const n=S.warp&&Array.isArray(S.warp.accounts)?S.warp.accounts.length:null;
@@ -58,14 +58,21 @@ if(!S.warp)loadWarpIfNeeded().then(()=>{if(parseRoute().view==='subs')renderSubs
 function subsUserRowHtml(u){
 const hint='<code dir="ltr" class="mono" style="font-size:var(--fs-sm)" title="'+esc(t('users.token.hint_title'))+'">'+esc(u.tokenHint||'')+'</code>';
 return '<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:30%">'+esc(u.name)+'</span><span style="flex:1;min-width:0">'+hint+'</span>'+userChip(u)+'</div>'}
+let subsUsersLoaded=false;
 function renderSubsUsers(){
 const box=$('subs-users');if(!box)return;
 const all=S.users||[];
-if(!all.length){box.innerHTML='<div class="empty-card" style="padding:2rem 1.5rem"><div class="empty-title">'+esc(t('subs.users.empty'))+'</div><div class="empty-actions"><a class="btn btn--primary btn--sm" href="#/users">'+esc(t('subs.users.empty_cta'))+'</a></div></div>';return}
+if(!subsUsersLoaded&&!all.length)return;
+if(!all.length){box.innerHTML=emptyCard({title:'subs.users.empty',cta:'subs.users.empty_cta',href:'#/users',style:'padding:2rem 1.5rem'});return}
 box.innerHTML=all.map(subsUserRowHtml).join('')+'<p class="field__hint" style="margin-block:10px 0">'+esc(t('subs.users.hint'))+'</p>'}
 async function loadSubsUsers(){
 const box=$('subs-users');if(!box)return;
-try{const d=await api('api/users',{fresh:true});S.users=d.users||[];renderSubsUsers()}catch(e){if(e&&e.status===401)return;if(e&&e.handled)return;box.innerHTML='<p class="field__error" style="display:block">'+esc(t('users.load_failed'))+'</p>'}}
+try{const d=await api('api/users',{fresh:true});S.users=d.users||[];subsUsersLoaded=true;renderSubsUsers()}catch(e){if(e&&e.status===401)return;if(e&&e.handled)return;subsUsersLoaded=true;box.innerHTML=errorCard({title:'users.load_failed',retryAction:'data-retry="subs-users"'})}}
+
+document.addEventListener('click',function(e){
+const b=e.target&&e.target.closest?e.target.closest('[data-retry="subs-users"]'):null;if(!b)return;
+const box=$('subs-users');if(box)box.innerHTML=loadingBox({rows:2});
+loadSubsUsers()});
 document.addEventListener('click',function(e){
 const chip=e.target&&e.target.closest?e.target.closest('#subs-body [data-mode]'):null;
 if(!chip)return;

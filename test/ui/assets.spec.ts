@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
+import { readFileSync } from "node:fs";
 import { ASSETS } from "../../src/ui/assets";
 import { buildSubUrls } from "../../src/handlers/api/status";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
@@ -578,6 +580,61 @@ describe("camo html", () => {
   });
 });
 
+describe("panel ui p16 states", () => {
+  const html = ASSETS.panel;
+
+  it("ships the shared states.js builders in the bundle", () => {
+    expect(html).toContain("function emptyCard(");
+    expect(html).toContain("function loadingBox(");
+    expect(html).toContain("function errorCard(");
+    expect(html).toContain("loading-box\"");
+    expect(html).toContain("empty-card--error");
+    expect(html).toContain("skel-bar");
+  });
+
+  it("adopts the empty-card builder on users, subs, warp and home", () => {
+    expect(html).toContain("function usersEmptyHtml(){");
+    expect(html).toMatch(/function usersEmptyHtml\(\)\{\s*return emptyCard\(/);
+    expect(html).toContain("function subsEmptyHtml(){return emptyCard(");
+    expect(html).toContain("ac.insertAdjacentHTML('beforeend',emptyCard(");
+    expect(html.match(/sh\+=emptyCard\(/g)?.length).toBe(1);
+    expect(html).not.toContain("'<div class=\"empty-card\"><div class=\"empty-icon\"><svg aria-hidden=\"true\"><use href=\"#i-qr\"/>");
+  });
+
+  it("pairs every errorCard usage with a retry action", () => {
+    const uses = [...html.matchAll(/errorCard\(\{([^}]*)\}\)/g)].map((m) => m[1]);
+    expect(uses.length).toBeGreaterThanOrEqual(6);
+    for (const u of uses) expect(u).toContain("retryAction:");
+    for (const attr of [
+      'data-action="users-reload"',
+      'data-action="pool-fetch"',
+      'data-retry="subs-users"',
+      'data-retry="home-pool"',
+      'data-retry="home-users"',
+      'data-retry="my-ip"',
+    ]) {
+      expect(html).toContain(attr);
+    }
+  });
+
+  it("routes every loading surface through loadingBox and keeps the warp retry handler", () => {
+    expect(html.match(/loadingBox\(/g)?.length).toBeGreaterThanOrEqual(8);
+    expect(html).not.toContain("+'<span class=\"spin\" style=\"display:inline-block;vertical-align:middle\"></span>'");
+    expect(html).toContain("if(!S.warp&&!warpLoadError){const panel=$('warp-body')");
+    expect(html).toContain("data-warp-retry");
+    expect(html).toContain("'[data-retry]'");
+  });
+
+  it("adds skeleton, loading-box and error-state styles with reduced-motion shimmer off", () => {
+    expect(html).toContain(".loading-box{");
+    expect(html).toContain(".skel-bar{");
+    expect(html).toContain(".empty-card--error{");
+    expect(html).toContain(".empty-icon--error{");
+    expect(html).toContain("@keyframes shimmer");
+    expect(html).toMatch(/@media\(prefers-reduced-motion:reduce\)\{\*[^@]*\.skeleton\{animation:none\}\s*\}/);
+  });
+});
+
 describe("panel build assembly", () => {
   const assemble = () =>
     execFileSync(process.execPath, ["scripts/build-single-file.mjs", "--assemble-only"], {
@@ -596,5 +653,64 @@ describe("panel build assembly", () => {
 
   it("keeps the committed panel.html in sync with its sources", () => {
     expect(assemble()).toBe(ASSETS.panel);
+  });
+});
+
+describe("panel ui p15 a11y", () => {
+  const html = ASSETS.panel;
+
+  it("ships the a11y module with radiogroup controller, announce and nextId", () => {
+    expect(html).toContain("function wireRadiogroups(");
+    expect(html).toContain("function radiogroupKeydown(");
+    expect(html).toContain("function syncRadiogroup(");
+    expect(html).toContain("function nextId(");
+    expect(html).toContain("function announce(");
+    expect(html).toContain("document.documentElement.dir==='rtl'");
+    expect(html).toContain("MutationObserver");
+  });
+
+  it("renders one global polite live region for dynamic announcements", () => {
+    expect(html).toContain('id="a11y-live"');
+    expect(html).toContain('role="status" aria-live="polite"');
+    expect(html).toMatch(/id="a11y-live" class="visually-hidden"/);
+    expect(html).toContain("announce(err.textContent)");
+  });
+
+  it("wires swatches and language segment as keyboard-operable radiogroups", () => {
+    expect(html).toContain('data-radiogroup="pressed"');
+    const groups = html.match(/role="radiogroup"/g) ?? [];
+    expect(groups.length).toBeGreaterThanOrEqual(3);
+    expect(html).toContain('class="seg" role="radiogroup" aria-label="Language" id="langseg"');
+    expect(html).toMatch(/\[role="radio"\],\[aria-checked\]/);
+  });
+
+  it("associates every address-card and remote-node field label with a generated id", () => {
+    expect(html).toMatch(/const fid=nextId\('addr'\+i\+'-'\+k\)/);
+    expect(html).toMatch(/const fid=nextId\('rmt'\+i\+'-'\+k\)/);
+    expect(html).not.toMatch(/<label>'+esc\(t\('remote\.nodes\.(kind|flow|fp|password|obfs|obfsPassword)'\)\)+'<\/label><(?:select|input)(?![^>]*id=)/);
+    expect(html).toMatch(/data-addr-enabled-input aria-label="/);
+  });
+
+  it("keeps the ECH preview direction auto so Persian renders correctly", () => {
+    expect(html).toContain('data-ech-preview dir="auto"');
+    expect(html).not.toContain('data-ech-preview dir="ltr"');
+  });
+
+  it("gives modal validation errors role=alert and labels the override inputs", () => {
+    expect(html).toContain('id="wi-error" role="alert"');
+    expect(html).toContain('id="wp-error" role="alert"');
+    expect(html).toContain('id="mu-error" role="alert"');
+    expect(html).toMatch(/<label for="mu-ov-address" id="mu-ov-address-label">/);
+    expect(html).toMatch(/<label for="mu-ov-port" id="mu-ov-port-label">/);
+    expect(html).toMatch(/<label for="mu-ov-label2" id="mu-ov-label-label">/);
+  });
+
+  it("registers a11y.js in the panel assembly order", () => {
+    const buildScript = readFileSync("scripts/build-single-file.mjs", "utf8");
+    expect(buildScript).toContain('"a11y.js"');
+    const order = buildScript.match(/PANEL_JS_ORDER = \[([^\]]+)\]/)?.[1] ?? "";
+    expect(order.indexOf('"a11y.js"')).toBeGreaterThan(-1);
+    expect(order.indexOf('"a11y.js"')).toBeLessThan(order.indexOf('"settings.js"'));
+    expect(ASSETS.panel).toContain("function announce(");
   });
 });

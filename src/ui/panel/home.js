@@ -101,6 +101,7 @@ const b=$('users-body');
 if(b&&!b.dataset.built){b.dataset.built='1';b.innerHTML=usersCardHtml()}
 loadUsers()}
 function showWarpView(warpId){
+if(!S.warp&&!warpLoadError){const panel=$('warp-body');if(panel)panel.innerHTML='<section class="card">'+loadingBox({rows:4})+'</section>'}
 loadWarpIfNeeded().then(()=>{if(parseRoute().view!=='warp')return;if(warpId)renderWarpDetail(warpId);else renderWarpSection()})}
 function showSection(sec){
 SECTIONS.forEach(s=>{const p=$('sp-'+s.key);if(p)p.hidden=s.key!==sec});
@@ -128,7 +129,7 @@ sh+='</div></div>';
 const urls=mainSubEntries();
 urls.slice(0,3).forEach((entry,i)=>{sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(formatLabel(entry.format))+'</span>'+copyFieldHtml(subUrlWithMode(entry.url),'sub-u'+i)+'</div>'});
 if(urls.length)sh+='<div class="row" style="border-block-end:0"><a class="btn btn--ghost btn--sm" href="#/subs">'+esc(t('home.subs.viewall'))+'<svg aria-hidden="true"><use href="#i-back" style="transform:scaleX(-1)"/></svg></a></div>';
-if(!urls.length&&!(S.warp&&S.warp.accounts.length))sh+='<div class="empty-card"><div class="empty-icon"><svg aria-hidden="true"><use href="#i-qr"/></svg></div><div class="empty-title">'+esc(t('home.subs.empty_title'))+'</div><p class="empty-msg">'+esc(t('home.subs.empty_msg'))+'</p><div class="empty-actions"><a class="btn btn--primary btn--sm" href="#/settings/protocols">'+esc(t('home.subs.empty_cta'))+'</a></div></div>';
+if(!urls.length&&!(S.warp&&S.warp.accounts.length))sh+=emptyCard({icon:'i-qr',title:'home.subs.empty_title',msg:'home.subs.empty_msg',cta:'home.subs.empty_cta',href:'#/settings/protocols'});
 subs.innerHTML=sh;
 body.appendChild(subs);
 if(!S.warp)loadWarpIfNeeded().then(()=>{if(S.warp)renderHome()});
@@ -143,7 +144,7 @@ const pool=document.createElement('section');pool.className='card';
 pool.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('egress.pool.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="home-pool-refresh"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="home-pool"><span class="field__hint">'+esc(t('egress.pool.idle'))+'</span></div>';
 right.appendChild(pool);
 const uc=document.createElement('section');uc.className='card';
-uc.innerHTML='<div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('home.users.desc'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('home.users.manage'))+'</a></div><div id="home-users"><span class="field__hint">'+esc(t('common.loading'))+'</span></div>';
+uc.innerHTML='<div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('home.users.desc'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('home.users.manage'))+'</a></div><div id="home-users">'+loadingBox({rows:2})+'</div>';
 right.appendChild(uc);
 if(S.status){
 const st=document.createElement('section');st.className='card';
@@ -185,8 +186,8 @@ finally{document.querySelectorAll('[data-kill]').forEach(b=>b.closest('.switch')
 function toastErr(e){toast(!e||e.status===0?t('toast.networkError'):e.message||t('common.error'),'err')}
 async function loadHomePool(){
 const box=$('home-pool');if(!box)return;
-box.innerHTML='<span class="field__hint">'+esc(t('common.loading'))+'</span>';
-try{S.pool=await api('api/proxy-pool?probe=1',{fresh:true});renderHomePool()}catch(e){if(e&&e.status===401)return;box.innerHTML='<p class="field__error" style="display:block">'+esc(t('egress.pool.failed'))+'</p>'}}
+box.innerHTML=loadingBox({rows:2});
+try{S.pool=await api('api/proxy-pool?probe=1',{fresh:true});renderHomePool()}catch(e){if(e&&e.status===401)return;box.innerHTML=errorCard({title:'egress.pool.failed',retryAction:'data-retry="home-pool"'})}}
 function renderHomePool(){
 const box=$('home-pool');if(!box)return;
 const pool=(S.pool&&S.pool.pool)||[];
@@ -198,14 +199,15 @@ const status=pr?(pr.status==='ok'?'<span class="glyph-ok">✓ '+pr.latencyMs+'ms
 return '<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc(k)+'</span><span class="pool-status">'+status+'</span></div>'}).join('')}
 async function loadHomeUsers(){
 const box=$('home-users');if(!box)return;
-try{const d=await api('api/users',{fresh:true});S.users=d.users||[];renderHomeUsers()}catch(e){if(e&&e.status===401)return;box.innerHTML='<p class="field__error" style="display:block">'+esc(t('users.load_failed'))+'</p>'}}
+box.innerHTML=loadingBox({rows:2});
+try{const d=await api('api/users',{fresh:true});S.users=d.users||[];renderHomeUsers()}catch(e){if(e&&e.status===401)return;box.innerHTML=errorCard({title:'users.load_failed',retryAction:'data-retry="home-users"'})}}
 function renderHomeUsers(){
 const box=$('home-users');if(!box)return;
 const all=S.users||[];const active=all.filter(u=>u.enabled&&!isUserExpired(u)).length;
 box.innerHTML='<div class="row" style="border:0"><span class="lbl">'+esc(t('home.users.active'))+'</span><span class="mono">'+active+'</span>'+usersCapacityChip(all.length)+'</div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('home.users.manage'))+'</a>'}
 async function loadMyIp(){const box=$('ip-body');
 if(!box)return;
-box.innerHTML='<span class="field__hint">'+esc(t('common.loading'))+'</span>';
+box.innerHTML=loadingBox({rows:2});
 try{
 const d=await fetch(BASE+'my-ip',{credentials:'same-origin',headers:{Accept:'application/json'}});
 if(!d.ok)throw 0;
@@ -216,4 +218,11 @@ box.innerHTML='<table class="tbl"><tbody>'
 +'<tr><td data-l="'+esc(t('home.stats.colo'))+'">'+esc(data.colo||'—')+'</td><td data-l="'+esc(t('home.stats.country'))+'">'+esc(data.country||'—')+'</td></tr>'
 +'<tr><td data-l="'+esc(t('home.stats.city'))+'">'+esc(data.city||'—')+'</td><td data-l="'+esc(t('home.stats.asn'))+'">'+esc(data.asn||'—')+'</td></tr>'
 +'</tbody></table>'}
-catch(e){box.innerHTML='<p class="field__error" style="display:block">'+esc(t('home.stats.failed'))+'</p>'}}
+catch(e){box.innerHTML=errorCard({title:'home.stats.failed',retryAction:'data-retry="my-ip"'})}}
+
+document.addEventListener('click',function(e){
+const b=e.target&&e.target.closest?e.target.closest('[data-retry]'):null;if(!b)return;
+const k=b.getAttribute('data-retry');
+if(k==='home-pool')loadHomePool();
+else if(k==='home-users')loadHomeUsers();
+else if(k==='my-ip')loadMyIp()});

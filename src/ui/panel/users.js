@@ -38,7 +38,7 @@ return '<span class="stat-chip" role="status" title="'+esc(t('users.capacity.tit
 function usersSearchHtml(){
 return '<input type="search" class="input" id="users-search" placeholder="'+esc(t('users.search.placeholder'))+'" aria-label="'+esc(t('users.search.placeholder'))+'" style="max-width:14rem">'}
 function usersCardHtml(){
-return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('users.desc'))+'</div></div><div class="btn-row">'+usersSearchHtml()+'<span id="users-capacity-slot">'+usersCapacityChip(0)+'</span><button type="button" class="btn btn--primary btn--sm" data-action="users-add">'+esc(t('users.add'))+'</button></div></div><div class="bulkbar" id="users-bulk" hidden><span class="stat-chip" id="users-bulk-count"></span><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-enable">'+esc(t('users.bulk.enable'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-disable">'+esc(t('users.bulk.disable'))+'</button><input type="datetime-local" class="input" id="users-bulk-expiry" aria-label="'+esc(t('users.expiry'))+'"><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-extend">'+esc(t('users.bulk.extend'))+'</button><button type="button" class="btn btn--ghost-danger btn--sm" data-action="users-bulk-del">'+esc(t('users.bulk.delete'))+'</button></div><table class="tbl"><thead id="users-thead"><tr><th><input type="checkbox" id="users-select-all" aria-label="'+esc(t('users.col.select'))+'"></th><th>'+esc(t('users.col.name'))+'</th><th>'+esc(t('users.col.token'))+'</th><th>'+esc(t('users.col.expires'))+'</th><th>'+esc(t('users.col.quota'))+'</th><th>'+esc(t('users.col.scope'))+'</th><th>'+esc(t('users.col.enabled'))+'</th><th>'+esc(t('users.col.actions'))+'</th></tr></thead><tbody id="users-rows"><tr><td colspan="8"><span class="field__hint">'+esc(t('common.loading'))+'</span></td></tr></tbody></table></section>'}
+return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('users.desc'))+'</div></div><div class="btn-row">'+usersSearchHtml()+'<span id="users-capacity-slot">'+usersCapacityChip(0)+'</span><button type="button" class="btn btn--primary btn--sm" data-action="users-add">'+esc(t('users.add'))+'</button></div></div><div class="bulkbar" id="users-bulk" hidden><span class="stat-chip" id="users-bulk-count"></span><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-enable">'+esc(t('users.bulk.enable'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-disable">'+esc(t('users.bulk.disable'))+'</button><input type="datetime-local" class="input" id="users-bulk-expiry" aria-label="'+esc(t('users.expiry'))+'"><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-extend">'+esc(t('users.bulk.extend'))+'</button><button type="button" class="btn btn--ghost-danger btn--sm" data-action="users-bulk-del">'+esc(t('users.bulk.delete'))+'</button></div><table class="tbl"><thead id="users-thead"><tr><th><input type="checkbox" id="users-select-all" aria-label="'+esc(t('users.col.select'))+'"></th><th>'+esc(t('users.col.name'))+'</th><th>'+esc(t('users.col.token'))+'</th><th>'+esc(t('users.col.expires'))+'</th><th>'+esc(t('users.col.quota'))+'</th><th>'+esc(t('users.col.scope'))+'</th><th>'+esc(t('users.col.enabled'))+'</th><th>'+esc(t('users.col.actions'))+'</th></tr></thead><tbody id="users-rows"><tr><td colspan="8">'+loadingBox({label:'common.loading'})+'</td></tr></tbody></table></section>'}
 function wireUsersSearch(){
 const inp=$('users-search');if(!inp||inp.dataset.wired)return;
 inp.dataset.wired='1';inp.addEventListener('input',function(){USERS_QUERY=inp.value;renderUserRows()})}
@@ -68,12 +68,12 @@ try{const d=await api('api/users',{fresh:true});S.users=d.users||[];if(typeof re
 for(const id of[...BULK])if(!S.users.some(u=>u.id===id))BULK.delete(id);
 renderUserRows()}
 function usersEmptyHtml(){
-return '<div class="empty-card"><div class="empty-icon"><svg aria-hidden="true"><use href="#i-qr"/></svg></div><div class="empty-title">'+esc(t('users.empty'))+'</div><p class="empty-msg">'+esc(t('users.empty_msg'))+'</p><div class="empty-actions"><button type="button" class="btn btn--primary btn--sm" data-action="users-add">'+esc(t('users.empty_cta'))+'</button></div></div>'}
+return emptyCard({icon:'i-qr',title:'users.empty',msg:'users.empty_msg',cta:'users.empty_cta',attrs:'data-action="users-add"'})}
 function renderUserRows(){
 const tb=$('users-rows');if(!tb)return;
 wireUsersSearch();
 const th=$('users-thead');if(th)th.hidden=false;
-if(usersLoadFailed){tb.innerHTML='<tr><td colspan="8"><p class="field__error" style="display:block">'+esc(t('users.load_failed'))+'</p><button type="button" class="btn btn--ghost btn--sm" data-action="users-reload">'+esc(t('common.retry'))+'</button></td></tr>';return}
+if(usersLoadFailed){tb.innerHTML='<tr><td colspan="8">'+errorCard({title:'users.load_failed',retryAction:'data-action="users-reload"'})+'</td></tr>';return}
 const capSlot=$('users-capacity-slot');if(capSlot)capSlot.innerHTML=usersCapacityChip(S.users.length);
 const rows=usersFiltered();
 const empty=S.users.length===0;
@@ -88,6 +88,9 @@ bar.hidden=BULK.size===0;
 const c=$('users-bulk-count');if(c)c.textContent=t('users.bulk.selected',{n:BULK.size});
 const all=$('users-select-all');
 if(all){const ids=(S.users||[]).map(u=>u.id);all.checked=ids.length>0&&ids.every(id=>BULK.has(id))}}
+document.addEventListener('click',function(e){
+const rb=e.target&&e.target.closest?e.target.closest('[data-action="users-reload"]'):null;if(!rb)return;
+const ltb=$('users-rows');if(ltb)ltb.innerHTML='<tr><td colspan="8">'+loadingBox({label:'common.loading'})+'</td></tr>'});
 async function bulkUsers(patch){
 const ids=[...BULK];
 if(!ids.length)return;

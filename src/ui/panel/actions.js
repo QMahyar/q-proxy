@@ -2,7 +2,10 @@ const ACTIONS={
 copy(el){
 const valEl=el.dataset.copyId?$(el.dataset.copyId):null;
 const val=el.dataset.copyValue||(valEl?valEl.textContent:'');
-copyText(val||'').then(()=>{
+el.dataset.busy='1';
+copyText(val||'').then(ok=>{
+delete el.dataset.busy;
+if(!ok){toast(t('toast.networkError'),'err');return}
 el.classList.add('copied');
 const use=el.querySelector('use');
 if(use){use.setAttribute('href','#i-check');setTimeout(()=>{use.setAttribute('href','#i-copy');el.classList.remove('copied')},900)}
@@ -19,6 +22,7 @@ if(use)use.setAttribute('href',show?'#i-eye-off':'#i-eye')},
 generate(el){
 const inp=$(el.dataset.target);
 if(!inp)return;
+captureUndoBase(inp);
 inp.value=genFor(el.dataset.gen);
 updateCharCount(inp);
 inp.dispatchEvent(new Event('change',{bubbles:true}));
@@ -30,14 +34,17 @@ if(!yes)return;
 try{await api('api/auth/logout',{method:'POST',mutate:true})}catch(err){}
 location.replace(BASE+'login')})},
 apply(){
-(async()=>{for(const sec of[...S.dirty])await applySection(sec)})()},
+withBusy($('apply-btn'),async()=>{
+$('apply-btn').textContent=t('common.applying');
+try{for(const sec of[...S.dirty])await applySection(sec)}
+finally{$('apply-btn').textContent=t('common.apply')}})},
 discard(){
 const n=S.dirty?S.dirty.size:0;
 if(!n)return;
-confirmDialog('confirm.discard.title','confirm.discard.message',true,{n:n}).then(yes=>{
+confirmDialog('confirm.discard.title','confirm.discard.message',true,{n:n}).then(async yes=>{
 if(!yes)return;
-[...S.dirty].forEach(sec=>discardSection(sec))})},
- 'settings-import'(){
+await withBusy($('discard-btn'),()=>{[...S.dirty].forEach(sec=>discardSection(sec))})})},
+ 'settings-import'(el){
  const fileInput=$('settings-import-file');
  fileInput.onchange=async()=>{
  const file=fileInput.files&&fileInput.files[0];
@@ -46,26 +53,24 @@ if(!yes)return;
  const parsed=JSON.parse(await file.text());
  if(parsed&&parsed.kind==='q-proxy-settings'&&parsed.settings){
  if(!(await confirmDialog('confirm.import.title','confirm.import.message',true,{name:file.name})))return;
- await api('api/settings/import',{method:'POST',body:{settings:parsed.settings}});
+ await withBusy(el,()=>api('api/settings/import',{method:'POST',body:{settings:parsed.settings}}));
  toast(t('general.backup.imported'),'ok');location.reload()}
  else toast(t('general.backup.badfile'),'err')}
  catch(err){if(err&&err.fields)toast(Object.values(err.fields)[0],'err');else toastErr(err)}
  finally{fileInput.value=''}};
  fileInput.click()},
  'check-update'(el){
- (async()=>{
- el.disabled=true;
+ withBusy(el,async()=>{
  try{
  const d=await api('api/version/check',{fresh:true});
  if(d.latest===null)toast(t('home.status.updateCheckFailed'),'err');
  else if(d.updateAvailable)toast(t('home.status.updateAvailable',{v:d.latest.replace(/^v/,'')}),'ok');
  else toast(t('home.status.upToDate'),'ok')}
- catch(err){toastErr(err)}
- finally{el.disabled=false}})()},
- 'reset-defaults'(){
+ catch(err){toastErr(err)}})},
+ 'reset-defaults'(el){
  confirmDialog('confirm.reset_title','confirm.reset_body',true).then(async yes=>{
 if(!yes)return;
-try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}catch(err){toastErr(err)}})},
+try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));location.reload()}catch(err){toastErr(err)}})},
  'refresh-ip'(){loadMyIp()},
  accent(el){
  const a=el.dataset.accent||'cyan';
@@ -81,52 +86,51 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  'warp-regen'(el){
  confirmDialog('warp.confirm.regen_title','warp.confirm.regen_body',true).then(async yes=>{
  if(!yes)return;
- try{await api('api/warp/account/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});
+ try{await withBusy(el,()=>api('api/warp/account/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));
  toast(t('users.toast.regen'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})},
  'warp-delete'(el){
  confirmDialog('warp.confirm.delete_title','warp.confirm.delete_body',true).then(async yes=>{
  if(!yes)return;
- try{await api('api/warp/account/'+el.dataset.id,{method:'DELETE',mutate:true});
+ try{await withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'DELETE',mutate:true}));
  toast(t('warp.toast.deleted'),'ok');invalidateWarp();location.hash='#/warp'}catch(err){toastErr(err)}})},
  'warp-amnezia-reset'(el){
- (async()=>{
- try{await api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:null}});
- toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})()},
+ withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:null}})
+ .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))})
+ .catch(err=>toastErr(err)))},
  'warp-save'(el){
- (async()=>{
  const id=el.dataset.id;const field=el.dataset.field;
  const patch={};
  if(field==='name')patch.name=$('warp-name').value.trim();
  if(field==='dns')patch.dns=$('warp-dns').value.trim();
  if(field==='preset')patch.endpoint_list={type:'preset',preset_id:$('warp-preset').value};
- try{await api('api/warp/account/'+id,{method:'PUT',body:patch});
- toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(id))}catch(err){toastErr(err)}})()},
- 'warp-amnezia-save'(){
-  (async()=>{
+ withBusy(el,()=>api('api/warp/account/'+id,{method:'PUT',body:patch})
+ .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(id))})
+ .catch(err=>toastErr(err)))},
+ 'warp-amnezia-save'(el){
   const body={};
-  ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const el=$('amz-'+k);if(!el)return;const v=el.value.trim();if(v.length>0)body[k]=v});
+  ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const el2=$('amz-'+k);if(!el2)return;const v=el2.value.trim();if(v.length>0)body[k]=v});
   const i1el=$('amz-I1');const i1=i1el?i1el.value.trim():'';if(i1.length>0)body.I1=i1;
- try{const d=await api('api/warp/settings/amnezia',{method:'PUT',body:{amnezia:body}});
- if(!S.warp)S.warp={accounts:[],presets:[],amnezia:null};
- S.warp.amnezia=d.amnezia;toast(t('common.saved'),'ok')}catch(err){toastErr(err)}})()},
+  withBusy(el,()=>api('api/warp/settings/amnezia',{method:'PUT',body:{amnezia:body}})
+  .then(d=>{if(!S.warp)S.warp={accounts:[],presets:[],amnezia:null};S.warp.amnezia=d.amnezia;toast(t('common.saved'),'ok')})
+  .catch(err=>toastErr(err)))},
   'warp-preset-del'(el){
   const p=S.warp&&S.warp.presets?S.warp.presets.find(x=>x.id===el.dataset.id):null;
   confirmDialog('confirm.presetDelete.title','confirm.presetDelete.message',true,{name:p?p.name:'',n:p&&p.endpoints?p.endpoints.length:0}).then(async yes=>{
   if(!yes)return;
-  try{await api('api/warp/presets/'+el.dataset.id,{method:'DELETE',mutate:true});
+  try{await withBusy(el,()=>api('api/warp/presets/'+el.dataset.id,{method:'DELETE',mutate:true}));
   toast(t('warp.toast.presetDeleted'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}catch(err){toastErr(err)}})},
   'warp-custom-eps-save'(el){
-  (async()=>{
   const eps=$('warp-custom-eps').value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
-  try{await api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{endpoint_list:{type:'custom',custom_endpoints:eps}}});
-  toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})()},
+  withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{endpoint_list:{type:'custom',custom_endpoints:eps}}})
+  .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))})
+  .catch(err=>toastErr(err)))},
   'warp-account-amnezia-save'(el){
-  (async()=>{
   const body={};
   ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const inp=$('amza-'+k);if(!inp)return;const v=inp.value.trim();if(v.length>0)body[k]=v});
   const i1el=$('amza-I1');const i1=i1el?i1el.value.trim():'';if(i1.length>0)body.I1=i1;
-  try{await api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:Object.keys(body).length?body:null}});
-  toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})()},
+  withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:Object.keys(body).length?body:null}})
+  .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))})
+  .catch(err=>toastErr(err)))},
  'close-user-modal'(el){closeModal(el.dataset.modal)},
  'users-add'(){openUserModal()},
  'users-edit'(el){openUserModal(el.dataset.id)},
@@ -134,33 +138,37 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  'users-del'(el){
  confirmDialog('users.confirm_delete_title','users.confirm_delete_body',true).then(async yes=>{
  if(!yes)return;
- try{await api('api/users/'+el.dataset.id,{method:'DELETE',mutate:true});toast(t('users.toast.deleted'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
+ try{await withBusy(el,()=>api('api/users/'+el.dataset.id,{method:'DELETE',mutate:true}));toast(t('users.toast.deleted'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
  'users-regen'(el){
  confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
  if(!yes)return;
- try{const d=await api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}});const tok=d&&d.token;if(tok)openShareSheet({title:t('share.title_rotated'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'});else toast(t('users.toast.regen'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
+ try{const d=await withBusy(el,()=>api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));const tok=d&&d.token;if(tok)openShareSheet({title:t('share.title_rotated'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'});else toast(t('users.toast.regen'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
  'shortcuts'(){renderShortcuts();openModal('m-keys')},
  'close-keys'(){closeModal('m-keys')},
+ 'wizard-skip'(){wizardDone()},
+ 'wizard-protocols'(){wizardDone();location.hash='#/settings/protocols'},
+ 'wizard-replay'(){
+ closeModal('m-keys');
+ try{localStorage.removeItem('qp_wizard_done')}catch(e){}
+ maybeWizard()},
  'backup-export'(){try{localStorage.setItem(EXPORT_KEY,String(Date.now()))}catch(e){}setTimeout(maybeBackupBanner,500)},
  'backup-dismiss'(){try{localStorage.setItem(BACKUP_DISMISS,String(Date.now()))}catch(e){}$('backup-banner').hidden=true},
- 'users-bulk-enable'(){runBulkUsers('confirm.bulk.enable',{enabled:true})},
- 'users-bulk-disable'(){runBulkUsers('confirm.bulk.disable',{enabled:false})},
- 'users-bulk-del'(){runBulkUsers('confirm.bulk.delete',{delete:true})},
- 'users-bulk-extend'(){const pick=$('users-bulk-expiry');const v=pick?pick.value:'';if(!v){toast(t('users.bulk.empty_expiry'),'err');return}runBulkUsers('confirm.bulk.extend',{expiresAt:new Date(v).getTime()})},
+ 'users-bulk-enable'(el){runBulkUsers('confirm.bulk.enable',{enabled:true},el)},
+ 'users-bulk-disable'(el){runBulkUsers('confirm.bulk.disable',{enabled:false},el)},
+ 'users-bulk-del'(el){runBulkUsers('confirm.bulk.delete',{delete:true},el)},
+ 'users-bulk-extend'(el){const pick=$('users-bulk-expiry');const v=pick?pick.value:'';if(!v){toast(t('users.bulk.empty_expiry'),'err');return}runBulkUsers('confirm.bulk.extend',{expiresAt:new Date(v).getTime()},el)},
  'tg-setup'(el){
- (async()=>{el.disabled=true;
+ withBusy(el,async()=>{
  try{const d=await api('api/telegram/setup',{method:'POST',body:{}});
  if(d.ok)toast(t('tg.setup_ok'),'ok');
  else toast(t('tg.setup_fail')+(d.description?' · '+d.description:''),'err')}
- catch(err){toastErr(err)}
- finally{el.disabled=false}})()},
+ catch(err){toastErr(err)}})()},
  'tg-remove'(el){
- (async()=>{el.disabled=true;
+ withBusy(el,async()=>{
  try{const d=await api('api/telegram/remove',{method:'POST',body:{}});
  if(d.ok)toast(t('tg.remove_ok'),'ok');
  else toast(t('tg.remove_fail')+(d.description?' · '+d.description:''),'err')}
- catch(err){toastErr(err)}
- finally{el.disabled=false}})()},
+ catch(err){toastErr(err)}})()},
   'theme-toggle'(){const cur=getTheme();const nxt=cur==='dark'?'light':'dark';try{localStorage.setItem(THEME_KEY,nxt)}catch(e){}applyTheme(nxt);},
   'addr-add'(el){
    const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
@@ -194,19 +202,20 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
    const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
    markDirty()},
   'addr-probe'(el){
-   (async()=>{
-   try{const d=await api('api/address-probe',{fresh:true});S.addrHealth=d&&d.results||[];renderAddrDots()}catch(err){toastErr(err)}})()},
+   withBusy(el,()=>api('api/address-probe',{fresh:true})
+   .then(d=>{S.addrHealth=d&&d.results||[];renderAddrDots()})
+   .catch(err=>toastErr(err)))},
   'pool-fetch'(el){loadPool(false)},
   'pool-test'(el){loadPool(true)},
   'home-pool-refresh'(el){loadHomePool()},
   'pool-add'(el){
    const addr=el.dataset.addr||'';
    const ta=document.querySelector('#sp-egress [data-bind="proxyIps"]');
-   if(ta&&addr){const lines=ta.value.split('\n').map(x=>x.trim()).filter(Boolean);
+   if(ta&&addr){captureUndoBase(ta);const lines=ta.value.split('\n').map(x=>x.trim()).filter(Boolean);
    if(!lines.some(x=>x.toLowerCase()===addr.toLowerCase())){lines.push(addr);}
    ta.value=lines.join('\n');markDirty();validateOneEditor(ta)}
    else toastErr()},
-  'section-save'(el){applySection(el.dataset.sec)},
+  'section-save'(el){withBusy(el,()=>applySection(el.dataset.sec))},
   'source-doh'(el){
    (async()=>{try{await loadPool(false)}catch(err){toastErr(err)}})()},
   'change-password'(el){
@@ -286,11 +295,11 @@ try{await api('api/settings/reset',{method:'POST',body:{}});location.reload()}ca
  totpReset()}
  catch(err){toastErr(err)}
  finally{el.disabled=false}})()}};
-async function runBulkUsers(titleKey,patch){
+async function runBulkUsers(titleKey,patch,el){
 const ids=[...BULK];
 if(!ids.length)return;
 if(!(await confirmDialog(titleKey,'confirm.bulk.message',true,{n:ids.length})))return;
-try{const d=await api('api/users/bulk',{method:'POST',body:{ids:ids,patch:patch}});
+try{const d=await withBusy(el,()=>api('api/users/bulk',{method:'POST',body:{ids:ids,patch:patch}}));
 BULK.clear();updateBulkBar();
 let msg=t('users.bulk.done',{updated:d.updated,deleted:d.deleted});
 if(d.unknown)msg+=t('users.bulk.unknown',{unknown:d.unknown});
@@ -361,6 +370,7 @@ return}}
 function handleChip(chip){
 const group=chip.closest('[data-type="chips"]');
 if(!group)return;
+captureUndoBase(chip);
 group.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked','false'));
 chip.setAttribute('aria-checked','true');
 markDirty();
@@ -389,8 +399,10 @@ const usel=e.target.closest('[data-user-select]');
 if(usel){if(usel.checked)BULK.add(usel.dataset.userSelect);else BULK.delete(usel.dataset.userSelect);updateBulkBar();return}
 if(e.target.id==='users-select-all'){const ids=(S.users||[]).map(u=>u.id);if(e.target.checked)ids.forEach(id=>BULK.add(id));else BULK.clear();renderUserRows();return}
 if(e.target.closest('[data-user-toggle]')){
-const sw=e.target.closest('.switch');sw.classList.add('pending');
-(async()=>{try{await api('api/users/'+e.target.dataset.userToggle,{method:'PUT',body:{enabled:e.target.checked}});toast(t('users.toast.saved'),'ok');await loadUsers()}catch(err){e.target.checked=!e.target.checked;toastErr(err)}finally{sw.classList.remove('pending')}})();
+const sw=e.target.closest('.switch');
+if(sw.dataset.busy==='1'){e.target.checked=!e.target.checked;return}
+sw.dataset.busy='1';sw.classList.add('pending');
+(async()=>{try{await api('api/users/'+e.target.dataset.userToggle,{method:'PUT',body:{enabled:e.target.checked}});toast(t('users.toast.saved'),'ok');await loadUsers()}catch(err){e.target.checked=!e.target.checked;toastErr(err)}finally{sw.classList.remove('pending');delete sw.dataset.busy}})();
 return}
 if(e.target.closest('[data-user-proto-all]')){
 if(e.target.checked)document.querySelectorAll('#mu-protocols input[data-user-proto]').forEach(i=>{i.checked=false});
@@ -435,6 +447,7 @@ eventsWired=true;
 document.addEventListener('click',onDocClick);
 document.addEventListener('change',onChange);
 document.addEventListener('input',onInput);
+document.addEventListener('focusin',e=>{captureUndoBase(e.target)});
 document.addEventListener('focusout',e=>{
 const el=e.target;
 if(el&&el.dataset&&el.dataset.bind&&el.tagName==='INPUT')blurValidateEl(el)});
@@ -455,8 +468,10 @@ else if(!$('m-warp-generate').hidden)closeModal('m-warp-generate');
 else if(!$('m-warp-import').hidden)closeModal('m-warp-import');
 else if(!$('m-warp-preset').hidden)closeModal('m-warp-preset');
 else if(!$('m-user').hidden)closeModal('m-user');
+else if(!$('m-wizard').hidden)wizardDone();
 else if(!$('m-keys').hidden)closeModal('m-keys')}});
 window.addEventListener('hashchange',navigate);
+wireApplyBarUr();
 window.addEventListener('beforeunload',e=>{
 if(S.dirty.size){e.preventDefault();e.returnValue=''}});
 wireTabKeys($('nav'),'.tab');
@@ -539,6 +554,9 @@ renderHome();
 navigate();
 maybeBackupBanner();
 if(!S.forceChange)maybeWizard()}
+function wizardDone(){
+closeModal('m-wizard');
+try{localStorage.setItem('qp_wizard_done','1')}catch(e){}}
 function maybeWizard(){
 try{if(localStorage.getItem('qp_wizard_done'))return}catch(e){}
 const protoCount=['vlessEnabled','vmessEnabled','trojanEnabled','ssEnabled'].filter(k=>S.set&&S.set[k]).length;
@@ -546,12 +564,12 @@ let step=protoCount>0?1:0;
 const body=$('wiz-body');
 function render(){
 const firstSub=(S.subs||[]).find(u=>u.format==='base64'&&u.label!=='Panel info');
-if(step===0){$('wiz-title').textContent=t('wizard.title');body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s1_body'))+'</p><a class="btn btn--primary btn--sm" href="#/settings/protocols" onclick="document.getElementById(\'wiz-skip\').click()">'+esc(t('wizard.s1_cta'))+'</a>';$('wiz-next').style.display='none'}
+if(step===0){$('wiz-title').textContent=t('wizard.title');body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s1_body'))+'</p><a class="btn btn--primary btn--sm" href="#/settings/protocols" data-action="wizard-protocols">'+esc(t('wizard.s1_cta'))+'</a>';$('wiz-next').style.display='none'}
 else if(step===1){$('wiz-title').textContent=t('wizard.s2_title');body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s2_body'))+'</p>'+(firstSub?copyFieldHtml(subUrlWithMode(firstSub.url),'wiz-sub'):'<p class="field__error" style="display:block">'+esc(t('home.subs.empty_msg'))+'</p>');$('wiz-next').style.display='';$('wiz-next').textContent=t('common.confirm')}
 else{$('wiz-title').textContent=t('wizard.s3_title');body.innerHTML='<p class="field__hint">'+esc(t('wizard.s3_body'))+'</p>';$('wiz-next').textContent=t('wizard.done')}}
 $('wiz-skip').textContent=t('wizard.skip');
-$('wiz-skip').onclick=()=>{closeModal('m-wizard');try{localStorage.setItem('qp_wizard_done','1')}catch(e){}};
-$('wiz-next').onclick=()=>{if(step<2){step++;render()}else{$('wiz-skip').onclick()}};
+$('wiz-skip').setAttribute('data-action','wizard-skip');
+$('wiz-next').onclick=()=>{if(step<2){step++;render()}else wizardDone()};
 openModal('m-wizard');
 render()}
 boot();
