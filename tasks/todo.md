@@ -18,7 +18,7 @@ Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · cre
 - [x] Task 9 (WS-B): Users read surface + capacity chip + search ✅ 8-col table, FA digits, dup-id bug fixed
 - [x] Task 10 (WS-A): Settings merge 10->6 ✅ Tunnel/Egress/Routing cards, aliases, P0 readBind textarea fix
 - [x] Task 11 (WS-B): ShareSheet component ✅ #m-qr+#m-rot deleted, honest clipboard, TOTP QR routed
-- [ ] Checkpoint 2: full tests + Playwright pass 2 (EN/FA + 375px)
+- [x] Checkpoint 2 ✅ PASS — 118 checks, 64 shots, 0 regressions, 0 console errors, dict parity 616=616
 
 ## Phase 3 — Copy, i18n, interaction
 - [ ] Task 12 (WS-F): Dead-key purge (~70×2) + computed unused-key guard
