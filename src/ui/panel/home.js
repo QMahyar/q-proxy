@@ -206,7 +206,7 @@ try{const d=await api('api/users',{fresh:true});S.users=d.users||[];renderHomeUs
 function renderHomeUsers(){
 const box=$('home-users');if(!box)return;
 const all=S.users||[];const active=all.filter(u=>u.enabled&&!isUserExpired(u)).length;
-box.innerHTML='<div class="stat-grid"><span class="lbl">'+esc(t('users.title'))+'</span><span class="mono">'+all.length+'</span><span></span><span class="lbl">'+esc(t('home.users.active'))+'</span><span class="mono">'+active+'</span></div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('home.users.manage'))+'</a>'}
+box.innerHTML='<div class="row" style="border:0"><span class="lbl">'+esc(t('home.users.active'))+'</span><span class="mono">'+active+'</span>'+usersCapacityChip(all.length)+'</div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('home.users.manage'))+'</a>'}
 async function loadMyIp(){const box=$('ip-body');
 if(!box)return;
 box.innerHTML='<span class="field__hint">'+esc(t('common.loading'))+'</span>';
