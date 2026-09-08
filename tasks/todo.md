@@ -12,7 +12,7 @@ Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · cre
 - [x] Checkpoint 1: typecheck+tests+build + Playwright pass 1 ✅ 1382/1382
 
 ## Phase 2 — Entity surfaces
-- [ ] Task 6 (WS-C): Subscriptions hub #/subs (+ staleness fix + teaser)
+- [x] Task 6 (WS-C): Subscriptions hub #/subs ✅ 5th tab, format-labels registry + drift test, teaser, staleness fix, attachment split
 - [ ] Task 7 (WS-D): WARP top-level page + detail reorder + error/retry
 - [ ] Task 8 (WS-D): WARP format grouping + preset honesty + warp.fmt.* keys
 - [ ] Task 9 (WS-B): Users read surface + capacity chip + search
