@@ -4,7 +4,7 @@ import { buildSubUrls } from "../../src/handlers/api/status";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { execFileSync } from "node:child_process";
 
-const TOTAL_BUDGET_BYTES = 320 * 1024;
+const TOTAL_BUDGET_BYTES = 340 * 1024;
 
 describe("ui/assets", () => {
   it("exports exactly panel, login and camo as non-empty strings", () => {
@@ -42,8 +42,9 @@ describe("panel html", () => {
     expect(html).not.toContain("@import");
   });
 
-  it("hash-routes the two views with aria tab semantics", () => {
+  it("hash-routes the views with aria tab semantics", () => {
     expect(html).toContain('id="view-home"');
+    expect(html).toContain('id="view-subs"');
     expect(html).toContain('id="view-settings"');
     expect(html).toContain('id="view-users"');
     expect(html).toContain('id="view-warp"');
@@ -51,6 +52,17 @@ describe("panel html", () => {
     expect(html).toContain("role='tabpanel'");
     expect(html).toContain("'sp-'+s.key");
     expect(html).toContain("#/settings/");
+  });
+
+  it("adds the Subscriptions hub as a top-level tab", () => {
+    expect(html).toContain('id="tab-subs"');
+    expect(html).toContain('href="#/subs"');
+    expect(html).toContain("seg[0]==='subs')return{view:'subs'}");
+    expect(html).toContain("'nav.subs':'Subs'");
+    expect(html).toContain("'nav.subs':'اشتراک‌ها'");
+    expect(html).toContain("'tabs.subs.title':'Subscriptions'");
+    expect(html).toContain("'tabs.subs.title':'اشتراک‌ها'");
+    expect(html).toContain("showSubsView()");
   });
 
   it("promotes users and warp to top-level tabs with back-compat redirects", () => {
@@ -213,16 +225,15 @@ describe("panel ui p08", () => {
     }
   });
 
-  it("keeps the 'Panel info' label literal in parity between producer and consumer", () => {
-    const produced = buildSubUrls("example.workers.dev", "p").map((e) => e.label);
-    const consumed = [...html.matchAll(/u\.label!=='([^']+)'/g)].map((m) => m[1]);
-    expect(produced.length).toBeGreaterThan(0);
-    expect(consumed.length).toBeGreaterThan(0);
-    for (const label of consumed) {
-      expect(produced).toContain(label);
-    }
-    expect(produced).toContain("Panel info");
-    expect(consumed).toContain("Panel info");
+  it("identifies the info-page entry by the view=html URL and labels it from the dict", () => {
+    const produced = buildSubUrls("example.workers.dev", "p");
+    const infoEntry = produced.find((e) => /[?&]view=html/.test(e.url));
+    expect(infoEntry).toBeDefined();
+    expect(html).toContain("function isInfoEntry(");
+    expect(html).toContain("/[?&]view=html/");
+    expect(html).toMatch(/home\.chips\.formats',\{n:\(S\.subs\|\|\[\]\)\.filter\(u=>!isInfoEntry\(u\)\)\.length\}\)/);
+    expect(html).toContain("'subs.info.title':'Panel info page'");
+    expect(html).toContain("'subs.info.title':'صفحهٔ اطلاعات پنل'");
   });
 
   it("shows a read-only panel address card and never a securePath editor", () => {

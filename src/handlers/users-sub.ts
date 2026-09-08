@@ -17,6 +17,7 @@ import {
   SUB_CONTENT_TYPES,
 } from "../subscription/render";
 import { pickSubFormat, SUB_FORMATS } from "../subscription/negotiate";
+import { attachmentHeaders } from "../subscription/headers";
 import { dayKeyUtc } from "../utils/time";
 import { findUserByToken, getUserHits, consumeUserHit } from "../users/store";
 
@@ -108,6 +109,7 @@ export const handleUserSub: RouteHandler = async (req, env, s) => {
     },
   );
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
+  Object.assign(headers, attachmentHeaders(format, s.profileTitle));
   const res = new Response(body, { status: 200, headers });
   if (typeof caches !== "undefined") afterResponse(caches.default.put(cacheKey, res.clone()));
   return res;

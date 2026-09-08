@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { subscriptionHeaders, subscriptionUserinfo, throttleHeaders } from "../../src/subscription/headers";
+import { subscriptionHeaders, subscriptionUserinfo, throttleHeaders, attachmentHeaders } from "../../src/subscription/headers";
 import type { ProxyNode } from "../../src/types/node";
 import type { UsageSnapshot } from "../../src/types/context";
 
@@ -20,7 +20,6 @@ describe("subscriptionHeaders", () => {
       ).toEqual({
         "Profile-Title": "base64:USBQcm94eQ==",
         "Subscription-Userinfo": "upload=0; download=5242880",
-        "Content-Disposition": "attachment; filename*=UTF-8''Q%20Proxy.yaml",
         "Cache-Control": "public, max-age=60, s-maxage=60",
         Expires: "Wed, 02 Sep 2026 00:01:00 GMT",
         "Profile-Update-Interval": "60",
@@ -31,15 +30,20 @@ describe("subscriptionHeaders", () => {
     }
   });
 
-  it("picks the extension per format", () => {
-    const mk = (format: Parameters<typeof subscriptionHeaders>[0]): Record<string, string> =>
-      subscriptionHeaders(format, "T", nodes, usage, { updateIntervalHours: 6, webPageUrl: "" });
+  it("picks the extension per format (attachment headers are separate now)", () => {
+    const mk = (format: Parameters<typeof attachmentHeaders>[0]): Record<string, string> =>
+      attachmentHeaders(format, "T");
     expect(mk("base64")["Content-Disposition"]).toContain("T.txt");
     expect(mk("singbox")["Content-Disposition"]).toContain("T.json");
     expect(mk("surge")["Content-Disposition"]).toContain("T.conf");
     expect(mk("loon")["Content-Disposition"]).toContain("T.conf");
     expect(mk("quantumult")["Content-Disposition"]).toContain("T.conf");
     expect(mk("clash")["Content-Disposition"]).toContain("T.yaml");
+  });
+
+  it("keeps attachment out of the default header set so browser views never download", () => {
+    const h = subscriptionHeaders("clash", "T", nodes, usage, { updateIntervalHours: 6, webPageUrl: "" });
+    expect("Content-Disposition" in h).toBe(false);
   });
 
   it("omits profile-web-page-url when empty and pins the update interval to the fixed throttle", () => {

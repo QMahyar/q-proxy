@@ -29,7 +29,7 @@ export function subscriptionUserinfo(
   return userinfo;
 }
 
-const EXTENSIONS: Record<SubFormat, string> = {
+export const EXTENSIONS: Record<SubFormat, string> = {
   base64: "txt",
   clash: "yaml",
   singbox: "json",
@@ -62,13 +62,20 @@ export function subscriptionHeaders(
   meta: SubscriptionMeta,
 ): Record<string, string> {
   void nodes;
+  void format;
   const userinfo = subscriptionUserinfo(usage, meta.expireAt);
   const h: Record<string, string> = {
     "Profile-Title": `base64:${encodeUtf8Base64(title)}`,
     "Subscription-Userinfo": userinfo,
-    "Content-Disposition": `attachment; filename*=UTF-8''${filenameFor(format, title)}`,
     ...throttleHeaders(),
   };
   if (meta.webPageUrl.length > 0) h["profile-web-page-url"] = meta.webPageUrl;
   return h;
+}
+
+export function attachmentHeaders(
+  format: SubFormat,
+  title: string,
+): Record<string, string> {
+  return { "Content-Disposition": `attachment; filename*=UTF-8''${filenameFor(format, title)}` };
 }

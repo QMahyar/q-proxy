@@ -11,10 +11,12 @@ function setPath(o,p,v){const ks=p.split('.');let c=o;for(let i=0;i<ks.length-1;
 function leaves(o,pre,out){for(const k in o){const p=pre?pre+'.'+k:k;const v=o[k];if(v&&typeof v==='object'&&!Array.isArray(v))leaves(v,p,out);else out[p]=v}return out}
 function buildShell(){
 $('tab-home').textContent=t('nav.home');
+$('tab-subs').textContent=t('nav.subs');
 $('tab-users').textContent=t('nav.users');
 $('tab-warp').textContent=t('nav.warp');
 $('tab-settings').textContent=t('nav.settings');
 $('home-h1').textContent=t('nav.home');
+$('subs-h1').textContent=t('tabs.subs.title');
 $('users-h1').textContent=t('nav.users');
 $('warp-h1').textContent=t('nav.warp');
 $('settings-h1').textContent=t('nav.settings');
@@ -65,7 +67,7 @@ if(seg[1]==='warp')return seg[2]?{view:'warp',warpId:seg[2],redirect:true}:{view
 return{view:'settings',sec:SECTIONS.some(s=>s.key===seg[1])?seg[1]:'general'}}
 if(seg[0]==='users')return{view:'users'};
 if(seg[0]==='warp')return{view:'warp',warpId:seg[1]||undefined};
-if(seg[0]==='subs')return{view:'settings',sec:'general'};
+if(seg[0]==='subs')return{view:'subs'};
 return{view:'home'}}
 function navigate(){
 const r=parseRoute();
@@ -73,12 +75,31 @@ const h=location.hash;
 if(r.redirect){history.replaceState(null,'',r.view==='users'?'#/users':'#/warp'+(r.warpId?'/'+r.warpId:''))}
 if(r.view==='home'&&h!==''&&h!=='#'&&h!=='#/home')history.replaceState(null,'','#/home');
 if(r.view==='settings'&&SECTIONS.some(s=>s.key===r.sec))history.replaceState(null,'','#/settings/'+r.sec+(r.warpId?'/'+r.warpId:''));
-['home','settings','users','warp'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
+['home','subs','settings','users','warp'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
 document.querySelectorAll('#nav .tab').forEach(a=>a.setAttribute('aria-selected',String(a.dataset.view===r.view)));
 if(r.view==='settings')showSection(r.sec);
+if(r.view==='subs')showSubsView();
 if(r.view==='users')showUsersView();
 if(r.view==='warp')showWarpView(r.warpId);
+if(r.view==='home'||r.view==='subs')ensureFreshSubs();
 window.scrollTo(0,0)}
+let subsFreshAt=0,subsFreshView='',subsRefreshBusy=null;
+function ensureFreshSubs(){
+const v=parseRoute().view;
+if(subsFreshAt===0){subsFreshAt=Date.now();subsFreshView=v;return}
+if(subsRefreshBusy)return;
+if(Date.now()-subsFreshAt<30000&&subsFreshView===v)return;
+subsRefreshBusy=(async()=>{
+try{sessionStorage.removeItem('qpe:api/bootstrap');sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
+let d=null;try{d=await api('api/bootstrap',{fresh:true})}catch(e){subsRefreshBusy=null;return}
+subsRefreshBusy=null;
+if(!d)return;
+S.subs=(d.subUrls&&d.subUrls.urls)||[];
+subsFreshAt=Date.now();
+subsFreshView=parseRoute().view;
+const cv=parseRoute().view;
+if(cv==='home'&&!$('view-home').hidden)renderHome();
+else if(cv==='subs'&&!$('view-subs').hidden)showSubsView()})()}
 function showUsersView(){
 const b=$('users-body');
 if(b&&!b.dataset.built){b.dataset.built='1';b.innerHTML=usersCardHtml()}
@@ -94,6 +115,7 @@ SECTIONS.forEach(s=>{const a=document.createElement('button');a.type='button';a.
 function subUrlWithMode(u){
 if(S.subMode!=='fragment')return u;
 return u+(u.includes('?')?'&':'?')+'mode=fragment'}
+function formatLabel(f){const m=FORMAT_LABELS[f];return m?t(m.key):f}
 function copyFieldHtml(value,idAttr){
 return '<div class="copy-field"><code id="'+idAttr+'" dir="ltr">'+esc(value)+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-id="'+idAttr+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm" data-action="qr" data-qr="'+esc(value)+'" aria-label="'+esc(t('common.qr'))+'"><svg aria-hidden="true"><use href="#i-qr"/></svg></button></div>'}
 function renderHome(){
@@ -101,16 +123,15 @@ const body=$('home-body');
 body.innerHTML='';
 const protoCount=['vlessEnabled','vmessEnabled','trojanEnabled','ssEnabled'].filter(k=>S.set&&S.set[k]).length;
 const chips=document.createElement('div');chips.className='chips-row';
-chips.innerHTML='<span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('home.chips.protocols',{n:protoCount}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('home.chips.formats',{n:(S.subs||[]).filter(u=>u.format!=='base64'||u.label!=='Panel info').length}))+'</span>';
+chips.innerHTML='<span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('home.chips.protocols',{n:protoCount}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('home.chips.formats',{n:(S.subs||[]).filter(u=>!isInfoEntry(u)).length}))+'</span>';
 body.appendChild(chips);
 const subs=document.createElement('section');subs.className='card';
 let sh='<div class="card__head"><div><div class="card__title">'+esc(t('home.subs.title'))+'</div><div class="field__hint">'+esc(t('home.subs.desc'))+'</div><div class="field__hint">'+esc(t('home.subs.quota'))+'</div></div><div class="seg" role="radiogroup" aria-label="'+esc(t('home.subs.mode.normal'))+'/'+esc(t('home.subs.mode.fragment'))+'">';
 [['normal','home.subs.mode.normal'],['fragment','home.subs.mode.fragment']].forEach(([m,k])=>{sh+='<button type="button" aria-checked="'+String(S.subMode===m)+'" data-mode="'+m+'">'+esc(t(k))+'</button>'});
 sh+='</div></div>';
-const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
-urls.forEach((entry,i)=>{sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(entry.label||entry.format)+'</span>'+copyFieldHtml(subUrlWithMode(entry.url),'sub-u'+i)+'</div>'});
-if(S.warp&&S.warp.accounts.length)sh+=warpSubsHtml();
-if(urls.length)sh+='<p class="field__hint" dir="auto">'+esc(t('country.hint'))+'</p>';
+const urls=mainSubEntries();
+urls.slice(0,3).forEach((entry,i)=>{sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(formatLabel(entry.format))+'</span>'+copyFieldHtml(subUrlWithMode(entry.url),'sub-u'+i)+'</div>'});
+if(urls.length)sh+='<div class="row" style="border-block-end:0"><a class="btn btn--ghost btn--sm" href="#/subs">'+esc(t('home.subs.viewall'))+'<svg aria-hidden="true"><use href="#i-back" style="transform:scaleX(-1)"/></svg></a></div>';
 if(!urls.length&&!(S.warp&&S.warp.accounts.length))sh+='<div class="empty-card"><div class="empty-icon"><svg aria-hidden="true"><use href="#i-qr"/></svg></div><div class="empty-title">'+esc(t('home.subs.empty_title'))+'</div><p class="empty-msg">'+esc(t('home.subs.empty_msg'))+'</p><div class="empty-actions"><a class="btn btn--primary btn--sm" href="#/settings/protocols">'+esc(t('home.subs.empty_cta'))+'</a></div></div>';
 subs.innerHTML=sh;
 body.appendChild(subs);

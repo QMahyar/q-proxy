@@ -16,6 +16,7 @@ import {
   SUB_CONTENT_TYPES,
 } from "../subscription/render";
 import { pickSubFormat, SUB_FORMATS } from "../subscription/negotiate";
+import { attachmentHeaders } from "../subscription/headers";
 import { escapeHtml } from "../utils/html";
 
 const FORMAT_LABELS: Record<SubFormat, string> = {
@@ -117,6 +118,7 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
     webPageUrl: `${url.origin}/${s.securePath}/panel`,
   });
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
+  Object.assign(headers, attachmentHeaders(format, s.profileTitle));
   const res = new Response(body, { status: 200, headers });
   if (typeof caches !== "undefined") afterResponse(caches.default.put(cacheKey, res.clone()));
   return res;
