@@ -13,7 +13,7 @@ Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · cre
 
 ## Phase 2 — Entity surfaces
 - [x] Task 6 (WS-C): Subscriptions hub #/subs ✅ 5th tab, format-labels registry + drift test, teaser, staleness fix, attachment split
-- [ ] Task 7 (WS-D): WARP top-level page + detail reorder + error/retry
+- [x] Task 7 (WS-D): WARP detail reorder + error/retry + warp.fmt.* registry adoption ✅
 - [ ] Task 8 (WS-D): WARP format grouping + preset honesty + warp.fmt.* keys
 - [ ] Task 9 (WS-B): Users read surface + capacity chip + search
 - [ ] Task 10 (WS-A): Settings merge 10→6 (+ Panel access card + Advanced TLS collapsible)
