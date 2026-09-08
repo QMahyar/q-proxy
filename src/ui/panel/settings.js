@@ -453,14 +453,6 @@ const lc=leaves(cur,'',{}),ls=leaves(snap,'',{});
 const patch={};
 for(const p in lc)if(JSON.stringify(lc[p])!==JSON.stringify(ls[p]))setPath(patch,p,lc[p]);
 return{cur,patch}}
-function withBusy(el,fn){
-if(!el||el.dataset.busy==='1')return Promise.resolve(false);
-el.dataset.busy='1';el.setAttribute('aria-busy','true');
-const prev=el.disabled;el.disabled=true;
-const release=()=>{el.dataset.busy='';delete el.dataset.busy;el.removeAttribute('aria-busy');el.disabled=prev};
-let p;
-try{p=typeof fn==='function'?fn():Promise.resolve(fn)}catch(err){release();throw err}
-return Promise.resolve(p).then(v=>{release();return v===undefined?true:v},e=>{release();throw e})}
 function markDirty(){
 S.dirty.clear();
 SECTIONS.forEach(s=>{
