@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SUB_FORMATS } from "../../src/subscription/negotiate";
 import { SUB_CONTENT_TYPES } from "../../src/subscription/render";
 import { EXTENSIONS } from "../../src/subscription/headers";
+import { WARP_FORMATS } from "../../src/warp/formats/registry";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { readFileSync } from "node:fs";
 
@@ -71,5 +72,32 @@ describe("panel format-labels registry", () => {
     expect(SUB_CONTENT_TYPES.base64).toContain("text/plain");
     expect(SUB_CONTENT_TYPES.clash).toContain("yaml");
     expect(SUB_CONTENT_TYPES.singbox).toContain("json");
+  });
+});
+
+describe("panel WARP format registry (warp.js WARP_W)", () => {
+  const WARP_W_PATH = "src/ui/panel/warp.js";
+
+  const parseWarpIds = (): string[] => {
+    const src = readFileSync(WARP_W_PATH, "utf8");
+    const at = src.indexOf("WARP_W=");
+    const line = src.slice(at, src.indexOf("];") + 2);
+    return [...line.matchAll(/\{id:'([a-z0-9-]+)'/g)].map((m) => m[1]!);
+  };
+
+  it("covers exactly the server's WARP_FORMATS, in registry order", () => {
+    expect(parseWarpIds()).toEqual([...WARP_FORMATS]);
+  });
+
+  it("every WARP format has a bilingual dict label (no hardcoded EN in the renderer)", () => {
+    for (const f of WARP_FORMATS) {
+      expect(dictKeys(`warp.fmt.${f}`).length).toBe(2);
+    }
+  });
+
+  it("legacy hardcoded table and duplicate per-account renderer are gone", () => {
+    const src = readFileSync(WARP_W_PATH, "utf8");
+    expect(src.includes("WARP_F")).toBe(false);
+    expect(src.includes("warpSubsHtml")).toBe(false);
   });
 });
