@@ -23,7 +23,7 @@ Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · cre
 ## Phase 3 — Copy, i18n, interaction
 - [x] Task 12 (WS-F): Dead-key purge (~70x2) + computed unused-key guard ✅ 620->547 keys, guard proven red->green
 - [ ] Task 13 (WS-F): Hardcoded strings → dict + home.status.total + dir=auto ECH
-- [ ] Task 14 (WS-G): Wizard funnel + undo/redo fix + withBusy + copy honesty
+- [x] Task 14 (WS-G): Wizard funnel + undo/redo fix + withBusy + copy honesty ✅ 20 mutations guarded
 - [x] Task 15 (WS-E): A11y radiogroups + labels + live regions ✅ RTL-aware, 0 orphan inputs, ECH dir=auto
 - [x] Task 16 (WS-E): Empty/loading consolidation + retry pairing ✅ states.js, 7 loaders, subs unknown-vs-empty fix
 - [ ] Checkpoint 3: tests + Playwright pass 3 (keyboard, FA)
