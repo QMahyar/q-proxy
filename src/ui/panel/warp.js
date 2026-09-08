@@ -2,10 +2,28 @@
 const WARP_W=[{id:'wireguard-conf',grad:'grad-1'},{id:'wireguard-conf-amnezia',grad:'grad-4'},{id:'throne',grad:'grad-5'},{id:'throne-amnezia',grad:'grad-4'},{id:'wireguard-uri',grad:'grad-2'},{id:'v2rayn',grad:'grad-3'},{id:'singbox',grad:'grad-6'},{id:'singbox-amnezia',grad:'grad-4'},{id:'singbox-legacy',grad:'grad-2'},{id:'singbox-legacy-amnezia',grad:'grad-3'},{id:'xray',grad:'grad-1'},{id:'clash',grad:'grad-5'},{id:'clash-amnezia',grad:'grad-4'},{id:'surge',grad:'grad-6'},{id:'surfboard',grad:'grad-2'},{id:'loon',grad:'grad-3'},{id:'egern',grad:'grad-6'}];
 function warpFmtLabel(id){return t('warp.fmt.'+id)}
 function warpSubUrl(token,format){return location.origin+BASE+'sub/wg/'+token+'/'+format}
+const WARP_GROUPS=[['wireguard','wireguard-conf','wireguard-conf-amnezia','wireguard-uri'],['throne','throne','throne-amnezia'],['singbox','singbox','singbox-amnezia','singbox-legacy','singbox-legacy-amnezia'],['xray','xray','v2rayn'],['clash','clash','clash-amnezia'],['surge','surge','surfboard'],['loon','loon','egern']];
+const WARP_EXT={'wireguard-conf':'zip','wireguard-conf-amnezia':'zip','throne':'txt','throne-amnezia':'txt','wireguard-uri':'txt','v2rayn':'txt','singbox':'json','singbox-amnezia':'json','singbox-legacy':'json','singbox-legacy-amnezia':'json','xray':'json','clash':'yaml','clash-amnezia':'yaml','surge':'conf','surfboard':'conf','loon':'conf','egern':'yaml'};
+let warpAmzShow=false;let warpPresetGuardPass=false;
+function warpIsAmz(id){return id.slice(-8)==='-amnezia'}
+function fmtExtTag(id){const ext=WARP_EXT[id];return ext?'<span dir="ltr" style="flex:none;font-family:var(--font-mono);font-size:10px;color:var(--text-dim);border:1px solid var(--border-strong);border-radius:.375rem;padding:1px 6px">.'+esc(ext)+'</span>':''}
+function renderWarpSubs(a){
+const box=$('warp-detail-subs');if(!box)return;
+let sh='<div style="display:flex;justify-content:flex-end;margin-block-end:2px"><label class="switch"><input type="checkbox" id="warp-amz-toggle"'+(warpAmzShow?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t('warp.groups.amnezia_toggle'))+'</span></label></div>';
+WARP_GROUPS.forEach(function(g){
+const fam=g[0],ids=g.slice(1);
+sh+='<div class="warp-group" data-warp-group="'+esc(fam)+'"><div style="display:flex;align-items:center;gap:8px;margin-block:12px 2px"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-ghost)">'+esc(t('warp.groups.'+fam))+'</span><span class="stat-chip" style="padding:.125rem .5rem">'+esc(t('warp.groups.count',{n:ids.length}))+'</span></div>';
+WARP_W.forEach(function(f){
+if(ids.indexOf(f.id)<0)return;
+const amz=warpIsAmz(f.id);
+sh+='<div class="fmt-row" data-fmt="'+esc(f.id)+'"'+(amz?' data-amz="1"':'')+(amz&&!warpAmzShow?' hidden':'')+'><span class="fmt-icon '+f.grad+'"><svg aria-hidden="true"><use href="#i-download"/></svg></span><span class="fmt-label">'+esc(warpFmtLabel(f.id))+'</span>'+fmtExtTag(f.id)+copyFieldHtml(warpSubUrl(a.token,f.id),'warp-u'+WARP_W.indexOf(f))+'</div>'});
+sh+='</div>'});
+box.innerHTML=sh}
 let warpPromise=null;let warpLoadError=false;
 function loadWarp(){if(!warpPromise)warpPromise=(async()=>{const[acc,pre,amz]=await Promise.all([api('api/warp/account'),api('api/warp/presets'),api('api/warp/settings/amnezia')]);S.warp={accounts:acc.accounts,presets:pre.presets,amnezia:amz.amnezia};warpLoadError=false;return S.warp})().catch(e=>{warpPromise=null;if(!e||e.status!==401)warpLoadError=true;toastErr(e);throw e});return warpPromise}
 function loadWarpIfNeeded(){return S.warp?Promise.resolve(S.warp):loadWarp().catch(()=>null)}
-function invalidateWarp(){S.warp=null;warpPromise=null}
+function invalidateWarp(){S.warp=null;warpPromise=null;
+try{['api/warp/account','api/warp/presets','api/warp/settings/amnezia'].forEach(function(k){sessionStorage.removeItem('qpc:'+k);sessionStorage.removeItem('qpe:'+k)})}catch(e){}}
 function retryWarp(id){invalidateWarp();warpLoadError=false;loadWarpIfNeeded().then(function(){const r=parseRoute();if(r.view!=='warp')return;if(id)renderWarpDetail(id);else renderWarpSection()})}
 function poolCardHtml(){
 return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('egress.pool.title'))+'</div><div class="field__hint">'+esc(t('egress.pool.desc'))+'</div></div><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="pool-fetch">'+esc(t('egress.pool.fetch'))+'</button><button type="button" class="btn btn--primary btn--sm" data-action="pool-test">'+esc(t('egress.pool.test'))+'</button></div></div><div id="pool-list" class="pool-list"><span class="field__hint">'+esc(t('egress.pool.idle'))+'</span></div></section>'}
@@ -76,10 +94,12 @@ if(!S.warp){if(warpLoadError){panel.innerHTML='<div class="detail-title"><a clas
 if(!S.warp.accounts){location.hash='#/warp';return}
 const a=S.warp.accounts.find(function(x){return x.id===id});
 if(!a){location.hash='#/warp';return}
+warpAmzShow=!!a.amnezia_overrides;
 let html='<div class="detail-title"><a class="back-btn" href="#/warp" aria-label="'+esc(t('warp.back'))+'"><svg aria-hidden="true"><use href="#i-back"/></svg></a><h2 class="view-title">'+esc(a.name)+'</h2>'+(a.amnezia_overrides?'<span class="amz-tag">AMZ</span>':'')+'</div>';
 html+='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('warp.detail.subs'))+'</div><div class="field__hint">'+esc(t('warp.detail.subs_desc'))+'</div></div></div><div id="warp-detail-subs"></div></section>';
 html+='<details class="warp-acc token-panel" id="warp-token-details"><summary><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('warp.detail.token'))+'</span><code class="mono" dir="ltr" style="font-size:var(--fs-sm)">'+esc(String(a.token||'').slice(0,8))+'…</code></summary><div class="warp-grid-sub"><code class="mono" dir="ltr" style="word-break:break-all;font-size:var(--fs-sm);color:var(--cyan-pale)">'+esc(a.token)+'</code><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-regen" data-id="'+esc(a.id)+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('warp.detail.regen'))+'</button></div><p class="field__hint" style="margin-block:8px 0">'+esc(t('warp.detail.token_hint'))+'</p></div></details>';
-const presetSel='<select class="select" id="warp-preset">'+S.warp.presets.map(function(p){return '<option value="'+esc(p.id)+'"'+(a.endpoint_list.type==='preset'&&a.endpoint_list.preset_id===p.id?' selected':'')+'>'+esc(p.name)+' ('+p.endpoints.length+')</option>'}).join('')+'</select>';
+const isCustomEps=a.endpoint_list&&a.endpoint_list.type==='custom';
+const presetSel='<select class="select" id="warp-preset">'+(isCustomEps?'<option value="__custom" disabled selected>'+esc(t('warp.presets.custom_n',{n:(a.endpoint_list.custom_endpoints||[]).length}))+'</option>':'')+S.warp.presets.map(function(p){return '<option value="'+esc(p.id)+'"'+(a.endpoint_list.type==='preset'&&a.endpoint_list.preset_id===p.id?' selected':'')+'>'+esc(p.name)+' ('+p.endpoints.length+')</option>'}).join('')+'</select>';
 html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.accounts'))+'</div></div><div class="field"><label class="field__label" for="warp-name">'+esc(t('warp.detail.name'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-name" maxlength="100" value="'+esc(a.name)+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="name">'+esc(t('common.apply'))+'</button></div></div><div class="field"><label class="field__label" for="warp-preset">'+esc(t('warp.detail.preset'))+'</label>'+presetSel+'</div><div class="field"><label class="field__label" for="warp-dns">'+esc(t('warp.detail.dns'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-dns" dir="ltr" value="'+esc(a.dns||'')+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="dns">'+esc(t('common.apply'))+'</button></div></div></section>';
 const customEps=(a.endpoint_list.type==='custom'?a.endpoint_list.custom_endpoints:[]).map(function(e){return e.ip+':'+e.port}).join('\n');
 html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.detail.custom_eps_title'))+'</div></div><p class="field__hint">'+esc(t('warp.detail.custom_eps_desc'))+'</p><div class="field"><textarea class="input textarea textarea--mono" id="warp-custom-eps" rows="5" dir="ltr" spellcheck="false" placeholder="162.159.192.1:2408">'+esc(customEps)+'</textarea></div><div class="btn-row"><button type="button" class="btn btn--primary btn--sm" data-action="warp-custom-eps-save" data-id="'+esc(a.id)+'">'+esc(t('common.save'))+'</button></div></section>';
@@ -92,7 +112,7 @@ amh+='<div class="btn-row"><button type="button" class="btn btn--primary btn--sm
 html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.amnezia.title'))+'</div></div>'+amh+'</section>';
 html+='<section class="card card--danger"><div class="card__head"><div class="card__title">'+esc(t('warp.detail.delete'))+'</div></div><button type="button" class="btn btn--ghost-danger btn--sm" data-action="warp-delete" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.delete'))+'</button></section>';
 panel.innerHTML=html;
-const subs=$('warp-detail-subs');let sh='';WARP_W.forEach(function(fmt,i){sh+='<div class="fmt-row"><span class="fmt-icon '+fmt.grad+'"><svg aria-hidden="true"><use href="#i-download"/></svg></span><span class="fmt-label">'+esc(warpFmtLabel(fmt.id))+'</span>'+copyFieldHtml(warpSubUrl(a.token,fmt.id),'warp-u'+i)+'</div>'});subs.innerHTML=sh}
+renderWarpSubs(a)}
 function openWarpModal(id,presetId){
 const m=$(id);if(!m)return;
 if(id==='m-warp-preset'){
@@ -111,3 +131,23 @@ openModal(id)}
 document.addEventListener('click',function(e){
 const b=e.target&&e.target.closest?e.target.closest('[data-warp-retry]'):null;if(!b)return;
 b.disabled=true;retryWarp(b.getAttribute('data-warp-retry')||'')});
+document.addEventListener('change',function(e){
+const tg=e.target;if(!tg)return;
+if(tg.id==='warp-amz-toggle'){
+const box=$('warp-detail-subs');if(!box)return;
+box.querySelectorAll('.fmt-row[data-amz]').forEach(function(r){r.hidden=!tg.checked});
+box.querySelectorAll('.warp-group').forEach(function(g){
+const chip=g.querySelector('.stat-chip');if(!chip)return;
+chip.textContent=t('warp.groups.count',{n:g.querySelectorAll('.fmt-row:not([hidden])').length})});
+return}
+if(tg.id!=='warp-preset')return;
+if(warpPresetGuardPass)return;
+const r=parseRoute();if(r.view!=='warp'||!r.warpId)return;
+const acc=S.warp&&S.warp.accounts?S.warp.accounts.find(function(x){return x.id===r.warpId}):null;
+if(!acc||!acc.endpoint_list||acc.endpoint_list.type!=='custom')return;
+const val=tg.value;if(!val||val==='__custom')return;
+e.stopImmediatePropagation();
+const n=(acc.endpoint_list.custom_endpoints||[]).length;
+confirmDialog('warp.confirm.presetSwitch.title','warp.confirm.presetSwitch.body',true,{n:n}).then(function(yes){
+if(!yes){tg.value='__custom';return}
+warpPresetGuardPass=true;tg.dispatchEvent(new Event('change',{bubbles:true}));warpPresetGuardPass=false})});

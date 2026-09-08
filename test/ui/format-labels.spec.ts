@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SUB_FORMATS } from "../../src/subscription/negotiate";
 import { SUB_CONTENT_TYPES } from "../../src/subscription/render";
 import { EXTENSIONS } from "../../src/subscription/headers";
-import { WARP_FORMATS } from "../../src/warp/formats/registry";
+import { WARP_FORMATS, WARP_EXTENSIONS } from "../../src/warp/formats/registry";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { readFileSync } from "node:fs";
 
@@ -99,5 +99,79 @@ describe("panel WARP format registry (warp.js WARP_W)", () => {
     const src = readFileSync(WARP_W_PATH, "utf8");
     expect(src.includes("WARP_F")).toBe(false);
     expect(src.includes("warpSubsHtml")).toBe(false);
+  });
+});
+
+describe("panel WARP grouping (warp.js WARP_GROUPS + WARP_EXT)", () => {
+  const GROUPS_PATH = "src/ui/panel/warp.js";
+
+  const parseGroups = (): Record<string, string[]> => {
+    const src = readFileSync(GROUPS_PATH, "utf8");
+    const at = src.indexOf("WARP_GROUPS=");
+    const line = src.slice(at, src.indexOf("]];", at) + 3);
+    const out: Record<string, string[]> = {};
+    for (const m of line.matchAll(/\[([^\]]+)\]/g)) {
+      const ids = [...m[1]!.matchAll(/'([a-z0-9-]+)'/g)].map((x) => x[1]!);
+      out[ids[0]!] = ids.slice(1);
+    }
+    return out;
+  };
+
+  const parseWarpExt = (): Record<string, string> => {
+    const src = readFileSync(GROUPS_PATH, "utf8");
+    const at = src.indexOf("WARP_EXT=");
+    const line = src.slice(at, src.indexOf("};", at));
+    const out: Record<string, string> = {};
+    for (const m of line.matchAll(/'([a-z0-9-]+)':'([a-z]+)'/g)) out[m[1]!] = m[2]!;
+    return out;
+  };
+
+  it("every WARP format appears in exactly one family, and every family id is a real format", () => {
+    const groups = parseGroups();
+    const seen: string[] = [];
+    for (const ids of Object.values(groups)) {
+      for (const id of ids) {
+        expect(WARP_FORMATS as readonly string[]).toContain(id);
+        expect(seen).not.toContain(id);
+        seen.push(id);
+      }
+    }
+    expect([...seen].sort()).toEqual([...WARP_FORMATS].sort());
+  });
+
+  it("amnezia variants (detection rule: id ends with '-amnezia') are all present and each sits with its base format", () => {
+    const groups = parseGroups();
+    const famOf = new Map<string, string>();
+    for (const [fam, ids] of Object.entries(groups)) ids.forEach((id) => famOf.set(id, fam));
+    const amzIds = [...famOf.keys()].filter((id) => id.endsWith("-amnezia")).sort();
+    expect(amzIds).toEqual(WARP_FORMATS.filter((f) => f.endsWith("-amnezia")).sort());
+    for (const [id, fam] of famOf) {
+      if (!id.endsWith("-amnezia")) continue;
+      const base = id.replace(/-amnezia$/, "");
+      expect(famOf.get(base)).toBeTruthy();
+      expect(famOf.get(base)).toBe(fam);
+    }
+  });
+
+  it("WARP_EXT mirrors the server's WARP_EXTENSIONS exactly (no invented extensions)", () => {
+    expect(parseWarpExt()).toEqual({ ...WARP_EXTENSIONS });
+  });
+
+  it("group labels + preset placeholder + preset-switch confirm keys are bilingual", () => {
+    const keys = [
+      "warp.groups.wireguard",
+      "warp.groups.throne",
+      "warp.groups.singbox",
+      "warp.groups.xray",
+      "warp.groups.clash",
+      "warp.groups.surge",
+      "warp.groups.loon",
+      "warp.groups.count",
+      "warp.groups.amnezia_toggle",
+      "warp.presets.custom_n",
+      "warp.confirm.presetSwitch.title",
+      "warp.confirm.presetSwitch.body",
+    ];
+    for (const k of keys) expect(dictKeys(k).length).toBe(2);
   });
 });
