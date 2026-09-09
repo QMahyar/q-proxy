@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.5.0 - 2026-09-09
+
+### Added
+- Top-level panel tabs: Home / **Subscriptions** (new hub) / **Users** / **WARP** / Settings — Users and WARP promoted out of Settings subtabs (back-compat hash redirects `#/settings/{users,warp}[/:id]`); Settings shrinks 10→6 subtabs (Sources→Egress, Fragment+Chain→Tunnel, Routing-rules card, Advanced-TLS collapsible).
+- Subscriptions hub: every served URL in one place — per-format rows with expanders (app hints, `?target=` variants, downloads), per-user links, WARP link-out, Panel-info as a labeled footer (no QR); client format-label registry generated from server truth with a 1:1 drift guard.
+- Unified ShareSheet (`#m-share`): select-on-focus URL, honest clipboard (writeText → execCommand → error toast), QR, conditional download, shown-once warning; replaces the old QR + rotation modals across create/rotate/subs/WARP/TOTP-QR flows.
+- Users read surface: expiry countdown, today/limit quota cell, protocol-scope chips, scoped badge, `n/50` capacity chip (table + Home card), client-side search; zero-state empty-card with create CTA.
+- WARP depth: detail page URLs-first (device token collapsed), error card + Retry on failed loads, 17 output formats grouped into 7 client families with extension tags and an Amnezia-variants toggle, preset select shows `Custom (n endpoints)` and confirms before replacing custom endpoints.
+- Accessibility: keyboard radiogroups (RTL-aware, roving tabindex, Home/End) across swatches/language/mode chips, generated label/id pairs on address + remote-node cards, global `announce()` live region wired to field errors, ECH preview `dir=auto`.
+- `scripts/ui-walk.mjs` (`npm run test:ui`): permanent 12-step Playwright regression walk — login, tabs, kill-switch, hub, users CRUD via ShareSheet, WARP families, settings save round-trips (exactly-1-PUT asserts), wizard replay, a11y spots, FA/RTL, 375px, undo/redo; zero-console-error contract with JSON verdict report.
+
+### Fixed
+- Users token column could never render a URL (dead branch vs hashed-token API); now renders `tokenHint` with an in-place Regenerate action. Daily quota relabeled "Daily subscription fetch limit" with reset semantics (00:00 UTC) — it never counted tunnel traffic.
+- `securePath` panel control removed: it faked a save the server strips; replaced by a read-only Panel-address card (`deploy.py urls` reprints links).
+- Settings textarea list fields (`proxyIps`, NAT64, `allowedIps`, `remoteSubUrls`, routing custom lists, ALPN) never dirtied, never saved, and Discard would have blanked them — since v1.0; readBind now splits on newlines (regression guard).
+- Light theme WCAG: success/warning/danger/faint tokens remapped to ≥4.5:1; empty-state titles were ~1.1:1 (invisible on white); `.help-pop` hidden state no longer occupies layout (375px overflow fixed).
+- Destructive actions now confirm: settings import (names the file), WARP preset delete (names preset + endpoint count), Discard bar (counts dirty sections), bulk-user ops (name the verb).
+- Undo/redo reworked: pre-edit snapshots, works inside focused inputs, Undo/Redo on the apply bar; 20 mutations busy-guarded (exactly-1-request under double-click); copy reports real clipboard success/failure.
+- WARP mutations appeared to revert for up to 30s (sessionStorage GET cache not invalidated on writes); preset-switch guard actually gates the sibling PUT handler (`stopImmediatePropagation`).
+- Login page no longer logs a 401 on the normal logged-out path (new `GET api/auth/status` session probe).
+- Subscriptions no longer force a download when opened in a browser — `Content-Disposition` attaches only after UA negotiation; stale sub URLs refresh on view entry after protocol changes.
+
+### Changed
+- Delivery: panel script/style minified at bundle time with `node --check` revalidation and UTF-8 charset (Persian no longer escape-bloated) — dist 619,573 → ~532 KB; panel/login served with strong sha256 ETag + `If-None-Match` → 304 and `Cache-Control: private, no-cache` (was `no-store`); dict heap retains only the active language when the cookie pins it.
+- Dead code removed: IP-checker and Ports/CDN remnants (~73 dict keys ×2 languages with a computed unused-key guard to keep them out), ports renderer machinery, Ctrl+K ghost, no-op apply bars, orphaned SVG symbols, unused tokens/shine/spinring; settings.js split into 8 focused modules with O(1) per-section dirty tracking.
+- Server: write-only settings deleted (`localDns`, `sourceUrls`, `addresses[].city` — zero readers; stale KV keys drop silently on merge); `Profile-Update-Interval` now derived from `subUpdateIntervalHours` (clamped 1–168 h) instead of hardcoded 60; zero-writer per-user activity byte plumbing removed (`/activity` endpoint and counters kept). AGENTS.md field count corrected to 73.
+- Wizard: step-1 CTA marks onboarding done (no more self-destruct loop); Replay-setup-guide entry in the shortcuts modal; Escape closes.
+
 ## 1.4.0 - 2026-09-04
 
 ### Added
