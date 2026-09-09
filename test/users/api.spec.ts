@@ -286,7 +286,7 @@ describe("users api handler", () => {
     )) as Response;
     expect(res.status).toBe(200);
     const j = (await res.json()) as { data: { activity: Record<string, unknown>[] } };
-    expect(j.data.activity).toEqual([{ day: dayKeyUtc(), requests: 2, bytesUp: 0, bytesDown: 0 }]);
+    expect(j.data.activity).toEqual([{ day: dayKeyUtc(), requests: 2 }]);
     const serialized = JSON.stringify(j);
     expect(serialized).not.toContain(token);
     expect(serialized).not.toContain(await hashToken(token));
@@ -300,7 +300,7 @@ describe("users api handler", () => {
     const id = createJ.data.user.id;
     const get = async (qs: string) =>
       ((await handleUsersApi(req(`/api/users/${id}/activity${qs}`, { method: "GET" }), env as never, {} as never)) as Response).json() as Promise<{
-        data: { activity: { day: string; requests: number; bytesUp: number; bytesDown: number }[] };
+        data: { activity: { day: string; requests: number }[] };
       }>;
     expect(((await get("")).data.activity)).toHaveLength(7);
     expect(((await get("?days=3")).data.activity)).toHaveLength(3);
@@ -309,7 +309,7 @@ describe("users api handler", () => {
     expect(((await get("?days=abc")).data.activity)).toHaveLength(7);
     const three = (await get("?days=3")).data.activity;
     expect(three.map((r) => r.day)).toEqual([...three.map((r) => r.day)].sort());
-    for (const row of three) expect(Object.keys(row).sort()).toEqual(["bytesDown", "bytesUp", "day", "requests"]);
+    for (const row of three) expect(Object.keys(row).sort()).toEqual(["day", "requests"]);
   });
 
   it("GET activity is 404 for unknown or malformed ids and rejects non-GET methods", async () => {

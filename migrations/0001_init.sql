@@ -24,8 +24,6 @@ CREATE TABLE IF NOT EXISTS user_activity (
   day TEXT NOT NULL,
   token_hash TEXT NOT NULL,
   requests INTEGER NOT NULL DEFAULT 0,
-  bytes_up INTEGER NOT NULL DEFAULT 0,
-  bytes_down INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, token_hash)
 );
 CREATE TABLE IF NOT EXISTS counters (

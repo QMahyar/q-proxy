@@ -33,3 +33,32 @@ describe("deepMergeDefaults prototype-pollution guard", () => {
     expect(() => deepMergeDefaults(structuredClone(DEFAULT_SETTINGS) as unknown as Record<string, unknown>, deep)).not.toThrow();
   });
 });
+
+describe("removed settings fields drop migrate-safe", () => {
+  it("silently drops deleted fields (localDns, sourceUrls) from stored blobs", async () => {
+    const { migrateSettings } = await import("../../src/settings/migrate");
+    const { validateSettings } = await import("../../src/settings/validate");
+    const legacyBlob = {
+      version: 2,
+      updatedAt: Date.now(),
+      data: {
+        ...structuredClone(DEFAULT_SETTINGS),
+        securePath: "deployed1",
+        sessionSecret: "s".repeat(64),
+        localDns: "1.1.1.1",
+        sourceUrls: ["https://old.example/sub"],
+        addresses: [{ address: "1.2.3.4", city: "Berlin", country: "DE" }],
+      },
+    };
+    const merged = migrateSettings(legacyBlob) as unknown as Record<string, unknown>;
+    expect(merged).not.toHaveProperty("localDns");
+    expect(merged).not.toHaveProperty("sourceUrls");
+    const validated = validateSettings(merged);
+    expect(validated.ok).toBe(true);
+    if (validated.ok) {
+      expect(validated.value.addresses).toEqual([{ address: "1.2.3.4", country: "DE" }]);
+      expect("localDns" in validated.value).toBe(false);
+      expect("sourceUrls" in validated.value).toBe(false);
+    }
+  });
+});

@@ -29,14 +29,10 @@ export const MAX_USERS = 50;
 export interface UserActivityDay {
   day: string;
   requests: number;
-  bytesUp: number;
-  bytesDown: number;
 }
 
 export interface UserActivityDelta {
   requests?: number;
-  bytesUp?: number;
-  bytesDown?: number;
 }
 
 export interface StoreEnv {
@@ -88,8 +84,6 @@ CREATE TABLE IF NOT EXISTS user_activity (
   day TEXT NOT NULL,
   token_hash TEXT NOT NULL,
   requests INTEGER NOT NULL DEFAULT 0,
-  bytes_up INTEGER NOT NULL DEFAULT 0,
-  bytes_down INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, token_hash)
 );
 CREATE TABLE IF NOT EXISTS counters (
@@ -220,11 +214,9 @@ function d1ActivityRowToDay(raw: unknown, day: string): UserActivityDay {
     return {
       day: typeof r.day === "string" ? r.day : day,
       requests: toNonNegativeInt(r.requests),
-      bytesUp: toNonNegativeInt(r.bytes_up),
-      bytesDown: toNonNegativeInt(r.bytes_down),
     };
   }
-  return { day, requests: 0, bytesUp: 0, bytesDown: 0 };
+  return { day, requests: 0 };
 }
 
 async function listUsersD1(db: D1Database): Promise<UserAccount[]> {
@@ -307,7 +299,7 @@ async function consumeUserHitD1(
   await db.batch([
     db
       .prepare(
-        "INSERT INTO user_activity(day, token_hash, requests, bytes_up, bytes_down) VALUES(?, ?, 1, 0, 0) ON CONFLICT(day, token_hash) DO UPDATE SET requests = user_activity.requests + 1",
+        "INSERT INTO user_activity(day, token_hash, requests) VALUES(?, ?, 1) ON CONFLICT(day, token_hash) DO UPDATE SET requests = user_activity.requests + 1",
       )
       .bind(day, h),
     db
@@ -323,21 +315,19 @@ async function recordUserActivityD1(db: D1Database, h: string, delta: UserActivi
   const day = dayKeyUtc();
   const gained = {
     requests: toNonNegativeInt(delta.requests),
-    bytesUp: toNonNegativeInt(delta.bytesUp),
-    bytesDown: toNonNegativeInt(delta.bytesDown),
   };
   const select = db
-    .prepare("SELECT day, requests, bytes_up, bytes_down FROM user_activity WHERE day = ? AND token_hash = ?")
+    .prepare("SELECT day, requests FROM user_activity WHERE day = ? AND token_hash = ?")
     .bind(day, h);
-  if (gained.requests === 0 && gained.bytesUp === 0 && gained.bytesDown === 0) {
+  if (gained.requests === 0) {
     return d1ActivityRowToDay(await select.first(), day);
   }
   const out = await db.batch([
     db
       .prepare(
-        "INSERT INTO user_activity(day, token_hash, requests, bytes_up, bytes_down) VALUES(?, ?, ?, ?, ?) ON CONFLICT(day, token_hash) DO UPDATE SET requests = user_activity.requests + excluded.requests, bytes_up = user_activity.bytes_up + excluded.bytes_up, bytes_down = user_activity.bytes_down + excluded.bytes_down",
+        "INSERT INTO user_activity(day, token_hash, requests) VALUES(?, ?, ?) ON CONFLICT(day, token_hash) DO UPDATE SET requests = user_activity.requests + excluded.requests",
       )
-      .bind(day, h, gained.requests, gained.bytesUp, gained.bytesDown),
+      .bind(day, h, gained.requests),
     select,
   ]);
   return d1ActivityRowToDay(out[1]!.results?.[0], day);
@@ -352,13 +342,13 @@ async function getUserActivityD1(db: D1Database, h: string, days: number): Promi
   for (let i = count - 1; i >= 0; i--) labels.push(dayKeyUtc(new Date(now - i * 86400000)));
   const res = await db
     .prepare(
-      `SELECT day, requests, bytes_up, bytes_down FROM user_activity WHERE token_hash = ? AND day IN (${labels.map(() => "?").join(", ")})`,
+      `SELECT day, requests FROM user_activity WHERE token_hash = ? AND day IN (${labels.map(() => "?").join(", ")})`,
     )
     .bind(h, ...labels)
     .all<{ day: string }>();
   const byDay = new Map<string, UserActivityDay>();
   for (const r of res.results ?? []) byDay.set(r.day, d1ActivityRowToDay(r, r.day));
-  return labels.map((day) => byDay.get(day) ?? { day, requests: 0, bytesUp: 0, bytesDown: 0 });
+  return labels.map((day) => byDay.get(day) ?? { day, requests: 0 });
 }
 
 interface UsageDayRow {
@@ -372,7 +362,7 @@ async function migrateUserUsageD1(db: D1Database, oldH: string, newH: string): P
     .bind(oldH)
     .all<UsageDayRow>();
   const activity = await db
-    .prepare("SELECT day, requests, bytes_up, bytes_down FROM user_activity WHERE token_hash = ?")
+    .prepare("SELECT day, requests FROM user_activity WHERE token_hash = ?")
     .bind(oldH)
     .all<{ day: string }>();
   const totalRow = await db
@@ -394,13 +384,13 @@ async function migrateUserUsageD1(db: D1Database, oldH: string, newH: string): P
   }
   for (const r of activity.results ?? []) {
     const row = d1ActivityRowToDay(r, typeof r.day === "string" ? r.day : "");
-    if (row.day.length === 0 || (row.requests === 0 && row.bytesUp === 0 && row.bytesDown === 0)) continue;
+    if (row.day.length === 0 || row.requests === 0) continue;
     stmts.push(
       db
         .prepare(
-          "INSERT INTO user_activity(day, token_hash, requests, bytes_up, bytes_down) VALUES(?, ?, ?, ?, ?) ON CONFLICT(day, token_hash) DO UPDATE SET requests = user_activity.requests + excluded.requests, bytes_up = user_activity.bytes_up + excluded.bytes_up, bytes_down = user_activity.bytes_down + excluded.bytes_down",
+          "INSERT INTO user_activity(day, token_hash, requests) VALUES(?, ?, ?) ON CONFLICT(day, token_hash) DO UPDATE SET requests = user_activity.requests + excluded.requests",
         )
-        .bind(row.day, newH, row.requests, row.bytesUp, row.bytesDown),
+        .bind(row.day, newH, row.requests),
     );
   }
   const oldTotal =
@@ -863,12 +853,10 @@ function parseActivityValue(raw: unknown, day: string): UserActivityDay {
     return {
       day,
       requests: toNonNegativeInt(r.requests),
-      bytesUp: toNonNegativeInt(r.bytesUp),
-      bytesDown: toNonNegativeInt(r.bytesDown),
     };
   }
-  if (typeof raw === "number") return { day, requests: toNonNegativeInt(raw), bytesUp: 0, bytesDown: 0 };
-  return { day, requests: 0, bytesUp: 0, bytesDown: 0 };
+  if (typeof raw === "number") return { day, requests: toNonNegativeInt(raw) };
+  return { day, requests: 0 };
 }
 
 const activityLocks = new Map<string, Promise<unknown>>();
@@ -884,8 +872,6 @@ function withActivityLock<T>(hash: string, fn: () => Promise<T>): Promise<T> {
 interface BufferedActivity {
   day: string;
   requests: number;
-  bytesUp: number;
-  bytesDown: number;
 }
 
 const ACTIVITY_FLUSH_MS = 60_000;
@@ -916,8 +902,6 @@ async function flushActivities(env: StoreEnv, captured: Map<string, BufferedActi
           JSON.stringify({
             day: delta.day,
             requests: current.requests + delta.requests,
-            bytesUp: current.bytesUp + delta.bytesUp,
-            bytesDown: current.bytesDown + delta.bytesDown,
           }),
         );
       }),
@@ -938,32 +922,24 @@ async function bufferActivity(env: StoreEnv, hash: string, delta: UserActivityDe
   const key = activityKey(day, hash);
   const gained = {
     requests: toNonNegativeInt(delta.requests),
-    bytesUp: toNonNegativeInt(delta.bytesUp),
-    bytesDown: toNonNegativeInt(delta.bytesDown),
   };
   const stored = parseActivityValue(await env.QPROXY_KV.get(key, "json"), day);
   const prev = activityPending.get(key);
-  if (gained.requests === 0 && gained.bytesUp === 0 && gained.bytesDown === 0) {
+  if (gained.requests === 0) {
     return {
       day,
       requests: stored.requests + (prev?.requests ?? 0),
-      bytesUp: stored.bytesUp + (prev?.bytesUp ?? 0),
-      bytesDown: stored.bytesDown + (prev?.bytesDown ?? 0),
     };
   }
   const next: BufferedActivity = {
     day,
     requests: (prev?.requests ?? 0) + gained.requests,
-    bytesUp: (prev?.bytesUp ?? 0) + gained.bytesUp,
-    bytesDown: (prev?.bytesDown ?? 0) + gained.bytesDown,
   };
   activityPending.set(key, next);
   activityBufferedOps += 1;
   const merged: UserActivityDay = {
     day,
     requests: stored.requests + next.requests,
-    bytesUp: stored.bytesUp + next.bytesUp,
-    bytesDown: stored.bytesDown + next.bytesDown,
   };
   const stale = Date.now() - activityLastFlushMs >= ACTIVITY_FLUSH_MS;
   if (!stale && activityBufferedOps < ACTIVITY_FLUSH_HITS) return merged;
@@ -1030,8 +1006,6 @@ async function getUserActivityKv(env: StoreEnv, h: string, days: number): Promis
     return {
       day,
       requests: stored.requests + queued.requests,
-      bytesUp: stored.bytesUp + queued.bytesUp,
-      bytesDown: stored.bytesDown + queued.bytesDown,
     };
   });
 }
@@ -1046,7 +1020,7 @@ async function migrateActivityRows(env: StoreEnv, oldHash: string, newHash: stri
       const raw = await env.QPROXY_KV.get(oldKey, "json");
       if (raw === null || raw === undefined) return;
       const oldRow = parseActivityValue(raw, day);
-      if (oldRow.requests > 0 || oldRow.bytesUp > 0 || oldRow.bytesDown > 0) {
+      if (oldRow.requests > 0) {
         const newKey = activityKey(day, newHash);
         const current = parseActivityValue(await env.QPROXY_KV.get(newKey, "json"), day);
         await env.QPROXY_KV.put(
@@ -1054,8 +1028,6 @@ async function migrateActivityRows(env: StoreEnv, oldHash: string, newHash: stri
           JSON.stringify({
             day,
             requests: current.requests + oldRow.requests,
-            bytesUp: current.bytesUp + oldRow.bytesUp,
-            bytesDown: current.bytesDown + oldRow.bytesDown,
           }),
         );
       }
@@ -1295,11 +1267,11 @@ async function copyLegacyKvToD1(env: StoreEnv, db: D1Database): Promise<string[]
       return null;
     }
     const row = parseActivityValue(raw, parts[0]!);
-    if (row.requests === 0 && row.bytesUp === 0 && row.bytesDown === 0) continue;
+    if (row.requests === 0) continue;
     stmts.push(
       db
-        .prepare("INSERT OR REPLACE INTO user_activity(day, token_hash, requests, bytes_up, bytes_down) VALUES(?, ?, ?, ?, ?)")
-        .bind(row.day, parts[1]!.toLowerCase(), row.requests, row.bytesUp, row.bytesDown),
+        .prepare("INSERT OR REPLACE INTO user_activity(day, token_hash, requests) VALUES(?, ?, ?)")
+        .bind(row.day, parts[1]!.toLowerCase(), row.requests),
     );
   }
   const counters = parseCountersBlob(countersRaw);

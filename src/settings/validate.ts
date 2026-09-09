@@ -270,21 +270,6 @@ function addressListField(
         entry.country = normalized;
       }
     }
-    const cityRaw = rec.city;
-    if (cityRaw !== undefined && cityRaw !== null) {
-      if (typeof cityRaw !== "string") {
-        fail(fields, key, `entry ${i + 1} city must be a string`);
-        continue;
-      }
-      const trimmed = cityRaw.trim();
-      if (trimmed.length > 0) {
-        if (trimmed.length > 64) {
-          fail(fields, key, `entry ${i + 1} city is too long`);
-          continue;
-        }
-        entry.city = trimmed;
-      }
-    }
     const dedupeKey = `${entry.address}:${entry.port ?? "auto"}`.toLowerCase();
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
@@ -519,14 +504,6 @@ function applyCustomField(
           if (hp === null || isLocalOrPrivateTarget(hp.host)) fail(fields, "remoteDns", "must not target a local or private address");
           else out.remoteDns = `https://${bracketIpv6(hp.host)}/dns-query`;
         } else fail(fields, "remoteDns", "must be a URL or IP/hostname");
-      }
-      return;
-    }
-    case "localDns": {
-      const v = strField(patch, "localDns", fields, { maxLen: 253, minLen: 1 });
-      if (v !== undefined) {
-        if (!HOST_TOKEN_RE.test(v) && !/^\d{1,3}(\.\d{1,3}){3}$/.test(v) && v !== "localhost") fail(fields, "localDns", "must be a hostname or IP");
-        else out.localDns = v;
       }
       return;
     }

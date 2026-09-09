@@ -92,7 +92,6 @@ export interface AddressSetting {
   sni?: string;
   enabled?: boolean;
   country?: string;
-  city?: string;
 }
 
 export interface Settings {
@@ -140,14 +139,12 @@ export interface Settings {
   enableUdp53: boolean;
   dohUpstream: string;
   remoteDns: string;
-  localDns: string;
   urlTestIntervalSec: number;
   profileTitle: string;
   subUpdateIntervalHours: number;
   maxNodesPerFormat: number;
   remoteNodes: RemoteNodeSetting[];
   remoteSubUrls: string[];
-  sourceUrls: string[];
   killSwitch: boolean;
   allowedIps: string[];
   speedtestIntercept: boolean;
@@ -211,14 +208,12 @@ export const DEFAULT_SETTINGS: Settings = {
   enableUdp53: true,
   dohUpstream: "https://cloudflare-dns.com/dns-query",
   remoteDns: "https://8.8.8.8/dns-query",
-  localDns: "localhost",
   urlTestIntervalSec: 300,
   profileTitle: "Q Proxy",
   subUpdateIntervalHours: 12,
   maxNodesPerFormat: 500,
   remoteNodes: [],
   remoteSubUrls: [],
-  sourceUrls: [],
   killSwitch: false,
   allowedIps: [],
   speedtestIntercept: true,

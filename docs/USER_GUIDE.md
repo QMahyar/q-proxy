@@ -132,7 +132,7 @@ All fields from `src/types/settings.ts:41` grouped below. Saving is `PUT /{sp}/a
 | Routing | `hostnameOverride`, `customDomains[]`, `cleanIps[]`, `tlsPorts[]` (443,2053,2083,2087,2096,8443), `plainPorts[]` (80,8080,...), `plainPortPolicy` (`always`/`workers-dev`/`never`), `cdn {enabled, addresses[], host, sni}` | Address pool + port matrix |
 | TLS | `echEnabled`, `echAuto` (derive ECH name from node SNI), `echServerName` (manual override, always wins), `fingerprint` (chrome/firefox/safari/ios/android/edge/360/qq/random/randomized), `randomizeSniCase`, `alpn` (`["http/1.1"]`) | Emitted node TLS hygiene + ECH |
 | Fragment | `fragment {mode (off/low/medium/high/severe/custom), packets (tlshello/1-1…1-5), lengthMin/Max, delayMin/Max, maxSplitMin/Max}` | Xray fragment subs |
-| DNS | `dohUpstream` (`https://cloudflare-dns.com/dns-query`), `remoteDns` (`https://8.8.8.8/dns-query`), `localDns` (`localhost`) | DoH + resolver |
+| DNS | `dohUpstream` (`https://cloudflare-dns.com/dns-query`), `remoteDns` (`https://8.8.8.8/dns-query`) | DoH + resolver |
 | Privacy | `camouflage {mode (off/static/proxy), url}`, `killSwitch`, `speedtestIntercept`, `remoteSubUrls[]`, `urlTestIntervalSec` (300) | Camouflage + merging |
 | Routing rules | `routingRules {bypassLan, blockAds, blockMalware, blockQuic, customBypass[], customBlock[]}` | Clash/sing-box rule-section injection |
 | Telegram | `telegram {enabled, chatId}` (`botToken` write-only, never returned) | Bot management |
@@ -241,7 +241,7 @@ Admin panel → Users tab. Create a user (name, protocol filter, optional daily 
 
 Each user link supports the same `?target=` formats as the main subscription. Up to 50 users; usage counters reset daily. Worker-subscription traffic from user links consumes the same Workers request quota as your own links.
 
-**Activity:** `GET /{sp}/api/users/{id}/activity?days=N` returns `{activity: [{day, requests, bytesUp, bytesDown}, …]}` — one row per day, chronological, zeros for days with no traffic. Defaults to 7 days, clamped to 1–31 (`?days=abc` behaves as omitted). Unknown or malformed user ids return 404; the response never contains the user token or its hash.
+**Activity:** `GET /{sp}/api/users/{id}/activity?days=N` returns `{activity: [{day, requests}, …]}` — one row per day, chronological, zeros for days with no fetches. Defaults to 7 days, clamped to 1–31 (`?days=abc` behaves as omitted). Unknown or malformed user ids return 404; the response never contains the user token or its hash.
 
 **Rate limiting:** the per-user limiter is a token bucket (30 connections/min refill, burst of 10, keyed by token hash, 120 s KV entries, fail-open so a KV outage never blocks users); a denied relay admission closes with 1008.
 
@@ -309,7 +309,7 @@ Still stuck? Enable `debugLogging: true` (`src/types/settings.ts:48` → `src/co
 
 Address composition guarantee: subscriptions contain **only** your worker hostname plus entries from these user-owned lists — no built-in or hard-coded IPs/domains are ever added.
 
-Each clean-IP/custom-domain entry can carry optional `country` (2-letter code, stored uppercase) and `city` (free text, 64 chars) metadata, set in the address editor. Appending `?country=XX` to any subscription URL (`/{sp}/sub` or a per-user link, comma-separated for several, case-insensitive) keeps only nodes whose tagged address matches, plus every untagged address and the worker-hostname fallback — e.g. `/{sp}/sub?target=clash&country=DE,NL`. Missing, empty, or fully-invalid values disable filtering. The panel Home page shows the same hint under the subscription list.
+Each clean-IP/custom-domain entry can carry an optional `country` (2-letter code, stored uppercase) tag, set in the address editor. Appending `?country=XX` to any subscription URL (`/{sp}/sub` or a per-user link, comma-separated for several, case-insensitive) keeps only nodes whose tagged address matches, plus every untagged address and the worker-hostname fallback — e.g. `/{sp}/sub?target=clash&country=DE,NL`. Missing, empty, or fully-invalid values disable filtering. The panel Home page shows the same hint under the subscription list.
 
 Set in Panel -> Settings -> Routing. DNS for custom domains must be proxied (orange cloud) in CF dashboard — no auto DNS changes.
 

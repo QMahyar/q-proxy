@@ -450,7 +450,7 @@ describe("ssrf guards", () => {
   });
 });
 
-describe("address country/city metadata", () => {
+describe("address country metadata", () => {
   it("normalizes country to uppercase", () => {
     const result = validateSettings({ addresses: [{ address: "1.2.3.4", country: "de" }] });
     expect(result.ok).toBe(true);
@@ -468,30 +468,22 @@ describe("address country/city metadata", () => {
     expect(validateSettings({ addresses: [{ address: "1.2.3.4", country: "FR" }] }).ok).toBe(true);
   });
 
-  it("trims city and caps it at 64 characters", () => {
-    const result = validateSettings({ addresses: [{ address: "1.2.3.4", city: "  Berlin  " }] });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.addresses).toEqual([{ address: "1.2.3.4", city: "Berlin" }]);
-    expect(fieldsOf({ addresses: [{ address: "1.2.3.4", city: "a".repeat(65) }] }).addresses).toBeTruthy();
-    expect(validateSettings({ addresses: [{ address: "1.2.3.4", city: "a".repeat(64) }] }).ok).toBe(true);
-    expect(fieldsOf({ addresses: [{ address: "1.2.3.4", city: 42 }] }).addresses).toBeTruthy();
-  });
-
-  it("treats empty country and city as absent", () => {
-    const result = validateSettings({ addresses: [{ address: "1.2.3.4", country: "", city: "   " }] });
+  it("treats empty country as absent and drops stored city metadata", () => {
+    const result = validateSettings({ addresses: [{ address: "1.2.3.4", country: "" }] });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.addresses).toEqual([{ address: "1.2.3.4" }]);
+    const legacy = validateSettings({ addresses: [{ address: "1.2.3.4", city: "Berlin" }] });
+    expect(legacy.ok).toBe(true);
+    if (legacy.ok) expect(legacy.value.addresses).toEqual([{ address: "1.2.3.4" }]);
   });
 
-  it("keeps country and city together on one entry", () => {
+  it("keeps country on one entry", () => {
     const result = validateSettings({
-      addresses: [{ address: "1.2.3.4", country: "de", city: "Frankfurt", label: "DE-1" }],
+      addresses: [{ address: "1.2.3.4", country: "de", label: "DE-1" }],
     });
     expect(result.ok).toBe(true);
     if (result.ok)
-      expect(result.value.addresses).toEqual([
-        { address: "1.2.3.4", label: "DE-1", country: "DE", city: "Frankfurt" },
-      ]);
+      expect(result.value.addresses).toEqual([{ address: "1.2.3.4", label: "DE-1", country: "DE" }]);
   });
 });
 

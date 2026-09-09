@@ -22,7 +22,7 @@ describe("subscriptionHeaders", () => {
         "Subscription-Userinfo": "upload=0; download=5242880",
         "Cache-Control": "public, max-age=60, s-maxage=60",
         Expires: "Wed, 02 Sep 2026 00:01:00 GMT",
-        "Profile-Update-Interval": "60",
+        "Profile-Update-Interval": "12",
         "profile-web-page-url": "https://w.test/sp/panel",
       });
     } finally {
@@ -46,10 +46,10 @@ describe("subscriptionHeaders", () => {
     expect("Content-Disposition" in h).toBe(false);
   });
 
-  it("omits profile-web-page-url when empty and pins the update interval to the fixed throttle", () => {
+  it("omits profile-web-page-url when empty and clamps non-positive update intervals to 1 hour", () => {
     const h = subscriptionHeaders("base64", "T", nodes, usage, { updateIntervalHours: 0, webPageUrl: "" });
     expect("profile-web-page-url" in h).toBe(false);
-    expect(h["Profile-Update-Interval"]).toBe("60");
+    expect(h["Profile-Update-Interval"]).toBe("1");
   });
 
   it("scales download estimate by requestsTotal * 1 MiB", () => {
@@ -96,18 +96,26 @@ describe("subscriptionHeaders", () => {
 });
 
 describe("throttleHeaders", () => {
-  it("emits the fixed 60s cache-throttle triple derived from now", () => {
+  it("emits the 60s cache-throttle triple with the interval derived from the setting", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-02T00:00:00.000Z"));
     try {
-      expect(throttleHeaders()).toEqual({
+      expect(throttleHeaders(12)).toEqual({
         "Cache-Control": "public, max-age=60, s-maxage=60",
         Expires: "Wed, 02 Sep 2026 00:01:00 GMT",
-        "Profile-Update-Interval": "60",
+        "Profile-Update-Interval": "12",
       });
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("clamps the update interval to the validated 1-168 hour range", () => {
+    expect(throttleHeaders(0)["Profile-Update-Interval"]).toBe("1");
+    expect(throttleHeaders(-5)["Profile-Update-Interval"]).toBe("1");
+    expect(throttleHeaders(500)["Profile-Update-Interval"]).toBe("168");
+    expect(throttleHeaders(12.9)["Profile-Update-Interval"]).toBe("12");
+    expect(throttleHeaders(Number.NaN)["Profile-Update-Interval"]).toBe("12");
   });
 });
 

@@ -40,17 +40,27 @@ export const EXTENSIONS: Record<SubFormat, string> = {
 
 export const SUB_THROTTLE_SECONDS = 60;
 
+export const MAX_UPDATE_INTERVAL_HOURS = 168;
+
+export function profileUpdateInterval(updateIntervalHours: number): string {
+  if (!Number.isFinite(updateIntervalHours)) return "12";
+  return String(Math.min(168, Math.max(1, Math.floor(updateIntervalHours))));
+}
+
 function filenameFor(format: SubFormat, title: string): string {
   const ext = EXTENSIONS[format];
   const enc = encodeURIComponent(title).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
   return `${enc}.${ext}`;
 }
 
-export function throttleHeaders(now: number = Date.now()): Record<string, string> {
+export function throttleHeaders(
+  updateIntervalHours: number,
+  now: number = Date.now(),
+): Record<string, string> {
   return {
     "Cache-Control": `public, max-age=${SUB_THROTTLE_SECONDS}, s-maxage=${SUB_THROTTLE_SECONDS}`,
     Expires: new Date(now + SUB_THROTTLE_SECONDS * 1000).toUTCString(),
-    "Profile-Update-Interval": "60",
+    "Profile-Update-Interval": profileUpdateInterval(updateIntervalHours),
   };
 }
 
@@ -67,7 +77,7 @@ export function subscriptionHeaders(
   const h: Record<string, string> = {
     "Profile-Title": `base64:${encodeUtf8Base64(title)}`,
     "Subscription-Userinfo": userinfo,
-    ...throttleHeaders(),
+    ...throttleHeaders(meta.updateIntervalHours),
   };
   if (meta.webPageUrl.length > 0) h["profile-web-page-url"] = meta.webPageUrl;
   return h;

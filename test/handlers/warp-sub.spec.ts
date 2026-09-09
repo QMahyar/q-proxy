@@ -61,7 +61,7 @@ describe("handleWarpSub", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     expect(res.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
-    expect(res.headers.get("profile-update-interval")).toBe("60");
+    expect(res.headers.get("profile-update-interval")).toBe("12");
     expect(res.headers.get("expires")).toBeTypeOf("string");
     const body = await res.text();
     expect(body.startsWith("wireguard://")).toBe(true);

@@ -64,7 +64,7 @@ src/nodes/emitters/*     clash-yaml, singbox-json, surge-conf, loon-conf (+regis
 src/subscription/        negotiate (?target= > UA > base64), headers, merge (remote subs)
 src/users/store.ts       per-user directory (≤50): token subs, protocol filter, daily quota, expiry
 src/auth/                password tiers (PBKDF2 100k current, 15k legacy auto-upgraded on login), session (HMAC q_session {exp,iat} + revocation floor qproxy:min-iat), guard (CSRF X-Q-Panel)
-src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, fields (descriptor table), validate (66 leaf fields)
+src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, fields (descriptor table), validate (73 field descriptors)
 src/handlers/            tunnel, subscribe, warp-sub, users-sub, doh, myip(requireAuth), robots, camouflage,
                          api/* (auth, settings+bootstrap/export/import/reset, status+suburls, killswitch,
                          warp, users, telegram setup/remove/webhook, version/check)

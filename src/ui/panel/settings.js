@@ -76,8 +76,6 @@ FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
   {title:'remote.nodes.title',fields:[
   FL('remoteNodes','remoteList','remote.nodes.label','remote.nodes.hint',{help:'remote.nodes.help'})]}]},
   {key:'egress',cards:[
-  {title:'egress.remoteSubs.title',fields:[
-  FL('sourceUrls','list','egress.remoteSubs.label','egress.remoteSubs.hint',{validate:'url',help:'egress.remoteSubs.help'})]},
   {title:'egress.mode.title',fields:[
   FL('proxyIpMode','chips','egress.mode.label',null,{opts:[['proxyip','egress.mode.list'],['nat64','egress.mode.nat64']]}),
   FL('proxyIps','list','egress.list.label','egress.list.short',{validate:'host_port',help:'egress.list.help',showIf:v=>getPath(v,'proxyIpMode')!=='nat64'}),
@@ -98,7 +96,6 @@ FL('chainProxy.uri','str','chain.uri.label','chain.uri.hint',{mono:true})]}]},
 {title:'advanced.doh.label',fields:[
 FL('dohUpstream','str','advanced.doh.label','advanced.doh.short',{mono:true,help:'advanced.doh.help'}),
 FL('remoteDns','str','advanced.remoteDns.label',null,{mono:true}),
-FL('localDns','str','advanced.localDns.label',null,{mono:true}),
 FL('enableUdp53','bool','advanced.udp53.label','advanced.udp53.hint'),
 FL('__privateDoh','copyonly','advanced.doh.private',null)]},
 {title:'advanced.tg.title',tgActions:true,fields:[
@@ -147,7 +144,6 @@ function lines(v){return Array.isArray(v)?v.map(x=>String(x)).filter(x=>x.trim()
      +field('host',t('addresses.field.host'),'cdn.example.net')
      +field('sni',t('addresses.field.sni'),'cdn.example.net')
      +field('country',t('addresses.field.country'),'DE')
-     +field('city',t('addresses.field.city'),'Frankfurt')
      +'</div>'
      +'<div class="addr-card__side"><span class="addr-dot" data-addr-dot="'+esc(String(get('address')).replace(/^\[|\]$/g,'').toLowerCase())+'" hidden></span>'
      +(isHost?'<span class="addr-badge">'+esc(t('addresses.hostname_badge'))+'</span>':'')
@@ -380,7 +376,6 @@ const l=get('label');if(l)e.label=l;
 const h=get('host');if(h)e.host=h;
 const sn=get('sni');if(sn)e.sni=sn;
 const co=get('country');if(co)e.country=co;
-const ci=get('city');if(ci)e.city=ci;
 if(c.dataset.addrEnabled==='0')e.enabled=false;
 return e}).filter(Boolean)}
 if(el.dataset.type==='remoteList'){

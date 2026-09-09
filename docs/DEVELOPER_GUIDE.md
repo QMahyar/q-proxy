@@ -168,7 +168,7 @@ Namespace binding `QPROXY_KV`.
 | `qproxy:counters` | `{day, requestsToday, requestsTotal, updatedAt}` | `src/core/counters.ts:recordConnection` | Buffered per-isolate; flush >60 s or every 32 conns |
 | `qproxy:users` | JSON array of ≤50 user records (token, protocols, quota, expiry) | `src/users/store.ts` | Read per admin request / sub hit |
 | `qproxy:user-usage:{yyyy-mm-dd}:{hash}` | per-user daily hit counter (per-hash key; legacy `qproxy:user-usage:{yyyy-mm-dd}` array still read for same-day migration) | `src/users/store.ts` | Day-keyed |
-| `qproxy:user-activity:{yyyy-mm-dd}:{hash}` | per-user daily activity row `{day, requests, bytesUp, bytesDown}` (never plaintext tokens; corrupt rows read as zeros) | `src/users/store.ts:recordUserActivity` (in-isolate deltas, flush every 32 ops / 60 s) | Day-keyed, no TTL |
+| `qproxy:user-activity:{yyyy-mm-dd}:{hash}` | per-user daily activity row `{day, requests}` (never plaintext tokens; corrupt rows read as zeros) | `src/users/store.ts:recordUserActivity` (in-isolate deltas, flush every 32 ops / 60 s) | Day-keyed, no TTL |
 | `qproxy:ratelimit:{hash}:{window}` | per-user rate-limit bucket `{tokens, updatedAt}` (1-min window stamp) | `src/users/ratelimit.ts:tryConsume` | 120 s TTL, fail-open on KV error |
 | `qproxy:warp:account:{id}` / `qproxy:warp:token:{token}` / `qproxy:warp:presets` / `qproxy:warp:global` | WARP device + preset state | `src/warp/store.ts` | Two-key write with rollback |
 
@@ -183,7 +183,7 @@ Write-hot state lives in D1, schema in `migrations/0001_init.sql` (mirrored by e
 | `users` | User directory (≤50): id, name, token_hash (unique), token_hint, enabled, expires_at, daily_req_limit, protocols (JSON), address_override (JSON), created_at | `src/users/store.ts` (D1-first, KV fallback when unbound) |
 | `user_totals` | Lifetime hits per token_hash | same (single UPSERT) |
 | `user_usage` | Daily hits per (day, token_hash) | same (single UPSERT — quota check + increment in one statement) |
-| `user_activity` | Daily `{requests, bytes_up, bytes_down}` per (day, token_hash) | same (buffered deltas, flushed as one UPSERT) |
+| `user_activity` | Daily `{requests}` per (day, token_hash) | same (buffered deltas, flushed as one UPSERT) |
 | `counters` | Single row (`id = 1`): day, requests_today/total, bytes_up/down | `src/core/counters.ts:flushD1` (SELECT + UPSERT batch; KV fallback on error) |
 | `audit_log` | `{ts, ip, action, detail}` rows | `src/core/log.ts:audit` (via `waitUntil`; context bound through `bindCounterContext`) |
 | `meta` | Migration guard `kv_migrated_v1` | `bootstrapD1` |
@@ -261,7 +261,7 @@ Handshake bounded: 16 KiB accumulated + 10 s timeout → WS close 1008. Reasons 
 - log.ts: debug-gated structured logging with request id; redaction deny-list asserted in tests.
 - counters.ts: `readUsage`/`recordConnection` with isolate-buffered flush — D1-first (`flushD1` batch), KV fallback on error; the `Subscription-Userinfo` estimate derives from it (`download ≈ requestsTotal × 1 MiB`).
 - audit trail: `audit(action, detail, env?)` in `src/core/log.ts` emits a JSON `info` line (`scope:"audit"`) via the `log.info` seam and persists to the D1 `audit_log` table when `env.QPROXY_DB` is present (fire-and-forget through `waitUntil`; wire the context with `bindCounterContext`). Allowlist design — only caller-supplied fields are serialized (`settings.save|reset|import` → `{ip, keys}`, `killswitch` → `{ip, enabled}`, `warp.account.*`/`warp.preset.*` → `{ip, id}`, `warp.amnezia.update` → `{ip}`); never pass values or secrets, only key names/ids/booleans.
-- per-user activity: `recordUserActivity(env, tokenOrHash, delta)` buffers `{requests, bytesUp, bytesDown}` per day-key (merges pending + stored on read); `getUserActivity(env, hash, days)` clamps 1–31 (default 7), returns chronological rows with zeros for gaps; `flushPendingUserActivity` + token-regen migration included.
+- per-user activity: `recordUserActivity(env, tokenOrHash, delta)` buffers `{requests}` per day-key (merges pending + stored on read); `getUserActivity(env, hash, days)` clamps 1–31 (default 7), returns chronological rows with zeros for gaps; `flushPendingUserActivity` + token-regen migration included.
 
 ## 12. Local Development Tips
 
@@ -306,7 +306,7 @@ Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},f
 - `GET api/bootstrap` → `{settings, status, subUrls}` aggregate with ETag/304
 - `GET api/status`; `POST api/killswitch {enabled}` → `{killSwitch, rev}`; `GET api/suburls`; `GET api/version/check`
 - `ANY api/warp/{…}` → accounts/presets/amnezia sub-dispatch
-- `ANY api/users/{…}` → user CRUD + token regeneration; `GET api/users/{id}/activity?days=` → `{activity: [{day, requests, bytesUp, bytesDown}]}` (default 7, clamp 1–31; 404 on unknown id); `POST api/users/bulk` `{ids (1–50), patch: {enabled?, expiresAt?} | {delete: true}}` → `{updated, deleted, unknown}` (unknown ids skipped, tokens never returned)
+- `ANY api/users/{…}` → user CRUD + token regeneration; `GET api/users/{id}/activity?days=` → `{activity: [{day, requests}]}` (default 7, clamp 1–31; 404 on unknown id); `POST api/users/bulk` `{ids (1–50), patch: {enabled?, expiresAt?} | {delete: true}}` → `{updated, deleted, unknown}` (unknown ids skipped, tokens never returned)
 - `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated; also handles `callback_query` with `tg:*` data via `telegramMenuKeyboard()` — `/start`+`/menu` attach it, taps answer + `editMessageText` in place)
 
 Method guards live in the declarative `API_ROUTES` table in `src/core/router.ts` (`Record<ApiRouteName, {methods, auth: none|read|write, handler, bootstrap?: "allow"|"read"}>` + a 5-line dispatcher: method gate, then none⇒direct / read⇒authed / write⇒authed on GET else authedCsrf, with authed handlers additionally wrapped in `bootstrapGated` for the bootstrap lock); `OPTIONS` on APIs → 405.

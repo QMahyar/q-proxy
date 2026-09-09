@@ -91,9 +91,7 @@ describe("kv to d1 migration", () => {
     expect(await getUserHits(env, fx.legacyToken)).toBe(4);
     expect(await getUserTotalHits(env, fx.modernToken)).toBe(9);
     expect(await getUserTotalHits(env, fx.legacyToken)).toBe(7);
-    expect(await getUserActivity(env, fx.modernToken, 1)).toEqual([
-      { day: fx.today, requests: 5, bytesUp: 50, bytesDown: 60 },
-    ]);
+    expect(await getUserActivity(env, fx.modernToken, 1)).toEqual([{ day: fx.today, requests: 5 }]);
 
     const usage = await readUsage(env);
     expect(usage.requestsToday).toBe(11);
@@ -121,9 +119,7 @@ describe("kv to d1 migration", () => {
     expect(await consumeUserHit(env, fx.modernToken, 5)).toEqual({ allowed: false, hits: 5, total: 11 });
     expect(await getUserHits(env, fx.modernToken)).toBe(5);
     expect(await getUserTotalHits(env, fx.modernToken)).toBe(11);
-    expect(await getUserActivity(env, fx.modernToken, 1)).toEqual([
-      { day: fx.today, requests: 7, bytesUp: 50, bytesDown: 60 },
-    ]);
+    expect(await getUserActivity(env, fx.modernToken, 1)).toEqual([{ day: fx.today, requests: 7 }]);
 
     for (let i = 0; i < 32; i++) await recordConnection(env);
     const usage = await readUsage(env);
@@ -169,21 +165,15 @@ describe("kv to d1 migration", () => {
     expect(await getUserHits(env, replacement)).toBe(3);
     expect(await getUserTotalHits(env, fx.modernToken)).toBe(0);
     expect(await getUserTotalHits(env, replacement)).toBe(9);
-    expect(await getUserActivity(env, replacement, 1)).toEqual([
-      { day: fx.today, requests: 5, bytesUp: 50, bytesDown: 60 },
-    ]);
-    expect(await getUserActivity(env, fx.modernToken, 1)).toEqual([
-      { day: fx.today, requests: 0, bytesUp: 0, bytesDown: 0 },
-    ]);
+    expect(await getUserActivity(env, replacement, 1)).toEqual([{ day: fx.today, requests: 5 }]);
+    expect(await getUserActivity(env, fx.modernToken, 1)).toEqual([{ day: fx.today, requests: 0 }]);
   });
 
   it("records activity deltas straight into d1 rows", async () => {
     const fx = await seedLegacyKvForMigration(kv);
     await bootstrapD1(env);
-    await recordUserActivity(env, fx.legacyToken, { requests: 2, bytesUp: 10, bytesDown: 20 });
-    expect(await getUserActivity(env, fx.legacyToken, 1)).toEqual([
-      { day: fx.today, requests: 2, bytesUp: 10, bytesDown: 20 },
-    ]);
+    await recordUserActivity(env, fx.legacyToken, { requests: 2 });
+    expect(await getUserActivity(env, fx.legacyToken, 1)).toEqual([{ day: fx.today, requests: 2 }]);
     expect(await kvUserKeys()).toEqual([]);
   });
 

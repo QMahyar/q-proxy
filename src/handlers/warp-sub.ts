@@ -51,7 +51,7 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
   const headers: Record<string, string> = {
     "Content-Type": WARP_CONTENT_TYPES[formatName],
     "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`${sanitizeFilename(account.name)}-${formatName}.${WARP_EXTENSIONS[formatName]}`)}`,
-    ...throttleHeaders(),
+    ...throttleHeaders(s.subUpdateIntervalHours),
     "Profile-Title": `base64:${encodeUtf8Base64(account.name)}`,
     "Subscription-Userinfo": subscriptionUserinfo(usage),
     "profile-web-page-url": `${origin}/${s.securePath}/panel`,

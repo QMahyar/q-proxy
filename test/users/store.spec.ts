@@ -447,25 +447,20 @@ describe("users store", () => {
     expect(typeof sanitized.tokenHint).toBe("string");
   });
 
-  it("aggregates request and byte deltas into today's activity row", async () => {
+  it("aggregates request deltas into today's activity row", async () => {
     const env = kv.asEnv();
     const token = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
     const hash = await hashToken(token);
     const today = dayKeyUtc();
     const key = USER_ACTIVITY_PREFIX + today + ":" + hash;
-    await recordUserActivity(env, token, { requests: 2, bytesUp: 100, bytesDown: 200 });
-    await recordUserActivity(env, hash, { requests: 3, bytesUp: 50 });
-    await recordUserActivity(env, token, { bytesDown: 25 });
+    await recordUserActivity(env, token, { requests: 2 });
+    await recordUserActivity(env, hash, { requests: 3 });
     expect(kv.map.has(key)).toBe(false);
-    expect(await getUserActivity(env, token, 1)).toEqual([
-      { day: today, requests: 5, bytesUp: 150, bytesDown: 225 },
-    ]);
+    expect(await getUserActivity(env, token, 1)).toEqual([{ day: today, requests: 5 }]);
     const putsBefore = kv.puts();
     await flushPendingUserActivity(env);
-    expect(kv.map.get(key)).toBe(JSON.stringify({ day: today, requests: 5, bytesUp: 150, bytesDown: 225 }));
-    expect(await getUserActivity(env, token, 1)).toEqual([
-      { day: today, requests: 5, bytesUp: 150, bytesDown: 225 },
-    ]);
+    expect(kv.map.get(key)).toBe(JSON.stringify({ day: today, requests: 5 }));
+    expect(await getUserActivity(env, token, 1)).toEqual([{ day: today, requests: 5 }]);
     await flushPendingUserActivity(env);
     expect(kv.puts()).toBe(putsBefore + 1);
   });
@@ -479,27 +474,27 @@ describe("users store", () => {
     expect(yesterday).not.toBe(today);
     kv.map.set(
       USER_ACTIVITY_PREFIX + yesterday + ":" + hash,
-      JSON.stringify({ day: yesterday, requests: 4, bytesUp: 10, bytesDown: 20 }),
+      JSON.stringify({ day: yesterday, requests: 4 }),
     );
     await recordUserActivity(env, token, { requests: 1 });
     const rows = await getUserActivity(env, token, 2);
     expect(rows.map((r) => r.day)).toEqual([yesterday, today]);
-    expect(rows[0]).toEqual({ day: yesterday, requests: 4, bytesUp: 10, bytesDown: 20 });
-    expect(rows[1]).toEqual({ day: today, requests: 1, bytesUp: 0, bytesDown: 0 });
+    expect(rows[0]).toEqual({ day: yesterday, requests: 4 });
+    expect(rows[1]).toEqual({ day: today, requests: 1 });
     const week = await getUserActivity(env, token, 7);
     expect(week).toHaveLength(7);
-    expect(week[6]).toEqual({ day: today, requests: 1, bytesUp: 0, bytesDown: 0 });
-    for (const r of week.slice(0, 5)) expect(r).toEqual({ day: r.day, requests: 0, bytesUp: 0, bytesDown: 0 });
+    expect(week[6]).toEqual({ day: today, requests: 1 });
+    for (const r of week.slice(0, 5)) expect(r).toEqual({ day: r.day, requests: 0 });
   });
 
-  it("consumeUserHit bumps the activity row with zero bytes until the tunnel wiring follow-up", async () => {
+  it("consumeUserHit bumps the activity row per fetch", async () => {
     const env = kv.asEnv();
     const token = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
     const today = dayKeyUtc();
     await consumeUserHit(env, token, null);
     await consumeUserHit(env, token, null);
     expect(await getUserActivity(env, token, 1)).toEqual([
-      { day: today, requests: 2, bytesUp: 0, bytesDown: 0 },
+      { day: today, requests: 2 },
     ]);
   });
 
@@ -510,7 +505,7 @@ describe("users store", () => {
     expect(await consumeUserHit(env, token, 1)).toMatchObject({ allowed: true });
     expect(await consumeUserHit(env, token, 1)).toMatchObject({ allowed: false });
     expect(await getUserActivity(env, token, 1)).toEqual([
-      { day: today, requests: 1, bytesUp: 0, bytesDown: 0 },
+      { day: today, requests: 1 },
     ]);
   });
 
@@ -521,16 +516,16 @@ describe("users store", () => {
     const today = dayKeyUtc();
     kv.map.set(USER_ACTIVITY_PREFIX + today + ":" + hash, JSON.stringify({ day: today, requests: 5 }));
     expect(await getUserActivity(env, token, 1)).toEqual([
-      { day: today, requests: 5, bytesUp: 0, bytesDown: 0 },
+      { day: today, requests: 5 },
     ]);
-    await recordUserActivity(env, token, { requests: 1, bytesUp: 7, bytesDown: 9 });
+    await recordUserActivity(env, token, { requests: 1 });
     expect(await getUserActivity(env, token, 1)).toEqual([
-      { day: today, requests: 6, bytesUp: 7, bytesDown: 9 },
+      { day: today, requests: 6 },
     ]);
     await flushPendingUserActivity(env);
     kv.map.set(USER_ACTIVITY_PREFIX + today + ":" + hash, "{not json");
     expect(await getUserActivity(env, token, 1)).toEqual([
-      { day: today, requests: 0, bytesUp: 0, bytesDown: 0 },
+      { day: today, requests: 0 },
     ]);
     for (const key of kv.map.keys()) expect(key).not.toContain(token);
   });
@@ -553,13 +548,13 @@ describe("users store", () => {
     const today = dayKeyUtc();
     await consumeUserHit(env, oldPlain, null);
     await consumeUserHit(env, oldPlain, null);
-    await recordUserActivity(env, oldPlain, { bytesUp: 40, bytesDown: 60 });
+    await recordUserActivity(env, oldPlain, { requests: 1 });
     await migrateUserUsage(env, oldHash, newPlain);
     expect(await getUserActivity(env, newPlain, 1)).toEqual([
-      { day: today, requests: 2, bytesUp: 40, bytesDown: 60 },
+      { day: today, requests: 3 },
     ]);
     expect(await getUserActivity(env, oldPlain, 1)).toEqual([
-      { day: today, requests: 0, bytesUp: 0, bytesDown: 0 },
+      { day: today, requests: 0 },
     ]);
     expect(kv.map.has(USER_ACTIVITY_PREFIX + today + ":" + oldHash)).toBe(false);
     expect(kv.map.has(USER_ACTIVITY_PREFIX + today + ":" + newHash)).toBe(true);

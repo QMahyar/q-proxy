@@ -212,7 +212,6 @@ describe("panel html", () => {
       "speedtestIntercept",
       "camouflage.mode",
       "camouflage.url",
-      "sourceUrls",
       "routingRules.bypassLan",
       "routingRules.customBlock",
     ]) {
@@ -230,10 +229,9 @@ describe("panel html", () => {
     }
   });
 
-  it("absorbs the sources subtab into egress with an honest not-yet-consumed note", () => {
-    expect(html).toContain("FL('sourceUrls','list','egress.remoteSubs.label'");
-    expect(html.match(/'egress\.remoteSubs\.hint':'/g)?.length).toBe(2);
-    expect(html.match(/'egress\.remoteSubs\.title':'/g)?.length).toBe(2);
+  it("drops the write-only sources card with its server field and dict family", () => {
+    expect(html).not.toContain("sourceUrls");
+    expect(html).not.toContain("egress.remoteSubs");
   });
 
   it("renders routing rules as their own card inside the advanced subtab", () => {
