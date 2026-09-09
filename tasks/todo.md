@@ -36,7 +36,7 @@ Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · cre
 - [x] Checkpoint 4: full suite + size report ✅ dist 532,305 B (from 619,573 at Phase-3 close)
 
 ## Phase 5 — Verification & release
-- [ ] Task 21: scripts/ui-walk.mjs visual regression suite (EN/FA × themes × viewports)
+- [x] Task 21: scripts/ui-walk.mjs visual regression suite ✅ 12/12 steps × 3 consecutive runs PASS, exit 0, 0 console errors; `npm run test:ui`; report .pi/ui-audit/ui-walk-report.json
 - [ ] Task 22: CHANGELOG + guides + version bump/tag
 
 ## Status log
