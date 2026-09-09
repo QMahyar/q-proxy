@@ -17,7 +17,7 @@ Read order: [AGENTS.md](AGENTS.md) (rules) → [docs/ARCHITECTURE.md](docs/ARCHI
 | `src/settings/` | KV-backed settings: cache, seed, migrate, validate | `store.ts` (60 s isolate cache + `loadSettingsFresh`), `validate.ts`, `migrate.ts` | Writes always `validateSettings` then `saveSettings` |
 | `src/auth/` | Password hashing, sessions, CSRF | `password.ts` (PBKDF2 ≥100k), `session.ts` (HMAC `q_session`), `guard.ts` (`X-Q-Panel: 1`) | Constant-time compares everywhere |
 | `src/crypto/` | Primitives WebCrypto lacks + X25519 | `md5.ts`, `sha224.ts`, `aes.ts`, `kdf.ts`, `x25519.ts`, `chacha20.ts` | RFC test vectors prove each primitive |
-| `src/ui/` | Bilingual EN/FA SPA as HTML strings | `assets.ts` exports `panel.html`/`login.html`/`camo.html` | Field registry + en/fa dictionaries inside `panel.html` |
+| `src/ui/` | Bilingual EN/FA SPA assembled from parts | `assets.ts` exports `panel.html`/`login.html`/`camo.html`; sources in `panel/` (22 parts, plain-concat IIFE, `PANEL_JS_ORDER`) | Edit parts, never generated `panel.html`; strings via `dict.js` en/fa; drift guards in `test/ui/` |
 | `src/utils/`, `src/types/` | Shared helpers and frozen types | `utils/random.ts`, `utils/net.ts`; `types/settings.ts`, `types/node.ts`, `types/tunnel.ts` | Types here are the frozen contract surface |
 
 ## Conventions Cheat-Sheet
@@ -46,7 +46,7 @@ npm run typecheck && npm test
 
 ## Gotchas
 
-- `src/ui/panel.html` is a large single-file SPA. Edit surgically. Syntax-check your `<script>` block: extract it and run `node -e "new Function(require('fs').readFileSync(0,'utf8'))"` < script.js.
+- `src/ui/panel.html` is generated output — edit the parts in `src/ui/panel/` and rebuild (see `src/ui/panel/README.md` for part order and ownership). Never rename top-level functions in parts: they are a cross-file contract under plain-concat concatenation.
 - KV is eventually consistent; the isolate settings cache adds a 60 s window. Setup and kill-switch writes re-read via `loadSettingsFresh` to avoid TOCTOU.
 - First packet is consumed exactly once: `initialPayload ?? rest` in `src/handlers/tunnel.ts` — never concatenate both.
 - Trojan UDP datagrams are framed ATYP+addr+port+len+CRLF+payload; the downlink re-wraps each chunk with the request's source address (last seen uplink source).
@@ -63,4 +63,4 @@ npm run typecheck && npm test
 | API route | `SecureRoute`/`ApiRouteName` in `src/core/routes.ts` → `dispatchApi` in `src/core/router.ts` → handler in `src/handlers/api/` → ARCHITECTURE §3 row → `test/workers/router.spec.ts` |
 | Sub emitter | `SubFormat` in `src/core/ua.ts` → `src/nodes/emitters/<name>.ts` → `registry.ts` → `SUB_FORMATS` in `src/subscription/negotiate.ts` (single source — subscribe + users-sub both consume it; see DEVELOPER_GUIDE §6) |
 | WARP format | `WARP_FORMATS` + `WARP_EMITTERS` + type/extension maps in `src/warp/formats/registry.ts` |
-| User-facing string | en/fa dictionaries in `src/ui/panel.html` |
+| User-facing string | en/fa dictionaries in `src/ui/panel/dict.js` (guard: `test/ui/dict-usage.spec.ts` fails on unused/missing keys) |
