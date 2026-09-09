@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:ui": "node scripts/ui-walk.mjs",
     "build": "node scripts/build-single-file.mjs",
     "dev": "node scripts/build-single-file.mjs && wrangler dev",
     "deploy": "node scripts/deploy-direct.mjs",
