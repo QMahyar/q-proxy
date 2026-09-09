@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+// @ts-expect-error node builtin lacks types in this repo (precedent: assets.spec.ts)
+import { join } from "node:path";
 import { ASSETS } from "../../src/ui/assets";
 import { buildSubUrls } from "../../src/handlers/api/status";
 // @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
@@ -639,12 +641,12 @@ describe("panel ui p16 states", () => {
     expect(html).toContain("skel-bar");
   });
 
-  it("adopts the empty-card builder on users, subs, warp and home", () => {
+  it("adopts the empty-card builder on users, subs and warp", () => {
     expect(html).toContain("function usersEmptyHtml(){");
     expect(html).toMatch(/function usersEmptyHtml\(\)\{\s*return emptyCard\(/);
     expect(html).toContain("function subsEmptyHtml(){return emptyCard(");
     expect(html).toContain("ac.insertAdjacentHTML('beforeend',emptyCard(");
-    expect(html.match(/sh\+=emptyCard\(/g)?.length).toBe(1);
+    expect(html.match(/sh\+=emptyCard\(/g)).toBeNull();
     expect(html).not.toContain("'<div class=\"empty-card\"><div class=\"empty-icon\"><svg aria-hidden=\"true\"><use href=\"#i-qr\"/>");
   });
 
@@ -777,5 +779,64 @@ describe("panel ui p15 a11y", () => {
     expect(order.indexOf('"a11y.js"')).toBeGreaterThan(-1);
     expect(order.indexOf('"a11y.js"')).toBeLessThan(order.indexOf('"settings.js"'));
     expect(ASSETS.panel).toContain("function announce(");
+  });
+});
+
+describe("dead-code resurrection guards", () => {
+  const panelDir = join(process.cwd(), "src", "ui", "panel");
+  const corpus = readdirSync(panelDir)
+    .map((f: string) => readFileSync(join(panelDir, f), "utf8"))
+    .join("\n");
+
+  const codeSymbols = [
+    "WARP_F",
+    "warpSubsHtml",
+    "MAX_TARGETS",
+    "checker-targets",
+    "#settings-search",
+    "case 'ports'",
+    "dataset.type==='ports'",
+    "data-type=\"ports\"",
+    "data-port-master",
+    "data-port-opt",
+    "updatePortMasters",
+    "TLS_PORTS",
+    "PLAIN_PORTS",
+    "sourcesCardHtml",
+    "source-doh",
+    "bulkUsers",
+    "PROBE_TIMEOUT",
+    "PROBE_TRIES",
+    "shortcuts.search",
+    "common.yes",
+    "common.no",
+    "fragment.enable",
+    "users.bulk.confirm",
+  ];
+
+  const cssSymbols = [
+    "i-play",
+    "i-stop",
+    "--ease-bounce",
+    "--accent-hover",
+    "--accent-down",
+    "--shadow-sm",
+    "--shadow-hover",
+    "spinring",
+    ".port-matrix",
+    "var(--line",
+    "var(--s-4",
+  ];
+
+  it("keeps deleted panel symbols dead (ui-audit removals, Task 18)", () => {
+    for (const symbol of codeSymbols) {
+      expect(corpus.includes(symbol), `resurrected: ${symbol}`).toBe(false);
+    }
+  });
+
+  it("keeps deleted markup and css sediment dead (ui-audit removals, Task 18)", () => {
+    for (const symbol of cssSymbols) {
+      expect(corpus.includes(symbol), `resurrected: ${symbol}`).toBe(false);
+    }
   });
 });

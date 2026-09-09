@@ -226,8 +226,6 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    ta.value=lines.join('\n');markDirty();validateOneEditor(ta)}
    else toastErr()},
   'section-save'(el){withBusy(el,()=>applySection(el.dataset.sec))},
-  'source-doh'(el){
-   (async()=>{try{await loadPool(false)}catch(err){toastErr(err)}})()},
   'change-password'(el){
  (async()=>{
  const cur=$('sec-cur'),nw=$('sec-new'),cf=$('sec-confirm');
@@ -423,18 +421,10 @@ if(allBox)allBox.checked=false;
 return}
 if(e.target.id==='warp-preset'){const id=(location.hash.match(/^#\/warp\/([0-9a-f-]+)/i)||[])[1];if(id){(async()=>{try{await api('api/warp/account/'+id,{method:'PUT',body:{endpoint_list:{type:'preset',preset_id:e.target.value}}});toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(id))}catch(err){toastErr(err)}})()}return}
 if(e.target.closest('[data-kill]')){setKillSwitch(e.target.checked);return}
-if(e.target.closest('[data-lang-sel]')){setLangCookie(e.target.value);location.reload();return}
-if(e.target.closest('[data-port-master]')){
-const master=e.target;
-master.closest('fieldset').querySelectorAll('[data-port-opt]').forEach(c=>{c.checked=master.checked});
-markDirty();
-updatePortMasters();
-return}
 const bind=e.target.closest('[data-bind]');
 if(bind){
 if(bind.tagName==='TEXTAREA')validateOneEditor(bind);
 markDirty();
-updatePortMasters();
 if(/^vlessEnabled$|^vmessEnabled$|^trojanEnabled$|^ssEnabled$/.test(bind.dataset.bind))applyProtoDim()
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()}}
 function onInput(e){
@@ -573,7 +563,7 @@ const protoCount=['vlessEnabled','vmessEnabled','trojanEnabled','ssEnabled'].fil
 let step=protoCount>0?1:0;
 const body=$('wiz-body');
 function render(){
-const firstSub=(S.subs||[]).find(u=>u.format==='base64'&&u.label!=='Panel info');
+const firstSub=(S.subs||[]).find(u=>u.format==='base64'&&!isInfoEntry(u));
 if(step===0){$('wiz-title').textContent=t('wizard.title');body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s1_body'))+'</p><a class="btn btn--primary btn--sm" href="#/settings/protocols" data-action="wizard-protocols">'+esc(t('wizard.s1_cta'))+'</a>';$('wiz-next').style.display='none'}
 else if(step===1){$('wiz-title').textContent=t('wizard.s2_title');body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s2_body'))+'</p>'+(firstSub?copyFieldHtml(subUrlWithMode(firstSub.url),'wiz-sub'):'<p class="field__error" style="display:block">'+esc(t('home.subs.empty_msg'))+'</p>');$('wiz-next').style.display='';$('wiz-next').textContent=t('common.confirm')}
 else{$('wiz-title').textContent=t('wizard.s3_title');body.innerHTML='<p class="field__hint">'+esc(t('wizard.s3_body'))+'</p>';$('wiz-next').textContent=t('wizard.done')}}

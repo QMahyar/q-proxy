@@ -1,5 +1,4 @@
 
-const TLS_PORTS=[443,2053,2083,2087,2096,8443],PLAIN_PORTS=[80,8080,8880,2052,2082,2086,2095];
 const SS_METHODS=['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305'];
 const FPS=['chrome','firefox','safari','ios','android','edge','360','qq','random','randomized'];
 const PACKETS=['tlshello','1-1','1-2','1-3','1-5'];
@@ -129,7 +128,6 @@ sh+='</div></div>';
 const urls=mainSubEntries();
 urls.slice(0,3).forEach((entry,i)=>{sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(formatLabel(entry.format))+'</span>'+copyFieldHtml(subUrlWithMode(entry.url),'sub-u'+i)+'</div>'});
 if(urls.length)sh+='<div class="row" style="border-block-end:0"><a class="btn btn--ghost btn--sm" href="#/subs">'+esc(t('home.subs.viewall'))+'<svg aria-hidden="true"><use href="#i-back" style="transform:scaleX(-1)"/></svg></a></div>';
-if(!urls.length&&!(S.warp&&S.warp.accounts.length))sh+=emptyCard({icon:'i-qr',title:'home.subs.empty_title',msg:'home.subs.empty_msg',cta:'home.subs.empty_cta',href:'#/settings/protocols'});
 subs.innerHTML=sh;
 body.appendChild(subs);
 if(!S.warp)loadWarpIfNeeded().then(()=>{if(S.warp)renderHome()});

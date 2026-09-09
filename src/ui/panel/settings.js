@@ -82,11 +82,11 @@ FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
   FL('proxyIpMode','chips','egress.mode.label',null,{opts:[['proxyip','egress.mode.list'],['nat64','egress.mode.nat64']]}),
   FL('proxyIps','list','egress.list.label','egress.list.short',{validate:'host_port',help:'egress.list.help',showIf:v=>getPath(v,'proxyIpMode')!=='nat64'}),
   FL('nat64Prefixes','list','egress.nat64.label','egress.nat64.short',{validate:'ipv6_prefix',help:'egress.nat64.help',showIf:v=>getPath(v,'proxyIpMode')==='nat64'}),
-  FL('proxyIpPoolUrl','str','egress.poolUrl.label','egress.poolUrl.hint',{mono:true,vtype:'url'})]},
+  FL('proxyIpPoolUrl','str','egress.poolUrl.label','egress.poolUrl.hint',{mono:true})]},
   {title:'egress.pool.title',pool:true,fields:[]}]},
 {key:'tunnel',cards:[
 {title:'fragment.card.title',fields:[
-FL('fragment.mode','fpreset','fragment.enable',null),
+FL('fragment.mode','fpreset',null,null),
 FL('fragment.packets','select','fragment.packets',null,{opts:PACKETS}),
 FL(['fragment.lengthMin','fragment.lengthMax'],'range','fragment.length',null),
 FL(['fragment.delayMin','fragment.delayMax'],'range','fragment.delay',null),
@@ -211,11 +211,6 @@ case 'chips':{
 const cur=String(getPath(S.set,paths[0])??'');
 let h='<div role="radiogroup" class="chip-row" data-bind="'+paths[0]+'" data-type="chips" aria-label="'+esc(t(f.label))+'">'+f.opts.map(([v,k])=>'<button type="button" role="radio" class="chip" data-chip="'+esc(v)+'" aria-checked="'+String(cur===v)+'">'+esc(t(k))+'</button>').join('')+'</div>';
 return fieldWrap(id,f.label,f.hint).replace('{B}',h)}
-case 'ports':{
-const fam=f.family==='tls'?TLS_PORTS:PLAIN_PORTS;
-const cur=lines(getPath(S.set,paths[0])).map(Number);
-let h='<fieldset class="port-matrix" style="margin-block-end:12px"><legend style="font-size:var(--fs-sm);color:var(--text-dim);font-weight:600;padding-inline:6px">'+esc(t(f.label))+' <label class="btn btn--icon btn--sm" title="'+esc(t('common.yes'))+'/'+esc(t('common.no'))+'"><input type="checkbox" data-port-master data-family="'+f.family+'" style="position:absolute;opacity:0;width:1px;height:1px" aria-label="'+esc(t(f.label))+' all"></label></legend><div class="port-cells" data-bind="'+paths[0]+'" data-type="ports" data-family="'+f.family+'">'+fam.map(p=>'<label class="port-cell"><input type="checkbox" value="'+p+'" data-port-opt'+(cur.includes(p)?' checked':'')+'><span>'+p+'</span></label>').join('')+'</div></fieldset>';
-return fieldWrap(id,f.label,null).replace('{B}',h)}
 case 'list':{
 const arr=lines(getPath(S.set,paths[0]));
 let h='<div class="line-editor"><textarea rows="5" class="input textarea textarea--mono" id="'+id+'" data-bind="'+paths[0]+'" data-validate="'+(f.validate||'')+'" dir="ltr" spellcheck="false" autocomplete="off">'+esc(arr.join('\n'))+'</textarea><div class="meta"><span class="cnt"></span><span class="bad"></span></div></div>';
@@ -323,7 +318,6 @@ SECTIONS.forEach(s=>{S.snap[s.key]=JSON.stringify(collectSection(s.key))});
 S.dirty.clear();
 updateApplyBar();
 applyProtoDim();
-updatePortMasters();
 syncKillUI();
 refreshShowIf();
 updateEchPreview();
@@ -337,12 +331,6 @@ card.classList.toggle('card--dim',!on);
 card.querySelectorAll('[data-bind]').forEach(el=>{
 if(el.closest('.row'))return;
 el.disabled=!on})})}
-function updatePortMasters(){
-document.querySelectorAll('[data-port-master]').forEach(master=>{
-const cells=master.closest('fieldset').querySelectorAll('[data-port-opt]');
-const checked=[...cells].filter(c=>c.checked).length;
-master.checked=checked===cells.length;
-master.indeterminate=checked>0&&checked<cells.length})}
 function applyFragmentPresetUi(mode){
 const panel=$('sp-tunnel');
 if(!panel)return;
@@ -402,9 +390,6 @@ return [...body.querySelectorAll('.remote-card')].map(c=>{
 const e=readRemoteCard(c);
 if(e.address.length===0)return null;
 return e}).filter(Boolean)}
-if(el.dataset.type==='ports'){
-const fam=el.dataset.family==='tls'?TLS_PORTS:PLAIN_PORTS;
-return fam.filter(p=>el.querySelector('input[data-port-opt][value="'+p+'"]').checked)}
 if(el.dataset.type==='chips'){
 const c=el.querySelector('.chip[aria-checked="true"]');
 return c?c.dataset.chip:''}
@@ -425,10 +410,6 @@ const body=el.querySelector('[data-remote-body]');
 if(body){body.innerHTML=Array.isArray(v)?v.map(remoteNodeCardHtml).join(''):''}
 const rempty=el.querySelector('.remote-empty');
 if(rempty)rempty.style.display=Array.isArray(v)&&v.length?'none':'';
-return}
-if(el.dataset.type==='ports'){
-const arr=lines(v).map(Number);
-el.querySelectorAll('input[data-port-opt]').forEach(c=>{c.checked=arr.includes(Number(c.value))});
 return}
 if(el.dataset.type==='chips'){
 el.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked',String(c.dataset.chip===v)));
@@ -519,7 +500,6 @@ clearFieldErrorEl(el)});
 markDirty();
 refreshShowIf();
 updateEchPreview();
-updatePortMasters();
 applyProtoDim()}
 function fieldWrapOf(bindEl){
 return bindEl.closest('.field')}
@@ -552,7 +532,7 @@ function validIpOrHost(line){
 const s=line.replace(/^\[|\]$/g,'');
 if(RE_IPV4.test(s))return true;
 if(RE_V6PREFIX.test(s)&&s.includes(':'))return true;
-return RE_HOST.test(s)&&s.includes('.')||(RE_HOST.test(s)&&!s.includes('.'))}
+return RE_HOST.test(s)}
 function validateLine(kind,line){
 if(!line)return false;
 switch(kind){

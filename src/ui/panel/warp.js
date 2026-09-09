@@ -27,10 +27,6 @@ try{['api/warp/account','api/warp/presets','api/warp/settings/amnezia'].forEach(
 function retryWarp(id){invalidateWarp();warpLoadError=false;loadWarpIfNeeded().then(function(){const r=parseRoute();if(r.view!=='warp')return;if(id)renderWarpDetail(id);else renderWarpSection()})}
 function poolCardHtml(){
 return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('egress.pool.title'))+'</div><div class="field__hint">'+esc(t('egress.pool.desc'))+'</div></div><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="pool-fetch">'+esc(t('egress.pool.fetch'))+'</button><button type="button" class="btn btn--primary btn--sm" data-action="pool-test">'+esc(t('egress.pool.test'))+'</button></div></div><div id="pool-list" class="pool-list"><span class="field__hint">'+esc(t('egress.pool.idle'))+'</span></div></section>'}
-function sourcesCardHtml(){
-return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t('sources.title'))+'</div></div><p class="field__hint">'+esc(t('sources.desc'))+'</p>'
-+'<div class="field"><span class="field__label">'+esc(t('sources.links.label'))+'</span><div class="line-editor"><textarea rows="4" class="input textarea textarea--mono" dir="ltr" spellcheck="false" placeholder="https://…" data-bind="sourceUrls" data-validate="url">'+esc((S.set.sourceUrls||[]).join('\n'))+'</textarea><div class="meta"><span class="cnt"></span><span class="bad"></span></div></div><p class="field__hint">'+esc(t('sources.links.hint'))+'</p></div>'
-+'<div class="field"><span class="field__label">'+esc(t('sources.tools.title'))+'</span><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="pool-fetch">'+esc(t('egress.pool.fetch'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="source-doh">'+esc(t('sources.tools.doh'))+'</button></div><p class="field__hint">'+esc(t('sources.tools.hint'))+'</p></div></section>'}
 async function loadPool(probe){
 const box=$('pool-list');if(!box)return;
 box.innerHTML=loadingBox({rows:3});

@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BASE=location.pathname.replace(/panel\/?$/,'');
-const TOAST_MS=3500,TOAST_ERR_MS=10000,PROBE_TIMEOUT=5000,PROBE_TRIES=3;
+const TOAST_MS=3500,TOAST_ERR_MS=10000;
 function setLangCookie(l){document.cookie='qp_lang='+l+'; Path=/; Max-Age=31536000; SameSite=Lax'}
 function toast(msg,kind){const box=$('toasts');const el=document.createElement('div');el.className='toast'+(kind==='err'?' toast--err':'');if(kind==='err')el.setAttribute('role','alert');
 el.innerHTML='<svg class="ticon" aria-hidden="true"><use href="#'+(kind==='err'?'i-x':'i-check')+'"/></svg><span class="toast__msg"></span><button type="button" class="toast__close" aria-label="'+esc(t('common.close'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button><i class="toast-bar"></i>';

@@ -91,12 +91,3 @@ if(all){const ids=(S.users||[]).map(u=>u.id);all.checked=ids.length>0&&ids.every
 document.addEventListener('click',function(e){
 const rb=e.target&&e.target.closest?e.target.closest('[data-action="users-reload"]'):null;if(!rb)return;
 const ltb=$('users-rows');if(ltb)ltb.innerHTML='<tr><td colspan="8">'+loadingBox({label:'common.loading'})+'</td></tr>'});
-async function bulkUsers(patch){
-const ids=[...BULK];
-if(!ids.length)return;
-if(!(await confirmDialog('users.bulk.selected','users.bulk.confirm',true,{n:ids.length})))return;
-try{const d=await api('api/users/bulk',{method:'POST',body:{ids:ids,patch:patch}});
-BULK.clear();
-let msg=t('users.bulk.done',{updated:d.updated,deleted:d.deleted});
-if(d.unknown)msg+=t('users.bulk.unknown',{unknown:d.unknown});
-toast(msg,'ok');await loadUsers()}catch(err){toastErr(err)}}
