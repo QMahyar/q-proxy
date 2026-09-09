@@ -30,7 +30,7 @@ Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · cre
 
 ## Phase 4 — Perf, purge, server hygiene
 - [x] Task 17 (WS-H): Minify + ETag + per-lang dict heap split ✅ dist 619->541KB, F1+F2 fixed
-- [ ] Task 18 (WS-H): Dead code purge (ports/checker/ctrl-k/no-op bars/fossils)
+- [x] Task 18 (WS-H): Dead code purge ✅ 34-symbol guards, dist -6.2KB, guard caught 5 orphaned keys
 - [ ] Task 19 (WS-H): Server field deletions (localDns, sourceUrls, city) + derived headers + AGENTS.md 76
 - [ ] Task 20 (WS-H): settings.js split + O(1) dirty tracking
 - [ ] Checkpoint 4: full suite + size report + Playwright pass 4
