@@ -1157,6 +1157,33 @@ if(all){const ids=(S.users||[]).map(u=>u.id);all.checked=ids.length>0&&ids.every
 document.addEventListener('click',function(e){
 const rb=e.target&&e.target.closest?e.target.closest('[data-action="users-reload"]'):null;if(!rb)return;
 const ltb=$('users-rows');if(ltb)ltb.innerHTML='<tr><td colspan="8">'+loadingBox({label:'common.loading'})+'</td></tr>'});
+function toLocalInputValue(ms){
+const d=new Date(ms);const p=n=>String(n).padStart(2,'0');
+return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())}
+function openUserModal(id){
+const m=$('m-user');
+if(id)m.dataset.userId=id;else delete m.dataset.userId;
+const u=id?S.users.find(x=>x.id===id):null;
+$('mu-title').textContent=t(u?'users.edit':'users.add');
+$('mu-go').textContent=t(u?'common.save':'users.add');
+$('mu-name').value=u?u.name:'';
+const picked=u&&u.protocols!=='all'?u.protocols:['all'];
+document.querySelectorAll('#mu-protocols input[type=checkbox]').forEach(i=>{i.checked=picked.includes(i.value)});
+$('mu-limit').value=u&&u.dailyReqLimit!=null?String(u.dailyReqLimit):'';
+$('mu-expiry').value=u&&u.expiresAt!=null?toLocalInputValue(u.expiresAt):'';
+$('mu-ov-label').textContent=t('users.override.label');
+$('mu-ov-hint').textContent=t('users.override.hint');
+$('mu-ov-address-label').textContent=t('addresses.field.address');
+$('mu-ov-port-label').textContent=t('addresses.field.port');
+$('mu-ov-label-label').textContent=t('addresses.field.label');
+const ov=u&&u.addressOverride?u.addressOverride:null;
+$('mu-ov-address').value=ov&&ov.address?ov.address:'';
+$('mu-ov-port').value=ov&&ov.port?String(ov.port):'';
+$('mu-ov-label2').value=ov&&ov.label?ov.label:'';
+const dl=$('mu-ov-options');
+if(dl){dl.innerHTML=(S.set.addresses||[]).map(function(a){if(a.enabled===false)return '';return '<option value="'+esc(String(a.address||'').replace(/(:\d+)$/,''))+'"></option>'}).join('')}
+$('mu-error').style.display='';$('mu-error').textContent='';
+openModal('m-user')}
 const SUBS_MODE_IDS=['normal','fragment'];
 function isInfoEntry(e){return !!e&&typeof e.url==='string'&&/[?&]view=html/.test(e.url)}
 function mainSubEntries(){const idx=f=>FORMAT_ORDER.indexOf(f);return (S.subs||[]).filter(e=>!isInfoEntry(e)).slice().sort((a,b)=>(idx(a.format)<0?99:idx(a.format))-(idx(b.format)<0?99:idx(b.format)))}
@@ -1343,46 +1370,6 @@ $('keys-title').textContent=t('shortcuts.title');
 $('keys-close').textContent=t('common.close');
 const rows=[['Ctrl / \u2318 + S','shortcuts.save'],['g h','shortcuts.home'],['Ctrl / \u2318 + Z','shortcuts.undo'],['Shift + Ctrl / \u2318 + Z','shortcuts.redo']];
 $('keys-body').innerHTML='<table class="tbl"><tbody>'+rows.map(r=>'<tr><td style="white-space:nowrap"><code dir="ltr" class="mono">'+esc(r[0])+'</code></td><td data-l="'+esc(r[0])+'">'+esc(t(r[1]))+'</td></tr>').join('')+'</tbody></table><div class="btn-row" style="margin-block-start:14px"><button type="button" class="btn btn--ghost btn--sm" data-action="wizard-replay" aria-label="'+esc(t('wizard.title'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('wizard.title'))+'</button></div>'}
-const UR={};
-function urStack(sec){if(!UR[sec])UR[sec]={undo:[],redo:[]};return UR[sec]}
-function pushUndo(sec,state){
-const st=urStack(sec);
-if(st.undo[st.undo.length-1]===state)return;
-st.undo.push(state);if(st.undo.length>20)st.undo.shift();st.redo.length=0}
-let urBase=null;
-function captureUndoBase(el){
-const panel=el&&el.closest?el.closest('[id^="sp-"]'):null;
-if(!panel)return;
-const sec=panel.id.slice(3);
-if(!SECTIONS.some(s=>s.key===sec))return;
-if(urBase&&urBase.sec===sec)return;
-try{urBase={sec:sec,json:JSON.stringify(collectSection(sec))}}catch(e){}}
-function clearUndoBase(){urBase=null}
-function scheduleDirtyPush(){
-if(!urBase)return;
-pushUndo(urBase.sec,urBase.json);
-urBase=null}
-function restoreSection(sec,json){
-clearUndoBase();
-let snap={};try{snap=JSON.parse(json)}catch(e){return}
-const panel=$('sp-'+sec);if(!panel)return;
-panel.querySelectorAll('[data-bind]').forEach(el=>{
-writeBind(el,getPath(snap,el.dataset.bind));
-clearFieldErrorEl(el)});
-markDirty();
-refreshShowIf();
-updateEchPreview();
-applyProtoDim()}
-function undoSection(){
-const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
-const st=urStack(sec);if(!st.undo.length)return;
-st.redo.push(JSON.stringify(collectSection(sec)));
-restoreSection(sec,st.undo.pop())}
-function redoSection(){
-const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
-const st=urStack(sec);if(!st.redo.length)return;
-st.undo.push(JSON.stringify(collectSection(sec)));
-restoreSection(sec,st.redo.pop())}
 let lastG=0;
 function isEditable(el){return el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable)}
 function globalKeys(e){
@@ -1392,33 +1379,10 @@ if(mod&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redoSection(
 if(isEditable(e.target))return;
 if(e.key==='g'){lastG=Date.now();return}
 if(e.key==='h'&&Date.now()-lastG<800){lastG=0;location.hash='#/home'}}
-function toLocalInputValue(ms){
-const d=new Date(ms);const p=n=>String(n).padStart(2,'0');
-return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())}
-function openUserModal(id){
-const m=$('m-user');
-if(id)m.dataset.userId=id;else delete m.dataset.userId;
-const u=id?S.users.find(x=>x.id===id):null;
-$('mu-title').textContent=t(u?'users.edit':'users.add');
-$('mu-go').textContent=t(u?'common.save':'users.add');
-$('mu-name').value=u?u.name:'';
-const picked=u&&u.protocols!=='all'?u.protocols:['all'];
-document.querySelectorAll('#mu-protocols input[type=checkbox]').forEach(i=>{i.checked=picked.includes(i.value)});
-$('mu-limit').value=u&&u.dailyReqLimit!=null?String(u.dailyReqLimit):'';
-$('mu-expiry').value=u&&u.expiresAt!=null?toLocalInputValue(u.expiresAt):'';
-$('mu-ov-label').textContent=t('users.override.label');
-$('mu-ov-hint').textContent=t('users.override.hint');
-$('mu-ov-address-label').textContent=t('addresses.field.address');
-$('mu-ov-port-label').textContent=t('addresses.field.port');
-$('mu-ov-label-label').textContent=t('addresses.field.label');
-const ov=u&&u.addressOverride?u.addressOverride:null;
-$('mu-ov-address').value=ov&&ov.address?ov.address:'';
-$('mu-ov-port').value=ov&&ov.port?String(ov.port):'';
-$('mu-ov-label2').value=ov&&ov.label?ov.label:'';
-const dl=$('mu-ov-options');
-if(dl){dl.innerHTML=(S.set.addresses||[]).map(function(a){if(a.enabled===false)return '';return '<option value="'+esc(String(a.address||'').replace(/(:\d+)$/,''))+'"></option>'}).join('')}
-$('mu-error').style.display='';$('mu-error').textContent='';
-openModal('m-user')}
+const SETTINGS_SEC_ALIAS={fragment:'tunnel',chain:'tunnel',sources:'egress'};
+function normalizeSettingsHash(){
+const m=location.hash.match(/^#\/settings\/(fragment|chain|sources)$/);
+if(m)history.replaceState(null,'','#/settings/'+SETTINGS_SEC_ALIAS[m[1]])}
 const FL=(path,type,label,hint,extra)=>Object.assign({path,type,label,hint:hint||null},extra||{});
 
 const SECTIONS=[
@@ -1683,70 +1647,6 @@ function totpCardHtml(){return '<section class="card"><div class="card__head"><d
 function totpReset(){TOTP={secret:'',hashes:[],plain:[],started:false,confirmed:false};const b=$('totp-body');if(b)b.innerHTML=totpIdleHtml()}
 function renderTotpSetup(){const b=$('totp-body');if(!b)return;b.innerHTML='<p class="field__hint">'+esc(t('totp.step_secret'))+'</p>'+'<div class="field__label-row"><span class="field__label">'+esc(t('totp.secret_label'))+'</span></div>'+'<div class="copy-field"><code id="totp-secret" dir="ltr">'+esc(TOTP.secret)+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-value="'+esc(TOTP.secret)+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm" data-action="totp-qr" aria-label="'+esc(t('totp.show_qr'))+'"><svg aria-hidden="true"><use href="#i-qr"/></svg></button></div>'+(totpWarnActive()?'<p class="field__hint" style="color:var(--warning)">'+esc(t('totp.warn.restart'))+'</p>':'')+'<p class="field__hint">'+esc(t('totp.step_verify'))+'</p>'+'<div class="field" id="fw-totp-code"><div class="field__label-row"><label class="field__label" for="totp-code">'+esc(t('totp.code_label'))+'</label></div><input type="text" class="input input--mono" id="totp-code" autocomplete="one-time-code" inputmode="numeric" spellcheck="false" dir="ltr" maxlength="6"><p class="field__error"></p></div>'+'<p class="field__hint">'+esc(t('totp.step_backup'))+'</p>'+'<div class="field__label-row"><span class="field__label">'+esc(t('totp.recovery_title'))+'</span></div>'+'<div class="copy-field"><code id="totp-codes" dir="ltr">'+esc(TOTP.plain.join(' '))+'</code><button type="button" class="btn btn--icon btn--sm" data-action="copy" data-copy-value="'+esc(TOTP.plain.join('\n'))+'" aria-label="'+esc(t('common.copy'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button><button type="button" class="btn btn--icon btn--sm" data-action="totp-codes-download" aria-label="'+esc(t('totp.codes.download'))+'" title="'+esc(t('totp.codes.download'))+'"><svg aria-hidden="true"><use href="#i-download"/></svg></button></div>'+'<label class="switch"><input type="checkbox" id="totp-saved" data-totp-saved><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t('totp.saved.confirm'))+'</span></label>'+'<div class="btn-row"><button type="button" class="btn btn--primary btn--sm" data-action="totp-confirm" disabled>'+esc(t('totp.verify_enable'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="totp-start">'+esc(t('totp.setup'))+'</button></div>'+'<p class="field__hint" style="color:var(--warning)">'+esc(t('totp.warn.clock'))+'</p>'}
 function renderTotpDone(){const b=$('totp-body');if(!b)return;b.innerHTML='<p class="field__hint">'+esc(t('totp.enabled_ok'))+'</p>'+'<p class="field__hint" style="color:var(--warning)">'+esc(t('totp.warn.clock'))+'</p>'+'<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="totp-disable">'+esc(t('totp.disable'))+'</button></div>'}
-function renderSettings(){
-buildSubtabs();
-const wrap=$('settings-panels');
-wrap.innerHTML='';
-SECTIONS.forEach(s=>{
-const p=document.createElement('div');
-p.id='sp-'+s.key;p.role='tabpanel';p.setAttribute('aria-labelledby','st-'+s.key);
-p.hidden=true;
-let h='';
-if(s.key==='protocols'){
-const protoCards=s.cards.slice(0,4);
-const commonCards=s.cards.slice(4);
-h+='<div class="grid2">';protoCards.forEach(c=>{h+=cardHtml(c)});h+='</div>';
-commonCards.forEach(c=>{h+=cardHtml(c)});
- } else {
- s.cards.forEach(c=>{h+=cardHtml(c)});
- }
-  h='<div class="section-actions"><button type="button" class="btn btn--primary btn--sm" data-action="section-save" data-sec="'+s.key+'">'+esc(t('common.save'))+'</button><span class="section-actions__hint" data-dirty-hint hidden>'+esc(t('common.unsaved'))+'</span></div>'+h;
-  p.innerHTML=h;
- wrap.appendChild(p)});
-applyFragmentPresetUi(String(getPath(S.set,'fragment.mode')||'off'));
-SECTIONS.forEach(s=>{S.snap[s.key]=JSON.stringify(collectSection(s.key))});
-S.dirty.clear();
-updateApplyBar();
-applyProtoDim();
-syncKillUI();
-refreshShowIf();
-updateEchPreview();
-validateAllLineEditors();
-document.querySelectorAll('#settings-panels .char-count').forEach(cc=>{const inp=$(cc.dataset.countFor);if(inp)updateCharCount(inp)})}
-function applyProtoDim(){
-document.querySelectorAll('[data-proto-card]').forEach(card=>{
-const key=card.dataset.protoCard;
-const on=getPath(S.set,key)!==false;
-card.classList.toggle('card--dim',!on);
-card.querySelectorAll('[data-bind]').forEach(el=>{
-if(el.closest('.row'))return;
-el.disabled=!on})})}
-function applyFragmentPresetUi(mode){
-const panel=$('sp-tunnel');
-if(!panel)return;
-['lengthMin','lengthMax','delayMin','delayMax'].forEach((k,idx)=>{
-const el=panel.querySelector('[data-bind="fragment.'+k+'"]');
-if(!el)return;
-if(PRESETS[mode]){el.value=String(PRESETS[mode][idx]);el.disabled=true}
-else el.disabled=false});
-panel.querySelectorAll('[data-bind^="fragment."]').forEach(el=>{
-if(el.tagName==='SELECT')el.disabled=mode==='off'})}
-function refreshShowIf(){
-SECTIONS.forEach(s=>s.cards.forEach(c=>c.fields.forEach(f=>{
-if(!f.showIf)return;
-const paths=Array.isArray(f.path)?f.path:[f.path];
-const el=$('sp-'+s.key).querySelector('[data-fpath="'+paths[0]+'"]');
-if(el)el.hidden=!f.showIf(collectSection(s.key))})))}
-function updateEchPreview(){
-document.querySelectorAll('[data-ech-preview]').forEach(el=>{
-const panel=el.closest('[id^="sp-"]');
-const auto=panel?panel.querySelector('[data-bind="echAuto"]'):null;
-const manual=panel?panel.querySelector('[data-bind="echServerName"]'):null;
-const name=manual?String(manual.value||'').trim():'';
-if(name.length>0)el.textContent=t('protocols.ech.preview_manual',{name:name});
-else if(auto&&auto.checked)el.textContent=t('protocols.ech.preview_auto',{name:location.hostname||'worker'});
-else el.textContent=t('protocols.ech.preview_off')})}
-
 function readRemoteCard(c){
 const get=(k)=>{const f=c.querySelector('[data-remote-field="'+k+'"]');return f?f.value.trim():''};
 const raw=(k)=>{const f=c.querySelector('[data-remote-field="'+k+'"]');return f?f.value:''};
@@ -1808,111 +1708,6 @@ if(el.type==='checkbox'){el.checked=!!v;return}
 if(el.tagName==='SELECT'){el.value=String(v);return}
 el.value=v==null?'':Array.isArray(v)?lines(v).join('\n'):String(v);
 if(el.tagName==='INPUT')updateCharCount(el)}
-function collectSection(sec){
-const panel=$('sp-'+sec);
-const out={};
-if(!panel)return out;
-panel.querySelectorAll('[data-bind]').forEach(el=>{
-setPath(out,el.dataset.bind,readBind(el))});
-return out}
-function diffSection(sec){
-const cur=collectSection(sec);
-let snap={};
-try{snap=JSON.parse(S.snap[sec]||'{}')}catch(e){}
-const lc=leaves(cur,'',{}),ls=leaves(snap,'',{});
-const patch={};
-for(const p in lc)if(JSON.stringify(lc[p])!==JSON.stringify(ls[p]))setPath(patch,p,lc[p]);
-return{cur,patch}}
-function markDirty(){
-S.dirty.clear();
-SECTIONS.forEach(s=>{
-try{if(JSON.stringify(collectSection(s.key))!==S.snap[s.key])S.dirty.add(s.key)}catch(e){}});
-scheduleDirtyPush();
-updateApplyBar()}
-function updateApplyBar(){
-const ab=$('apply-btn');
-$('applybar').hidden=S.dirty.size===0;
-if(!ab||ab.dataset.busy==='1'){}
-else{ab.disabled=false;ab.textContent=t('common.apply')}
-const st=urStack(currentSection());
-const ub=$('ur-undo'),rb=$('ur-redo');
-if(ub)ub.disabled=!st.undo.length;
-if(rb)rb.disabled=!st.redo.length;
-document.querySelectorAll('.section-actions__hint').forEach(hint=>{hint.hidden=!S.dirty.has(hint.closest('[id^="sp-"]').id.replace('sp-',''))});
-document.querySelectorAll('#subtabs .subtab').forEach(a=>{const base=a.dataset.label||a.textContent.replace(/ \*$/,'');a.dataset.label=base;a.textContent=base+(S.dirty.has(a.dataset.sec)?' *':'')})}
-function wireApplyBarUr(){
-const bar=$('applybar');
-if(!bar||bar.querySelector('#ur-undo'))return;
-const mk=(id,labelKey,shift)=>{
-const b=document.createElement('button');
-b.type='button';b.id=id;b.className='btn btn--ghost btn--sm';
-b.textContent=t(labelKey);b.setAttribute('aria-label',t(labelKey));
-b.addEventListener('click',()=>{if(shift)redoSection();else undoSection()});
-return b};
-const inner=bar.querySelector('.applybar__inner');
-const ref=$('discard-btn');
-const u=mk('ur-undo','shortcuts.undo',false),r=mk('ur-redo','shortcuts.redo',true);
-if(ref){inner.insertBefore(u,ref);inner.insertBefore(r,ref)}
-else inner.append(u,r);
-updateApplyBar()}
-async function refreshSubUrls(){
-try{sessionStorage.removeItem('qpe:api/bootstrap');sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
-try{const d=await api('api/bootstrap',{fresh:true});S.subs=(d.subUrls&&d.subUrls.urls)||[];renderHome()}catch(e){}}
-async function applySection(sec){
-clearFieldErrors(sec);
-try{
-const{cur,patch}=diffSection(sec);
-if(Object.keys(patch).length===0){markDirty();return}
-await api('api/settings/save',{method:'PUT',body:patch});
-Object.assign(S.set,JSON.parse(JSON.stringify(cur)));
-pushUndo(sec,S.snap[sec]||'{}');
-S.snap[sec]=JSON.stringify(cur);
-markDirty();
- toast(t('toast.settingsSaved'),'ok');
-  if(sec==='general'||sec==='addresses')await refreshSubUrls()}
-catch(e){
-if(e&&e.fields&&Object.keys(e.fields).length){
-let n=0;
-for(const path in e.fields){
-showFieldError(path,e.fields[path]);
-n++}
-toast(t('common.fixErrors',{count:n}),'err')}
-else toastErr(e)}
-finally{updateApplyBar()}}
-function discardSection(sec){
-let snap={};
-try{snap=JSON.parse(S.snap[sec]||'{}')}catch(e){}
-const panel=$('sp-'+sec);
-if(panel)panel.querySelectorAll('[data-bind]').forEach(el=>{
-writeBind(el,getPath(snap,el.dataset.bind));
-clearFieldErrorEl(el)});
-markDirty();
-refreshShowIf();
-updateEchPreview();
-applyProtoDim()}
-function fieldWrapOf(bindEl){
-return bindEl.closest('.field')}
-function showFieldError(path,msg){
-document.querySelectorAll('#settings-panels [data-bind="'+CSS.escape(path)+'"]').forEach(el=>{
-const fw=fieldWrapOf(el);
-if(!fw)return;
-fw.classList.add('field--error');
-const err=fw.querySelector('.field__error');
-if(err)err.textContent=/\s/.test(msg)||!DICT[LANG][msg]&&!DICT.en[msg]?msg:t(msg);
-el.setAttribute('aria-invalid','true');
-const errId='err-'+(++UID);
-err.id=errId;
-el.setAttribute('aria-describedby',errId);
-announce(err.textContent)})}
-function clearFieldErrors(sec){
-const panel=$('sp-'+sec);
-if(!panel)return;
-panel.querySelectorAll('.field--error').forEach(fw=>{
-fw.classList.remove('field--error');
-fw.querySelectorAll('[aria-invalid]').forEach(el=>el.removeAttribute('aria-invalid'))})}
-function clearFieldErrorEl(el){
-const fw=fieldWrapOf(el);
-if(fw)fw.classList.remove('field--error')}
 const RE_DOMAIN=/^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 const RE_IPV4=/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const RE_HOST=/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i;
@@ -1998,12 +1793,226 @@ return m?m[1]:s}
 function genFor(kind){
 if(kind==='uuid')return crypto.randomUUID();
 return randomPass()}
-const SETTINGS_SEC_ALIAS={fragment:'tunnel',chain:'tunnel',sources:'egress'};
-function normalizeSettingsHash(){
-const m=location.hash.match(/^#\/settings\/(fragment|chain|sources)$/);
-if(m)history.replaceState(null,'','#/settings/'+SETTINGS_SEC_ALIAS[m[1]])}
-window.addEventListener('hashchange',normalizeSettingsHash);
-normalizeSettingsHash();
+function collectSection(sec){
+const panel=$('sp-'+sec);
+const out={};
+if(!panel)return out;
+panel.querySelectorAll('[data-bind]').forEach(el=>{
+setPath(out,el.dataset.bind,readBind(el))});
+return out}
+function diffSection(sec){
+const cur=collectSection(sec);
+let snap={};
+try{snap=JSON.parse(S.snap[sec]||'{}')}catch(e){}
+const lc=leaves(cur,'',{}),ls=leaves(snap,'',{});
+const patch={};
+for(const p in lc)if(JSON.stringify(lc[p])!==JSON.stringify(ls[p]))setPath(patch,p,lc[p]);
+return{cur,patch}}
+function sectionOf(src){
+const panel=src&&src.closest?src.closest('[id^="sp-"]'):null;
+if(!panel)return null;
+const key=panel.id.slice(3);
+return SECTIONS.some(s=>s.key===key)?key:null}
+function sectionMatchesSnapshot(sec){
+try{return JSON.stringify(collectSection(sec))===S.snap[sec]}catch(e){return false}}
+function markDirty(source){
+const sec=typeof source==='string'?source:sectionOf(source);
+if(sec){
+if(sectionMatchesSnapshot(sec))S.dirty.delete(sec);
+else S.dirty.add(sec)}
+else{
+S.dirty.clear();
+SECTIONS.forEach(s=>{
+try{if(JSON.stringify(collectSection(s.key))!==S.snap[s.key])S.dirty.add(s.key)}catch(e){}})}
+scheduleDirtyPush();
+updateApplyBar()}
+function updateApplyBar(){
+const ab=$('apply-btn');
+$('applybar').hidden=S.dirty.size===0;
+if(!ab||ab.dataset.busy==='1'){}
+else{ab.disabled=false;ab.textContent=t('common.apply')}
+const st=urStack(currentSection());
+const ub=$('ur-undo'),rb=$('ur-redo');
+if(ub)ub.disabled=!st.undo.length;
+if(rb)rb.disabled=!st.redo.length;
+document.querySelectorAll('.section-actions__hint').forEach(hint=>{hint.hidden=!S.dirty.has(hint.closest('[id^="sp-"]').id.replace('sp-',''))});
+document.querySelectorAll('#subtabs .subtab').forEach(a=>{const base=a.dataset.label||a.textContent.replace(/ \*$/,'');a.dataset.label=base;a.textContent=base+(S.dirty.has(a.dataset.sec)?' *':'')})}
+function wireApplyBarUr(){
+const bar=$('applybar');
+if(!bar||bar.querySelector('#ur-undo'))return;
+const mk=(id,labelKey,shift)=>{
+const b=document.createElement('button');
+b.type='button';b.id=id;b.className='btn btn--ghost btn--sm';
+b.textContent=t(labelKey);b.setAttribute('aria-label',t(labelKey));
+b.addEventListener('click',()=>{if(shift)redoSection();else undoSection()});
+return b};
+const inner=bar.querySelector('.applybar__inner');
+const ref=$('discard-btn');
+const u=mk('ur-undo','shortcuts.undo',false),r=mk('ur-redo','shortcuts.redo',true);
+if(ref){inner.insertBefore(u,ref);inner.insertBefore(r,ref)}
+else inner.append(u,r);
+updateApplyBar()}
+async function refreshSubUrls(){
+try{sessionStorage.removeItem('qpe:api/bootstrap');sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
+try{const d=await api('api/bootstrap',{fresh:true});S.subs=(d.subUrls&&d.subUrls.urls)||[];renderHome()}catch(e){}}
+async function applySection(sec){
+clearFieldErrors(sec);
+try{
+const{cur,patch}=diffSection(sec);
+if(Object.keys(patch).length===0){markDirty(sec);return}
+await api('api/settings/save',{method:'PUT',body:patch});
+Object.assign(S.set,JSON.parse(JSON.stringify(cur)));
+pushUndo(sec,S.snap[sec]||'{}');
+S.snap[sec]=JSON.stringify(cur);
+markDirty(sec);
+ toast(t('toast.settingsSaved'),'ok');
+  if(sec==='general'||sec==='addresses')await refreshSubUrls()}
+catch(e){
+if(e&&e.fields&&Object.keys(e.fields).length){
+let n=0;
+for(const path in e.fields){
+showFieldError(path,e.fields[path]);
+n++}
+toast(t('common.fixErrors',{count:n}),'err')}
+else toastErr(e)}
+finally{updateApplyBar()}}
+function discardSection(sec){
+let snap={};
+try{snap=JSON.parse(S.snap[sec]||'{}')}catch(e){}
+const panel=$('sp-'+sec);
+if(panel)panel.querySelectorAll('[data-bind]').forEach(el=>{
+writeBind(el,getPath(snap,el.dataset.bind));
+clearFieldErrorEl(el)});
+markDirty(sec);
+refreshShowIf();
+updateEchPreview();
+applyProtoDim()}
+function fieldWrapOf(bindEl){
+return bindEl.closest('.field')}
+function showFieldError(path,msg){
+document.querySelectorAll('#settings-panels [data-bind="'+CSS.escape(path)+'"]').forEach(el=>{
+const fw=fieldWrapOf(el);
+if(!fw)return;
+fw.classList.add('field--error');
+const err=fw.querySelector('.field__error');
+if(err)err.textContent=/\s/.test(msg)||!DICT[LANG][msg]&&!DICT.en[msg]?msg:t(msg);
+el.setAttribute('aria-invalid','true');
+const errId='err-'+(++UID);
+err.id=errId;
+el.setAttribute('aria-describedby',errId);
+announce(err.textContent)})}
+function clearFieldErrors(sec){
+const panel=$('sp-'+sec);
+if(!panel)return;
+panel.querySelectorAll('.field--error').forEach(fw=>{
+fw.classList.remove('field--error');
+fw.querySelectorAll('[aria-invalid]').forEach(el=>el.removeAttribute('aria-invalid'))})}
+function clearFieldErrorEl(el){
+const fw=fieldWrapOf(el);
+if(fw)fw.classList.remove('field--error')}
+const UR={};
+function urStack(sec){if(!UR[sec])UR[sec]={undo:[],redo:[]};return UR[sec]}
+function pushUndo(sec,state){
+const st=urStack(sec);
+if(st.undo[st.undo.length-1]===state)return;
+st.undo.push(state);if(st.undo.length>20)st.undo.shift();st.redo.length=0}
+let urBase=null;
+function captureUndoBase(el){
+const panel=el&&el.closest?el.closest('[id^="sp-"]'):null;
+if(!panel)return;
+const sec=panel.id.slice(3);
+if(!SECTIONS.some(s=>s.key===sec))return;
+if(urBase&&urBase.sec===sec)return;
+try{urBase={sec:sec,json:JSON.stringify(collectSection(sec))}}catch(e){}}
+function clearUndoBase(){urBase=null}
+function scheduleDirtyPush(){
+if(!urBase)return;
+pushUndo(urBase.sec,urBase.json);
+urBase=null}
+function restoreSection(sec,json){
+clearUndoBase();
+let snap={};try{snap=JSON.parse(json)}catch(e){return}
+const panel=$('sp-'+sec);if(!panel)return;
+panel.querySelectorAll('[data-bind]').forEach(el=>{
+writeBind(el,getPath(snap,el.dataset.bind));
+clearFieldErrorEl(el)});
+markDirty(sec);
+refreshShowIf();
+updateEchPreview();
+applyProtoDim()}
+function undoSection(){
+const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
+const st=urStack(sec);if(!st.undo.length)return;
+st.redo.push(JSON.stringify(collectSection(sec)));
+restoreSection(sec,st.undo.pop())}
+function redoSection(){
+const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
+const st=urStack(sec);if(!st.redo.length)return;
+st.undo.push(JSON.stringify(collectSection(sec)));
+restoreSection(sec,st.redo.pop())}
+function renderSettings(){
+buildSubtabs();
+const wrap=$('settings-panels');
+wrap.innerHTML='';
+SECTIONS.forEach(s=>{
+const p=document.createElement('div');
+p.id='sp-'+s.key;p.role='tabpanel';p.setAttribute('aria-labelledby','st-'+s.key);
+p.hidden=true;
+let h='';
+if(s.key==='protocols'){
+const protoCards=s.cards.slice(0,4);
+const commonCards=s.cards.slice(4);
+h+='<div class="grid2">';protoCards.forEach(c=>{h+=cardHtml(c)});h+='</div>';
+commonCards.forEach(c=>{h+=cardHtml(c)});
+ } else {
+ s.cards.forEach(c=>{h+=cardHtml(c)});
+ }
+  h='<div class="section-actions"><button type="button" class="btn btn--primary btn--sm" data-action="section-save" data-sec="'+s.key+'">'+esc(t('common.save'))+'</button><span class="section-actions__hint" data-dirty-hint hidden>'+esc(t('common.unsaved'))+'</span></div>'+h;
+  p.innerHTML=h;
+ wrap.appendChild(p)});
+applyFragmentPresetUi(String(getPath(S.set,'fragment.mode')||'off'));
+SECTIONS.forEach(s=>{S.snap[s.key]=JSON.stringify(collectSection(s.key))});
+S.dirty.clear();
+updateApplyBar();
+applyProtoDim();
+syncKillUI();
+refreshShowIf();
+updateEchPreview();
+validateAllLineEditors();
+document.querySelectorAll('#settings-panels .char-count').forEach(cc=>{const inp=$(cc.dataset.countFor);if(inp)updateCharCount(inp)})}
+function applyProtoDim(){
+document.querySelectorAll('[data-proto-card]').forEach(card=>{
+const key=card.dataset.protoCard;
+const on=getPath(S.set,key)!==false;
+card.classList.toggle('card--dim',!on);
+card.querySelectorAll('[data-bind]').forEach(el=>{
+if(el.closest('.row'))return;
+el.disabled=!on})})}
+function applyFragmentPresetUi(mode){
+const panel=$('sp-tunnel');
+if(!panel)return;
+['lengthMin','lengthMax','delayMin','delayMax'].forEach((k,idx)=>{
+const el=panel.querySelector('[data-bind="fragment.'+k+'"]');
+if(!el)return;
+if(PRESETS[mode]){el.value=String(PRESETS[mode][idx]);el.disabled=true}
+else el.disabled=false});
+panel.querySelectorAll('[data-bind^="fragment."]').forEach(el=>{
+if(el.tagName==='SELECT')el.disabled=mode==='off'})}
+function refreshShowIf(){
+SECTIONS.forEach(s=>s.cards.forEach(c=>c.fields.forEach(f=>{
+if(!f.showIf)return;
+const paths=Array.isArray(f.path)?f.path:[f.path];
+const el=$('sp-'+s.key).querySelector('[data-fpath="'+paths[0]+'"]');
+if(el)el.hidden=!f.showIf(collectSection(s.key))})))}
+function updateEchPreview(){
+document.querySelectorAll('[data-ech-preview]').forEach(el=>{
+const panel=el.closest('[id^="sp-"]');
+const auto=panel?panel.querySelector('[data-bind="echAuto"]'):null;
+const manual=panel?panel.querySelector('[data-bind="echServerName"]'):null;
+const name=manual?String(manual.value||'').trim():'';
+if(name.length>0)el.textContent=t('protocols.ech.preview_manual',{name:name});
+else if(auto&&auto.checked)el.textContent=t('protocols.ech.preview_auto',{name:location.hostname||'worker'});
+else el.textContent=t('protocols.ech.preview_off')})}
 function withBusy(el,fn){
 if(!el||el.dataset.busy==='1')return Promise.resolve(false);
 el.dataset.busy='1';el.setAttribute('aria-busy','true');
@@ -2190,7 +2199,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
    if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({},body.children.length));
    const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
-   markDirty()},
+   markDirty(el)},
   'addr-del'(el){
    const card=el.closest('.addr-card'),body=el.closest('[data-addr-body]');
    if(body&&card){card.remove();
@@ -2204,7 +2213,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    if(body.querySelectorAll('.remote-card').length>=20){toast(t('remote.nodes.max'),'err');return}
    body.insertAdjacentHTML('beforeend',remoteNodeCardHtml({},body.children.length));
    const empty=list&&list.querySelector('.remote-empty');if(empty)empty.style.display='none'}
-   markDirty()},
+   markDirty(el)},
   'remote-del'(el){
    const card=el.closest('.remote-card'),body=el.closest('[data-remote-body]');
    if(body&&card){card.remove();
@@ -2216,7 +2225,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
    if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({address:location.hostname},body.children.length));
    const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
-   markDirty()},
+   markDirty(el)},
   'addr-probe'(el){
    withBusy(el,()=>api('api/address-probe',{fresh:true})
    .then(d=>{S.addrHealth=d&&d.results||[];renderAddrDots()})
@@ -2229,7 +2238,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    const ta=document.querySelector('#sp-egress [data-bind="proxyIps"]');
    if(ta&&addr){captureUndoBase(ta);const lines=ta.value.split('\n').map(x=>x.trim()).filter(Boolean);
    if(!lines.some(x=>x.toLowerCase()===addr.toLowerCase())){lines.push(addr);}
-   ta.value=lines.join('\n');markDirty();validateOneEditor(ta)}
+   ta.value=lines.join('\n');markDirty(ta);validateOneEditor(ta)}
    else toastErr()},
   'section-save'(el){withBusy(el,()=>applySection(el.dataset.sec))},
   'change-password'(el){
@@ -2387,7 +2396,7 @@ if(!group)return;
 captureUndoBase(chip);
 group.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked','false'));
 chip.setAttribute('aria-checked','true');
-markDirty();
+markDirty(chip);
 clearTimeout(leTimer);
 if(group.hasAttribute('data-fpreset')){
 applyFragmentPresetUi(chip.dataset.preset)}
@@ -2403,12 +2412,12 @@ return}
 if(e.target.matches('[data-remote-field="kind"]')){
 const card=e.target.closest('.remote-card');
 if(card){const cur=readRemoteCard(card);cur.kind=e.target.value;card.outerHTML=remoteNodeCardHtml(cur,Number(card.dataset.remoteIndex||0))}
-markDirty();return}
-if(e.target.matches('[data-addr-field]')){markDirty();return}
+markDirty(e.target);return}
+if(e.target.matches('[data-addr-field]')){markDirty(e.target);return}
 if(e.target.matches('[data-addr-enabled-input]')){
 const card=e.target.closest('.addr-card');
 if(card){card.dataset.addrEnabled=e.target.checked?'1':'0';card.classList.toggle('addr-card--off',!e.target.checked)}
-markDirty();return}
+markDirty(e.target);return}
 const usel=e.target.closest('[data-user-select]');
 if(usel){if(usel.checked)BULK.add(usel.dataset.userSelect);else BULK.delete(usel.dataset.userSelect);updateBulkBar();return}
 if(e.target.id==='users-select-all'){const ids=(S.users||[]).map(u=>u.id);if(e.target.checked)ids.forEach(id=>BULK.add(id));else BULK.clear();renderUserRows();return}
@@ -2430,12 +2439,12 @@ if(e.target.closest('[data-kill]')){setKillSwitch(e.target.checked);return}
 const bind=e.target.closest('[data-bind]');
 if(bind){
 if(bind.tagName==='TEXTAREA')validateOneEditor(bind);
-markDirty();
+markDirty(bind);
 if(/^vlessEnabled$|^vmessEnabled$|^trojanEnabled$|^ssEnabled$/.test(bind.dataset.bind))applyProtoDim()
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()}}
 function onInput(e){
-if(e.target.matches('[data-remote-field]')){markDirty();return}
-if(e.target.matches('[data-addr-field]')){markDirty();return}
+if(e.target.matches('[data-remote-field]')){markDirty(e.target);return}
+if(e.target.matches('[data-addr-field]')){markDirty(e.target);return}
 const bind=e.target.closest('[data-bind]');
 if(!bind)return;
 if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250)}
@@ -2445,7 +2454,7 @@ const fw=fieldWrapOf(bind);
 if(!msg&&fw&&fw.classList.contains('field--error')){fw.classList.remove('field--error');bind.removeAttribute('aria-invalid')}
 updateCharCount(bind)}
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()
-markDirty()}
+markDirty(bind)}
 let eventsWired=false;
 function wireEvents(){
 if(eventsWired)return;

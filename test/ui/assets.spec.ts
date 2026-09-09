@@ -838,3 +838,74 @@ describe("dead-code resurrection guards", () => {
     }
   });
 });
+
+describe("panel settings split (Task 20)", () => {
+  const panelDir = join(process.cwd(), "src", "ui", "panel");
+  const part = (name: string) => readFileSync(join(panelDir, name), "utf8");
+  const orderOf = () => {
+    const buildScript = readFileSync("scripts/build-single-file.mjs", "utf8");
+    return buildScript.match(/PANEL_JS_ORDER = \[([^\]]+)\]/)?.[1] ?? "";
+  };
+
+  it("registers the split modules in the assembly order at dependency-safe positions", () => {
+    const order = orderOf();
+    const at = (n: string) => order.indexOf(`"${n}"`);
+    for (const f of ["users-modal.js", "sections-registry.js", "fields-render.js", "cards.js", "totp.js", "fields-validate.js", "section-io.js", "sections.js"]) {
+      expect(at(f), `missing from PANEL_JS_ORDER: ${f}`).toBeGreaterThan(-1);
+    }
+    expect(at("home.js")).toBeLessThan(at("sections-registry.js"));
+    expect(at("settings.js")).toBeLessThan(at("sections-registry.js"));
+    expect(at("sections-registry.js")).toBeLessThan(at("fields-render.js"));
+    expect(at("fields-render.js")).toBeLessThan(at("fields-validate.js"));
+    expect(at("fields-validate.js")).toBeLessThan(at("section-io.js"));
+    expect(at("section-io.js")).toBeLessThan(at("sections.js"));
+    expect(at("sections.js")).toBeLessThan(at("actions.js"));
+  });
+
+  it("keeps every settings module under the 300-line target with settings.js as slim glue", () => {
+    const counts: Record<string, number> = {};
+    for (const f of ["settings.js", "sections-registry.js", "fields-render.js", "fields-validate.js", "cards.js", "totp.js", "users-modal.js", "section-io.js", "sections.js"]) {
+      counts[f] = part(f).split("\n").length;
+      expect(counts[f], `${f} over 300 lines`).toBeLessThan(300);
+    }
+    expect(counts["settings.js"]).toBeLessThan(10);
+  });
+
+  it("defines each moved symbol exactly once across the panel corpus (no duplicate declarations)", () => {
+    const corpus = readdirSync(panelDir).map((f: string) => part(f)).join("\n");
+    const symbols = [
+      "SECTIONS", "FL", "bindHtml", "cardHtml", "cardBodyHtml", "renderSettings",
+      "readBind", "writeBind", "collectSection", "diffSection", "markDirty",
+      "applySection", "discardSection", "updateApplyBar", "wireApplyBarUr",
+      "openUserModal", "totpCheck", "totpCardHtml", "renderTotpSetup",
+      "normalizeSettingsHash", "validIpOrHost", "SCALAR_RULES", "urStack",
+      "captureUndoBase", "restoreSection", "undoSection", "redoSection",
+    ];
+    for (const sym of symbols) {
+      const matches = corpus.match(new RegExp(`\b(?:function |const |let )${sym}\b`, "g")) ?? [];
+      expect(matches.length, `${sym} declared ${matches.length} times`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("keeps the single-section dirty fast path on the keystroke surface", () => {
+    const html = ASSETS.panel;
+    expect(html).toContain("function markDirty(source){");
+    expect(html).toContain("typeof source==='string'?source:sectionOf(source)");
+    expect(html).toContain("function sectionOf(");
+    expect(html).toContain("function sectionMatchesSnapshot(");
+    expect(html.match(/markDirty\(e\.target\)/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
+    expect(html).toContain("markDirty(bind)");
+    expect(html).toContain("markDirty(chip)");
+    expect(html).toContain("markDirty(sec)");
+    expect(html).toContain("markDirty(ta)");
+  });
+
+  it("leaves no settings.js sediment behind in the moved modules", () => {
+    expect(part("section-io.js")).toContain("function collectSection(");
+    expect(part("sections-registry.js")).toContain("const SECTIONS=[");
+    expect(part("users-modal.js")).toContain("function openUserModal(");
+    expect(part("totp.js")).toContain("function totpCheck(");
+    expect(part("settings.js")).not.toMatch(/function (?![a-zA-Z]*normalizeSettingsHash)/);
+    expect(part("settings.js")).toContain("normalizeSettingsHash");
+  });
+});

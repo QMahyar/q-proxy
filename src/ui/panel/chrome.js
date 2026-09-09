@@ -39,46 +39,6 @@ $('keys-title').textContent=t('shortcuts.title');
 $('keys-close').textContent=t('common.close');
 const rows=[['Ctrl / \u2318 + S','shortcuts.save'],['g h','shortcuts.home'],['Ctrl / \u2318 + Z','shortcuts.undo'],['Shift + Ctrl / \u2318 + Z','shortcuts.redo']];
 $('keys-body').innerHTML='<table class="tbl"><tbody>'+rows.map(r=>'<tr><td style="white-space:nowrap"><code dir="ltr" class="mono">'+esc(r[0])+'</code></td><td data-l="'+esc(r[0])+'">'+esc(t(r[1]))+'</td></tr>').join('')+'</tbody></table><div class="btn-row" style="margin-block-start:14px"><button type="button" class="btn btn--ghost btn--sm" data-action="wizard-replay" aria-label="'+esc(t('wizard.title'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('wizard.title'))+'</button></div>'}
-const UR={};
-function urStack(sec){if(!UR[sec])UR[sec]={undo:[],redo:[]};return UR[sec]}
-function pushUndo(sec,state){
-const st=urStack(sec);
-if(st.undo[st.undo.length-1]===state)return;
-st.undo.push(state);if(st.undo.length>20)st.undo.shift();st.redo.length=0}
-let urBase=null;
-function captureUndoBase(el){
-const panel=el&&el.closest?el.closest('[id^="sp-"]'):null;
-if(!panel)return;
-const sec=panel.id.slice(3);
-if(!SECTIONS.some(s=>s.key===sec))return;
-if(urBase&&urBase.sec===sec)return;
-try{urBase={sec:sec,json:JSON.stringify(collectSection(sec))}}catch(e){}}
-function clearUndoBase(){urBase=null}
-function scheduleDirtyPush(){
-if(!urBase)return;
-pushUndo(urBase.sec,urBase.json);
-urBase=null}
-function restoreSection(sec,json){
-clearUndoBase();
-let snap={};try{snap=JSON.parse(json)}catch(e){return}
-const panel=$('sp-'+sec);if(!panel)return;
-panel.querySelectorAll('[data-bind]').forEach(el=>{
-writeBind(el,getPath(snap,el.dataset.bind));
-clearFieldErrorEl(el)});
-markDirty();
-refreshShowIf();
-updateEchPreview();
-applyProtoDim()}
-function undoSection(){
-const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
-const st=urStack(sec);if(!st.undo.length)return;
-st.redo.push(JSON.stringify(collectSection(sec)));
-restoreSection(sec,st.undo.pop())}
-function redoSection(){
-const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
-const st=urStack(sec);if(!st.redo.length)return;
-st.undo.push(JSON.stringify(collectSection(sec)));
-restoreSection(sec,st.redo.pop())}
 let lastG=0;
 function isEditable(el){return el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable)}
 function globalKeys(e){

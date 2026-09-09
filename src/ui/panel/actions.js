@@ -184,7 +184,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
    if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({},body.children.length));
    const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
-   markDirty()},
+   markDirty(el)},
   'addr-del'(el){
    const card=el.closest('.addr-card'),body=el.closest('[data-addr-body]');
    if(body&&card){card.remove();
@@ -198,7 +198,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    if(body.querySelectorAll('.remote-card').length>=20){toast(t('remote.nodes.max'),'err');return}
    body.insertAdjacentHTML('beforeend',remoteNodeCardHtml({},body.children.length));
    const empty=list&&list.querySelector('.remote-empty');if(empty)empty.style.display='none'}
-   markDirty()},
+   markDirty(el)},
   'remote-del'(el){
    const card=el.closest('.remote-card'),body=el.closest('[data-remote-body]');
    if(body&&card){card.remove();
@@ -210,7 +210,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
    if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({address:location.hostname},body.children.length));
    const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
-   markDirty()},
+   markDirty(el)},
   'addr-probe'(el){
    withBusy(el,()=>api('api/address-probe',{fresh:true})
    .then(d=>{S.addrHealth=d&&d.results||[];renderAddrDots()})
@@ -223,7 +223,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    const ta=document.querySelector('#sp-egress [data-bind="proxyIps"]');
    if(ta&&addr){captureUndoBase(ta);const lines=ta.value.split('\n').map(x=>x.trim()).filter(Boolean);
    if(!lines.some(x=>x.toLowerCase()===addr.toLowerCase())){lines.push(addr);}
-   ta.value=lines.join('\n');markDirty();validateOneEditor(ta)}
+   ta.value=lines.join('\n');markDirty(ta);validateOneEditor(ta)}
    else toastErr()},
   'section-save'(el){withBusy(el,()=>applySection(el.dataset.sec))},
   'change-password'(el){
@@ -381,7 +381,7 @@ if(!group)return;
 captureUndoBase(chip);
 group.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked','false'));
 chip.setAttribute('aria-checked','true');
-markDirty();
+markDirty(chip);
 clearTimeout(leTimer);
 if(group.hasAttribute('data-fpreset')){
 applyFragmentPresetUi(chip.dataset.preset)}
@@ -397,12 +397,12 @@ return}
 if(e.target.matches('[data-remote-field="kind"]')){
 const card=e.target.closest('.remote-card');
 if(card){const cur=readRemoteCard(card);cur.kind=e.target.value;card.outerHTML=remoteNodeCardHtml(cur,Number(card.dataset.remoteIndex||0))}
-markDirty();return}
-if(e.target.matches('[data-addr-field]')){markDirty();return}
+markDirty(e.target);return}
+if(e.target.matches('[data-addr-field]')){markDirty(e.target);return}
 if(e.target.matches('[data-addr-enabled-input]')){
 const card=e.target.closest('.addr-card');
 if(card){card.dataset.addrEnabled=e.target.checked?'1':'0';card.classList.toggle('addr-card--off',!e.target.checked)}
-markDirty();return}
+markDirty(e.target);return}
 const usel=e.target.closest('[data-user-select]');
 if(usel){if(usel.checked)BULK.add(usel.dataset.userSelect);else BULK.delete(usel.dataset.userSelect);updateBulkBar();return}
 if(e.target.id==='users-select-all'){const ids=(S.users||[]).map(u=>u.id);if(e.target.checked)ids.forEach(id=>BULK.add(id));else BULK.clear();renderUserRows();return}
@@ -424,12 +424,12 @@ if(e.target.closest('[data-kill]')){setKillSwitch(e.target.checked);return}
 const bind=e.target.closest('[data-bind]');
 if(bind){
 if(bind.tagName==='TEXTAREA')validateOneEditor(bind);
-markDirty();
+markDirty(bind);
 if(/^vlessEnabled$|^vmessEnabled$|^trojanEnabled$|^ssEnabled$/.test(bind.dataset.bind))applyProtoDim()
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()}}
 function onInput(e){
-if(e.target.matches('[data-remote-field]')){markDirty();return}
-if(e.target.matches('[data-addr-field]')){markDirty();return}
+if(e.target.matches('[data-remote-field]')){markDirty(e.target);return}
+if(e.target.matches('[data-addr-field]')){markDirty(e.target);return}
 const bind=e.target.closest('[data-bind]');
 if(!bind)return;
 if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250)}
@@ -439,7 +439,7 @@ const fw=fieldWrapOf(bind);
 if(!msg&&fw&&fw.classList.contains('field--error')){fw.classList.remove('field--error');bind.removeAttribute('aria-invalid')}
 updateCharCount(bind)}
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()
-markDirty()}
+markDirty(bind)}
 let eventsWired=false;
 function wireEvents(){
 if(eventsWired)return;

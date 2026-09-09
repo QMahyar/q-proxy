@@ -1,0 +1,93 @@
+const FL=(path,type,label,hint,extra)=>Object.assign({path,type,label,hint:hint||null},extra||{});
+
+const SECTIONS=[
+{key:'general',cards:[
+{title:null,fields:[
+FL('profileTitle','str','general.profileTitle.label','general.profileTitle.hint',{maxLen:64}),
+FL('debugLogging','bool','general.debugLogging.label','general.debugLogging.hint'),
+FL('allowedIps','list','security.allowlist.label','security.allowlist.hint')]},
+{title:'address.panelTitle',panelAddr:true,fields:[]},
+{title:'general.danger.title',danger:true,fields:[]},
+{title:'general.backup.title',backup:true,fields:[]},{title:'security.title',security:true,fields:[]},{title:'totp.title',totpCard:true,fields:[]}]},
+{key:'protocols',cards:[
+{title:'protocols.vless.title',protoCard:'vlessEnabled',fields:[
+FL('vlessEnabled','bool',null,null,{protoLabelKey:'protocols.vless.title'}),
+FL('vlessUuid','secret','protocols.uuid',null,{gen:'uuid',copy:true}),
+FL('vlessPath','str','protocols.path.label','protocols.path.hint',{mono:true}),
+FL('vlessFlow','select','protocols.flow.label','protocols.flow.hint',{opts:[['','protocols.flow.off'],['xtls-rprx-vision','protocols.flow.vision']]})]},
+{title:'protocols.vmess.title',protoCard:'vmessEnabled',fields:[
+FL('vmessEnabled','bool',null,null,{protoLabelKey:'protocols.vmess.title'}),
+FL('vmessUuid','secret','protocols.uuid',null,{gen:'uuid',copy:true}),
+FL('vmessPath','str','protocols.path.label','protocols.path.hint',{mono:true})]},
+{title:'protocols.trojan.title',protoCard:'trojanEnabled',fields:[
+FL('trojanEnabled','bool',null,null,{protoLabelKey:'protocols.trojan.title'}),
+FL('trojanPassword','secret','protocols.password',null,{gen:'pass',copy:true}),
+FL('trojanPath','str','protocols.path.label','protocols.path.hint',{mono:true})]},
+{title:'protocols.ss.title',protoCard:'ssEnabled',fields:[
+FL('ssEnabled','bool',null,null,{protoLabelKey:'protocols.ss.title'}),
+FL('ssPassword','secret','protocols.password',null,{gen:'pass',copy:true}),
+FL('ssMethod','select','protocols.cipher',null,{opts:SS_METHODS}),
+FL('ssPath','str','protocols.path.label','protocols.path.hint',{mono:true}),
+FL('ssDirect','bool','protocols.ssDirect.label','protocols.ssDirect.hint')]},
+{title:'protocols.common.title',fields:[
+FL('earlyDataEnabled','bool','protocols.earlyData.label','protocols.earlyData.hint'),
+FL('earlyDataMaxBytes','num','protocols.earlyData.max',null,{min:0,max:8192})]},
+{title:'protocols.advTls.title',advTls:true,fields:[
+FL('fingerprint','select','protocols.fingerprint.label',null,{opts:FPS}),
+FL('randomizeSniCase','bool','protocols.sniCase.label','protocols.sniCase.hint'),
+FL('echEnabled','bool','protocols.ech.label','protocols.ech.short',{help:'protocols.ech.help'}),
+FL('echAuto','bool','protocols.ech.auto','protocols.ech.auto_hint',{help:'protocols.ech.auto_help'}),
+FL('echServerName','str','protocols.ech.server','protocols.ech.server_hint',{maxLen:253,vtype:'domain',preview:'ech'}),
+FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
+  {key:'addresses',cards:[
+  {title:'addresses.card.title',fields:[
+  FL('addresses','addrList','addresses.card.label','addresses.card.hint',{help:'addresses.card.help'}),
+  FL('defaultPort','select','addresses.defaultPort.label','addresses.defaultPort.hint',{opts:[[443,'443'],[2053,'2053'],[2083,'2083'],[2087,'2087'],[2096,'2096'],[8443,'8443']]}),
+  FL('nameTemplate','str','addresses.nameTemplate.label','addresses.nameTemplate.hint',{mono:true,maxLen:512})]},
+  {title:'addresses.remoteSubs.label',fields:[
+  FL('remoteSubUrls','list','addresses.remoteSubs.label','addresses.remoteSubs.hint',{validate:'url'})]},
+  {title:'remote.nodes.title',fields:[
+  FL('remoteNodes','remoteList','remote.nodes.label','remote.nodes.hint',{help:'remote.nodes.help'})]}]},
+  {key:'egress',cards:[
+  {title:'egress.mode.title',fields:[
+  FL('proxyIpMode','chips','egress.mode.label',null,{opts:[['proxyip','egress.mode.list'],['nat64','egress.mode.nat64']]}),
+  FL('proxyIps','list','egress.list.label','egress.list.short',{validate:'host_port',help:'egress.list.help',showIf:v=>getPath(v,'proxyIpMode')!=='nat64'}),
+  FL('nat64Prefixes','list','egress.nat64.label','egress.nat64.short',{validate:'ipv6_prefix',help:'egress.nat64.help',showIf:v=>getPath(v,'proxyIpMode')==='nat64'}),
+  FL('proxyIpPoolUrl','str','egress.poolUrl.label','egress.poolUrl.hint',{mono:true})]},
+  {title:'egress.pool.title',pool:true,fields:[]}]},
+{key:'tunnel',cards:[
+{title:'fragment.card.title',fields:[
+FL('fragment.mode','fpreset',null,null),
+FL('fragment.packets','select','fragment.packets',null,{opts:PACKETS}),
+FL(['fragment.lengthMin','fragment.lengthMax'],'range','fragment.length',null),
+FL(['fragment.delayMin','fragment.delayMax'],'range','fragment.delay',null),
+FL(['fragment.maxSplitMin','fragment.maxSplitMax'],'range','fragment.split',null)]},
+{title:'chain.card.title',fields:[
+FL('chainProxy.enabled','bool','chain.enable',null),
+FL('chainProxy.uri','str','chain.uri.label','chain.uri.hint',{mono:true})]}]},
+{key:'advanced',cards:[
+{title:'advanced.doh.label',fields:[
+FL('dohUpstream','str','advanced.doh.label','advanced.doh.short',{mono:true,help:'advanced.doh.help'}),
+FL('remoteDns','str','advanced.remoteDns.label',null,{mono:true}),
+FL('enableUdp53','bool','advanced.udp53.label','advanced.udp53.hint'),
+FL('__privateDoh','copyonly','advanced.doh.private',null)]},
+{title:'advanced.tg.title',tgActions:true,fields:[
+FL('telegram.enabled','bool','advanced.tg.enabled','advanced.tg.hint'),
+FL('telegram.botToken','secret','advanced.tg.token',null,{copy:true}),
+FL('telegram.chatId','str','advanced.tg.chat_id',null,{mono:true})]},
+{title:'advanced.behavior.title',fields:[
+FL('urlTestIntervalSec','num','advanced.urlTest.label',null,{min:60,max:86400}),
+FL('subUpdateIntervalHours','num','advanced.subInterval.label',null,{min:1,max:168}),
+FL('maxNodesPerFormat','num','advanced.maxNodes.label',null,{min:1,max:2000})]},
+{title:'advanced.camouflage.label',fields:[
+FL('camouflage.mode','select','advanced.camouflage.label',null,{opts:[['off','advanced.camouflage.none'],['static','advanced.camouflage.static'],['proxy','advanced.camouflage.proxy']]}),
+FL('camouflage.url','str','advanced.camouflage.url',null,{mono:true}),
+FL('speedtestIntercept','bool','advanced.speedtest.label','advanced.speedtest.short',{help:'advanced.speedtest.help'})]},
+{title:'routing.title',fields:[
+FL('routingRules.bypassLan','bool','routing.bypassLan.label','routing.bypassLan.hint'),
+FL('routingRules.blockQuic','bool','routing.blockQuic.label','routing.blockQuic.hint'),
+FL('routingRules.blockAds','bool','routing.blockAds.label','routing.blockAds.hint'),
+FL('routingRules.blockMalware','bool','routing.blockMalware.label','routing.blockMalware.hint'),
+FL('routingRules.customBypass','list','routing.customBypass.label','routing.customBypass.short',{help:'routing.customBypass.help'}),
+ FL('routingRules.customBlock','list','routing.customBlock.label','routing.customBlock.short',{help:'routing.customBlock.help'})]}]},
+  ];

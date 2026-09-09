@@ -13,7 +13,7 @@ const PANEL_HTML = resolve(root, "src/ui/panel.html");
 const PANEL_HEAD_MARKER = "<!--panel:head-js-->";
 const PANEL_CSS_MARKER = "<!--panel:css-->";
 const PANEL_JS_MARKER = "<!--panel:js-->";
-const PANEL_JS_ORDER = ["dict.js", "format-labels.js", "lib.js", "a11y.js", "qr.js", "states.js", "home.js", "warp.js", "users.js", "subs.js", "share.js", "chrome.js", "settings.js", "actions.js"];
+const PANEL_JS_ORDER = ["dict.js", "format-labels.js", "lib.js", "a11y.js", "qr.js", "states.js", "home.js", "warp.js", "users.js", "users-modal.js", "subs.js", "share.js", "chrome.js", "settings.js", "sections-registry.js", "fields-render.js", "cards.js", "totp.js", "fields-validate.js", "section-io.js", "sections.js", "actions.js"];
 
 function panelPart(name) {
   const text = readFileSync(join(PANEL_DIR, name), "utf8");
