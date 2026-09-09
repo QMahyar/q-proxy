@@ -37,7 +37,7 @@ Dev server: `wrangler-dev-8799` background task → http://127.0.0.1:8799 · cre
 
 ## Phase 5 — Verification & release
 - [x] Task 21: scripts/ui-walk.mjs visual regression suite ✅ 12/12 steps × 3 consecutive runs PASS, exit 0, 0 console errors; `npm run test:ui`; report .pi/ui-audit/ui-walk-report.json
-- [ ] Task 22: CHANGELOG + guides + version bump/tag
+- [x] Task 22: CHANGELOG + version bump v1.5.0 ✅ released (tag pushed, release script green)
 
 ## Status log
 - [ ] plan written (this commit)
