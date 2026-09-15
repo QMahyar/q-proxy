@@ -8,14 +8,15 @@ try{p=typeof fn==='function'?fn():Promise.resolve(fn)}catch(err){release();throw
 return Promise.resolve(p).then(v=>{release();return v===undefined?true:v},e=>{release();throw e})}
 const ACTIONS={
 copy(el){
+if(el.dataset.busy==='1')return;
 const valEl=el.dataset.copyId?$(el.dataset.copyId):null;
 const val=el.dataset.copyValue||(valEl?valEl.textContent:'');
-el.dataset.busy='1';
+el.dataset.busy='1';el.setAttribute('aria-busy','true');
 let p;
 try{p=copyText(val||'')}catch(err){p=Promise.resolve(false)}
 p.then(ok=>{
-delete el.dataset.busy;
-if(!ok){toast(t('toast.networkError'),'err');return}
+delete el.dataset.busy;el.removeAttribute('aria-busy');
+if(!ok){toast(t('share.copy_failed'),'err');return}
 el.classList.add('copied');
 const use=el.querySelector('use');
 if(use){use.setAttribute('href','#i-check');setTimeout(()=>{use.setAttribute('href','#i-copy');el.classList.remove('copied')},900)}
@@ -96,8 +97,8 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  'warp-regen'(el){
  confirmDialog('warp.confirm.regen_title','warp.confirm.regen_body',true).then(async yes=>{
  if(!yes)return;
- try{await withBusy(el,()=>api('api/warp/account/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));
- toast(t('users.toast.regen'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})},
+ try{const d=await withBusy(el,()=>api('api/warp/account/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));
+ const tok=d&&d.token;if(tok&&S.warp){const url=warpSubUrl(tok,'wireguard-conf');openShareSheet({title:t('share.title_rotated'),url:url,fileName:'warp-'+el.dataset.id+'.conf',note:'once'})}else toast(t('warp.toast.regen')||t('users.toast.regen'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})},
  'warp-delete'(el){
  confirmDialog('warp.confirm.delete_title','warp.confirm.delete_body',true).then(async yes=>{
  if(!yes)return;
@@ -148,12 +149,17 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  'users-del'(el){
  confirmDialog('users.confirm_delete_title','users.confirm_delete_body',true).then(async yes=>{
  if(!yes)return;
- try{await withBusy(el,()=>api('api/users/'+el.dataset.id,{method:'DELETE',mutate:true}));toast(t('users.toast.deleted'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
+ try{await withBusy(el,()=>api('api/users/'+el.dataset.id,{method:'DELETE',mutate:true}));toast(t('users.toast.deleted'),'ok');invalidateUsersCache();await loadUsers()}catch(err){toastErr(err)}})},
  'users-regen'(el){
  confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
  if(!yes)return;
  try{const d=await withBusy(el,()=>api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));const tok=d&&d.token;if(tok)openShareSheet({title:t('share.title_rotated'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'});else toast(t('users.toast.regen'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
+  'subs-user-copy'(el){
+ confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
+ if(!yes)return;
+ try{const d=await withBusy(el,()=>api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));const tok=d&&d.token;if(tok)openShareSheet({title:t('share.title_rotated'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'});else toast(t('users.toast.regen'),'ok');await loadUsers();await loadSubsUsers()}catch(err){toastErr(err)}})},
  'shortcuts'(){renderShortcuts();openModal('m-keys')},
+  'boot-retry'(){boot()},
  'close-keys'(){closeModal('m-keys')},
  'wizard-skip'(){wizardDone()},
  'wizard-protocols'(){wizardDone();location.hash='#/settings/protocols'},
@@ -311,7 +317,7 @@ try{const d=await withBusy(el,()=>api('api/users/bulk',{method:'POST',body:{ids:
 BULK.clear();updateBulkBar();
 let msg=t('users.bulk.done',{updated:d.updated,deleted:d.deleted});
 if(d.unknown)msg+=t('users.bulk.unknown',{unknown:d.unknown});
-toast(msg,'ok');await loadUsers()}
+toast(msg,'ok');invalidateUsersCache();await loadUsers()}
 catch(err){toastErr(err)}}
 function forceFlagged(){
 if(S.set&&S.set.passwordIsBootstrap===true)return true;
@@ -356,11 +362,31 @@ if(el){
 const fn=ACTIONS[el.dataset.action];
 if(fn)fn(el);
 return}
+const retry=e.target.closest('[data-retry]');
+if(retry){
+const k=retry.getAttribute('data-retry');
+if(k==='home-pool')loadHomePool();
+else if(k==='home-users'){invalidateUsersCache();loadHomeUsers()}
+else if(k==='my-ip')loadMyIp();
+else if(k==='subs-users'){const box=$('subs-users');if(box)box.innerHTML=loadingBox({rows:2,label:'common.loading'});invalidateUsersCache();loadSubsUsers()}
+return}
+const wretry=e.target.closest('[data-warp-retry]');
+if(wretry){wretry.disabled=true;retryWarp(wretry.getAttribute('data-warp-retry')||'');return}
+const expChip=e.target.closest('[data-expiry-preset]');
+if(expChip){
+const v=expChip.getAttribute('data-expiry-preset');
+const inp=$('mu-expiry');
+if(inp){
+if(v==='')inp.value='';
+else{const d=new Date();d.setDate(d.getDate()+Number(v));d.setSeconds(0,0);inp.value=toLocalInputValue(d.getTime())}
+expChip.parentElement.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked','false'));
+expChip.setAttribute('aria-checked','true')}
+return}
 const chip=e.target.closest('[data-chip]');
 if(chip){handleChip(chip);return}
 const mode=e.target.closest('[data-mode]');
 if(mode){
-S.subMode=mode.dataset.mode;
+S.subMode=mode.dataset.mode;try{localStorage.setItem('qp_submode',S.subMode)}catch(err){}
 mode.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===mode)));
 const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
 document.querySelectorAll('#home-body [id^="sub-u"] code').forEach((code,i)=>{
@@ -427,19 +453,20 @@ if(bind.tagName==='TEXTAREA')validateOneEditor(bind);
 markDirty(bind);
 if(/^vlessEnabled$|^vmessEnabled$|^trojanEnabled$|^ssEnabled$/.test(bind.dataset.bind))applyProtoDim()
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()}}
+let dirtyTimer=null;
 function onInput(e){
-if(e.target.matches('[data-remote-field]')){markDirty(e.target);return}
-if(e.target.matches('[data-addr-field]')){markDirty(e.target);return}
+if(e.target.matches('[data-remote-field]')){clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(e.target),120);return}
+if(e.target.matches('[data-addr-field]')){clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(e.target),120);return}
 const bind=e.target.closest('[data-bind]');
 if(!bind)return;
-if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250)}
+if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250);clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(bind),120);return}
 else if(bind.tagName==='INPUT'){
 const msg=scalarError(bind);
 const fw=fieldWrapOf(bind);
 if(!msg&&fw&&fw.classList.contains('field--error')){fw.classList.remove('field--error');bind.removeAttribute('aria-invalid')}
 updateCharCount(bind)}
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()
-markDirty(bind)}
+clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(bind),120)}
 let eventsWired=false;
 function wireEvents(){
 if(eventsWired)return;
@@ -453,12 +480,10 @@ const el=e.target;
 if(el&&el.dataset&&el.dataset.bind&&el.tagName==='INPUT')blurValidateEl(el)});
 $('m-confirm').addEventListener('click',e=>{if(e.target===$('m-confirm'))settleConfirm(false)});
 $('m-share').addEventListener('click',e=>{if(e.target===$('m-share'))closeModal('m-share')});
-$('m-share').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-share'),e)});
 $('cf-cancel').addEventListener('click',()=>settleConfirm(false));
 $('cf-ok').addEventListener('click',()=>settleConfirm(true));
-$('m-share').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-share'),e)});
 $('m-confirm').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-confirm'),e)});
-['m-warp-generate','m-warp-import','m-warp-preset','m-user','m-share','m-keys'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($(id),e)}));
+['m-warp-generate','m-warp-import','m-warp-preset','m-user','m-share','m-keys','m-wizard'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus(el,e)})});
 document.addEventListener('keydown',globalKeys);
 document.addEventListener('keydown',e=>{
 if(e.key==='Escape'){
@@ -476,18 +501,14 @@ window.addEventListener('beforeunload',e=>{
 if(S.dirty.size){e.preventDefault();e.returnValue=''}});
 wireTabKeys($('nav'),'.tab');
 wireTabKeys($('subtabs'),'.subtab');
-$('wg-go').addEventListener('click',async()=>{
-const btn=$('wg-go');btn.disabled=true;
+$('wg-go').addEventListener('click',()=>withBusy($('wg-go'),async()=>{
 try{const d=await api('api/warp/account/generate',{method:'POST',body:{name:$('wg-name').value.trim()}});
 closeModal('m-warp-generate');toast(t('warp.toast.generated'),'ok');invalidateWarp();location.hash='#/warp/'+d.account.id}
-catch(err){toastErr(err)}
-finally{btn.disabled=false}});
-$('wi-go').addEventListener('click',async()=>{
-const btn=$('wi-go');btn.disabled=true;
+catch(err){toastErr(err)}}));
+$('wi-go').addEventListener('click',()=>withBusy($('wi-go'),async()=>{
 try{const d=await api('api/warp/account/import',{method:'POST',body:{name:$('wi-name').value.trim(),config:$('wi-config').value}});
 closeModal('m-warp-import');toast(t('warp.toast.imported'),'ok');invalidateWarp();location.hash='#/warp/'+d.account.id}
-catch(err){if(err&&err.fields&&err.fields.config){$('wi-error').textContent=err.fields.config;$('wi-error').style.display='block'}else toastErr(err)}
-finally{btn.disabled=false}});
+catch(err){if(err&&err.fields&&err.fields.config){$('wi-error').textContent=err.fields.config;$('wi-error').style.display='block';const ta=$('wi-config');if(ta){ta.setAttribute('aria-invalid','true');const eid='err-wi';$('wi-error').id=eid;ta.setAttribute('aria-describedby',eid);announce($('wi-error').textContent)}}else toastErr(err)}}));
 $('wp-go').addEventListener('click',async()=>{
 const btn=$('wp-go');btn.disabled=true;
 const m=$('m-warp-preset');const editId=m.dataset.presetId||'';
@@ -520,8 +541,10 @@ bar.addEventListener('keydown',e=>{
 const tabs=[...bar.querySelectorAll(sel)];
 const idx=tabs.indexOf(document.activeElement);
 if(idx<0)return;
+const rtl=document.documentElement.dir==='rtl';
 let next=null;
-if(e.key==='ArrowRight'||e.key==='ArrowLeft')next=(idx+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+if((e.key==='ArrowRight'&&!rtl)||(e.key==='ArrowLeft'&&rtl))next=(idx+1)%tabs.length;
+else if((e.key==='ArrowLeft'&&!rtl)||(e.key==='ArrowRight'&&rtl))next=(idx-1+tabs.length)%tabs.length;
 else if(e.key==='Home')next=0;
 else if(e.key==='End')next=tabs.length-1;
 if(next!=null){e.preventDefault();tabs[next].focus();tabs[next].click()}})}
@@ -530,7 +553,7 @@ openShareSheet({url:url})}
 function currentSection(){
 const r=parseRoute();
 return r.view==='settings'?r.sec:'general'}
-function renderBootSkeleton(){const body=$('home-body');if(!body)return;body.innerHTML='<div class="skel-card"><div class="skel-row"><div class="skeleton skel-avatar"></div><div class="skel-col"><div class="skeleton skel-a"></div><div class="skeleton skel-b"></div><div class="skeleton skel-c"></div></div></div><div class="skeleton skel-pill"></div></div><div class="skel-card"><div class="skeleton skel-a"></div><div class="skeleton skel-b"></div><div class="skeleton skel-c"></div><div class="skeleton skel-a"></div></div>'}
+function renderBootSkeleton(){const body=$('home-body');if(!body)return;body.innerHTML='<div class="loading-box" role="status">'+loadingBox({rows:4,label:'common.loading'})+'</div>'}
 async function boot(){
 buildShell();
 wireEvents();
@@ -545,6 +568,7 @@ if(e&&e.status===401)return;
 if(e&&e.code==='PASSWORD_CHANGE_REQUIRED')return;
 S.set={};
 toastErr(e);
+const body=$('home-body');if(body)body.innerHTML=errorCard({title:'common.error',msg:e&&e.status===0?'toast.networkError':null,retryAction:'data-action="boot-retry"'});
 return}
 try{if(!/(?:^|;\s*)qp_lang=(en|fa)/.test(document.cookie)&&S.set&&(S.set.language==='en'||S.set.language==='fa')){LANG=S.set.language;setLangCookie(LANG);document.documentElement.lang=LANG;document.documentElement.dir=LANG==='fa'?'rtl':'ltr';buildShell()}}catch(e){}
 if(forceFlagged())showForceChange();

@@ -12,6 +12,7 @@ const picked=u&&u.protocols!=='all'?u.protocols:['all'];
 document.querySelectorAll('#mu-protocols input[type=checkbox]').forEach(i=>{i.checked=picked.includes(i.value)});
 $('mu-limit').value=u&&u.dailyReqLimit!=null?String(u.dailyReqLimit):'';
 $('mu-expiry').value=u&&u.expiresAt!=null?toLocalInputValue(u.expiresAt):'';
+const expPresets=$('mu-expiry-presets');if(expPresets)expPresets.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked','false'));
 $('mu-ov-label').textContent=t('users.override.label');
 $('mu-ov-hint').textContent=t('users.override.hint');
 $('mu-ov-address-label').textContent=t('addresses.field.address');
@@ -21,7 +22,10 @@ const ov=u&&u.addressOverride?u.addressOverride:null;
 $('mu-ov-address').value=ov&&ov.address?ov.address:'';
 $('mu-ov-port').value=ov&&ov.port?String(ov.port):'';
 $('mu-ov-label2').value=ov&&ov.label?ov.label:'';
+const det=$('mu-ov-details');if(det)det.open=!!ov;
 const dl=$('mu-ov-options');
 if(dl){dl.innerHTML=(S.set.addresses||[]).map(function(a){if(a.enabled===false)return '';return '<option value="'+esc(String(a.address||'').replace(/(:\d+)$/,''))+'"></option>'}).join('')}
+const qhint=$('mu-limit-hint');if(qhint&&u&&u.todayHits!=null)qhint.textContent=t('users.limit_none')+' '+t('users.limit_reset')+' ('+t('users.today_hits',{n:fmtInt(u.todayHits)})+')';
+else if(qhint)qhint.textContent=t('users.limit_none')+' '+t('users.limit_reset');
 $('mu-error').style.display='';$('mu-error').textContent='';
 openModal('m-user')}

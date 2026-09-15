@@ -1,5 +1,5 @@
 function helpTrigger(key){
-return '<span class="help-wrap"><button type="button" class="help-trigger" aria-label="'+esc(t('common.help'))+'"><svg aria-hidden="true"><use href="#i-info"/></svg></button><span class="help-pop" role="tooltip">'+esc(t(key))+'</span></span>'}
+const hid=nextId('help');return '<span class="help-wrap"><button type="button" class="help-trigger" aria-label="'+esc(t('common.help'))+'" aria-describedby="'+hid+'"><svg aria-hidden="true"><use href="#i-info"/></svg></button><span class="help-pop" role="tooltip" id="'+hid+'">'+esc(t(key))+'</span></span>'}
 function fieldWrap(id,label,hint,helpKey,countMax){
 let lbl='';
 if(label){

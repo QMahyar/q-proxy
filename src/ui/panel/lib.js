@@ -14,6 +14,8 @@ function removeToast(){if(removed)return;removed=true;clearTimeout(timer);el.cla
 timer=setTimeout(removeToast,total);
 el.addEventListener('mouseenter',()=>{clearTimeout(timer);left-=Date.now()-start;if(bar)bar.style.animationPlayState='paused'});
 el.addEventListener('mouseleave',()=>{start=Date.now();timer=setTimeout(removeToast,Math.max(600,left));if(bar)bar.style.animationPlayState='running'});
+el.addEventListener('focusin',()=>{clearTimeout(timer);left-=Date.now()-start;if(bar)bar.style.animationPlayState='paused'});
+el.addEventListener('focusout',()=>{start=Date.now();timer=setTimeout(removeToast,Math.max(600,left));if(bar)bar.style.animationPlayState='running'});
 el.querySelector('.toast__close').addEventListener('click',removeToast)}
 const API_TTL=30000;const apiInflight=new Map();
 async function api(p,o={}){
@@ -40,9 +42,9 @@ const toastErrDirect=toastErr;
 toastErr=function(e){if(e&&e.handled)return;toastErrDirect(e)}
 
 let modalReturnFocus=null;
-function openModal(id){modalReturnFocus=document.activeElement;const m=$(id);m.hidden=false;const f=m.querySelector('button,input,[href],[tabindex]');if(f)f.focus()}
+function openModal(id){modalReturnFocus=document.activeElement;const m=$(id);m.hidden=false;const f=m.querySelector('button,input,select,textarea,a[href],[tabindex]:not([tabindex="-1"])');if(f)f.focus()}
 function closeModal(id){const m=$(id);m.hidden=true;if(modalReturnFocus&&modalReturnFocus.focus)modalReturnFocus.focus();modalReturnFocus=null}
-function trapFocus(modal,e){const list=[...modal.querySelectorAll('button,input,[href],[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&x.offsetParent!==null);if(!list.length)return;const first=list[0],last=list[list.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
+function trapFocus(modal,e){const list=[...modal.querySelectorAll('button,input,select,textarea,a[href],[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&x.offsetParent!==null);if(!list.length)return;const first=list[0],last=list[list.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
 let confirmResolve=null;
 function confirmDialog(titleKey,bodyKey,danger,params){$('cf-title').textContent=t(titleKey,params);$('cf-body').textContent=t(bodyKey,params);$('cf-cancel').textContent=t('common.cancel');const ok=$('cf-ok');ok.textContent=t('confirm.yes');ok.className='btn '+(danger?'btn--ghost-danger':'btn--primary');openModal('m-confirm');setTimeout(()=>$('cf-cancel').focus(),0);return new Promise(res=>{confirmResolve=res})}
 function settleConfirm(v){if(confirmResolve){const r=confirmResolve;confirmResolve=null;$('m-confirm').hidden=true;if(modalReturnFocus&&modalReturnFocus.focus)modalReturnFocus.focus();modalReturnFocus=null;r(v)}}

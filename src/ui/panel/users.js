@@ -41,18 +41,18 @@ function usersCardHtml(){
 return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('users.desc'))+'</div></div><div class="btn-row">'+usersSearchHtml()+'<span id="users-capacity-slot">'+usersCapacityChip(0)+'</span><button type="button" class="btn btn--primary btn--sm" data-action="users-add">'+esc(t('users.add'))+'</button></div></div><div class="bulkbar" id="users-bulk" hidden><span class="stat-chip" id="users-bulk-count"></span><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-enable">'+esc(t('users.bulk.enable'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-disable">'+esc(t('users.bulk.disable'))+'</button><input type="datetime-local" class="input" id="users-bulk-expiry" aria-label="'+esc(t('users.expiry'))+'"><button type="button" class="btn btn--ghost btn--sm" data-action="users-bulk-extend">'+esc(t('users.bulk.extend'))+'</button><button type="button" class="btn btn--ghost-danger btn--sm" data-action="users-bulk-del">'+esc(t('users.bulk.delete'))+'</button></div><table class="tbl"><thead id="users-thead"><tr><th><input type="checkbox" id="users-select-all" aria-label="'+esc(t('users.col.select'))+'"></th><th>'+esc(t('users.col.name'))+'</th><th>'+esc(t('users.col.token'))+'</th><th>'+esc(t('users.col.expires'))+'</th><th>'+esc(t('users.col.quota'))+'</th><th>'+esc(t('users.col.scope'))+'</th><th>'+esc(t('users.col.enabled'))+'</th><th>'+esc(t('users.col.actions'))+'</th></tr></thead><tbody id="users-rows"><tr><td colspan="8">'+loadingBox({label:'common.loading'})+'</td></tr></tbody></table></section>'}
 function wireUsersSearch(){
 const inp=$('users-search');if(!inp||inp.dataset.wired)return;
-inp.dataset.wired='1';inp.addEventListener('input',function(){USERS_QUERY=inp.value;renderUserRows()})}
+inp.dataset.wired='1';let t=null;inp.addEventListener('input',function(){clearTimeout(t);const v=inp.value;t=setTimeout(function(){USERS_QUERY=v;renderUserRows()},150)})}
 function usersFiltered(){
 const q=USERS_QUERY.trim().toLowerCase();
 if(!q)return S.users;
-return S.users.filter(function(u){return u.name.toLowerCase().indexOf(q)>=0})}
+return S.users.filter(function(u){return u.name.toLowerCase().indexOf(q)>=0||String(u.tokenHint||'').toLowerCase().indexOf(q)>=0})}
 function userRowHtml(u){
-const hint='<div class="btn-row"><code dir="ltr" class="mono" style="font-size:var(--fs-sm)" title="'+esc(t('users.token.hint_title'))+'">'+esc(u.tokenHint||'')+'</code><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-regen" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.token.regen'))+'" title="'+esc(t('users.token.regen'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button></div>';
-const acts='<div class="btn-row"><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-edit" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.edit'))+'"><svg aria-hidden="true"><use href="#i-edit"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="users-del" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>';
-const sw='<label class="switch"><input type="checkbox" role="switch" data-user-toggle="'+esc(u.id)+'"'+(u.enabled?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span></label>';
+const hint='<div class="btn-row"><code dir="ltr" class="mono" style="font-size:var(--fs-sm)" title="'+esc(t('users.token.hint_title'))+'">'+esc(u.tokenHint||'')+'</code><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-regen" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.token.regen')+': '+u.name)+'" title="'+esc(t('users.token.regen')+': '+u.name)+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button></div>';
+const acts='<div class="btn-row"><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="users-edit" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.edit')+': '+u.name)+'" title="'+esc(t('users.edit')+': '+u.name)+'"><svg aria-hidden="true"><use href="#i-edit"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="users-del" data-id="'+esc(u.id)+'" aria-label="'+esc(t('users.delete')+': '+u.name)+'" title="'+esc(t('users.delete')+': '+u.name)+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div>';
+const sw='<label class="switch"><input type="checkbox" role="switch" data-user-toggle="'+esc(u.id)+'" aria-label="'+esc(u.name)+'" '+(u.enabled?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span></label>';
 const badge=u.protocols!=='all'?userOverrideBadge():'';
-const absDate=u.expiresAt!=null?new Date(u.expiresAt).toLocaleString():'';
-return '<tr><td data-l="'+esc(t('users.col.select'))+'"><input type="checkbox" data-user-select="'+esc(u.id)+'"'+(BULK.has(u.id)?' checked':'')+' aria-label="'+esc(t('users.col.select'))+'"></td><td data-l="'+esc(t('users.col.name'))+'" style="max-width:10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(u.name)+badge+'</td>'
+const absDate=u.expiresAt!=null?new Date(u.expiresAt).toLocaleString(LANG==='fa'?'fa-IR':'en-US'):'';
+return '<tr><td data-l="'+esc(t('users.col.select'))+'"><input type="checkbox" data-user-select="'+esc(u.id)+'"'+(BULK.has(u.id)?' checked':'')+' aria-label="'+esc(t('users.col.select')+': '+u.name)+'"></td><td data-l="'+esc(t('users.col.name'))+'" style="max-width:10rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(u.name)+badge+'</td>'
 +'<td data-l="'+esc(t('users.col.token'))+'" dir="ltr">'+hint+'</td>'
 +'<td data-l="'+esc(t('users.col.expires'))+'" title="'+esc(absDate)+'">'+fmtExpiry(u.expiresAt)+'</td>'
 +'<td data-l="'+esc(t('users.col.quota'))+'">'+fmtQuota(u)+'</td>'
@@ -62,9 +62,16 @@ return '<tr><td data-l="'+esc(t('users.col.select'))+'"><input type="checkbox" d
 let usersLoadFailed=false;
 let USERS_QUERY='';
 const BULK=new Set();
+let usersPromise=null;let usersCacheAt=0;
+function loadUsersShared(fresh){
+if(!fresh&&usersPromise&&Date.now()-usersCacheAt<30000)return usersPromise;
+usersPromise=(async()=>{const d=await api('api/users');S.users=d.users||[];usersCacheAt=Date.now();return S.users})().catch(e=>{usersPromise=null;throw e});
+if(fresh)usersCacheAt=0;
+return usersPromise}
+function invalidateUsersCache(){usersPromise=null;usersCacheAt=0;try{sessionStorage.removeItem('qpc:api/users');sessionStorage.removeItem('qpe:api/users')}catch(e){}}
 async function loadUsers(){
 usersLoadFailed=false;
-try{const d=await api('api/users',{fresh:true});S.users=d.users||[];if(typeof renderHomeUsers==='function')renderHomeUsers()}catch(e){usersLoadFailed=true}
+try{const d=await api('api/users');S.users=d.users||[];usersPromise=Promise.resolve(S.users);usersCacheAt=Date.now();if(typeof renderHomeUsers==='function')renderHomeUsers()}catch(e){usersLoadFailed=true;usersPromise=null}
 for(const id of[...BULK])if(!S.users.some(u=>u.id===id))BULK.delete(id);
 renderUserRows()}
 function usersEmptyHtml(){

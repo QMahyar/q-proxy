@@ -35,7 +35,7 @@ function updateApplyBar(){
 const ab=$('apply-btn');
 $('applybar').hidden=S.dirty.size===0;
 if(!ab||ab.dataset.busy==='1'){}
-else{ab.disabled=false;ab.textContent=t('common.apply')}
+else{ab.disabled=false;const n=S.dirty.size;ab.textContent=n>1?t('common.apply_count',{n:n}):t('common.apply');ab.title=n>1?[...S.dirty].join(', '):''}
 const st=urStack(currentSection());
 const ub=$('ur-undo'),rb=$('ur-redo');
 if(ub)ub.disabled=!st.undo.length;
@@ -58,8 +58,7 @@ if(ref){inner.insertBefore(u,ref);inner.insertBefore(r,ref)}
 else inner.append(u,r);
 updateApplyBar()}
 async function refreshSubUrls(){
-try{sessionStorage.removeItem('qpe:api/bootstrap');sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
-try{const d=await api('api/bootstrap',{fresh:true});S.subs=(d.subUrls&&d.subUrls.urls)||[];renderHome()}catch(e){}}
+try{const d=await api('api/bootstrap');S.subs=(d.subUrls&&d.subUrls.urls)||[];renderHome()}catch(e){toastErr(e)}}
 async function applySection(sec){
 clearFieldErrors(sec);
 try{
@@ -149,9 +148,9 @@ function undoSection(){
 const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
 const st=urStack(sec);if(!st.undo.length)return;
 st.redo.push(JSON.stringify(collectSection(sec)));
-restoreSection(sec,st.undo.pop())}
+restoreSection(sec,st.undo.pop());announce(t('shortcuts.undo'))}
 function redoSection(){
 const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
 const st=urStack(sec);if(!st.redo.length)return;
 st.undo.push(JSON.stringify(collectSection(sec)));
-restoreSection(sec,st.redo.pop())}
+restoreSection(sec,st.redo.pop());announce(t('shortcuts.redo'))}
