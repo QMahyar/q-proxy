@@ -6,15 +6,10 @@ import type { Settings } from "../types/settings";
 import { encodeUtf8Base64 } from "../utils/base64";
 import { buildShareUris } from "../nodes/share-uri";
 import { EMITTERS } from "../nodes/emitters/registry";
-import { fetchRemoteSubLines } from "./merge";
 
 export const SUB_CONTENT_TYPES: Record<SubFormat, string> = {
   base64: "text/plain; charset=utf-8",
-  clash: "text/yaml; charset=utf-8",
   singbox: "application/json; charset=utf-8",
-  surge: "text/plain; charset=utf-8",
-  loon: "text/plain; charset=utf-8",
-  quantumult: "text/plain; charset=utf-8",
 };
 
 export interface RenderSubInput {
@@ -36,8 +31,6 @@ export function selectVariantNodes(
 export function emitterOptions(input: RenderSubInput): EmitOptions {
   const s = input.settings;
   return {
-    remoteDns: s.remoteDns,
-    urlTestIntervalSec: s.urlTestIntervalSec,
     isFragment: input.isFragmentMode,
     subscriptionUrl: input.subscriptionUrl,
     updateIntervalHours: s.subUpdateIntervalHours,
@@ -54,19 +47,13 @@ export async function renderSubscriptionBody(input: RenderSubInput): Promise<str
   const opts = emitterOptions(input);
   if (input.format === "base64") {
     const visible = base64VisibleNodes(input.nodes, input.isFragmentMode);
-    const [ownLines, remoteLines] = await Promise.all([
-      Promise.resolve(buildShareUris(visible)),
-      fetchRemoteSubLines(input.settings.remoteSubUrls, input.settings.subUpdateIntervalHours * 3600),
-    ]);
-    return encodeUtf8Base64([...ownLines, ...remoteLines].join("\n"));
+    return encodeUtf8Base64(buildShareUris(visible).join("\n"));
   }
   return EMITTERS[input.format](input.nodes, opts);
 }
 
 function base64VisibleNodes(nodes: readonly ProxyNode[], isFragmentMode: boolean): ProxyNode[] {
-  const visible = tlsRequiredNodes(nodes, isFragmentMode);
-  const nonSs = visible.filter((n) => n.kind !== "ss");
-  return nonSs.length > 0 || visible.length === 0 ? nonSs : visible;
+  return tlsRequiredNodes(nodes, isFragmentMode);
 }
 
 export function makeEdgeCacheKey(req: Request, format: SubFormat, isFragmentMode: boolean, token?: string): Request {

@@ -7,15 +7,9 @@ import {
   handleTelegramSetup,
   handleTelegramWebhook,
   normalizeTelegramChatId,
-  runExpirySweep,
   telegramMenuKeyboard,
   telegramWebhookSecret,
-  userExpiringSoon,
-  userQuotaExhausted,
 } from "../../../src/handlers/api/telegram";
-import { USERS_KEY, clearUsersMemoForTests } from "../../../src/users/store";
-import type { UserAccount } from "../../../src/users/store";
-import { dayKeyUtc } from "../../../src/utils/time";
 
 const BOT_TOKEN = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const CHAT_ID = "424242";
@@ -99,7 +93,6 @@ beforeEach(() => {
   respond = () => new Response(JSON.stringify({ ok: true, result: true }), { status: 200 });
   stubFetch();
   invalidateSettingsCache();
-  clearUsersMemoForTests();
 });
 
 afterEach(() => {
@@ -181,15 +174,24 @@ describe("handleTelegramWebhook", () => {
     await handleTelegramWebhook(webhookRequest("/sub", CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings());
     const sent = await lastSent();
     const text = String(sent.body.text);
-    expect(text).toContain("https://panel.example.com/testpath/sub?target=clash");
+    expect(text).toContain("https://panel.example.com/testpath/sub?target=singbox");
+    expect(text).not.toContain("?target=clash");
     expect(text).toContain("Base64/Mixed");
   });
 
-  it("reports counts on /usage", async () => {
+  it("answers removed commands (/usage, /expiry) with the trimmed help text", async () => {
     const secret = await telegramWebhookSecret(SESSION_SECRET);
-    await handleTelegramWebhook(webhookRequest("/usage", CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings());
-    const sent = await lastSent();
-    expect(String(sent.body.text)).toMatch(/^Today: \d+ requests\nTotal: \d+ requests$/);
+    for (const text of ["/usage", "/expiry"]) {
+      calls = [];
+      await handleTelegramWebhook(webhookRequest(text, CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings());
+      const sent = await lastSent();
+      const body = String(sent.body.text);
+      expect(body).toContain("/status");
+      expect(body).toContain("/sub");
+      expect(body).toContain("/kill");
+      expect(body).not.toContain("/usage");
+      expect(body).not.toContain("/expiry");
+    }
   });
 
   it("sends help text for unknown or empty commands", async () => {
@@ -230,10 +232,10 @@ describe("handleTelegramWebhook", () => {
   it("matches @usernames case-insensitively when stored mixed-case", async () => {
     const secret = await telegramWebhookSecret(SESSION_SECRET);
     const settings = makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "@OpsAlerts" } });
-    const res = await handleTelegramWebhook(usernameWebhookRequest("/usage", "opsalerts", secret), new FakeKV().asEnv() as never, settings);
+    const res = await handleTelegramWebhook(usernameWebhookRequest("/status", "opsalerts", secret), new FakeKV().asEnv() as never, settings);
     expect(res.status).toBe(200);
     const sent = await lastSent();
-    expect(String(sent.body.text)).toMatch(/^Today: \d+ requests/);
+    expect(String(sent.body.text)).toMatch(/^Version: /);
   });
 
   it("still rejects a different @username regardless of case", async () => {
@@ -335,158 +337,6 @@ describe("telegram admin endpoints", () => {
   });
 });
 
-const HASH_A = "a".repeat(64);
-const HASH_B = "b".repeat(64);
-const HASH_C = "c".repeat(64);
-
-function userRow(overrides: Partial<UserAccount> = {}): UserAccount {
-  return {
-    id: "00000000-0000-4000-8000-000000000000",
-    name: "alice",
-    tokenHash: HASH_A,
-    tokenHint: "deadbeef…",
-    enabled: true,
-    expiresAt: null,
-    dailyReqLimit: null,
-    protocols: "all",
-    createdAt: new Date().toISOString(),
-    ...overrides,
-  };
-}
-
-function seedUsers(kv: FakeKV, users: UserAccount[]): void {
-  kv.map.set(USERS_KEY, JSON.stringify(users));
-}
-
-function seedUsage(kv: FakeKV, hash: string, hits: number): void {
-  kv.map.set(`qproxy:user-usage:${dayKeyUtc()}:${hash}`, JSON.stringify(hits));
-}
-
-describe("expiry alert composers", () => {
-  it("composes expiring-soon alerts in english with singular/plural days", () => {
-    expect(userExpiringSoon({ name: "alice" }, 3, "en")).toBe('User "alice" expires in 3 days');
-    expect(userExpiringSoon({ name: "alice" }, 1, "en")).toBe('User "alice" expires in 1 day');
-    expect(userExpiringSoon({ name: "alice" }, 0, "en")).toBe('User "alice" expires today');
-  });
-
-  it("defaults to english and composes quota alerts", () => {
-    expect(userExpiringSoon({ name: "bob" }, 2)).toBe('User "bob" expires in 2 days');
-    expect(userQuotaExhausted({ name: "bob" })).toBe('User "bob" has exhausted the daily quota');
-  });
-
-  it("composes both alerts in persian", () => {
-    expect(userExpiringSoon({ name: "alice" }, 3, "fa")).toBe('کاربر "alice" تا 3 روز دیگر منقضی می‌شود');
-    expect(userQuotaExhausted({ name: "alice" }, "fa")).toBe('کاربر "alice" سقف مصرف روزانه را تمام کرد');
-  });
-});
-
-describe("handleTelegramWebhook /expiry", () => {
-  it("ignores /expiry from other chats", async () => {
-    const secret = await telegramWebhookSecret(SESSION_SECRET);
-    const res = await handleTelegramWebhook(webhookRequest("/expiry", 999999, secret), new FakeKV().asEnv() as never, makeSettings());
-    expect(res.status).toBe(200);
-    expect(((await res.json()) as { data: unknown }).data).toEqual({});
-    expect(calls.length).toBe(0);
-  });
-
-  it("lists expiring and over-quota users but skips healthy ones", async () => {
-    const kv = new FakeKV();
-    seedUsers(kv, [
-      userRow({ id: "user-alice", name: "alice", tokenHash: HASH_A, expiresAt: Date.now() + 3 * 86400000 }),
-      userRow({ id: "user-bob", name: "bob", tokenHash: HASH_B, dailyReqLimit: 10 }),
-      userRow({ id: "user-carol", name: "carol", tokenHash: HASH_C }),
-    ]);
-    seedUsage(kv, HASH_B, 9);
-    const secret = await telegramWebhookSecret(SESSION_SECRET);
-    await handleTelegramWebhook(webhookRequest("/expiry", CHAT_ID, secret), kv.asEnv() as never, makeSettings());
-    const sent = await lastSent();
-    const text = String(sent.body.text);
-    expect(text).toContain("alice");
-    expect(text).toContain("bob");
-    expect(text).not.toContain("carol");
-  });
-
-  it("reports empty state when nobody is expiring or over quota", async () => {
-    const kv = new FakeKV();
-    seedUsers(kv, [userRow({ id: "user-carol", name: "carol", tokenHash: HASH_C })]);
-    const secret = await telegramWebhookSecret(SESSION_SECRET);
-    await handleTelegramWebhook(webhookRequest("/expiry", CHAT_ID, secret), kv.asEnv() as never, makeSettings());
-    const sent = await lastSent();
-    expect(String(sent.body.text)).toContain("No users");
-  });
-
-  it("replies to /expiry in persian when settings.language is fa", async () => {
-    const kv = new FakeKV();
-    seedUsers(kv, [userRow({ id: "user-alice", name: "alice", tokenHash: HASH_A, expiresAt: Date.now() + 2 * 86400000 })]);
-    const secret = await telegramWebhookSecret(SESSION_SECRET);
-    await handleTelegramWebhook(webhookRequest("/expiry", CHAT_ID, secret), kv.asEnv() as never, makeSettings({ language: "fa" }));
-    const sent = await lastSent();
-    expect(String(sent.body.text)).toContain("alice");
-    expect(String(sent.body.text)).toContain("منقضی");
-  });
-});
-
-describe("runExpirySweep", () => {
-  it("is a no-op when the bot is disabled or unbound", async () => {
-    const kv = new FakeKV();
-    seedUsers(kv, [userRow({ id: "user-alice", name: "alice", tokenHash: HASH_A, expiresAt: Date.now() + 86400000 })]);
-    const off = await runExpirySweep(kv.asEnv() as never, makeSettings({ telegram: { enabled: false, botToken: BOT_TOKEN, chatId: CHAT_ID } }));
-    expect(off).toEqual({ sent: 0, skipped: 0 });
-    const unbound = await runExpirySweep(kv.asEnv() as never, makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "" } }));
-    expect(unbound).toEqual({ sent: 0, skipped: 0 });
-    expect(calls.length).toBe(0);
-  });
-
-  it("alerts expiring and exhausted users once per day", async () => {
-    const kv = new FakeKV();
-    seedUsers(kv, [
-      userRow({ id: "user-alice", name: "alice", tokenHash: HASH_A, expiresAt: Date.now() + 2 * 86400000 }),
-      userRow({ id: "user-bob", name: "bob", tokenHash: HASH_B, dailyReqLimit: 10 }),
-      userRow({ id: "user-carol", name: "carol", tokenHash: HASH_C }),
-    ]);
-    seedUsage(kv, HASH_B, 10);
-    const first = await runExpirySweep(kv.asEnv() as never, makeSettings());
-    expect(first).toEqual({ sent: 2, skipped: 0 });
-    expect(calls.length).toBe(2);
-    const texts = calls.map((c) => String((JSON.parse(String(c.init!.body)) as { text: string }).text));
-    expect(texts.some((t) => t.includes("alice"))).toBe(true);
-    expect(texts.some((t) => t.includes("bob"))).toBe(true);
-    expect(calls.every((c) => (JSON.parse(String(c.init!.body)) as { chat_id: string }).chat_id === CHAT_ID)).toBe(true);
-    const day = dayKeyUtc();
-    for (const key of [`qproxy:notify-sent:${day}:user-alice:expiry`, `qproxy:notify-sent:${day}:user-bob:quota`]) {
-      expect(kv.map.has(key)).toBe(true);
-      expect(kv.putOptions.get(key)).toEqual({ expirationTtl: 48 * 3600 });
-    }
-    const second = await runExpirySweep(kv.asEnv() as never, makeSettings());
-    expect(second).toEqual({ sent: 0, skipped: 2 });
-    expect(calls.length).toBe(2);
-  });
-
-  it("warns at 80% quota in /expiry but does not sweep until exhausted", async () => {
-    const kv = new FakeKV();
-    seedUsers(kv, [userRow({ id: "user-bob", name: "bob", tokenHash: HASH_B, dailyReqLimit: 10 })]);
-    seedUsage(kv, HASH_B, 8);
-    const swept = await runExpirySweep(kv.asEnv() as never, makeSettings());
-    expect(swept).toEqual({ sent: 0, skipped: 0 });
-    expect(calls.length).toBe(0);
-    const secret = await telegramWebhookSecret(SESSION_SECRET);
-    await handleTelegramWebhook(webhookRequest("/expiry", CHAT_ID, secret), kv.asEnv() as never, makeSettings());
-    const sent = await lastSent();
-    expect(String(sent.body.text)).toContain("bob");
-  });
-
-  it("skips already-expired and far-future users", async () => {
-    const kv = new FakeKV();
-    seedUsers(kv, [
-      userRow({ id: "user-old", name: "old", tokenHash: HASH_A, expiresAt: Date.now() - 1000 }),
-      userRow({ id: "user-far", name: "far", tokenHash: HASH_B, expiresAt: Date.now() + 30 * 86400000 }),
-    ]);
-    const res = await runExpirySweep(kv.asEnv() as never, makeSettings());
-    expect(res).toEqual({ sent: 0, skipped: 0 });
-    expect(calls.length).toBe(0);
-  });
-});
-
 function callbackRequest(
   data: unknown,
   chatId: number | string,
@@ -509,15 +359,11 @@ function sentTo(method: string): Array<{ url: string; body: Record<string, unkno
 }
 
 describe("telegram menu keyboard", () => {
-  it("exposes the six namespaced payloads across three rows of two", () => {
+  it("exposes the four surviving payloads (status, sub, kill on/off)", () => {
     const keyboard = telegramMenuKeyboard();
-    expect(keyboard.inline_keyboard).toHaveLength(3);
-    for (const row of keyboard.inline_keyboard) expect(row).toHaveLength(2);
     expect(keyboard.inline_keyboard.flat().map((b) => b.callback_data)).toEqual([
       "tg:status",
-      "tg:usage",
       "tg:sub",
-      "tg:expiry",
       "tg:kill-on",
       "tg:kill-off",
     ]);
@@ -640,7 +486,7 @@ describe("handleTelegramWebhook callback_query", () => {
   it("sends a fresh keyboard message when the callback carries no message", async () => {
     const secret = await telegramWebhookSecret(SESSION_SECRET);
     await handleTelegramWebhook(
-      callbackRequest("tg:usage", Number(CHAT_ID), secret, null),
+      callbackRequest("tg:status", Number(CHAT_ID), secret, null),
       new FakeKV().asEnv() as never,
       makeSettings(),
     );
@@ -648,7 +494,7 @@ describe("handleTelegramWebhook callback_query", () => {
     expect(sentTo("editMessageText")).toHaveLength(0);
     const sent = sentTo("sendMessage");
     expect(sent).toHaveLength(1);
-    expect(String(sent[0]!.body.text)).toMatch(/^Today: \d+ requests/);
+    expect(String(sent[0]!.body.text)).toMatch(/^Version: /);
     expect(sent[0]!.body.chat_id).toBe(CHAT_ID);
     const markup = sent[0]!.body.reply_markup as { inline_keyboard: unknown };
     expect(markup.inline_keyboard).toEqual(telegramMenuKeyboard().inline_keyboard);

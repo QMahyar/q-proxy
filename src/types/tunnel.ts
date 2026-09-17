@@ -9,7 +9,7 @@ export interface Socket {
   close(): Promise<void>;
 }
 
-export type EgressVia = "direct" | "chain" | "proxyip" | "nat64";
+export type EgressVia = "direct" | "proxyip";
 
 export interface EgressCandidate {
   via: EgressVia;

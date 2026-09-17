@@ -86,49 +86,12 @@ function parseEndpoints(value: unknown, field: string): WarpEndpoint[] {
   return out;
 }
 
-async function resolveEndpointList(
-  env: Parameters<RouteHandler>[1],
-  value: unknown,
-): Promise<WarpAccount["endpoint_list"]> {
-  if (value !== null && typeof value === "object") {
-    const v = value as Record<string, unknown>;
-    if (v.type === "custom") {
-      return { type: "custom", custom_endpoints: parseEndpoints(v.custom_endpoints, "endpoint_list") };
-    }
-    if (v.type === "preset" && typeof v.preset_id === "string") {
-      const presets = await listPresets(env);
-      if (!presets.some((p) => p.id === v.preset_id)) {
-        throw new ValidationError({ endpoint_list: "unknown preset" });
-      }
-      return { type: "preset", preset_id: v.preset_id };
-    }
-  }
-  throw new ValidationError({ endpoint_list: "must be {type:'preset',preset_id} or {type:'custom',custom_endpoints}" });
-}
-
-async function buildAccount(
-  env: Parameters<RouteHandler>[1],
-  body: Record<string, unknown>,
-  config: WarpAccount["config"],
-  amnezia: AmneziaParams | null,
-  defaultEndpointList?: WarpAccount["endpoint_list"],
-): Promise<WarpAccount> {
+async function buildAccount(body: Record<string, unknown>, config: WarpAccount["config"]): Promise<WarpAccount> {
   const name = typeof body.name === "string" && body.name.trim().length > 0 ? body.name.trim().slice(0, 100) : `Account ${Date.now()}`;
-  const endpoint_list =
-    body.endpoint_list === undefined
-      ? defaultEndpointList ?? ({ type: "preset", preset_id: "default" } as const)
-      : await resolveEndpointList(env, body.endpoint_list);
+  const endpoint_list = { type: "preset", preset_id: "default" } as const;
   let dns: string | null = null;
   if (typeof body.dns === "string" && body.dns.trim().length > 0) {
     dns = body.dns.trim().slice(0, 253);
-  }
-  let amnezia_overrides: AmneziaParams | null = amnezia;
-  if (body.amnezia_overrides !== undefined && body.amnezia_overrides !== null) {
-    const shaped = asAmneziaParams(body.amnezia_overrides);
-    if (shaped === null) throw new ValidationError({ amnezia_overrides: "must be an object" });
-    const check = validateAmnezia(shaped);
-    if (!check.ok) throw new ValidationError(check.fields);
-    amnezia_overrides = check.value;
   }
   return {
     id: newAccountId(),
@@ -139,7 +102,7 @@ async function buildAccount(
     warp_token: null,
     config,
     endpoint_list,
-    amnezia_overrides,
+    amnezia_overrides: null,
     dns,
   };
 }
@@ -162,7 +125,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
     if (rest[1] === "generate" && rest.length === 2 && method === "POST") {
       if ((await listAccounts(env)).length >= 100) throw new ValidationError({ account: "too many warp accounts (max 100)" });
       const body = await readJsonObject(req);
-      const account = await buildAccount(env, body, PLACEHOLDER_CONFIG, null);
+      const account = await buildAccount(body, PLACEHOLDER_CONFIG);
       let reg: Awaited<ReturnType<typeof registerWarpDevice>>;
       try {
         reg = await registerWarpDevice();
@@ -191,15 +154,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
           ? parseWarpConfig(rawConfig)
           : parseWarpJson(rawConfig);
       if (!parsed.ok) throw new ValidationError({ config: parsed.reason });
-      if (parsed.amnezia_overrides !== null) {
-        const check = validateAmnezia(parsed.amnezia_overrides);
-        if (!check.ok) throw new ValidationError(check.fields);
-      }
-      const defaultEndpointList: WarpAccount["endpoint_list"] | undefined =
-        parsed.endpoints !== undefined && parsed.endpoints.length > 0
-          ? { type: "custom", custom_endpoints: parsed.endpoints }
-          : undefined;
-      const account = await buildAccount(env, body, parsed.config, parsed.amnezia_overrides, defaultEndpointList);
+      const account = await buildAccount(body, parsed.config);
       await storeAccount(env, account);
       audit("warp.account.import", { ip: clientIp(req), id: account.id });
       return jsonOk({ account: sanitizeAccount(account) });
@@ -214,20 +169,8 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
       if (rest.length === 2 && method === "PUT") {
         const body = await readJsonObject(req);
         if (body.name !== undefined) account.name = requireString(body.name, "name");
-        if (body.endpoint_list !== undefined) account.endpoint_list = await resolveEndpointList(env, body.endpoint_list);
         if (body.dns !== undefined) {
           account.dns = typeof body.dns === "string" && body.dns.trim().length > 0 ? body.dns.trim().slice(0, 253) : null;
-        }
-        if (body.amnezia_overrides !== undefined) {
-          if (body.amnezia_overrides === null) {
-            account.amnezia_overrides = null;
-          } else {
-            const shaped = asAmneziaParams(body.amnezia_overrides);
-            if (shaped === null) throw new ValidationError({ amnezia_overrides: "must be an object" });
-            const check = validateAmnezia(shaped);
-            if (!check.ok) throw new ValidationError(check.fields);
-            account.amnezia_overrides = check.value;
-          }
         }
         await storeAccount(env, account);
         await purgeWarpSub(origin, s.securePath, account.token).catch(() => {});
@@ -292,9 +235,10 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
         return jsonOk({ preset: presets[index] });
       }
       if (method === "DELETE") {
-        const accounts = await listAccounts(env);
-        const inUse = accounts.some((a) => a.endpoint_list.type === "preset" && a.endpoint_list.preset_id === id);
-        if (inUse) throw new ValidationError({ preset: "preset is in use by an account" });
+        const selected: unknown = (s as unknown as { warpPresets?: unknown }).warpPresets;
+        if (Array.isArray(selected) && selected.includes(id)) {
+          throw new ValidationError({ preset: "preset is selected globally" });
+        }
         presets.splice(index, 1);
         await savePresets(env, presets);
         void purgeAll();
@@ -307,7 +251,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
   if (rest[0] === "settings" && rest[1] === "amnezia") {
     if (rest.length === 2 && method === "GET") {
       const global = await getGlobalSettings(env);
-      return jsonOk({ amnezia: global.amnezia });
+      return jsonOk({ amnezia: global.amnezia, amneziaEnabled: global.amneziaEnabled });
     }
     if (rest.length === 2 && method === "PUT") {
       const body = await readJsonObject(req);
@@ -315,10 +259,15 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
       if (shaped === null) throw new ValidationError({ amnezia: "must be an object" });
       const check = validateAmnezia(shaped);
       if (!check.ok) throw new ValidationError(check.fields);
-      await setGlobalSettings(env, { amnezia: check.value });
+      let amneziaEnabled = (await getGlobalSettings(env)).amneziaEnabled;
+      if (body.amneziaEnabled !== undefined) {
+        if (typeof body.amneziaEnabled !== "boolean") throw new ValidationError({ amneziaEnabled: "must be a boolean" });
+        amneziaEnabled = body.amneziaEnabled;
+      }
+      await setGlobalSettings(env, { amnezia: check.value, amneziaEnabled });
       void purgeAll();
       audit("warp.amnezia.update", { ip: clientIp(req) });
-      return jsonOk({ amnezia: check.value });
+      return jsonOk({ amnezia: check.value, amneziaEnabled });
     }
   }
 

@@ -7,6 +7,41 @@ type PlainObject = Record<string, unknown>;
 type MigrationStep = (data: unknown) => unknown;
 
 export const MIGRATIONS: Record<number, MigrationStep> = {
+  2: (data) => {
+    if (!isPlainObject(data)) return data;
+    const out: PlainObject = { ...data };
+    for (const key of [
+      "vmessEnabled",
+      "trojanEnabled",
+      "ssEnabled",
+      "vmessUuid",
+      "trojanPassword",
+      "ssPassword",
+      "ssMethod",
+      "ssDirect",
+      "vmessPath",
+      "trojanPath",
+      "ssPath",
+      "proxyIpMode",
+      "nat64Prefixes",
+      "chainProxy",
+      "remoteDns",
+      "urlTestIntervalSec",
+      "remoteNodes",
+      "remoteSubUrls",
+      "speedtestIntercept",
+      "totp",
+    ]) {
+      delete out[key];
+    }
+    if (isPlainObject(out.camouflage)) {
+      const camo: PlainObject = { ...(out.camouflage as PlainObject) };
+      delete camo.url;
+      if (camo.mode === "proxy") camo.mode = "static";
+      out.camouflage = camo;
+    }
+    return out;
+  },
   1: (data) => {
     if (!isPlainObject(data)) return data;
     const out: PlainObject = { ...data };

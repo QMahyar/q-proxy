@@ -8,11 +8,10 @@ function subUrl(securePath: string, token: string, format: string): string {
 export async function purgeWarpSub(origin: string, securePath: string, token: string): Promise<void> {
   if (typeof caches === "undefined") return;
   const cache = caches.default;
+  const query = { ignoreSearch: true } as CacheQueryOptions;
   await Promise.all(
     WARP_FORMATS.map((f) =>
-      cache
-        .delete(new Request(`${origin}${subUrl(securePath, token, f)}`, { method: "GET" }))
-        .catch(() => false),
+      cache.delete(new Request(`${origin}${subUrl(securePath, token, f)}`, { method: "GET" }), query).catch(() => false),
     ),
   );
 }

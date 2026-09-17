@@ -143,6 +143,17 @@ describe("warp store", () => {
     expect((global.amnezia as Record<string, unknown>).junk).toBeUndefined();
   });
 
+  it("defaults the global amnezia toggle to false and validates stored values", async () => {
+    kv.map.delete("qproxy:warp:global");
+    expect((await getGlobalSettings(kv.asEnv())).amneziaEnabled).toBe(false);
+    kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: {}, amneziaEnabled: "yes" }));
+    expect((await getGlobalSettings(kv.asEnv())).amneziaEnabled).toBe(false);
+    kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: {}, amneziaEnabled: 1 }));
+    expect((await getGlobalSettings(kv.asEnv())).amneziaEnabled).toBe(false);
+    kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: {}, amneziaEnabled: true }));
+    expect((await getGlobalSettings(kv.asEnv())).amneziaEnabled).toBe(true);
+  });
+
   it("stores, lists, fetches by id and by token, sanitizes, deletes", async () => {
     const a = mkAccount();
     await storeAccount(kv.asEnv(), a);
@@ -260,8 +271,10 @@ describe("warp store", () => {
   });
 
   it("persists global settings", async () => {
-    await setGlobalSettings(kv.asEnv(), { amnezia: { Jc: 9 } });
-    expect((await getGlobalSettings(kv.asEnv())).amnezia.Jc).toBe(9);
+    await setGlobalSettings(kv.asEnv(), { amnezia: { Jc: 9 }, amneziaEnabled: true });
+    const global = await getGlobalSettings(kv.asEnv());
+    expect(global.amnezia.Jc).toBe(9);
+    expect(global.amneziaEnabled).toBe(true);
   });
 
   it("warp account update audits ids only, never keys or tokens", async () => {

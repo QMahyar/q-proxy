@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { expandAccount, sanitizeFilename } from "../../src/warp/expand";
 import type { WarpAccount } from "../../src/types/warp";
+import type { Settings } from "../../src/types/settings";
+import { makeTestSettings } from "../helpers/settings";
 
 class FakeKV {
   map = new Map<string, string>();
@@ -26,6 +28,10 @@ class FakeKV {
 
 const kv = new FakeKV();
 const env = kv.asEnv();
+
+function settingsWith(overrides: Partial<Settings> = {}): Settings {
+  return makeTestSettings({ warpPresets: [], ...overrides });
+}
 
 function mkAccount(): WarpAccount {
   return {
@@ -62,7 +68,8 @@ beforeEach(async () => {
 
 describe("expandAccount", () => {
   it("brackets ipv6 endpoints and builds bare host fields from the config addresses", async () => {
-    const ctx = await expandAccount(env, mkAccount());
+    const s = settingsWith({ warpCustomEndpoints: ["162.159.192.1:2408", "[2606:4700:d0::a29f:c001]:2408"] });
+    const ctx = await expandAccount(env, mkAccount(), s);
     expect(ctx.rows.map((r) => r.endpoint)).toEqual([
       "162.159.192.1:2408",
       "[2606:4700:d0::a29f:c001]:2408",
@@ -75,26 +82,23 @@ describe("expandAccount", () => {
   });
 
   it("tags each row with the account name when there is one endpoint", async () => {
-    const account = mkAccount();
-    account.endpoint_list = { type: "custom", custom_endpoints: [{ ip: "1.2.3.4", port: 2408 }] };
-    const ctx = await expandAccount(env, account);
+    const s = settingsWith({ warpCustomEndpoints: ["1.2.3.4:2408"] });
+    const ctx = await expandAccount(env, mkAccount(), s);
     expect(ctx.rows).toHaveLength(1);
     expect(ctx.rows[0]?.tag).toBe("Home ISP");
   });
 
   it("dedupes endpoints by ip and port, keeping first occurrence order", async () => {
-    const account = mkAccount();
-    account.endpoint_list = {
-      type: "custom",
-      custom_endpoints: [
-        { ip: "1.2.3.4", port: 2408 },
-        { ip: "1.2.3.4", port: 2408 },
-        { ip: "1.2.3.4", port: 500 },
-        { ip: "2606:4700:d0::a29f:c001", port: 2408 },
-        { ip: "2606:4700:d0::a29f:c001", port: 2408 },
+    const s = settingsWith({
+      warpCustomEndpoints: [
+        "1.2.3.4:2408",
+        "1.2.3.4:2408",
+        "1.2.3.4:500",
+        "[2606:4700:d0::a29f:c001]:2408",
+        "[2606:4700:d0::a29f:c001]:2408",
       ],
-    };
-    const ctx = await expandAccount(env, account);
+    });
+    const ctx = await expandAccount(env, mkAccount(), s);
     expect(ctx.rows.map((r) => r.endpoint)).toEqual([
       "1.2.3.4:2408",
       "1.2.3.4:500",
@@ -103,49 +107,63 @@ describe("expandAccount", () => {
     expect(ctx.rows.every((r) => r.tag.startsWith("Home ISP 1") || r.tag.startsWith("Home ISP 2606"))).toBe(true);
   });
 
-  it("falls back to the selected preset endpoints when the account has no custom list", async () => {
-    const account = mkAccount();
-    account.endpoint_list = { type: "preset", preset_id: "default" };
-    const ctx = await expandAccount(env, account);
+  it("renders ticked presets for every account from the global selection", async () => {
+    const s = settingsWith({ warpPresets: ["default"] });
+    const ctx = await expandAccount(env, mkAccount(), s);
     expect(ctx.rows.length).toBeGreaterThan(0);
     expect(ctx.rows[0]?.endpoint).toBe("engage.cloudflareclient.com:2408");
   });
 
-  it("yields no rows when the preset id is unknown", async () => {
+  it("falls back to the default preset on empty selection or unknown ids", async () => {
+    const empty = await expandAccount(env, mkAccount(), settingsWith());
+    expect(empty.rows.length).toBeGreaterThan(0);
+    expect(empty.rows[0]?.endpoint).toBe("engage.cloudflareclient.com:2408");
+    const unknown = await expandAccount(env, mkAccount(), settingsWith({ warpPresets: ["missing"] }));
+    expect(unknown.rows.length).toBeGreaterThan(0);
+    expect(unknown.rows[0]?.endpoint).toBe("engage.cloudflareclient.com:2408");
+  });
+
+  it("ignores stored per-account endpoint lists (retired selection)", async () => {
     const account = mkAccount();
-    account.endpoint_list = { type: "preset", preset_id: "missing" };
-    const ctx = await expandAccount(env, account);
-    expect(ctx.rows).toEqual([]);
+    account.endpoint_list = {
+      type: "custom",
+      custom_endpoints: [{ ip: "9.9.9.9", port: 2408 }],
+    };
+    const s = settingsWith({ warpPresets: ["default"] });
+    const ctx = await expandAccount(env, account, s);
+    expect(ctx.rows.some((r) => r.ip === "9.9.9.9")).toBe(false);
+    expect(ctx.rows[0]?.endpoint).toBe("engage.cloudflareclient.com:2408");
   });
 
   it("prefers account dns over preset dns and defaults to 1.1.1.1", async () => {
     const account = mkAccount();
     account.dns = "9.9.9.9";
-    const custom = await expandAccount(env, account);
+    const custom = await expandAccount(env, account, settingsWith({ warpCustomEndpoints: ["1.2.3.4:2408"] }));
     expect(custom.rows[0]?.dns).toBe("9.9.9.9");
-    const presetAccount = mkAccount();
-    presetAccount.endpoint_list = { type: "preset", preset_id: "default" };
-    const viaPreset = await expandAccount(env, presetAccount);
+    const viaPreset = await expandAccount(env, mkAccount(), settingsWith({ warpPresets: ["default"] }));
     expect(viaPreset.rows[0]?.dns).toBe("1.1.1.1");
-    const bare = mkAccount();
-    bare.endpoint_list = { type: "custom", custom_endpoints: [{ ip: "1.2.3.4", port: 2408 }] };
     const { savePresets } = await import("../../src/warp/store");
     await savePresets(env, [{ id: "default", name: "Cloudflare Default", dns: null, endpoints: [{ ip: "5.6.7.8", port: 2408 }] }]);
-    const noDnsAnywhere = await expandAccount(env, bare);
+    const noDnsAnywhere = await expandAccount(env, mkAccount(), settingsWith({ warpPresets: ["default"] }));
     expect(noDnsAnywhere.rows[0]?.dns).toBe("1.1.1.1");
   });
 
-  it("seeds default amnezia for clean accounts and lets account overrides win", async () => {
-    const clean = await expandAccount(env, mkAccount());
-    expect(clean.amnezia).toMatchObject({ Jc: 5, Jmin: 50, Jmax: 1000 });
+  it("resolves the global toggle and ignores per-account amnezia overrides", async () => {
+    const s = settingsWith({ warpCustomEndpoints: ["1.2.3.4:2408"] });
     const { setGlobalSettings } = await import("../../src/warp/store");
-    await setGlobalSettings(env, { amnezia: { Jc: 9 } });
-    const withGlobal = await expandAccount(env, mkAccount());
-    expect(withGlobal.amnezia).toMatchObject({ Jc: 9, Jmin: 50, Jmax: 1000 });
+    await setGlobalSettings(env, { amnezia: { Jc: 9 }, amneziaEnabled: false });
+    const off = await expandAccount(env, mkAccount(), s);
+    expect(off.amneziaEnabled).toBe(false);
+    expect(off.amnezia).toMatchObject({ Jc: 9, Jmin: 50, Jmax: 1000 });
     const account = mkAccount();
     account.amnezia_overrides = { Jc: 7 };
-    const withOverride = await expandAccount(env, account);
-    expect(withOverride.amnezia).toMatchObject({ Jc: 7 });
+    const inert = await expandAccount(env, account, s);
+    expect(inert.amnezia).toMatchObject({ Jc: 9 });
+    expect(inert.amnezia).not.toMatchObject({ Jc: 7 });
+    await setGlobalSettings(env, { amnezia: { Jc: 9 }, amneziaEnabled: true });
+    const on = await expandAccount(env, account, s);
+    expect(on.amneziaEnabled).toBe(true);
+    expect(on.amnezia).toMatchObject({ Jc: 9, Jmin: 50, Jmax: 1000 });
   });
 });
 

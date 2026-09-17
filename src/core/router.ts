@@ -18,14 +18,12 @@ import { handleTunnel } from "../handlers/tunnel";
 import { isUpgradeRequest } from "../tunnel/websocket";
 import { handleDoh } from "../handlers/doh";
 import { handleSubscribe } from "../handlers/subscribe";
-import { handleMyIp } from "../handlers/myip";
 import { handleRobots } from "../handlers/robots";
 import { handleHealth } from "../handlers/health";
 
 import { serveLoginPage, servePanelPage } from "../handlers/panel-page";
 import { handleCamouflage } from "../handlers/camouflage";
 import { handleWarpSub } from "../handlers/warp-sub";
-import { handleUserSub } from "../handlers/users-sub";
 import { handleLogin, handleLogout, handlePasswordChange, handleSetup, handleAuthStatus } from "../handlers/api/auth";
 import {
   handleGetSettings,
@@ -37,11 +35,9 @@ import {
 import { handleKillSwitch, handleStatus, handleSubUrls } from "../handlers/api/status";
 import { handleBootstrap } from "../handlers/api/bootstrap";
 import { handleWarpApi } from "../handlers/api/warp";
-import { handleUsersApi } from "../handlers/api/users";
 import { handleProxyPoolApi } from "../handlers/api/proxy-pool";
 import { handleAddressProbeApi } from "../handlers/api/address-probe";
 import { handleTelegramRemove, handleTelegramSetup, handleTelegramWebhook } from "../handlers/api/telegram";
-import { handleVersionCheck } from "../handlers/api/version";
 
 function methodNotAllowed(): never {
   throw new AppError("method not allowed", 405, "METHOD");
@@ -105,8 +101,6 @@ function bootstrapGated(handler: RouteHandler, route: ApiRouteDescriptor): Route
   };
 }
 
-const guardedMyIp = authed(handleMyIp);
-
 const settingsGetOrSave: RouteHandler = (req, env, s) =>
   req.method === "GET" ? handleGetSettings(req, env, s) : handleSaveSettings(req, env, s);
 
@@ -122,12 +116,10 @@ const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
   "settings-reset": { methods: ["POST"], auth: "write", handler: handleResetSettings },
   "settings-export": { methods: ["GET"], auth: "read", handler: handleExportSettings },
   "settings-import": { methods: ["POST"], auth: "write", handler: handleImportSettings },
-  "version-check": { methods: ["GET"], auth: "read", handler: handleVersionCheck },
   status: { methods: ["GET"], auth: "read", handler: handleStatus },
   killswitch: { methods: ["POST"], auth: "write", handler: handleKillSwitch },
   suburls: { methods: ["GET"], auth: "read", handler: handleSubUrls },
   warp: { methods: [], auth: "write", handler: handleWarpApi },
-  users: { methods: [], auth: "write", handler: handleUsersApi },
   "proxy-pool": { methods: [], auth: "write", handler: handleProxyPoolApi },
   "address-probe": { methods: [], auth: "write", handler: handleAddressProbeApi },
   "telegram-webhook": { methods: ["POST"], auth: "none", handler: handleTelegramWebhook },
@@ -172,13 +164,6 @@ async function dispatchSecureRoute(
     case "warp-sub":
       expectMethods(req, ["GET", "HEAD"]);
       return handleWarpSub(req, env, s);
-    case "user-sub":
-      expectMethods(req, ["GET", "HEAD"]);
-      void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
-      return handleUserSub(req, env, s);
-    case "myip":
-      expectMethods(req, ["GET"]);
-      return guardedMyIp(req, env, s);
     case "api":
       return dispatchApi(route.api, req, env, s);
   }

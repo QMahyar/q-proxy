@@ -115,9 +115,6 @@ describe("settings store", () => {
           ...structuredClone(DEFAULT_SETTINGS),
           securePath: "legacy-path",
           vlessUuid: "11111111-2222-3333-4444-555555555555",
-          vmessUuid: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-          trojanPassword: "trojanpass123",
-          ssPassword: "sspass123456",
           sessionSecret: "s".repeat(64),
         },
       }),
@@ -241,7 +238,7 @@ describe("settings store", () => {
     const req = new Request("https://panel.example/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urlTestIntervalSec: 600 }),
+      body: JSON.stringify({ maxNodesPerFormat: 600 }),
     });
     const res = await handleSaveSettings(req, env, stale);
     expect(res.status).toBe(200);
@@ -251,7 +248,7 @@ describe("settings store", () => {
     const stored = JSON.parse(kv.map.get("qproxy:settings")!);
     expect(stored.rev).toBe(1);
     expect(stored.data.profileTitle).toBe("concurrent-title");
-    expect(stored.data.urlTestIntervalSec).toBe(600);
+    expect(stored.data.maxNodesPerFormat).toBe(600);
   });
 
   it("handleKillSwitch merges fresh KV state instead of the stale isolate cache", async () => {
@@ -284,7 +281,7 @@ describe("settings store", () => {
     const stale = await loadSettings(env);
     const concurrent = JSON.parse(kv.map.get("qproxy:settings")!);
     concurrent.data.language = "en";
-    concurrent.data.trojanPassword = "concurrent-trojan-pass-1";
+    concurrent.data.vlessUuid = "22222222-3333-4444-5555-666666666666";
     kv.map.set("qproxy:settings", JSON.stringify(concurrent));
     const req = new Request("https://panel.example/api/settings/reset", {
       method: "POST",
@@ -298,7 +295,7 @@ describe("settings store", () => {
     expect(typeof payload.data.rev).toBe("number");
     const stored = JSON.parse(kv.map.get("qproxy:settings")!);
     expect(stored.data.language).toBe("en");
-    expect(stored.data.trojanPassword).toBe("concurrent-trojan-pass-1");
+    expect(stored.data.vlessUuid).toBe("22222222-3333-4444-5555-666666666666");
     expect(stored.data.profileTitle).toBe(DEFAULT_SETTINGS.profileTitle);
   });
 
@@ -308,7 +305,7 @@ describe("settings store", () => {
     const env = kv.asEnv() as never;
     const stale = await loadSettings(env);
     const concurrent = JSON.parse(kv.map.get("qproxy:settings")!);
-    concurrent.data.trojanPassword = "concurrent-trojan-pass-2";
+    concurrent.data.vlessUuid = "33333333-4444-5555-6666-777777777777";
     kv.map.set("qproxy:settings", JSON.stringify(concurrent));
     const req = new Request("https://panel.example/api/settings/import", {
       method: "POST",
@@ -325,7 +322,7 @@ describe("settings store", () => {
     expect(typeof payload.data.rev).toBe("number");
     const stored = JSON.parse(kv.map.get("qproxy:settings")!);
     expect(stored.data.profileTitle).toBe("imported-title");
-    expect(stored.data.trojanPassword).toBe("concurrent-trojan-pass-2");
+    expect(stored.data.vlessUuid).toBe("33333333-4444-5555-6666-777777777777");
   });
 
   it("handleSaveSettings audits changed top-level keys without secret values", async () => {
@@ -351,7 +348,7 @@ describe("settings store", () => {
     expect(entries[0]!.extra.ip).toBe("203.0.113.9");
     expect(entries[0]!.extra.keys).toContain("profileTitle");
     const line = lines.join("\n");
-    for (const secret of [s.sessionSecret, s.securePath, s.vlessUuid, s.trojanPassword]) {
+    for (const secret of [s.sessionSecret, s.securePath, s.vlessUuid]) {
       if (secret.length > 0) expect(line).not.toContain(secret);
     }
   });

@@ -62,15 +62,13 @@ describe("panel format-labels registry", () => {
     expect(new Set(order).size).toBe(order.length);
   });
 
-  it("orders base64 first, then clash, then the rest", () => {
+  it("orders base64 first, then singbox (VLESS slim-down: base64+singbox only)", () => {
     const order = parseOrder();
-    expect(order[0]).toBe("base64");
-    expect(order[1]).toBe("clash");
+    expect(order).toEqual(["base64", "singbox"]);
   });
 
   it("mirrors the server's content-type families (sanity on format identity)", () => {
     expect(SUB_CONTENT_TYPES.base64).toContain("text/plain");
-    expect(SUB_CONTENT_TYPES.clash).toContain("yaml");
     expect(SUB_CONTENT_TYPES.singbox).toContain("json");
   });
 });
@@ -157,20 +155,19 @@ describe("panel WARP grouping (warp.js WARP_GROUPS + WARP_EXT)", () => {
     expect(parseWarpExt()).toEqual({ ...WARP_EXTENSIONS });
   });
 
-  it("group labels + preset placeholder + preset-switch confirm keys are bilingual", () => {
+  it("group labels + global-endpoints keys are bilingual", () => {
     const keys = [
       "warp.groups.wireguard",
       "warp.groups.throne",
       "warp.groups.singbox",
-      "warp.groups.xray",
-      "warp.groups.clash",
-      "warp.groups.surge",
-      "warp.groups.loon",
+      "warp.groups.v2rayn",
       "warp.groups.count",
-      "warp.groups.amnezia_toggle",
-      "warp.presets.custom_n",
-      "warp.confirm.presetSwitch.title",
-      "warp.confirm.presetSwitch.body",
+      "warp.endpoints.title",
+      "warp.endpoints.desc",
+      "warp.endpoints.presets",
+      "warp.endpoints.custom",
+      "warp.endpoints.save",
+      "warp.endpoints.count",
     ];
     for (const k of keys) expect(dictKeys(k).length).toBe(2);
   });

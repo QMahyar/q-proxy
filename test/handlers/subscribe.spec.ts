@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { handleSubscribe } from "../../src/handlers/subscribe";
 import type { Env } from "../../src/types/env";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
@@ -20,11 +20,7 @@ function settings(): Settings {
     securePath: "sp12345678",
     sessionSecret: "x".repeat(64),
     vlessUuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
-    vmessUuid: "1386f85e-657b-4d6e-9d56-78badb75e1fd",
-    trojanPassword: "secretpass123",
-    ssPassword: "sspass12345",
     randomizeSniCase: false,
-    remoteSubUrls: [],
   };
 }
 
@@ -36,10 +32,6 @@ function request(url: string, ua?: string): Request {
 
 const BROWSER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36";
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("handleSubscribe", () => {
   it("serves the bilingual info page to browsers with textual sub URLs", async () => {
     const res = await handleSubscribe(
@@ -50,19 +42,14 @@ describe("handleSubscribe", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
     const body = await res.text();
-    expect(body).toContain("https://w.test/sp12345678/sub?target=clash");
     expect(body).toContain("https://w.test/sp12345678/sub?target=singbox");
+    expect(body).not.toContain("?target=clash");
     expect(body).toContain("اندپوینت");
     expect(body.toLowerCase()).not.toContain("vless://");
   });
 
-  it("emits base64 subscription with subscription headers and remote merge", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(btoa("ss://remote@203.0.113.9:1#R"), { status: 200 })),
-    );
+  it("emits base64 subscription with subscription headers and own nodes only", async () => {
     const s = settings();
-    s.remoteSubUrls = ["https://r/sub"];
     const res = await handleSubscribe(
       request("https://w.test/sp12345678/sub", "v2rayNG/1.8.14"),
       envStub(),
@@ -85,19 +72,27 @@ describe("handleSubscribe", () => {
       .decode(r.value)
       .split("\n")
       .filter((l) => l.length > 0);
-    expect(lines[0]!.startsWith("vless://")).toBe(true);
-    expect(lines.some((l) => l.startsWith("ss://remote@203.0.113.9:1"))).toBe(true);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.every((l) => l.startsWith("vless://"))).toBe(true);
     expect(new Set(lines).size).toBe(lines.length);
   });
 
-  it("negotiates clash via UA and serves yaml content type", async () => {
+  it("negotiates a former clash UA to base64 (deleted formats fall back)", async () => {
     const res = await handleSubscribe(
       request("https://w.test/sp12345678/sub", "clash-verge/v2.0"),
       envStub(),
       settings(),
     );
-    expect(res.headers.get("content-type")).toBe("text/yaml; charset=utf-8");
-    expect(await res.text()).toMatch(/^mixed-port: 7890\n/);
+    expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+  });
+
+  it("rejects deleted targets as invalid", async () => {
+    await expect(
+      handleSubscribe(request("https://w.test/sp12345678/sub?target=clash"), envStub(), settings()),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      handleSubscribe(request("https://w.test/sp12345678/sub?target=surge"), envStub(), settings()),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it("honors target=singbox overriding a browser UA", async () => {
@@ -109,22 +104,6 @@ describe("handleSubscribe", () => {
     expect(res.headers.get("content-type")).toBe("application/json; charset=utf-8");
     const parsed = JSON.parse(await res.text()) as { outbounds: unknown[] };
     expect(parsed.outbounds.length).toBeGreaterThan(1);
-  });
-
-  it("emits vmess+trojan+vless+ss in surge output (Surge 5 supports VLESS and SS)", async () => {
-    const res = await handleSubscribe(
-      request("https://w.test/sp12345678/sub?target=surge"),
-      envStub(),
-      settings(),
-    );
-    expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
-    const body = await res.text();
-    expect(body).toContain("#!MANAGED-CONFIG https://w.test/sp12345678/sub?target=surge interval=43200 strict=true");
-    expect(body).toContain("[Proxy]");
-    expect(body).toContain("= vmess,");
-    expect(body).toContain("= trojan,");
-    expect(body).toContain("= vless,");
-    expect(body).toContain("= ss,");
   });
 
   it("throws NotFound when the route is not sub", async () => {

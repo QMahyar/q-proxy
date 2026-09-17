@@ -1,7 +1,10 @@
-import type { ProxyNode, SSNode, VMessNode } from "../../types/node";
+import type { ProxyNode } from "../../types/node";
 import { isIpLiteral } from "../../utils/net";
 import { TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
+
+const DEFAULT_PROXY_DNS = "https://8.8.8.8/dns-query";
+const DEFAULT_URL_TEST_INTERVAL_SEC = 300;
 
 const DNS_SERVER_SCHEMES: Record<string, { type: string; defaultPort: number }> = {
   "https:": { type: "https", defaultPort: 443 },
@@ -81,69 +84,7 @@ export interface SingBoxVlessOutbound {
   transport: SingBoxTransport;
 }
 
-export interface SingBoxVmessOutbound {
-  type: "vmess";
-  tag: string;
-  server: string;
-  server_port: number;
-  uuid: string;
-  security: VMessNode["cipher"];
-  alter_id: VMessNode["alterId"];
-  packet_encoding: "xudp";
-  tls?: SingBoxTls;
-  transport: SingBoxTransport;
-}
-
-export interface SingBoxTrojanOutbound {
-  type: "trojan";
-  tag: string;
-  server: string;
-  server_port: number;
-  password: string;
-  tls?: SingBoxTls;
-  transport: SingBoxTransport;
-}
-
-export interface SingBoxShadowsocksOutbound {
-  type: "shadowsocks";
-  tag: string;
-  server: string;
-  server_port: number;
-  method: SSNode["method"];
-  password: string;
-  plugin?: "v2ray-plugin";
-  plugin_opts?: string;
-}
-
-export interface SingBoxVlessRealityOutbound {
-  type: "vless";
-  tag: string;
-  server: string;
-  server_port: number;
-  uuid: string;
-  flow?: string;
-  packet_encoding: "xudp";
-  tls: SingBoxTls & { reality: { enabled: boolean; public_key: string; short_id: string } };
-  transport: { type: "tcp" };
-}
-
-export interface SingBoxHy2Outbound {
-  type: "hysteria2";
-  tag: string;
-  server: string;
-  server_port: number;
-  password: string;
-  tls: SingBoxTls & { insecure: boolean };
-  obfs?: { type: string; password: string };
-}
-
-export type SingBoxOutbound =
-  | SingBoxVlessOutbound
-  | SingBoxVmessOutbound
-  | SingBoxTrojanOutbound
-  | SingBoxShadowsocksOutbound
-  | SingBoxVlessRealityOutbound
-  | SingBoxHy2Outbound;
+export type SingBoxOutbound = SingBoxVlessOutbound;
 
 function tlsObject(node: ProxyNode, serverName: string): SingBoxTls {
   const t: SingBoxTls = { enabled: true, server_name: serverName };
@@ -168,100 +109,18 @@ function transportObject(node: ProxyNode): SingBoxTransport {
 
 function outboundOf(node: ProxyNode): SingBoxOutbound {
   const server = bareServer(node.address);
-  if (node.kind === "vless") {
-    return {
-      type: "vless",
-      tag: node.name,
-      server,
-      server_port: node.port,
-      uuid: node.uuid,
-      ...(node.flow ? { flow: node.flow } : {}),
-      packet_encoding: "xudp",
-      ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
-      transport: transportObject(node),
-    };
-  }
-  if (node.kind === "vmess") {
-    return {
-      type: "vmess",
-      tag: node.name,
-      server,
-      server_port: node.port,
-      uuid: node.uuid,
-      security: node.cipher,
-      alter_id: node.alterId,
-      packet_encoding: "xudp",
-      ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
-      transport: transportObject(node),
-    };
-  }
-  if (node.kind === "trojan") {
-    return {
-      type: "trojan",
-      tag: node.name,
-      server,
-      server_port: node.port,
-      password: node.password,
-      ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
-      transport: transportObject(node),
-    };
-  }
-  if (node.kind === "reality") {
-    return {
-      type: "vless",
-      tag: node.name,
-      server,
-      server_port: node.port,
-      uuid: node.uuid,
-      ...(node.flow.length > 0 ? { flow: node.flow } : {}),
-      packet_encoding: "xudp",
-      tls: {
-        enabled: true,
-        server_name: node.sni ?? node.host,
-        ...(node.fingerprint !== null
-          ? { utls: { enabled: true, fingerprint: node.fingerprint } }
-          : {}),
-        reality: { enabled: true, public_key: node.pbk, short_id: node.sid },
-      },
-      transport: { type: "tcp" },
-    };
-  }
-  if (node.kind === "hy2") {
-    return {
-      type: "hysteria2",
-      tag: node.name,
-      server,
-      server_port: node.port,
-      password: node.password,
-      tls: { enabled: true, server_name: node.sni ?? node.host, insecure: true },
-      ...(node.obfs.length > 0 ? { obfs: { type: node.obfs, password: node.obfsPassword } } : {}),
-    };
-  }
-  if (node.direct === true) {
-    return {
-      type: "shadowsocks",
-      tag: node.name,
-      server,
-      server_port: node.port,
-      method: node.method,
-      password: node.password,
-    };
-  }
-  return {
-    type: "shadowsocks",
+  const outbound: SingBoxOutbound = {
+    type: "vless",
     tag: node.name,
     server,
     server_port: node.port,
-    method: node.method,
-    password: node.password,
-    plugin: "v2ray-plugin",
-    plugin_opts: [
-      "mode=websocket",
-      ...(nodeHasTls(node) ? ["tls"] : []),
-      `host=${node.host}`,
-      `path=${node.path}`,
-    ].join(";"),
+    uuid: node.uuid,
+    packet_encoding: "xudp",
+    ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
+    transport: transportObject(node),
   };
+  if (node.flow !== null && node.flow !== undefined && node.flow.length > 0) outbound.flow = node.flow;
+  return outbound;
 }
 
 export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions): string {
@@ -275,15 +134,15 @@ export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions):
           tag: "PROXY",
           outbounds: names,
           url: TEST_URL,
-          interval: `${opts.urlTestIntervalSec}s`,
+          interval: `${DEFAULT_URL_TEST_INTERVAL_SEC}s`,
           tolerance: 50,
         }
       : { type: "selector", tag: "PROXY", outbounds: names }
     : null;
 
   const dnsServers: Record<string, unknown>[] = hasNodes
-    ? [dnsServerEntry(opts.remoteDns, "proxy-dns", "PROXY"), { type: "local", tag: "local-dns" }]
-    : [dnsServerEntry(opts.remoteDns, "local-dns")];
+    ? [dnsServerEntry(DEFAULT_PROXY_DNS, "proxy-dns", "PROXY"), { type: "local", tag: "local-dns" }]
+    : [dnsServerEntry(DEFAULT_PROXY_DNS, "local-dns")];
 
   const routeRules: Record<string, unknown>[] = [{ protocol: "dns", action: "hijack-dns" }];
   if (opts.rules && opts.rules.blockDomains.length > 0) {

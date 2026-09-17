@@ -16,13 +16,7 @@ const PRESERVED_FIELDS = [
   "sessionSecret",
   "language",
   "vlessUuid",
-  "vmessUuid",
-  "trojanPassword",
-  "ssPassword",
   "vlessPath",
-  "vmessPath",
-  "trojanPath",
-  "ssPath",
   "passwordIsBootstrap",
   "seededAt",
 ] as const satisfies readonly (keyof Settings)[];
@@ -111,6 +105,11 @@ export const handleImportSettings: RouteHandler = async (req, env, s) => {
   const blob = incoming as Record<string, unknown>;
   if (typeof blob.version === "number" && blob.version > SETTINGS_VERSION) {
     throw new ValidationError({ settings: `exported by a newer version (${blob.version} > ${SETTINGS_VERSION})` });
+  }
+  if (typeof blob.version === "number" && blob.version < SETTINGS_VERSION) {
+    throw new ValidationError({
+      settings: "this backup was exported by a pre-cut release and cannot be imported; please reconfigure on the current version",
+    });
   }
   for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "version", "updatedAt"]) delete blob[k];
   const merged = deepMergeDefaults(structuredClone(DEFAULT_SETTINGS), blob);

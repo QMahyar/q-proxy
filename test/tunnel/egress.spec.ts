@@ -34,21 +34,17 @@ function fakeSocket(): { socket: Socket; writes: Uint8Array[] } {
 const TARGET: DialTarget = { host: "dest.example.com", port: 443 };
 
 describe("makeFailoverStrategy", () => {
-  it("orders chain first, then direct, then proxyip candidates", async () => {
+  it("orders direct first, then proxyip candidates", async () => {
     const s = makeTestSettings({
-      chainProxy: { enabled: true, uri: "socks5://u:p@chain.example:1080" },
-      proxyIpMode: "proxyip",
       proxyIps: ["1.1.1.1", "2.2.2.2"],
     });
     const strategy = await makeFailoverStrategy(s, TARGET);
-    expect(strategy.candidates.map((c) => c.via)).toEqual(["chain", "direct", "proxyip", "proxyip"]);
-    expect(strategy.candidates[0]).toMatchObject({ host: "chain.example", port: 1080 });
-    expect(strategy.candidates[1]).toMatchObject({ host: TARGET.host, port: TARGET.port });
+    expect(strategy.candidates.map((c) => c.via)).toEqual(["direct", "proxyip", "proxyip"]);
+    expect(strategy.candidates[0]).toMatchObject({ host: TARGET.host, port: TARGET.port });
   });
 
   it("omits direct for Cloudflare IP targets", async () => {
     const s = makeTestSettings({
-      proxyIpMode: "proxyip",
       proxyIps: ["1.1.1.1"],
     });
     const strategy = await makeFailoverStrategy(s, { host: "104.16.132.229", port: 443 });
@@ -56,40 +52,24 @@ describe("makeFailoverStrategy", () => {
   });
 
   it("omits direct for localhost and private targets", async () => {
-    const s = makeTestSettings({ proxyIpMode: "proxyip", proxyIps: [] });
+    const s = makeTestSettings({ proxyIps: [] });
     for (const host of ["127.0.0.1", "10.0.0.5", "192.168.1.1", "::1", "localhost"]) {
       const strategy = await makeFailoverStrategy(s, { host, port: 80 });
       expect(strategy.candidates.some((c) => c.via === "direct"), host).toBe(false);
     }
   });
 
-  it("keeps direct for ordinary domains and public IPs", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ Status: 0, Answer: [{ type: 1, data: "93.184.216.34" }] }), { status: 200 })),
-    );
-    const s = makeTestSettings({ proxyIpMode: "nat64" });
+  it("keeps direct first for ordinary domains and public IPs with an empty pool", async () => {
+    const s = makeTestSettings({ proxyIps: [] });
     const domainStrategy = await makeFailoverStrategy(s, TARGET);
     expect(domainStrategy.candidates[0]!.via).toBe("direct");
     const ipStrategy = await makeFailoverStrategy(s, { host: "93.184.216.34", port: 443 });
     expect(ipStrategy.candidates[0]!.via).toBe("direct");
   });
 
-  it("synthesizes one nat64 candidate per prefix with the target port", async () => {
-    const s = makeTestSettings({ proxyIpMode: "nat64" });
-    const strategy = await makeFailoverStrategy(s, { host: "1.2.3.4", port: 8443 });
-    const nat64 = strategy.candidates.filter((c) => c.via === "nat64");
-    expect(nat64.length).toBe(s.nat64Prefixes.length);
-    for (const candidate of nat64) expect(candidate.port).toBe(8443);
-    for (const prefix of s.nat64Prefixes) {
-      const bare = prefix.replace(/^\[|\]$/g, "");
-      expect(nat64.some((c) => c.host.startsWith(bare.replace(/:+$/, "")) || c.label.includes(prefix))).toBe(true);
-    }
-  });
-
   it("shuffles the proxyip pool deterministically per target and caps at 8", async () => {
     const pool = Array.from({ length: 12 }, (_, i) => `${10 + i}.0.0.${i + 1}`);
-    const s = makeTestSettings({ proxyIpMode: "proxyip", proxyIps: pool });
+    const s = makeTestSettings({ proxyIps: pool });
     const a = await makeFailoverStrategy(s, TARGET);
     const b = await makeFailoverStrategy(s, TARGET);
     const proxyA = a.candidates.filter((c) => c.via === "proxyip").map((c) => c.host);
@@ -104,48 +84,14 @@ describe("makeFailoverStrategy", () => {
     expect(proxyOther.every((h) => poolSet.has(h))).toBe(true);
   });
 
-  it("skips chain candidates when disabled or unparseable", async () => {
-    const off = makeTestSettings({ chainProxy: { enabled: false, uri: "socks5://h:1080" } });
-    expect((await makeFailoverStrategy(off, TARGET)).candidates.some((c) => c.via === "chain")).toBe(false);
-    const bad = makeTestSettings({ chainProxy: { enabled: true, uri: "ftp://nope" } });
-    expect((await makeFailoverStrategy(bad, TARGET)).candidates.some((c) => c.via === "chain")).toBe(false);
-  });
-
-  it("keeps direct when its host:port collides with the chain candidate", async () => {
+  it("dedupes duplicate non-direct candidates by host:port", async () => {
     const s = makeTestSettings({
-      chainProxy: { enabled: true, uri: "socks5://dest.example.com:443" },
-      proxyIpMode: "proxyip",
-      proxyIps: ["93.184.216.34"],
+      proxyIps: ["93.184.216.34", "93.184.216.34:443"],
     });
     const strategy = await makeFailoverStrategy(s, TARGET);
-    expect(strategy.candidates.map((c) => `${c.via}:${c.host}:${c.port}`)).toEqual([
-      "chain:dest.example.com:443",
-      "direct:dest.example.com:443",
-      "proxyip:93.184.216.34:443",
-    ]);
-  });
-
-  it("still dedupes duplicate non-direct candidates by host:port", async () => {
-    const s = makeTestSettings({
-      chainProxy: { enabled: true, uri: "socks5://93.184.216.34:443" },
-      proxyIpMode: "proxyip",
-      proxyIps: ["93.184.216.34"],
-    });
-    const strategy = await makeFailoverStrategy(s, TARGET);
-    expect(strategy.candidates.map((c) => `${c.via}:${c.host}:${c.port}`)).toEqual([
-      "chain:93.184.216.34:443",
-      "direct:dest.example.com:443",
-    ]);
-  });
-
-  it("drops nat64 candidates whose resolved ipv4 is private or Cloudflare-owned", async () => {
-    const s = makeTestSettings({ proxyIpMode: "nat64" });
-    const privateStrategy = await makeFailoverStrategy(s, { host: "10.1.2.3", port: 443 });
-    expect(privateStrategy.candidates.filter((c) => c.via === "nat64")).toHaveLength(0);
-    const cfStrategy = await makeFailoverStrategy(s, { host: "104.16.132.229", port: 443 });
-    expect(cfStrategy.candidates.filter((c) => c.via === "nat64")).toHaveLength(0);
-    const publicStrategy = await makeFailoverStrategy(s, { host: "1.2.3.4", port: 443 });
-    expect(publicStrategy.candidates.filter((c) => c.via === "nat64")).toHaveLength(s.nat64Prefixes.length);
+    const pool = strategy.candidates.filter((c) => c.via === "proxyip");
+    expect(pool).toHaveLength(1);
+    expect(strategy.candidates[0]).toMatchObject({ via: "direct", host: TARGET.host, port: TARGET.port });
   });
 });
 
@@ -212,7 +158,7 @@ describe("createEgressOpener", () => {
         { via: "direct", label: "first", host: "a", port: 1 },
         { via: "proxyip", label: "second", host: "b", port: 2 },
         { via: "proxyip", label: "third", host: "c", port: 3 },
-        { via: "nat64", label: "fourth", host: "d", port: 4 },
+        { via: "proxyip", label: "fourth", host: "d", port: 4 },
       ]),
       dialImpl,
     );
@@ -221,7 +167,7 @@ describe("createEgressOpener", () => {
     const retried = await opener.retry(TARGET, null);
     expect(retried).not.toBeNull();
     expect(retried!.candidateIndex).toBe(3);
-    expect(retried!.via).toBe("nat64");
+    expect(retried!.via).toBe("proxyip");
     expect(attempts).toEqual(["first", "second", "third", "fourth"]);
     expect(await opener.retry(TARGET, null)).toBeNull();
   });
@@ -345,7 +291,7 @@ describe("openEgressWithSpeculativeDirect", () => {
     });
     const fetchMock = vi.fn(async () => fetchGate);
     vi.stubGlobal("fetch", fetchMock);
-    const s = makeTestSettings({ proxyIpMode: "proxyip", proxyIps: ["proxy.example.com"] });
+    const s = makeTestSettings({ proxyIps: ["proxy.example.com"] });
     const sock = fakeSocket();
     const seen: string[] = [];
     const dialImpl = vi.fn(async (candidate: EgressCandidate): Promise<Socket> => {
@@ -366,33 +312,24 @@ describe("openEgressWithSpeculativeDirect", () => {
     expect(opener).toBeDefined();
   });
 
-  it("keeps chain first and closes the unused speculative direct socket", async () => {
+  it("fails over from direct to the pool through the speculative path", async () => {
     const s = makeTestSettings({
-      chainProxy: { enabled: true, uri: "socks5://u:p@chain.example:1080" },
-      proxyIpMode: "proxyip",
       proxyIps: ["1.1.1.1"],
     });
-    const chainSock = fakeSocket();
-    let directClosed = false;
-    const directSock = fakeSocket();
-    directSock.socket.close = async () => {
-      directClosed = true;
-    };
+    const poolSock = fakeSocket();
     const dialImpl = vi.fn(async (candidate: EgressCandidate): Promise<Socket> => {
-      if (candidate.via === "chain") return chainSock.socket;
-      if (candidate.via === "direct") return directSock.socket;
+      if (candidate.via === "direct") throw new Error("direct refused");
+      if (candidate.via === "proxyip") return poolSock.socket;
       throw new Error(`dial refused ${candidate.label}`);
     });
     const { established } = await openEgressWithSpeculativeDirect(s, TARGET, null, dialImpl);
-    expect(established.via).toBe("chain");
-    expect(established.candidateIndex).toBe(0);
-    expect(established.strategy.candidates.map((c) => c.via)).toEqual(["chain", "direct", "proxyip"]);
-    await Promise.resolve();
-    expect(directClosed).toBe(true);
+    expect(established.via).toBe("proxyip");
+    expect(established.candidateIndex).toBe(1);
+    expect(established.strategy.candidates.map((c) => c.via)).toEqual(["direct", "proxyip"]);
   });
 
   it("omits direct for blocked hosts and never dials it", async () => {
-    const s = makeTestSettings({ proxyIpMode: "proxyip", proxyIps: ["93.184.216.34"] });
+    const s = makeTestSettings({ proxyIps: ["93.184.216.34"] });
     const target: DialTarget = { host: "10.0.0.5", port: 80 };
     const sock = fakeSocket();
     const dialImpl = vi.fn(async (_candidate: EgressCandidate): Promise<Socket> => sock.socket);

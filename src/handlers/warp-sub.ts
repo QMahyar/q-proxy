@@ -3,6 +3,7 @@ import type { Settings } from "../types/settings";
 import { getAccountByToken } from "../warp/store";
 import { expandAccount, sanitizeFilename } from "../warp/expand";
 import { isWarpFormat, WARP_CONTENT_TYPES, WARP_EXTENSIONS, WARP_EMITTERS } from "../warp/formats/registry";
+import { handleCamouflage } from "./camouflage";
 import { resolveSecureRoute } from "../core/routes";
 import { appVersion, settingsEtag } from "../settings/store";
 import { afterResponse, readUsage } from "../core/counters";
@@ -27,7 +28,7 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
   const segs = url.pathname.split("/").filter((p) => p.length > 0);
   const token = segs[segs.length - 2]!;
   const formatName = segs[segs.length - 1]!;
-  if (!isWarpFormat(formatName)) return notFound();
+  if (!isWarpFormat(formatName)) return handleCamouflage(req, env, s);
 
   const account = await getAccountByToken(env, token);
   if (account === null) return notFound();
@@ -42,7 +43,7 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
     if (cached !== undefined) return cached;
   }
 
-  const ctx = await expandAccount(env, account);
+  const ctx = await expandAccount(env, account, s);
   if (ctx.rows.length === 0) return notFound();
   const result = WARP_EMITTERS[formatName](ctx);
 

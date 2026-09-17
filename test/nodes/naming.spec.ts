@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FRAGMENT_PRESETS, fragmentQuery } from "../../src/nodes/fragments";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { countryFlag, renderName } from "../../src/nodes/naming";
-import type { SSNode, TrojanNode, VlessNode } from "../../src/types/node";
+import type { VlessNode } from "../../src/types/node";
 
 describe("fragment presets", () => {
   it("matches the R1 B.3 preset table", () => {
@@ -67,11 +67,8 @@ describe("naming", () => {
     expect(renderName({ ...vless(), address: "2001:db8::1" })).toBe("VLESS [2001:db8::1] 443");
   });
 
-  it("renders trojan and ss protocol labels", () => {
-    const trojan: TrojanNode = { ...vless(), kind: "trojan", password: "p" };
-    expect(renderName(trojan).startsWith("TROJAN ")).toBe(true);
-    const ss: SSNode = { ...vless(), kind: "ss", method: "aes-128-gcm", password: "p" };
-    expect(renderName(ss).startsWith("SS ")).toBe(true);
+  it("renders the VLESS protocol label (only surviving protocol)", () => {
+    expect(renderName(vless()).startsWith("VLESS ")).toBe(true);
   });
 
   it("converts cf country codes to flag emoji and rejects junk", () => {

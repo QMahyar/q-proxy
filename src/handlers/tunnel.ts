@@ -6,7 +6,7 @@ import { NotFoundError, RateLimitedError } from "../core/errors";
 import { log } from "../core/log";
 import { recordBytes } from "../core/counters";
 import { clientIp } from "../auth/guard";
-import { tryConsume } from "../users/ratelimit";
+import { tryConsume } from "../tunnel/ratelimit";
 import { identifyTunnel, type TunnelKind } from "../core/routes";
 import { ByteAccumulator } from "../protocols/common";
 import type {
@@ -15,13 +15,9 @@ import type {
   ProtocolInbound,
 } from "../protocols/common";
 import { createVlessInbound } from "../protocols/vless";
-import { createTrojanInbound } from "../protocols/trojan";
-import { createVmessInbound } from "../protocols/vmess";
-import { createSSInbound } from "../protocols/shadowsocks";
 import { openEgressWithSpeculativeDirect } from "../tunnel/egress";
 import { createRelay } from "../tunnel/relay";
 import { createDnsPacketRelay } from "../tunnel/resolver";
-import { matchesSpeedtestHost, speedtestResponseBytes } from "../tunnel/speedtest";
 import { getCounterContext } from "../core/counters";
 import { acceptTunnelSocket } from "../tunnel/websocket";
 import { concatBytes, utf8Encode } from "../utils/bytes";
@@ -29,7 +25,6 @@ import { concatBytes, utf8Encode } from "../utils/bytes";
 type TunnelParsed = ParsedRequest<"tcp"> | ParsedRequest<"udp">;
 
 const HANDSHAKE_TIMEOUT_MS = 10_000;
-const SPEEDTEST_CLOSE_DELAY_MS = 200;
 const EMPTY_BYTES = new Uint8Array(0);
 
 export async function resolveTcpFirstPacket(
@@ -45,31 +40,9 @@ export async function resolveTcpFirstPacket(
   return firstPacket;
 }
 
-function pickCredential(kind: TunnelKind, s: Settings): string {
-  switch (kind) {
-    case "vless":
-      return s.vlessUuid;
-    case "vmess":
-      return s.vmessUuid;
-    case "trojan":
-      return s.trojanPassword;
-    case "ss":
-      return s.ssPassword;
-  }
-}
-
 function createInbound(kind: TunnelKind, s: Settings): ProtocolInbound<TunnelParsed> {
-  const credential = pickCredential(kind, s);
-  switch (kind) {
-    case "vless":
-      return createVlessInbound(credential);
-    case "vmess":
-      return createVmessInbound(credential);
-    case "trojan":
-      return createTrojanInbound(credential);
-    case "ss":
-      return createSSInbound(s.ssMethod, credential);
-  }
+  void kind;
+  return createVlessInbound(s.vlessUuid);
 }
 
 export const handleTunnel: RouteHandler = async (req, env, s) => {
@@ -78,7 +51,7 @@ export const handleTunnel: RouteHandler = async (req, env, s) => {
   const gate = await tryConsume(env, `tunnel:${clientIp(req)}`);
   if (!gate.allowed) throw new RateLimitedError(Math.ceil(gate.retryAfterMs / 1000));
   const accepted = acceptTunnelSocket(req, {
-    earlyDataEnabled: kind === "ss" ? false : s.earlyDataEnabled,
+    earlyDataEnabled: s.earlyDataEnabled,
     earlyDataMaxBytes: s.earlyDataMaxBytes,
   });
   const session = driveSession(accepted.ws, kind, s, accepted.earlyData, env).catch((err: unknown) => {
@@ -172,15 +145,6 @@ async function driveSession(
   };
 
   const startTcpSession = async (target: DialTarget, firstPacket: Uint8Array): Promise<void> => {
-    if (s.speedtestIntercept && matchesSpeedtestHost(target.host)) {
-      phase = "tcp";
-      cleanupHandshake();
-      log.debug("tunnel", "speedtest intercepted", { host: target.host });
-      if (headerBytes !== null && headerBytes.length > 0) sendRaw(headerBytes);
-      sendServerData(speedtestResponseBytes());
-      setTimeout(() => safeClose(1000), SPEEDTEST_CLOSE_DELAY_MS);
-      return;
-    }
     try {
       const packet = firstPacket.length > 0 ? firstPacket : null;
       const { established, opener } = await openEgressWithSpeculativeDirect(s, target, packet);

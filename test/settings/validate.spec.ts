@@ -1,9 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
 import { resolveEchServerName, validateSettings } from "../../src/settings/validate";
-import { handleCamouflage } from "../../src/handlers/camouflage";
 import { makeFailoverStrategy } from "../../src/tunnel/egress";
-import { ASSETS } from "../../src/ui/assets";
 import { makeTestSettings } from "../helpers/settings";
 
 function fieldsOf(input: unknown): Record<string, string> {
@@ -46,19 +44,11 @@ describe("validateSettings", () => {
     expect(fields["fragment.lengthMin"]).toBeTruthy();
   });
 
-  it("rejects local or private doh and remote dns targets", () => {
+  it("rejects local or private doh targets", () => {
     expect(fieldsOf({ dohUpstream: "http://127.0.0.1:53/dns-query" }).dohUpstream).toBeTruthy();
     expect(fieldsOf({ dohUpstream: "https://localhost/dns-query" }).dohUpstream).toBeTruthy();
     expect(fieldsOf({ dohUpstream: "http://169.254.169.254/dns-query" }).dohUpstream).toBeTruthy();
-    expect(fieldsOf({ remoteDns: "http://10.0.0.5/dns-query" }).remoteDns).toBeTruthy();
-    expect(fieldsOf({ remoteDns: "192.168.1.1" }).remoteDns).toBeTruthy();
-    expect(fieldsOf({ remoteDns: "192.168.1.1:443" }).remoteDns).toBeTruthy();
-    expect(fieldsOf({ remoteDns: "127.0.0.1:53" }).remoteDns).toBeTruthy();
-    expect(fieldsOf({ remoteDns: "localhost:3000" }).remoteDns).toBeTruthy();
     expect(validateSettings({ dohUpstream: "https://dns.google/dns-query" }).ok).toBe(true);
-    expect(validateSettings({ remoteDns: "https://dns.google/dns-query" }).ok).toBe(true);
-    expect(validateSettings({ remoteDns: "8.8.8.8" }).ok).toBe(true);
-    expect(validateSettings({ remoteDns: "8.8.8.8:53" }).ok).toBe(true);
   });
 
   it("validates echServerName domain shape", () => {
@@ -71,22 +61,13 @@ describe("validateSettings", () => {
     expect(fieldsOf({ echServerName: "has space.example.com" }).echServerName).toBeTruthy();
   });
 
-  it("normalizes a bare remoteDns host into an https dns-query URL", () => {
-    const result = validateSettings({ remoteDns: "8.8.8.8" });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.remoteDns).toBe("https://8.8.8.8/dns-query");
-    const v6 = validateSettings({ remoteDns: "2606:4700::1111" });
-    expect(v6.ok).toBe(true);
-    if (v6.ok) expect(v6.value.remoteDns).toBe("https://[2606:4700::1111]/dns-query");
-  });
-
   it("range-checks numeric fields", () => {
     for (const [key, value] of [
       ["earlyDataMaxBytes", -1],
       ["earlyDataMaxBytes", 8193],
       ["earlyDataMaxBytes", 1.5],
-      ["urlTestIntervalSec", 59],
-      ["urlTestIntervalSec", 86401],
+      ["maxNodesPerFormat", 0],
+      ["subUpdateIntervalHours", 200],
       ["subUpdateIntervalHours", 0],
       ["subUpdateIntervalHours", 169],
       ["maxNodesPerFormat", 2001],
@@ -96,57 +77,53 @@ describe("validateSettings", () => {
     }
     expect(validateSettings({ maxNodesPerFormat: 2000 }).ok).toBe(true);
     expect(validateSettings({ earlyDataMaxBytes: 8192 }).ok).toBe(true);
-    expect(validateSettings({ urlTestIntervalSec: 60 }).ok).toBe(true);
+    expect(validateSettings({ maxNodesPerFormat: 1 }).ok).toBe(true);
   });
 
-  it("enforces Cloudflare-proxied default ports and address ports", () => {
+  it("enforces Cloudflare-proxied default ports and custom-endpoint ports", () => {
     expect(fieldsOf({ defaultPort: 9999 }).defaultPort).toBeTruthy();
     expect(fieldsOf({ defaultPort: 80 }).defaultPort).toBeTruthy();
     expect(validateSettings({ defaultPort: 443 }).ok).toBe(true);
     expect(validateSettings({ defaultPort: 2053 }).ok).toBe(true);
-    expect(fieldsOf({ addresses: [{ address: "1.2.3.4", port: 9999 }] }).addresses).toBeTruthy();
+    expect(fieldsOf({ customEndpoints: ["1.2.3.4:9999"] }).customEndpoints).toBeTruthy();
   });
 
-  it("sanitizes arrays: trim, dedupe, drop empties, cap counts", () => {
+  it("sanitizes arrays: trim, drop empties, cap counts", () => {
     const result = validateSettings({
-      addresses: [{ address: "1.2.3.4" }, { address: " 1.2.3.4 " }, { address: "5.6.7.8" }],
+      customEndpoints: ["1.2.3.4:443", "  1.2.3.4:443  ", "", "5.6.7.8"],
       proxyIps: Array.from({ length: 70 }, (_, i) => `192.0.2.${(i % 250) + 1}`),
-      nat64Prefixes: Array.from({ length: 12 }, () => "[2a02:898:146:64::]"),
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.addresses.length).toBe(2);
+      expect(result.value.customEndpoints).toEqual(["1.2.3.4:443", "1.2.3.4:443", "5.6.7.8"]);
       expect(result.value.proxyIps.length).toBeLessThanOrEqual(64);
-      expect(result.value.nat64Prefixes.length).toBeLessThanOrEqual(8);
     }
   });
 
-  it("drops invalid nat64 prefixes silently and rejects non-array address input", () => {
-    const result = validateSettings({ nat64Prefixes: ["[2a02::]", "not valid!!"] });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.nat64Prefixes).toEqual(["[2a02::]"]);
-    expect(fieldsOf({ addresses: "nope" })["addresses"]).toBeTruthy();
-    expect(fieldsOf({ addresses: [{ address: "1.2.3.4:99999" }] })["addresses"]).toBeTruthy();
-    expect(fieldsOf({ remoteSubUrls: [123] })["remoteSubUrls"]).toBeTruthy();
+  it("rejects non-array custom-endpoint input", () => {
+    expect(fieldsOf({ customEndpoints: "nope" })["customEndpoints"]).toBeTruthy();
+    expect(fieldsOf({ customEndpoints: [42] })["customEndpoints"]).toBeTruthy();
   });
 
-  it("requires http(s) URLs in URL lists and url fields", () => {
-    expect(fieldsOf({ remoteSubUrls: ["ftp://bad.example/sub"] })["remoteSubUrls"]).toBeTruthy();
-    expect(validateSettings({ remoteSubUrls: ["https://ok.example/sub"] }).ok).toBe(true);
+  it("requires http(s) URLs in url fields", () => {
     expect(fieldsOf({ dohUpstream: "not-a-url" })["dohUpstream"]).toBeTruthy();
     expect(fieldsOf({ dohUpstream: "ftp://x" })["dohUpstream"]).toBeTruthy();
-    expect(validateSettings({ remoteDns: "1.1.1.1" }).ok).toBe(true);
+    expect(fieldsOf({ proxyIpPoolUrl: "ftp://x" })["proxyIpPoolUrl"]).toBeTruthy();
+    expect(validateSettings({ dohUpstream: "https://dns.google/dns-query" }).ok).toBe(true);
+    expect(validateSettings({ proxyIpPoolUrl: "https://pool.example/ips.txt" }).ok).toBe(true);
+    expect(validateSettings({ proxyIpPoolUrl: "" }).ok).toBe(true);
   });
 
   it("matches enums exactly", () => {
     expect(fieldsOf({ language: "fr" })["language"]).toBeTruthy();
-    expect(fieldsOf({ ssMethod: "chacha20-poly1305" })["ssMethod"]).toBeTruthy();
     expect(fieldsOf({ fingerprint: "nope" })["fingerprint"]).toBeTruthy();
-    expect(fieldsOf({ proxyIpMode: "warp" })["proxyIpMode"]).toBeTruthy();
     expect(fieldsOf({ camouflage: { mode: "mirror" } })["camouflage.mode"]).toBeTruthy();
+    expect(fieldsOf({ camouflage: { mode: "proxy" } })["camouflage.mode"]).toBeTruthy();
     expect(fieldsOf({ fragment: { mode: "ultra" } })["fragment.mode"]).toBeTruthy();
     expect(fieldsOf({ fragment: { packets: "9-9" } })["fragment.packets"]).toBeTruthy();
     expect(validateSettings({ language: "fa", fingerprint: "randomized" }).ok).toBe(true);
+    expect(validateSettings({ camouflage: { mode: "static" } }).ok).toBe(true);
+    expect(validateSettings({ camouflage: { mode: "off" } }).ok).toBe(true);
   });
 
   it("requires exact boolean types", () => {
@@ -154,24 +131,18 @@ describe("validateSettings", () => {
     expect(fieldsOf({ debugLogging: 1 })["debugLogging"]).toBeTruthy();
   });
 
-  it("validates chainProxy uri only when enabled", () => {
-    expect(fieldsOf({ chainProxy: { enabled: true, uri: "" } })["chainProxy.uri"]).toBeTruthy();
-    expect(
-      fieldsOf({ chainProxy: { enabled: true, uri: "https://h.example" } })["chainProxy.uri"],
-    ).toBeTruthy();
-    expect(validateSettings({ chainProxy: { enabled: true, uri: "socks5://u:p@h:1080" } }).ok).toBe(
-      true,
-    );
-    expect(validateSettings({ chainProxy: { enabled: true, uri: "http://h:8080" } }).ok).toBe(true);
-    expect(validateSettings({ chainProxy: { enabled: false, uri: "" } }).ok).toBe(true);
-  });
-
-  it("validates camouflage url only in proxy mode", () => {
-    expect(fieldsOf({ camouflage: { mode: "proxy", url: "" } })["camouflage.url"]).toBeTruthy();
-    expect(validateSettings({ camouflage: { mode: "static", url: "" } }).ok).toBe(true);
-    expect(
-      validateSettings({ camouflage: { mode: "proxy", url: "https://camo.example/page" } }).ok,
-    ).toBe(true);
+  it("ignores removed top-level keys instead of storing them", () => {
+    const result = validateSettings({
+      chainProxy: { enabled: true, uri: "socks5://u:p@h:1080" },
+      remoteNodes: [{ kind: "reality" }],
+      remoteDns: "8.8.8.8",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect("chainProxy" in result.value).toBe(false);
+      expect("remoteNodes" in result.value).toBe(false);
+      expect("remoteDns" in result.value).toBe(false);
+    }
   });
 
   it("restricts alpn to the known token list", () => {
@@ -186,7 +157,7 @@ describe("validateSettings", () => {
     expect(fieldsOf({ securePath: "" })["securePath"]).toBeTruthy();
     expect(validateSettings({ securePath: "abc-DEF_123" }).ok).toBe(true);
     expect(fieldsOf({ vlessPath: "x!" })["vlessPath"]).toBeTruthy();
-    expect(fieldsOf({ addresses: [{ address: "bad host" }] })["addresses"]).toBeTruthy();
+    expect(fieldsOf({ customEndpoints: ["bad host!!"] })["customEndpoints"]).toBeTruthy();
     expect(fieldsOf({ nameTemplate: "a".repeat(513) })["nameTemplate"]).toBeTruthy();
     expect(fieldsOf({ passwordHash: 7 })["passwordHash"]).toBeTruthy();
     expect(validateSettings({ passwordHash: null, passwordSalt: null }).ok).toBe(true);
@@ -198,7 +169,10 @@ describe("validateSettings", () => {
     if (result.ok) {
       expect(result.value.profileTitle).toBe("Trimmed");
       expect(result.value.defaultPort).toBe(DEFAULT_SETTINGS.defaultPort);
-      expect(result.value.addresses).toEqual([]);
+      expect(result.value.cdnPresets).toEqual([]);
+      expect(result.value.customEndpoints).toEqual([]);
+      expect(result.value.warpPresets).toEqual(["default"]);
+      expect(result.value.warpCustomEndpoints).toEqual([]);
       expect(result.value.fragment.packets).toBe("tlshello");
       expect(Object.keys(result.value).sort()).toEqual(
         Object.keys(DEFAULT_SETTINGS)
@@ -272,41 +246,80 @@ describe("defaultPort guard", () => {
     }
   });
 
-  it("allows empty addresses (falls back to the worker hostname)", () => {
-    expect(validateSettings({ addresses: [] }).ok).toBe(true);
+  it("allows empty custom endpoints (falls back to presets, then hostname)", () => {
+    expect(validateSettings({ customEndpoints: [] }).ok).toBe(true);
   });
 });
 
-describe("addresses with pinned ports", () => {
-  it("normalizes ip:port entries and drops inline ports into a port field", () => {
+describe("custom endpoint lines", () => {
+  it("keeps valid ip:port, bare host, and bracketed ipv6 lines verbatim", () => {
     const result = validateSettings({
-      addresses: [
-        { address: "1.2.3.4:2053" },
-        { address: " 5.6.7.8 " },
-        { address: "[2606:4700::1]:8443" },
-        { address: "2606:4700::99" },
-        { address: "edge.example.com" },
-        { address: "edge.example.com:2096" },
+      customEndpoints: [
+        "1.2.3.4:2053",
+        " 5.6.7.8 ",
+        "[2606:4700::1]:8443",
+        "2606:4700::99",
+        "edge.example.com",
+        "edge.example.com:2096",
       ],
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.addresses).toEqual([
-        { address: "1.2.3.4", port: 2053 },
-        { address: "5.6.7.8" },
-        { address: "[2606:4700::1]", port: 8443 },
-        { address: "[2606:4700::99]" },
-        { address: "edge.example.com" },
-        { address: "edge.example.com", port: 2096 },
+      expect(result.value.customEndpoints).toEqual([
+        "1.2.3.4:2053",
+        "5.6.7.8",
+        "[2606:4700::1]:8443",
+        "2606:4700::99",
+        "edge.example.com",
+        "edge.example.com:2096",
       ]);
     }
   });
 
-  it("caps the list at 64 normalized entries", () => {
-    const list = Array.from({ length: 80 }, (_, i) => ({ address: `10.0.0.${i + 1}`, port: 443 }));
-    const result = validateSettings({ addresses: list });
+  it("names every offending line and applies nothing on any bad line", () => {
+    const result = validateSettings({
+      customEndpoints: ["1.2.3.4:443", "not a host!!", "5.6.7.8:9999"],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fields.customEndpoints).toContain("line 2");
+      expect(result.fields.customEndpoints).toContain("not a host!!");
+    }
+    const outOfFamily = validateSettings({ customEndpoints: ["9.9.9.9:22"] });
+    expect(outOfFamily.ok).toBe(false);
+    if (!outOfFamily.ok) {
+      expect(outOfFamily.fields.customEndpoints).toContain("line 1");
+      expect(outOfFamily.fields.customEndpoints).toContain("9.9.9.9:22");
+    }
+  });
+
+  it("rejects non-string lines and caps the list at 64 entries", () => {
+    expect(fieldsOf({ customEndpoints: [42] })["customEndpoints"]).toBeTruthy();
+    const list = Array.from({ length: 80 }, (_, i) => `10.1.0.${i + 1}:443`);
+    const result = validateSettings({ customEndpoints: list });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.addresses.length).toBe(64);
+    if (result.ok) expect(result.value.customEndpoints.length).toBe(64);
+  });
+
+  it("validates the WARP custom box with the same per-line discipline (any port allowed)", () => {
+    expect(fieldsOf({ warpCustomEndpoints: ["bogus!!"] })["warpCustomEndpoints"]).toBeTruthy();
+    expect(fieldsOf({ warpCustomEndpoints: [42] })["warpCustomEndpoints"]).toBeTruthy();
+    const result = validateSettings({ warpCustomEndpoints: ["162.159.192.1:2408", "engage.cloudflareclient.com:500", "9.9.9.9:22"] });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.warpCustomEndpoints).toEqual(["162.159.192.1:2408", "engage.cloudflareclient.com:500", "9.9.9.9:22"]);
+    }
+  });
+
+  it("accepts preset id lists and drops nothing silently", () => {
+    expect(fieldsOf({ cdnPresets: "nope" })["cdnPresets"]).toBeTruthy();
+    expect(fieldsOf({ cdnPresets: [42] })["cdnPresets"]).toBeTruthy();
+    const result = validateSettings({ cdnPresets: ["cf-443-a", "cf-80-a"], warpPresets: ["default", "nope"] });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.cdnPresets).toEqual(["cf-443-a", "cf-80-a"]);
+      expect(result.value.warpPresets).toEqual(["default", "nope"]);
+    }
   });
 });
 
@@ -378,43 +391,6 @@ describe("telegram settings block", () => {
 });
 
 describe("ssrf guards", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("rejects a private camouflage URL at save in proxy mode", () => {
-    for (const url of [
-      "http://127.0.0.1/page",
-      "http://10.0.0.5/page",
-      "http://192.168.1.1/page",
-      "http://169.254.169.254/latest/meta-data/",
-      "http://localhost/page",
-      "http://[::1]/page",
-    ]) {
-      const result = validateSettings({ camouflage: { mode: "proxy", url } });
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.fields["camouflage.url"]).toBeTruthy();
-    }
-    expect(validateSettings({ camouflage: { mode: "proxy", url: "https://camo.example/page" } }).ok).toBe(true);
-    expect(validateSettings({ camouflage: { mode: "static", url: "" } }).ok).toBe(true);
-  });
-
-  it("rejects a private chainProxy host at save when enabled", () => {
-    for (const uri of [
-      "socks5://127.0.0.1:1080",
-      "socks5://10.0.0.5:1080",
-      "http://192.168.1.1:8080",
-      "http://localhost:8080",
-      "socks5://[::1]:1080",
-    ]) {
-      const result = validateSettings({ chainProxy: { enabled: true, uri } });
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.fields["chainProxy.uri"]).toBeTruthy();
-    }
-    expect(validateSettings({ chainProxy: { enabled: true, uri: "socks5://chain.example:1080" } }).ok).toBe(true);
-    expect(validateSettings({ chainProxy: { enabled: false, uri: "" } }).ok).toBe(true);
-  });
-
   it("rejects private proxyIps entries at save", () => {
     for (const entry of ["127.0.0.1", "10.0.0.5", "192.168.1.1:443", "localhost", "10.0.0.5:8443"]) {
       const result = validateSettings({ proxyIps: [entry] });
@@ -424,66 +400,28 @@ describe("ssrf guards", () => {
     expect(validateSettings({ proxyIps: ["8.8.8.8", "93.184.216.34:443"] }).ok).toBe(true);
   });
 
-  it("blocks a camouflage redirect to a private host", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(null, { status: 302, headers: { Location: "http://169.254.169.254/latest/meta-data/" } })),
-    );
-    const res = await handleCamouflage(
-      new Request("https://x/junk"),
-      {} as never,
-      makeTestSettings({ camouflage: { mode: "proxy", url: "https://camo.example/page" } }),
-    );
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe(ASSETS.camo);
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  it("rejects private proxyIpPoolUrl and dohUpstream targets at save", () => {
+    for (const url of [
+      "http://127.0.0.1/ips.txt",
+      "http://10.0.0.5/ips.txt",
+      "http://192.168.1.1/ips.txt",
+      "http://localhost/ips.txt",
+    ]) {
+      const result = validateSettings({ proxyIpPoolUrl: url });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.fields.proxyIpPoolUrl).toBeTruthy();
+    }
+    expect(validateSettings({ proxyIpPoolUrl: "https://pool.example/ips.txt" }).ok).toBe(true);
   });
 
   it("omits private and Cloudflare proxyIP candidates from the failover strategy", async () => {
-    const s = makeTestSettings({ proxyIpMode: "proxyip", proxyIps: ["127.0.0.1", "10.0.0.5", "104.16.132.229", "8.8.8.8"] });
+    const s = makeTestSettings({ proxyIps: ["127.0.0.1", "10.0.0.5", "104.16.132.229", "8.8.8.8"] });
     const strategy = await makeFailoverStrategy(s, { host: "dest.example.com", port: 443 });
     const proxied = strategy.candidates.filter((c) => c.via === "proxyip").map((c) => c.host);
     expect(proxied).not.toContain("127.0.0.1");
     expect(proxied).not.toContain("10.0.0.5");
     expect(proxied).not.toContain("104.16.132.229");
     expect(proxied).toContain("8.8.8.8");
-  });
-});
-
-describe("address country metadata", () => {
-  it("normalizes country to uppercase", () => {
-    const result = validateSettings({ addresses: [{ address: "1.2.3.4", country: "de" }] });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.addresses).toEqual([{ address: "1.2.3.4", country: "DE" }]);
-    const spaced = validateSettings({ addresses: [{ address: "1.2.3.4", country: " us " }] });
-    expect(spaced.ok).toBe(true);
-    if (spaced.ok) expect(spaced.value.addresses).toEqual([{ address: "1.2.3.4", country: "US" }]);
-  });
-
-  it("rejects non-2-letter country values", () => {
-    for (const country of ["USA", "U", "U1", "12", "D-", "ABC", 42]) {
-      const fields = fieldsOf({ addresses: [{ address: "1.2.3.4", country }] });
-      expect(fields.addresses, `country ${String(country)}`).toBeTruthy();
-    }
-    expect(validateSettings({ addresses: [{ address: "1.2.3.4", country: "FR" }] }).ok).toBe(true);
-  });
-
-  it("treats empty country as absent and drops stored city metadata", () => {
-    const result = validateSettings({ addresses: [{ address: "1.2.3.4", country: "" }] });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.addresses).toEqual([{ address: "1.2.3.4" }]);
-    const legacy = validateSettings({ addresses: [{ address: "1.2.3.4", city: "Berlin" }] });
-    expect(legacy.ok).toBe(true);
-    if (legacy.ok) expect(legacy.value.addresses).toEqual([{ address: "1.2.3.4" }]);
-  });
-
-  it("keeps country on one entry", () => {
-    const result = validateSettings({
-      addresses: [{ address: "1.2.3.4", country: "de", label: "DE-1" }],
-    });
-    expect(result.ok).toBe(true);
-    if (result.ok)
-      expect(result.value.addresses).toEqual([{ address: "1.2.3.4", label: "DE-1", country: "DE" }]);
   });
 });
 
@@ -508,27 +446,22 @@ describe("echAuto", () => {
   });
 });
 
-describe("vlessFlow and ssDirect", () => {
-  it("default to empty flow and direct off", () => {
+describe("vlessFlow", () => {
+  it("defaults to empty flow", () => {
     const d = validateSettings({});
     expect(d.ok).toBe(true);
     if (d.ok) {
       expect(d.value.vlessFlow).toBe("");
-      expect(d.value.ssDirect).toBe(false);
+      expect("ssDirect" in d.value).toBe(false);
     }
-    expect(validateSettings({ vlessFlow: "", ssDirect: false }).ok).toBe(true);
-    expect(validateSettings({ vlessFlow: "xtls-rprx-vision", ssDirect: true }).ok).toBe(true);
+    expect(validateSettings({ vlessFlow: "" }).ok).toBe(true);
+    expect(validateSettings({ vlessFlow: "xtls-rprx-vision" }).ok).toBe(true);
   });
 
   it("accepts only known flows", () => {
     expect(fieldsOf({ vlessFlow: "xtls-rprx-vision-extra" }).vlessFlow).toBeTruthy();
     expect(fieldsOf({ vlessFlow: "vision" }).vlessFlow).toBeTruthy();
     expect(fieldsOf({ vlessFlow: 0 }).vlessFlow).toBeTruthy();
-  });
-
-  it("rejects non-boolean ssDirect values", () => {
-    expect(fieldsOf({ ssDirect: "yes" }).ssDirect).toBeTruthy();
-    expect(fieldsOf({ ssDirect: 1 }).ssDirect).toBeTruthy();
   });
 });
 
@@ -600,58 +533,6 @@ describe("resolveEchServerName", () => {
   });
 });
 
-describe("totp settings block", () => {
-  const SECRET = "JBSWY3DPEHPK3PXP";
-  const DIGEST = "ab".repeat(32);
-
-  it("defaults to disabled with no secret or codes", () => {
-    const d = validateSettings({});
-    expect(d.ok).toBe(true);
-    if (d.ok) expect(d.value.totp).toEqual({ enabled: false, secret: "", recoveryCodes: [] });
-  });
-
-  it("accepts a full valid totp patch and normalizes it", () => {
-    const result = validateSettings({
-      totp: { enabled: true, secret: "jbsw y3dp-ehpk 3pxp", recoveryCodes: [DIGEST.toUpperCase(), DIGEST] },
-    });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.totp).toEqual({ enabled: true, secret: SECRET, recoveryCodes: [DIGEST] });
-  });
-
-  it("requires a secret when enabling", () => {
-    expect(fieldsOf({ totp: { enabled: true } })["totp.secret"]).toBeTruthy();
-    expect(fieldsOf({ totp: { enabled: true, secret: "" } })["totp.secret"]).toBeTruthy();
-    expect(validateSettings({ totp: { enabled: true, secret: SECRET } }).ok).toBe(true);
-  });
-
-  it("rejects malformed secrets", () => {
-    for (const secret of ["short", "JBSWY3DP", "JBSW!3DPEHPK3PXP", "JBSWY3DPEHPK3PX0", "JBSWY3DPEHPK3PX8", "JBSWY3DPEHPK3PX1"]) {
-      expect(fieldsOf({ totp: { secret } })["totp.secret"]).toBeTruthy();
-    }
-    expect(validateSettings({ totp: { secret: SECRET } }).ok).toBe(true);
-  });
-
-  it("validates recovery code shape strictly", () => {
-    expect(fieldsOf({ totp: { recoveryCodes: "nope" } })["totp.recoveryCodes"]).toBeTruthy();
-    expect(fieldsOf({ totp: { recoveryCodes: [42] } })["totp.recoveryCodes"]).toBeTruthy();
-    expect(fieldsOf({ totp: { recoveryCodes: ["xyz"] } })["totp.recoveryCodes"]).toBeTruthy();
-    expect(validateSettings({ totp: { recoveryCodes: ["AB".repeat(32)] } }).ok).toBe(true);
-    expect(fieldsOf({ totp: { recoveryCodes: Array.from({ length: 17 }, (_, i) => String(i).padStart(64, "0")) } })["totp.recoveryCodes"]).toBeTruthy();
-    expect(validateSettings({ totp: { recoveryCodes: [] } }).ok).toBe(true);
-  });
-
-  it("rejects non-object totp blocks and non-boolean flags", () => {
-    expect(fieldsOf({ totp: [1] }).totp).toBe("must be an object");
-    expect(fieldsOf({ totp: { enabled: "yes" } })["totp.enabled"]).toBeTruthy();
-  });
-
-  it("keeps totp out of the round-trip fixture", () => {
-    const result = validateSettings(makeTestSettings());
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual(makeTestSettings());
-  });
-});
-
 describe("allowedIps", () => {
   it("defaults to an empty list that allows all", () => {
     const result = validateSettings({});
@@ -683,128 +564,5 @@ describe("allowedIps", () => {
     expect(fieldsOf({ allowedIps: ["1.2.3.4:443"] }).allowedIps).toBeTruthy();
     expect(fieldsOf({ allowedIps: "1.2.3.4" }).allowedIps).toBeTruthy();
     expect(fieldsOf({ allowedIps: [42] }).allowedIps).toBeTruthy();
-  });
-});
-
-describe("remoteNodes", () => {
-  const PBK = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
-  const UUID = "d342d11e-d424-4583-b36e-524ab1f0afa4";
-
-  function reality(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-    return {
-      kind: "reality",
-      name: "VPS Reality",
-      address: "203.0.113.10",
-      port: 443,
-      uuid: UUID,
-      sni: "www.microsoft.com",
-      pbk: PBK,
-      sid: "6ba85179",
-      flow: "xtls-rprx-vision",
-      spx: "/",
-      fp: "chrome",
-      ...overrides,
-    };
-  }
-
-  function hy2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-    return {
-      kind: "hy2",
-      name: "VPS Hy2",
-      address: "203.0.113.11",
-      port: 4443,
-      password: "hy2secret",
-      sni: "example.com",
-      obfs: "",
-      obfsPassword: "",
-      ...overrides,
-    };
-  }
-
-  it("defaults to an empty list and accepts valid reality and hy2 entries", () => {
-    expect(DEFAULT_SETTINGS.remoteNodes).toEqual([]);
-    const result = validateSettings({ remoteNodes: [reality(), hy2()] });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.remoteNodes).toHaveLength(2);
-      expect(result.value.remoteNodes[0]).toMatchObject({ kind: "reality", name: "VPS Reality" });
-      expect(result.value.remoteNodes[1]).toMatchObject({ kind: "hy2", name: "VPS Hy2" });
-    }
-  });
-
-  it("fills reality defaults for flow, spx, fp and an empty sid", () => {
-    const { flow: _f, spx: _s, fp: _p, sid: _i, ...bare } = reality();
-    const result = validateSettings({ remoteNodes: [bare] });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.remoteNodes[0]).toMatchObject({
-        flow: "xtls-rprx-vision",
-        spx: "/",
-        fp: "chrome",
-        sid: "",
-      });
-    }
-  });
-
-  it("rejects non-array input and caps the list at 20 entries", () => {
-    expect(fieldsOf({ remoteNodes: "x" }).remoteNodes).toBeTruthy();
-    const many = Array.from({ length: 21 }, (_, i) => reality({ name: `R${i}` }));
-    expect(fieldsOf({ remoteNodes: many }).remoteNodes).toBeTruthy();
-    const max = Array.from({ length: 20 }, (_, i) => reality({ name: `R${i}` }));
-    expect(validateSettings({ remoteNodes: max }).ok).toBe(true);
-  });
-
-  it("rejects unknown kinds, non-object entries and bad names", () => {
-    expect(fieldsOf({ remoteNodes: [reality({ kind: "vless" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [42] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ name: "" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ name: "x".repeat(65) })] }).remoteNodes).toBeTruthy();
-  });
-
-  it("rejects bad addresses, ports and SSRF targets", () => {
-    expect(fieldsOf({ remoteNodes: [reality({ address: "" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ address: "not a host!!" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ port: 0 })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ port: 99999 })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ address: "127.0.0.1" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ address: "10.0.0.5" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ address: "localhost" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ sni: "" })] }).remoteNodes).toBeTruthy();
-    expect(validateSettings({ remoteNodes: [reality({ address: "vps.example.net", port: 8443 })] }).ok).toBe(true);
-    expect(validateSettings({ remoteNodes: [reality({ port: 2083 })] }).ok).toBe(true);
-  });
-
-  it("validates reality uuid, pbk, sid, flow, fp shapes", () => {
-    expect(fieldsOf({ remoteNodes: [reality({ uuid: "not-a-uuid" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ pbk: "!!!not-base64!!!" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ pbk: "aGk" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ sid: "xyz" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ sid: "123456789" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ flow: "bogus" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [reality({ fp: "ie6" })] }).remoteNodes).toBeTruthy();
-    expect(validateSettings({ remoteNodes: [reality({ sid: "", flow: "" })] }).ok).toBe(true);
-  });
-
-  it("validates hy2 password and obfs pairing", () => {
-    expect(fieldsOf({ remoteNodes: [hy2({ password: "" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [hy2({ obfs: "bogus" })] }).remoteNodes).toBeTruthy();
-    expect(fieldsOf({ remoteNodes: [hy2({ obfs: "salamander" })] }).remoteNodes).toBeTruthy();
-    expect(
-      validateSettings({ remoteNodes: [hy2({ obfs: "salamander", obfsPassword: "obfsecret" })] }).ok,
-    ).toBe(true);
-  });
-
-  it("drops unknown smuggled keys instead of storing them", () => {
-    const result = validateSettings({ remoteNodes: [reality({ privateKey: "topsecret" })] });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.remoteNodes[0]).not.toHaveProperty("privateKey");
-      expect(result.value.remoteNodes[0]).not.toHaveProperty("private_key");
-    }
-  });
-
-  it("fails the patch when any entry is invalid", () => {
-    const result = validateSettings({ remoteNodes: [reality({ uuid: "bad" }), hy2()] });
-    expect(result.ok).toBe(false);
   });
 });

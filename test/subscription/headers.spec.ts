@@ -13,7 +13,7 @@ describe("subscriptionHeaders", () => {
     vi.setSystemTime(new Date("2026-09-02T00:00:00.000Z"));
     try {
       expect(
-        subscriptionHeaders("clash", "Q Proxy", nodes, usage, {
+        subscriptionHeaders("singbox", "Q Proxy", nodes, usage, {
           updateIntervalHours: 12,
           webPageUrl: "https://w.test/sp/panel",
         }),
@@ -30,19 +30,15 @@ describe("subscriptionHeaders", () => {
     }
   });
 
-  it("picks the extension per format (attachment headers are separate now)", () => {
+  it("picks the extension per surviving format (deleted formats are invalid)", () => {
     const mk = (format: Parameters<typeof attachmentHeaders>[0]): Record<string, string> =>
       attachmentHeaders(format, "T");
     expect(mk("base64")["Content-Disposition"]).toContain("T.txt");
     expect(mk("singbox")["Content-Disposition"]).toContain("T.json");
-    expect(mk("surge")["Content-Disposition"]).toContain("T.conf");
-    expect(mk("loon")["Content-Disposition"]).toContain("T.conf");
-    expect(mk("quantumult")["Content-Disposition"]).toContain("T.conf");
-    expect(mk("clash")["Content-Disposition"]).toContain("T.yaml");
   });
 
   it("keeps attachment out of the default header set so browser views never download", () => {
-    const h = subscriptionHeaders("clash", "T", nodes, usage, { updateIntervalHours: 6, webPageUrl: "" });
+    const h = subscriptionHeaders("singbox", "T", nodes, usage, { updateIntervalHours: 6, webPageUrl: "" });
     expect("Content-Disposition" in h).toBe(false);
   });
 

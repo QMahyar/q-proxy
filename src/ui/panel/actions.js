@@ -67,22 +67,13 @@ await withBusy($('discard-btn'),()=>{[...S.dirty].forEach(sec=>discardSection(se
  await withBusy(el,()=>api('api/settings/import',{method:'POST',body:{settings:parsed.settings}}));
  toast(t('general.backup.imported'),'ok');location.reload()}
  else toast(t('general.backup.badfile'),'err')}
- catch(err){if(err&&err.fields)toast(Object.values(err.fields)[0],'err');else toastErr(err)}
+ catch(err){if(err&&err.fields){const first=String(Object.values(err.fields)[0]);toast(first.indexOf('pre-cut')>=0?t('general.backup.precut'):first,'err')}else toastErr(err)}
  finally{fileInput.value=''}};
  fileInput.click()},
- 'check-update'(el){
- withBusy(el,async()=>{
- try{
- const d=await api('api/version/check',{fresh:true});
- if(d.latest===null)toast(t('home.status.updateCheckFailed'),'err');
- else if(d.updateAvailable)toast(t('home.status.updateAvailable',{v:d.latest.replace(/^v/,'')}),'ok');
- else toast(t('home.status.upToDate'),'ok')}
- catch(err){toastErr(err)}})},
  'reset-defaults'(el){
  confirmDialog('confirm.reset_title','confirm.reset_body',true).then(async yes=>{
 if(!yes)return;
 try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));location.reload()}catch(err){toastErr(err)}})},
- 'refresh-ip'(){loadMyIp()},
  accent(el){
  const a=el.dataset.accent||'cyan';
  if(a==='cyan')delete document.documentElement.dataset.accent;
@@ -98,67 +89,43 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  confirmDialog('warp.confirm.regen_title','warp.confirm.regen_body',true).then(async yes=>{
  if(!yes)return;
  try{const d=await withBusy(el,()=>api('api/warp/account/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));
- const tok=d&&d.token;if(tok&&S.warp){const url=warpSubUrl(tok,'wireguard-conf');openShareSheet({title:t('share.title_rotated'),url:url,fileName:'warp-'+el.dataset.id+'.conf',note:'once'})}else toast(t('warp.toast.regen')||t('users.toast.regen'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})},
+ const tok=d&&d.token;if(tok&&S.warp){const url=warpSubUrl(tok,'wireguard-conf');openShareSheet({title:t('share.title_rotated'),url:url,fileName:'warp-'+el.dataset.id+'.conf',note:'once'})}else toast(t('warp.toast.regen'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})},
  'warp-delete'(el){
  confirmDialog('warp.confirm.delete_title','warp.confirm.delete_body',true).then(async yes=>{
  if(!yes)return;
  try{await withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'DELETE',mutate:true}));
  toast(t('warp.toast.deleted'),'ok');invalidateWarp();location.hash='#/warp'}catch(err){toastErr(err)}})},
- 'warp-amnezia-reset'(el){
- withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:null}})
- .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))})
- .catch(err=>toastErr(err)))},
- 'warp-save'(el){
+  'warp-save'(el){
  const id=el.dataset.id;const field=el.dataset.field;
  const patch={};
  if(field==='name')patch.name=$('warp-name').value.trim();
  if(field==='dns')patch.dns=$('warp-dns').value.trim();
- if(field==='preset')patch.endpoint_list={type:'preset',preset_id:$('warp-preset').value};
  withBusy(el,()=>api('api/warp/account/'+id,{method:'PUT',body:patch})
  .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(id))})
  .catch(err=>toastErr(err)))},
- 'warp-amnezia-save'(el){
-  const body={};
-  ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const el2=$('amz-'+k);if(!el2)return;const v=el2.value.trim();if(v.length>0)body[k]=v});
-  const i1el=$('amz-I1');const i1=i1el?i1el.value.trim():'';if(i1.length>0)body.I1=i1;
-  withBusy(el,()=>api('api/warp/settings/amnezia',{method:'PUT',body:{amnezia:body}})
-  .then(d=>{if(!S.warp)S.warp={accounts:[],presets:[],amnezia:null};S.warp.amnezia=d.amnezia;toast(t('common.saved'),'ok')})
-  .catch(err=>toastErr(err)))},
+  'warp-amnezia-save'(el){
+   const body={};
+   ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const el2=$('amz-'+k);if(!el2)return;const v=el2.value.trim();if(v.length>0)body[k]=v});
+   const i1el=$('amz-I1');const i1=i1el?i1el.value.trim():'';if(i1.length>0)body.I1=i1;
+   const tg=$('warp-amnezia-toggle');const on=tg?tg.checked:!!(S.warp&&S.warp.amneziaEnabled);
+   withBusy(el,()=>api('api/warp/settings/amnezia',{method:'PUT',body:{amnezia:body,amneziaEnabled:on}})
+   .then(d=>{if(!S.warp)S.warp={accounts:[],presets:[],amnezia:null,amneziaEnabled:false};S.warp.amnezia=d.amnezia;S.warp.amneziaEnabled=d.amneziaEnabled===true;toast(t('common.saved'),'ok')})
+   .catch(err=>toastErr(err)))},
   'warp-preset-del'(el){
   const p=S.warp&&S.warp.presets?S.warp.presets.find(x=>x.id===el.dataset.id):null;
   confirmDialog('confirm.presetDelete.title','confirm.presetDelete.message',true,{name:p?p.name:'',n:p&&p.endpoints?p.endpoints.length:0}).then(async yes=>{
   if(!yes)return;
   try{await withBusy(el,()=>api('api/warp/presets/'+el.dataset.id,{method:'DELETE',mutate:true}));
   toast(t('warp.toast.presetDeleted'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}catch(err){toastErr(err)}})},
-  'warp-custom-eps-save'(el){
-  const eps=$('warp-custom-eps').value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
-  withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{endpoint_list:{type:'custom',custom_endpoints:eps}}})
-  .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))})
-  .catch(err=>toastErr(err)))},
-  'warp-account-amnezia-save'(el){
-  const body={};
-  ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const inp=$('amza-'+k);if(!inp)return;const v=inp.value.trim();if(v.length>0)body[k]=v});
-  const i1el=$('amza-I1');const i1=i1el?i1el.value.trim():'';if(i1.length>0)body.I1=i1;
-  withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:Object.keys(body).length?body:null}})
-  .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))})
-  .catch(err=>toastErr(err)))},
- 'close-user-modal'(el){closeModal(el.dataset.modal)},
- 'users-add'(){openUserModal()},
- 'users-edit'(el){openUserModal(el.dataset.id)},
- 'users-reload'(){loadUsers()},
- 'users-del'(el){
- confirmDialog('users.confirm_delete_title','users.confirm_delete_body',true).then(async yes=>{
- if(!yes)return;
- try{await withBusy(el,()=>api('api/users/'+el.dataset.id,{method:'DELETE',mutate:true}));toast(t('users.toast.deleted'),'ok');invalidateUsersCache();await loadUsers()}catch(err){toastErr(err)}})},
- 'users-regen'(el){
- confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
- if(!yes)return;
- try{const d=await withBusy(el,()=>api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));const tok=d&&d.token;if(tok)openShareSheet({title:t('share.title_rotated'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'});else toast(t('users.toast.regen'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
-  'subs-user-copy'(el){
- confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
- if(!yes)return;
- try{const d=await withBusy(el,()=>api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));const tok=d&&d.token;if(tok)openShareSheet({title:t('share.title_rotated'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'});else toast(t('users.toast.regen'),'ok');await loadUsers();await loadSubsUsers()}catch(err){toastErr(err)}})},
- 'shortcuts'(){renderShortcuts();openModal('m-keys')},
+ 'warp-endpoints-save'(el){
+ const ids=[...document.querySelectorAll('#warp-endpoints input[data-warp-preset]')].filter(c=>c.checked).map(c=>c.dataset.warpPreset);
+ const ta=$('warp-eps-custom');
+ const custom=ta?ta.value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0):[];
+ const showErr=msg=>{const fw=ta?ta.closest('.field'):null;const err=fw?fw.querySelector('.field__error'):null;if(err)err.textContent=msg;if(ta)ta.setAttribute('aria-invalid','true')};
+ withBusy(el,()=>api('api/settings/save',{method:'PUT',body:{warpPresets:ids,warpCustomEndpoints:custom}})
+ .then(()=>{Object.assign(S.set,{warpPresets:ids,warpCustomEndpoints:custom});toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(renderWarpSection)})
+ .catch(err=>{if(err&&err.fields&&(err.fields.warpPresets||err.fields.warpCustomEndpoints))showErr(err.fields.warpCustomEndpoints||err.fields.warpPresets);else toastErr(err)}))},
+  'shortcuts'(){renderShortcuts();openModal('m-keys')},
   'boot-retry'(){boot()},
  'close-keys'(){closeModal('m-keys')},
  'wizard-skip'(){wizardDone()},
@@ -169,10 +136,6 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  maybeWizard()},
  'backup-export'(){try{localStorage.setItem(EXPORT_KEY,String(Date.now()))}catch(e){}setTimeout(maybeBackupBanner,500)},
  'backup-dismiss'(){try{localStorage.setItem(BACKUP_DISMISS,String(Date.now()))}catch(e){}$('backup-banner').hidden=true},
- 'users-bulk-enable'(el){runBulkUsers('confirm.bulk.enable',{enabled:true},el)},
- 'users-bulk-disable'(el){runBulkUsers('confirm.bulk.disable',{enabled:false},el)},
- 'users-bulk-del'(el){runBulkUsers('confirm.bulk.delete',{delete:true},el)},
- 'users-bulk-extend'(el){const pick=$('users-bulk-expiry');const v=pick?pick.value:'';if(!v){toast(t('users.bulk.empty_expiry'),'err');return}runBulkUsers('confirm.bulk.extend',{expiresAt:new Date(v).getTime()},el)},
  'tg-setup'(el){
  withBusy(el,async()=>{
  try{const d=await api('api/telegram/setup',{method:'POST',body:{}});
@@ -186,40 +149,9 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  else toast(t('tg.remove_fail')+(d.description?' · '+d.description:''),'err')}
  catch(err){toastErr(err)}})()},
   'theme-toggle'(){const cur=getTheme();const nxt=cur==='dark'?'light':'dark';try{localStorage.setItem(THEME_KEY,nxt)}catch(e){}applyTheme(nxt);},
-  'addr-add'(el){
-   const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
-   if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({},body.children.length));
-   const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
-   markDirty(el)},
-  'addr-del'(el){
-   const card=el.closest('.addr-card'),body=el.closest('[data-addr-body]');
-   if(body&&card){card.remove();
-   const list=el.closest('[data-type="addrList"]');
-   if(list&&list.querySelectorAll('[data-addr-body] .addr-card').length===0){const empty=list.querySelector('.addr-empty');if(empty)empty.style.display=''}
-   }
-   markDirty()},
-  'remote-add'(el){
-   const list=el.closest('[data-type="remoteList"]');const body=list&&list.querySelector('[data-remote-body]');
-   if(body){
-   if(body.querySelectorAll('.remote-card').length>=20){toast(t('remote.nodes.max'),'err');return}
-   body.insertAdjacentHTML('beforeend',remoteNodeCardHtml({},body.children.length));
-   const empty=list&&list.querySelector('.remote-empty');if(empty)empty.style.display='none'}
-   markDirty(el)},
-  'remote-del'(el){
-   const card=el.closest('.remote-card'),body=el.closest('[data-remote-body]');
-   if(body&&card){card.remove();
-   const list=el.closest('[data-type="remoteList"]');
-   if(list&&list.querySelectorAll('[data-remote-body] .remote-card').length===0){const empty=list.querySelector('.remote-empty');if(empty)empty.style.display=''}
-   }
-   markDirty()},
-  'addr-hostname'(el){
-   const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
-   if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({address:location.hostname},body.children.length));
-   const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
-   markDirty(el)},
   'addr-probe'(el){
    withBusy(el,()=>api('api/address-probe',{fresh:true})
-   .then(d=>{S.addrHealth=d&&d.results||[];renderAddrDots()})
+   .then(d=>{const r=d&&d.results||[];const ok=r.filter(x=>x.status==='ok').length;toast(t('endpoints.probe.done',{ok:ok,n:r.length}),ok===r.length&&r.length>0?'ok':'err')})
    .catch(err=>toastErr(err)))},
   'pool-fetch'(el){loadPool(false)},
   'pool-test'(el){loadPool(true)},
@@ -256,69 +188,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  if(err&&err.status===401)setFw('fw-sec-cur',t('security.wrong_current'));
  else if(err&&err.fields&&err.fields.newPassword)setFw('fw-sec-new',String(err.fields.newPassword));
  else toastErr(err)}
- finally{el.disabled=false}})()},
- 'totp-start'(el){
- (async()=>{
- if(TOTP.started&&!TOTP.confirmed){
- if(!(await confirmDialog('totp.setup','totp.warn.restart',true)))return}
- el.disabled=true;
- try{
- const raw=new Uint8Array(20);crypto.getRandomValues(raw);
- const secret=totpB32Encode(raw);
- const plain=[];const hashes=[];
- const ABC='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
- for(let i=0;i<10;i++){const b=new Uint8Array(8);crypto.getRandomValues(b);let s='';for(let j=0;j<8;j++)s+=ABC[b[j]%ABC.length];const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));hashes.push([...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,'0')).join(''));plain.push(s.slice(0,4)+'-'+s.slice(4))}
- TOTP={secret:secret,hashes:hashes,plain:plain,started:true,confirmed:false};
- renderTotpSetup()}
- catch(err){toastErr(err)}
- finally{el.disabled=false}})()},
- 'totp-qr'(el){
- if(TOTP.secret)openQr(totpIssuerUrl(TOTP.secret))},
- 'totp-confirm'(el){
- const saved=$('totp-saved');
- if(saved&&!saved.checked){el.disabled=true;return}
- (async()=>{
- const inp=$('totp-code');if(!inp)return;
- const fw=$('fw-totp-code');const perr=fw?fw.querySelector('.field__error'):null;
- if(perr)perr.textContent='';if(fw)fw.classList.remove('field--error');
- el.disabled=true;
- try{
- if(!(await totpCheck(TOTP.secret,inp.value))){if(fw)fw.classList.add('field--error');if(perr)perr.textContent=t('totp.wrong_code');inp.focus();inp.select();return}
- await api('api/settings/save',{method:'PUT',body:{totp:{enabled:true,secret:TOTP.secret,recoveryCodes:TOTP.hashes}}});
- TOTP.confirmed=true;
- toast(t('totp.enabled_ok'),'ok');
- renderTotpDone()}
- catch(err){toastErr(err)}
- finally{el.disabled=false}})()},
- 'totp-codes-download'(){
- try{
- const blob=new Blob([totpCodesFile()],{type:'text/plain;charset=utf-8'});
- const url=URL.createObjectURL(blob);
- const a=document.createElement('a');
- a.href=url;a.download='q-proxy-recovery-codes.txt';
- document.body.appendChild(a);a.click();a.remove();
- setTimeout(()=>URL.revokeObjectURL(url),1000)}
- catch(err){toastErr(err)}},
- 'totp-disable'(el){
- (async()=>{
- if(!(await confirmDialog('totp.confirm_disable','totp.confirm_disable_body',true)))return;
- el.disabled=true;
- try{
- await api('api/settings/save',{method:'PUT',body:{totp:{enabled:false}}});
- toast(t('totp.disabled_ok'),'ok');
- totpReset()}
- catch(err){toastErr(err)}
  finally{el.disabled=false}})()}};
-async function runBulkUsers(titleKey,patch,el){
-const ids=[...BULK];
-if(!ids.length)return;
-if(!(await confirmDialog(titleKey,'confirm.bulk.message',true,{n:ids.length})))return;
-try{const d=await withBusy(el,()=>api('api/users/bulk',{method:'POST',body:{ids:ids,patch:patch}}));
-BULK.clear();updateBulkBar();
-let msg=t('users.bulk.done',{updated:d.updated,deleted:d.deleted});
-if(d.unknown)msg+=t('users.bulk.unknown',{unknown:d.unknown});
-toast(msg,'ok');invalidateUsersCache();await loadUsers()}
-catch(err){toastErr(err)}}
 function forceFlagged(){
 if(S.set&&S.set.passwordIsBootstrap===true)return true;
 try{return sessionStorage.getItem('qproxy_force_change')==='1'}catch(e){return false}}
@@ -366,22 +236,9 @@ const retry=e.target.closest('[data-retry]');
 if(retry){
 const k=retry.getAttribute('data-retry');
 if(k==='home-pool')loadHomePool();
-else if(k==='home-users'){invalidateUsersCache();loadHomeUsers()}
-else if(k==='my-ip')loadMyIp();
-else if(k==='subs-users'){const box=$('subs-users');if(box)box.innerHTML=loadingBox({rows:2,label:'common.loading'});invalidateUsersCache();loadSubsUsers()}
 return}
 const wretry=e.target.closest('[data-warp-retry]');
 if(wretry){wretry.disabled=true;retryWarp(wretry.getAttribute('data-warp-retry')||'');return}
-const expChip=e.target.closest('[data-expiry-preset]');
-if(expChip){
-const v=expChip.getAttribute('data-expiry-preset');
-const inp=$('mu-expiry');
-if(inp){
-if(v==='')inp.value='';
-else{const d=new Date();d.setDate(d.getDate()+Number(v));d.setSeconds(0,0);inp.value=toLocalInputValue(d.getTime())}
-expChip.parentElement.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked','false'));
-expChip.setAttribute('aria-checked','true')}
-return}
 const chip=e.target.closest('[data-chip]');
 if(chip){handleChip(chip);return}
 const mode=e.target.closest('[data-mode]');
@@ -414,49 +271,15 @@ applyFragmentPresetUi(chip.dataset.preset)}
 refreshShowIf();
 validateAllLineEditors()}
 function onChange(e){
-if(e.target.matches('[data-totp-saved]')){
-TOTP.confirmed=e.target.checked;
-const body=$('totp-body');
-const btn=body?body.querySelector('[data-action="totp-confirm"]'):null;
-if(btn)btn.disabled=!e.target.checked;
-return}
-if(e.target.matches('[data-remote-field="kind"]')){
-const card=e.target.closest('.remote-card');
-if(card){const cur=readRemoteCard(card);cur.kind=e.target.value;card.outerHTML=remoteNodeCardHtml(cur,Number(card.dataset.remoteIndex||0))}
-markDirty(e.target);return}
-if(e.target.matches('[data-addr-field]')){markDirty(e.target);return}
-if(e.target.matches('[data-addr-enabled-input]')){
-const card=e.target.closest('.addr-card');
-if(card){card.dataset.addrEnabled=e.target.checked?'1':'0';card.classList.toggle('addr-card--off',!e.target.checked)}
-markDirty(e.target);return}
-const usel=e.target.closest('[data-user-select]');
-if(usel){if(usel.checked)BULK.add(usel.dataset.userSelect);else BULK.delete(usel.dataset.userSelect);updateBulkBar();return}
-if(e.target.id==='users-select-all'){const ids=(S.users||[]).map(u=>u.id);if(e.target.checked)ids.forEach(id=>BULK.add(id));else BULK.clear();renderUserRows();return}
-if(e.target.closest('[data-user-toggle]')){
-const sw=e.target.closest('.switch');
-if(sw.dataset.busy==='1'){e.target.checked=!e.target.checked;return}
-sw.dataset.busy='1';sw.classList.add('pending');
-(async()=>{try{await api('api/users/'+e.target.dataset.userToggle,{method:'PUT',body:{enabled:e.target.checked}});toast(t('users.toast.saved'),'ok');await loadUsers()}catch(err){e.target.checked=!e.target.checked;toastErr(err)}finally{sw.classList.remove('pending');delete sw.dataset.busy}})();
-return}
-if(e.target.closest('[data-user-proto-all]')){
-if(e.target.checked)document.querySelectorAll('#mu-protocols input[data-user-proto]').forEach(i=>{i.checked=false});
-return}
-if(e.target.closest('[data-user-proto]')&&e.target.checked){
-const allBox=document.querySelector('#mu-protocols input[data-user-proto-all]');
-if(allBox)allBox.checked=false;
-return}
-if(e.target.id==='warp-preset'){const id=(location.hash.match(/^#\/warp\/([0-9a-f-]+)/i)||[])[1];if(id){(async()=>{try{await api('api/warp/account/'+id,{method:'PUT',body:{endpoint_list:{type:'preset',preset_id:e.target.value}}});toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(id))}catch(err){toastErr(err)}})()}return}
 if(e.target.closest('[data-kill]')){setKillSwitch(e.target.checked);return}
 const bind=e.target.closest('[data-bind]');
 if(bind){
 if(bind.tagName==='TEXTAREA')validateOneEditor(bind);
 markDirty(bind);
-if(/^vlessEnabled$|^vmessEnabled$|^trojanEnabled$|^ssEnabled$/.test(bind.dataset.bind))applyProtoDim()
+if(/^vlessEnabled$/.test(bind.dataset.bind))applyProtoDim()
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()}}
 let dirtyTimer=null;
 function onInput(e){
-if(e.target.matches('[data-remote-field]')){clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(e.target),120);return}
-if(e.target.matches('[data-addr-field]')){clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(e.target),120);return}
 const bind=e.target.closest('[data-bind]');
 if(!bind)return;
 if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250);clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(bind),120);return}
@@ -483,7 +306,7 @@ $('m-share').addEventListener('click',e=>{if(e.target===$('m-share'))closeModal(
 $('cf-cancel').addEventListener('click',()=>settleConfirm(false));
 $('cf-ok').addEventListener('click',()=>settleConfirm(true));
 $('m-confirm').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-confirm'),e)});
-['m-warp-generate','m-warp-import','m-warp-preset','m-user','m-share','m-keys','m-wizard'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus(el,e)})});
+['m-warp-generate','m-warp-import','m-warp-preset','m-share','m-keys','m-wizard'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus(el,e)})});
 document.addEventListener('keydown',globalKeys);
 document.addEventListener('keydown',e=>{
 if(e.key==='Escape'){
@@ -492,7 +315,6 @@ else if(!$('m-share').hidden)closeModal('m-share');
 else if(!$('m-warp-generate').hidden)closeModal('m-warp-generate');
 else if(!$('m-warp-import').hidden)closeModal('m-warp-import');
 else if(!$('m-warp-preset').hidden)closeModal('m-warp-preset');
-else if(!$('m-user').hidden)closeModal('m-user');
 else if(!$('m-wizard').hidden)wizardDone();
 else if(!$('m-keys').hidden)closeModal('m-keys')}});
 window.addEventListener('hashchange',navigate);
@@ -519,22 +341,6 @@ if(editId)await api('api/warp/presets/'+editId,{method:'PUT',body:{name:$('wp-na
 else await api('api/warp/presets',{method:'POST',body:{name:$('wp-name').value.trim(),endpoints,dns:dns.length?dns:null}});
 closeModal('m-warp-preset');toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}
 catch(err){if(err&&err.fields){$('wp-error').textContent=Object.values(err.fields)[0]||t('common.error');$('wp-error').style.display='block'}else toastErr(err)}
-finally{btn.disabled=false}});
-$('mu-go').addEventListener('click',async()=>{
-const btn=$('mu-go');btn.disabled=true;
-const m=$('m-user');const editId=m.dataset.userId||'';
-const picked=[...document.querySelectorAll('#mu-protocols input[type=checkbox]:checked')].map(i=>i.value);
-const body={name:$('mu-name').value.trim(),protocols:picked.includes('all')?'all':picked};
-const limit=$('mu-limit').value.trim();body.dailyReqLimit=limit===''?null:Number(limit);
-const exp=$('mu-expiry').value;body.expiresAt=exp===''?null:new Date(exp).getTime();
-const ovAddr=$('mu-ov-address').value.trim(),ovPort=$('mu-ov-port').value.trim(),ovLabel=$('mu-ov-label2').value.trim();
-if(ovAddr.length>0){body.addressOverride={address:ovAddr};if(ovPort.length>0)body.addressOverride.port=Number(ovPort);if(ovLabel.length>0)body.addressOverride.label=ovLabel}
-else body.addressOverride=null;
-try{
-if(editId){await api('api/users/'+editId,{method:'PUT',body});closeModal('m-user');toast(t('users.toast.saved'),'ok')}
-else{const d=await api('api/users',{method:'POST',body});const tok=d&&d.user&&d.user.token;closeModal('m-user');toast(t('users.toast.created'),'ok');if(tok)openShareSheet({title:t('share.title_user_created'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'})}
-await loadUsers()}
-catch(err){if(err&&err.fields){$('mu-error').textContent=Object.values(err.fields)[0]||t('common.error');$('mu-error').style.display='block'}else toastErr(err)}
 finally{btn.disabled=false}})}
 function wireTabKeys(bar,sel){
 bar.addEventListener('keydown',e=>{
@@ -583,7 +389,7 @@ closeModal('m-wizard');
 try{localStorage.setItem('qp_wizard_done','1')}catch(e){}}
 function maybeWizard(){
 try{if(localStorage.getItem('qp_wizard_done'))return}catch(e){}
-const protoCount=['vlessEnabled','vmessEnabled','trojanEnabled','ssEnabled'].filter(k=>S.set&&S.set[k]).length;
+const protoCount=['vlessEnabled'].filter(k=>S.set&&S.set[k]).length;
 let step=protoCount>0?1:0;
 const body=$('wiz-body');
 function render(){

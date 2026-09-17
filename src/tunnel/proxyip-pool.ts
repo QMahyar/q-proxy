@@ -1,6 +1,6 @@
 import type { Settings } from "../types/settings";
 import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
-import { dialTcp } from "./chain";
+import { dialTcp } from "./egress";
 import { expandProxyIps, hashSeed, shuffleDeterministic } from "./proxyip";
 import { createResolver } from "./resolver";
 import type { DohResolver } from "./resolver";

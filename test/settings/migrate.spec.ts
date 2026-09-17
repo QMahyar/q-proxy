@@ -1,6 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { deepMergeDefaults } from "../../src/settings/migrate";
-import { DEFAULT_SETTINGS } from "../../src/types/settings";
+import { MIGRATIONS, deepMergeDefaults, migrateSettings } from "../../src/settings/migrate";
+import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
+
+const REMOVED_KEYS = [
+  "vmessEnabled",
+  "trojanEnabled",
+  "ssEnabled",
+  "vmessUuid",
+  "trojanPassword",
+  "ssPassword",
+  "ssMethod",
+  "ssDirect",
+  "vmessPath",
+  "trojanPath",
+  "ssPath",
+  "proxyIpMode",
+  "nat64Prefixes",
+  "chainProxy",
+  "remoteDns",
+  "urlTestIntervalSec",
+  "remoteNodes",
+  "remoteSubUrls",
+  "speedtestIntercept",
+  "totp",
+];
 
 describe("deepMergeDefaults prototype-pollution guard", () => {
   it("skips __proto__ / constructor / prototype keys", () => {
@@ -34,31 +57,67 @@ describe("deepMergeDefaults prototype-pollution guard", () => {
   });
 });
 
-describe("removed settings fields drop migrate-safe", () => {
-  it("silently drops deleted fields (localDns, sourceUrls) from stored blobs", async () => {
-    const { migrateSettings } = await import("../../src/settings/migrate");
-    const { validateSettings } = await import("../../src/settings/validate");
-    const legacyBlob = {
-      version: 2,
-      updatedAt: Date.now(),
-      data: {
-        ...structuredClone(DEFAULT_SETTINGS),
-        securePath: "deployed1",
-        sessionSecret: "s".repeat(64),
-        localDns: "1.1.1.1",
-        sourceUrls: ["https://old.example/sub"],
-        addresses: [{ address: "1.2.3.4", city: "Berlin", country: "DE" }],
-      },
+describe("MIGRATIONS[2] vless-warp slimdown cut", () => {
+  it("strips every removed top-level key and keeps survivors", () => {
+    const step = MIGRATIONS[2]!;
+    expect(step).toBeDefined();
+    const input: Record<string, unknown> = {
+      ...structuredClone(DEFAULT_SETTINGS),
+      securePath: "keep-me",
+      profileTitle: "Keep Title",
+      camouflage: { mode: "static", url: "https://camo.example/page" },
     };
-    const merged = migrateSettings(legacyBlob) as unknown as Record<string, unknown>;
-    expect(merged).not.toHaveProperty("localDns");
-    expect(merged).not.toHaveProperty("sourceUrls");
-    const validated = validateSettings(merged);
-    expect(validated.ok).toBe(true);
-    if (validated.ok) {
-      expect(validated.value.addresses).toEqual([{ address: "1.2.3.4", country: "DE" }]);
-      expect("localDns" in validated.value).toBe(false);
-      expect("sourceUrls" in validated.value).toBe(false);
+    for (const key of REMOVED_KEYS) {
+      (input as Record<string, unknown>)[key] = key === "totp"
+        ? { enabled: true, secret: "JBSWY3DPEHPK3PXP", recoveryCodes: [] }
+        : `legacy-${key}`;
     }
+    const out = step(input) as Record<string, unknown>;
+    for (const key of REMOVED_KEYS) {
+      expect(out).not.toHaveProperty(key);
+    }
+    expect(out.securePath).toBe("keep-me");
+    expect(out.profileTitle).toBe("Keep Title");
+  });
+
+  it("maps camouflage proxy to static and always drops camouflage.url", () => {
+    const step = MIGRATIONS[2]!;
+    const proxied = step({ camouflage: { mode: "proxy", url: "https://camo.example/page" } }) as Record<string, unknown>;
+    expect(proxied.camouflage).toEqual({ mode: "static" });
+    const staticKept = step({ camouflage: { mode: "static", url: "https://camo.example/page" } }) as Record<string, unknown>;
+    expect(staticKept.camouflage).toEqual({ mode: "static" });
+    const offKept = step({ camouflage: { mode: "off", url: "https://camo.example/page" } }) as Record<string, unknown>;
+    expect(offKept.camouflage).toEqual({ mode: "off" });
+    const bare = step({ profileTitle: "x" }) as Record<string, unknown>;
+    expect(bare).not.toHaveProperty("camouflage");
+    expect(step(null)).toBeNull();
+  });
+
+  it("migrateSettings applies the v2 cut on a stored blob and stamps v3", () => {
+    const legacyData: Record<string, unknown> = {
+      ...structuredClone(DEFAULT_SETTINGS),
+      securePath: "deployed1",
+      sessionSecret: "s".repeat(64),
+      vmessUuid: "legacy-vmess-uuid",
+      trojanPassword: "legacy-trojan",
+      ssPassword: "legacy-ss",
+      remoteDns: "8.8.8.8",
+      urlTestIntervalSec: 300,
+      remoteNodes: [{ kind: "reality" }],
+      remoteSubUrls: ["https://old.example/sub"],
+      nat64Prefixes: ["[2a02::]"],
+      chainProxy: { enabled: true, uri: "socks5://h:1080" },
+      speedtestIntercept: true,
+      totp: { enabled: false, secret: "", recoveryCodes: [] },
+      camouflage: { mode: "proxy", url: "https://camo.example/page" },
+    };
+    const legacyBlob = { version: 2, updatedAt: Date.now(), data: legacyData };
+    const merged = migrateSettings(legacyBlob) as unknown as Record<string, unknown>;
+    expect(merged.version).toBe(SETTINGS_VERSION);
+    for (const key of REMOVED_KEYS) {
+      expect(merged).not.toHaveProperty(key);
+    }
+    expect(merged.securePath).toBe("deployed1");
+    expect(merged.camouflage).toEqual({ mode: "static" });
   });
 });

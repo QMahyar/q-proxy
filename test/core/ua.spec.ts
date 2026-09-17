@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import { classifyUA } from "../../src/core/ua";
 
 describe("classifyUA", () => {
-  it("clash family wins over everything", () => {
-    expect(classifyUA("clash-verge/v2.1.3")).toBe("clash");
-    expect(classifyUA("ClashMetaForAndroid/2.11.5")).toBe("clash");
-    expect(classifyUA("mihomo/1.18 linux")).toBe("clash");
-    expect(classifyUA("Stash/2.7 (iPhone)")).toBe("clash");
-    expect(classifyUA("ClashVerge/2.0")).toBe("clash");
+  it("maps former clash-family UAs to base64 (format removed)", () => {
+    expect(classifyUA("clash-verge/v2.1.3")).toBe("base64");
+    expect(classifyUA("ClashMetaForAndroid/2.11.5")).toBe("base64");
+    expect(classifyUA("mihomo/1.18 linux")).toBe("base64");
+    expect(classifyUA("Stash/2.7 (iPhone)")).toBe("base64");
+    expect(classifyUA("ClashVerge/2.0")).toBe("base64");
   });
 
   it("does not match bare meta or verge tokens", () => {
     expect(classifyUA("Meta/1.0")).toBe("base64");
     expect(classifyUA("Verge/3.2")).toBe("base64");
-    expect(classifyUA("clash-verge/2.0")).toBe("clash");
+    expect(classifyUA("clash-verge/2.0")).toBe("base64");
   });
 
   it("sing-box family", () => {
@@ -28,18 +28,18 @@ describe("classifyUA", () => {
 
   it("sing-box wins over a browser token in a composite UA", () => {
     expect(classifyUA("Mozilla/5.0 (Throne/1.2.4)")).toBe("singbox");
-    expect(classifyUA("sing-box 1.13.0; ClashMeta; mihomo/1.19.16")).toBe("clash");
+    expect(classifyUA("sing-box 1.13.0; ClashMeta; mihomo/1.19.16")).toBe("singbox");
   });
 
-  it("surge then loon", () => {
-    expect(classifyUA("Surge iOS/2406")).toBe("surge");
-    expect(classifyUA("Loon/3.2.4")).toBe("loon");
+  it("maps former surge/loon UAs to base64 (formats removed)", () => {
+    expect(classifyUA("Surge iOS/2406")).toBe("base64");
+    expect(classifyUA("Loon/3.2.4")).toBe("base64");
   });
 
-  it("quantumult x family", () => {
-    expect(classifyUA("Quantumult X/1.5.4 (iPhone; iOS 17.0.3; Scale/3.00)")).toBe("quantumult");
-    expect(classifyUA("quantumult/2.0")).toBe("quantumult");
-    expect(classifyUA("QuanX/1.0")).toBe("quantumult");
+  it("maps former quantumult x family to base64 (format removed)", () => {
+    expect(classifyUA("Quantumult X/1.5.4 (iPhone; iOS 17.0.3; Scale/3.00)")).toBe("base64");
+    expect(classifyUA("quantumult/2.0")).toBe("base64");
+    expect(classifyUA("QuanX/1.0")).toBe("base64");
   });
 
   it("base64 clients", () => {

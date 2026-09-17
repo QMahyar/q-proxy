@@ -1,35 +1,6 @@
-function readRemoteCard(c){
-const get=(k)=>{const f=c.querySelector('[data-remote-field="'+k+'"]');return f?f.value.trim():''};
-const raw=(k)=>{const f=c.querySelector('[data-remote-field="'+k+'"]');return f?f.value:''};
-const kindSel=c.querySelector('[data-remote-field="kind"]');
-const kind=kindSel?kindSel.value:'reality';
-const e={kind:kind,name:get('name'),address:get('address'),sni:get('sni')};
-const p=get('port');e.port=p===''?0:Number(p);
-if(kind==='hy2'){e.password=raw('password');e.obfs=get('obfs');e.obfsPassword=raw('obfsPassword')}
-else{e.uuid=get('uuid');e.pbk=get('pbk');e.sid=get('sid');e.flow=get('flow');e.spx=get('spx');e.fp=get('fp')}
-return e}
 function readBind(el){
-if(el.dataset.type==='addrList'){
-const body=el.querySelector('[data-addr-body]');
-if(!body)return [];
-return [...body.querySelectorAll('.addr-card')].map(c=>{
-const get=(k)=>{const f=c.querySelector('[data-addr-field="'+k+'"]');return f?f.value.trim():''};
-const e={address:get('address')};
-if(e.address.length===0)return null;
-const p=get('port');if(p)e.port=Number(p);
-const l=get('label');if(l)e.label=l;
-const h=get('host');if(h)e.host=h;
-const sn=get('sni');if(sn)e.sni=sn;
-const co=get('country');if(co)e.country=co;
-if(c.dataset.addrEnabled==='0')e.enabled=false;
-return e}).filter(Boolean)}
-if(el.dataset.type==='remoteList'){
-const body=el.querySelector('[data-remote-body]');
-if(!body)return [];
-return [...body.querySelectorAll('.remote-card')].map(c=>{
-const e=readRemoteCard(c);
-if(e.address.length===0)return null;
-return e}).filter(Boolean)}
+if(el.dataset.type==='presetChecks'){
+return [...el.querySelectorAll('input[data-preset]')].filter(c=>c.checked).map(c=>c.dataset.preset)}
 if(el.dataset.type==='chips'){
 const c=el.querySelector('.chip[aria-checked="true"]');
 return c?c.dataset.chip:''}
@@ -39,17 +10,9 @@ if(el.tagName==='SELECT')return el.value;
 if(el.type==='number'){const n=Number(el.value);return Number.isFinite(n)?n:0}
 return el.value.trim()}
 function writeBind(el,v){
-if(el.dataset.type==='addrList'){
-const body=el.querySelector('[data-addr-body]');
-if(body){body.innerHTML=Array.isArray(v)?v.map(addrCardHtml).join(''):''}
-const empty=el.querySelector('.addr-empty');
-if(empty)empty.style.display=Array.isArray(v)&&v.length?'none':'';
-return}
-if(el.dataset.type==='remoteList'){
-const body=el.querySelector('[data-remote-body]');
-if(body){body.innerHTML=Array.isArray(v)?v.map(remoteNodeCardHtml).join(''):''}
-const rempty=el.querySelector('.remote-empty');
-if(rempty)rempty.style.display=Array.isArray(v)&&v.length?'none':'';
+if(el.dataset.type==='presetChecks'){
+const set=new Set(lines(v));
+el.querySelectorAll('input[data-preset]').forEach(c=>{c.checked=set.has(c.dataset.preset)});
 return}
 if(el.dataset.type==='chips'){
 el.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-checked',String(c.dataset.chip===v)));
@@ -72,8 +35,6 @@ function validateLine(kind,line){
 if(!line)return false;
 switch(kind){
 case 'domain':return RE_DOMAIN.test(line);
-case 'url':return /^https:\/\/\S+$/.test(line);
-case 'ipv6_prefix':return RE_V6PREFIX.test(line)&&line.includes(':');
 case 'ip_or_host':return validIpOrHost(line);
 case 'host_port':return validIpOrHost(stripPort(line));
 default:return true}}

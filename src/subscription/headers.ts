@@ -31,11 +31,7 @@ export function subscriptionUserinfo(
 
 export const EXTENSIONS: Record<SubFormat, string> = {
   base64: "txt",
-  clash: "yaml",
   singbox: "json",
-  surge: "conf",
-  loon: "conf",
-  quantumult: "conf",
 };
 
 export const SUB_THROTTLE_SECONDS = 60;

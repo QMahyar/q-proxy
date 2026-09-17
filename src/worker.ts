@@ -3,8 +3,7 @@ import { routeRequest } from "./core/router";
 import { bindCounterContext } from "./core/counters";
 import { errorToResponse } from "./core/respond";
 import { log } from "./core/log";
-import { currentDebugEnabled, ensureInitialized, loadSettings } from "./settings/store";
-import { runExpirySweep } from "./handlers/api/telegram";
+import { currentDebugEnabled, ensureInitialized } from "./settings/store";
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -21,7 +20,6 @@ export default {
   async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
     try {
       await ensureInitialized(env);
-      await runExpirySweep(env, await loadSettings(env));
     } catch {}
   },
 };

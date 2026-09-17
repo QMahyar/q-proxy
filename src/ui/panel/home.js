@@ -1,9 +1,9 @@
 
-const SS_METHODS=['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305'];
 const FPS=['chrome','firefox','safari','ios','android','edge','360','qq','random','randomized'];
 const PACKETS=['tlshello','1-1','1-2','1-3','1-5'];
 const PRESETS={low:[100,200,1,1],medium:[50,100,1,5],high:[10,20,10,20],severe:[1,5,1,5]};
-const S={set:{},status:null,subs:[],snap:{},dirty:new Set(),subMode:(function(){try{return localStorage.getItem('qp_submode')||'normal'}catch(e){return 'normal'}})(),users:[],warp:null,pool:null,addrHealth:[]};
+const CDN_PRESETS=[{id:'cf-443-a',ip:'104.17.0.0',port:443},{id:'cf-443-b',ip:'104.18.0.0',port:443},{id:'cf-443-c',ip:'104.19.0.0',port:443},{id:'cf-2053-a',ip:'104.21.0.0',port:2053},{id:'cf-2083-a',ip:'172.64.32.1',port:2083},{id:'cf-2096-a',ip:'188.114.96.1',port:2096},{id:'cf-80-a',ip:'104.17.0.0',port:80},{id:'cf-8080-a',ip:'172.64.32.1',port:8080}];
+const S={set:{},status:null,subs:[],snap:{},dirty:new Set(),subMode:(function(){try{return localStorage.getItem('qp_submode')||'normal'}catch(e){return 'normal'}})(),warp:null,pool:null};
 let UID=0;
 function getPath(o,p){return p.split('.').reduce((a,k)=>a==null?undefined:a[k],o)}
 function setPath(o,p,v){const ks=p.split('.');let c=o;for(let i=0;i<ks.length-1;i++){if(typeof c[ks[i]]!=='object'||c[ks[i]]===null)c[ks[i]]={};c=c[ks[i]]}c[ks[ks.length-1]]=v}
@@ -11,12 +11,10 @@ function leaves(o,pre,out){for(const k in o){const p=pre?pre+'.'+k:k;const v=o[k
 function buildShell(){
 $('tab-home').textContent=t('nav.home');
 $('tab-subs').textContent=t('nav.subs');
-$('tab-users').textContent=t('nav.users');
 $('tab-warp').textContent=t('nav.warp');
 $('tab-settings').textContent=t('nav.settings');
 $('home-h1').textContent=t('nav.home');
 $('subs-h1').textContent=t('tabs.subs.title');
-$('users-h1').textContent=t('nav.users');
 $('warp-h1').textContent=t('nav.warp');
 $('settings-h1').textContent=t('nav.settings');
 $('logout-btn').setAttribute('aria-label',t('nav.logout'));
@@ -39,14 +37,6 @@ $('wi-cancel').textContent=t('common.cancel');
 $('wi-go').textContent=t('warp.import');
 $('wp-name-label').textContent=t('warp.detail.name');
 $('wp-cancel').textContent=t('common.cancel');
-$('mu-name-label').textContent=t('users.name');
-$('mu-protocols-label').textContent=t('users.protocols');
-$('mu-proto-all-label').textContent=t('users.all');
-$('mu-limit-label').textContent=t('users.limit');
-$('mu-limit-hint').textContent=t('users.limit_none')+' '+t('users.limit_reset');
-$('mu-expiry-label').textContent=t('users.expiry');
-$('mu-expiry-hint').textContent=t('users.expiry_none');
-$('mu-cancel').textContent=t('common.cancel');
 document.querySelectorAll('.swatch').forEach(b=>{const nm=t('accent.'+(b.dataset.accent||'cyan'));b.setAttribute('aria-label',nm);b.title=nm});
 const _nav=$('nav');if(_nav)_nav.setAttribute('aria-label',t('nav.views'));
 const _sw=document.querySelector('.swatches');if(_sw)_sw.setAttribute('aria-label',t('accent.label'));
@@ -55,31 +45,31 @@ document.title='Q Proxy';
 const seg=$('langseg');seg.setAttribute('aria-label',t('common.language'));seg.innerHTML='';
 [['en','lang.en'],['fa','lang.fa']].forEach(([code,label])=>{const b=document.createElement('button');b.type='button';b.textContent=t(label);b.setAttribute('aria-checked',String(LANG===code));b.setAttribute('role','radio');b.addEventListener('click',()=>{if(code!==LANG){if(S.dirty&&S.dirty.size>0&&!confirm(t('common.unsaved')))return;setLangCookie(code);location.reload()}});seg.appendChild(b)})}
 function parseRoute(){
+// Unknown or deleted views redirect to home.
 const h=location.hash.replace(/^#\/?/,'');
 const seg=h.split('/');
 if(seg[0]==='settings'){
-if(seg[1]==='users')return{view:'users',redirect:true};
+if(seg[1]==='users')return{view:'home'};
 if(seg[1]==='warp')return seg[2]?{view:'warp',warpId:seg[2],redirect:true}:{view:'warp',redirect:true};
 return{view:'settings',sec:SECTIONS.some(s=>s.key===seg[1])?seg[1]:'general'}}
-if(seg[0]==='users')return{view:'users'};
+if(seg[0]==='users')return{view:'home'};
 if(seg[0]==='warp')return{view:'warp',warpId:seg[1]||undefined};
 if(seg[0]==='subs')return{view:'subs'};
 return{view:'home'}}
 function navigate(){
 const r=parseRoute();
 const h=location.hash;
-if(r.redirect){history.replaceState(null,'',r.view==='users'?'#/users':'#/warp'+(r.warpId?'/'+r.warpId:''))}
+if(r.redirect){history.replaceState(null,'','#/warp'+(r.warpId?'/'+r.warpId:''))}
 if(r.view==='home'&&h!==''&&h!=='#'&&h!=='#/home')history.replaceState(null,'','#/home');
 if(r.view==='settings'&&SECTIONS.some(s=>s.key===r.sec))history.replaceState(null,'','#/settings/'+r.sec+(r.warpId?'/'+r.warpId:''));
-['home','subs','settings','users','warp'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
+['home','subs','settings','warp'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
 document.querySelectorAll('#nav .tab').forEach(a=>{a.setAttribute('aria-selected',String(a.dataset.view===r.view));a.tabIndex=a.dataset.view===r.view?0:-1});
 if(r.view==='settings')showSection(r.sec);
 if(r.view==='subs')showSubsView();
-if(r.view==='users')showUsersView();
 if(r.view==='warp')showWarpView(r.warpId);
 if(r.view==='home'||r.view==='subs')ensureFreshSubs();
 window.scrollTo(0,0);
-const titleMap={home:'nav.home',subs:'tabs.subs.title',users:'nav.users',warp:'nav.warp',settings:'tabs.settings.'+(r.sec||'general')};
+const titleMap={home:'nav.home',subs:'tabs.subs.title',warp:'nav.warp',settings:'tabs.settings.'+(r.sec||'general')};
 const ttl=titleMap[r.view]||'nav.home';
 const h1=$('view-'+r.view+'-h1')||$(r.view+'-h1')||$('main');
 if(h1){h1.setAttribute('tabindex','-1');h1.focus({preventScroll:true})}
@@ -101,10 +91,6 @@ subsFreshView=parseRoute().view;
 const cv=parseRoute().view;
 if(cv==='home'&&!$('view-home').hidden)renderHome();
 else if(cv==='subs'&&!$('view-subs').hidden)showSubsView()})()}
-function showUsersView(){
-const b=$('users-body');
-if(b&&!b.dataset.built){b.dataset.built='1';b.innerHTML=usersCardHtml()}
-loadUsers()}
 function showWarpView(warpId){
 if(!S.warp&&!warpLoadError){const panel=$('warp-body');if(panel)panel.innerHTML='<section class="card">'+loadingBox({rows:4})+'</section>'}
 loadWarpIfNeeded().then(()=>{if(parseRoute().view!=='warp')return;if(warpId)renderWarpDetail(warpId);else renderWarpSection()})}
@@ -124,7 +110,7 @@ return '<div class="copy-field"><code id="'+idAttr+'" dir="ltr">'+esc(value)+'</
 function renderHome(){
 const body=$('home-body');
 body.innerHTML='';
-const protoCount=['vlessEnabled','vmessEnabled','trojanEnabled','ssEnabled'].filter(k=>S.set&&S.set[k]).length;
+const protoCount=['vlessEnabled'].filter(k=>S.set&&S.set[k]).length;
 const chips=document.createElement('div');chips.className='chips-row';
 chips.innerHTML='<span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('home.chips.protocols',{n:protoCount}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('home.chips.formats',{n:(S.subs||[]).filter(u=>!isInfoEntry(u)).length}))+'</span>';
 body.appendChild(chips);
@@ -142,27 +128,20 @@ const right=document.createElement('div');
 const kill=document.createElement('section');kill.className='card';
 kill.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.kill.title'))+'</div><span class="chip-status ok" id="kill-chip"></span></div><p class="field__hint" id="kill-desc"></p><div class="row" style="border:0"><label class="switch"><input type="checkbox" role="switch" data-kill'+(S.status&&S.status.killSwitch?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t('general.killSwitch.label'))+'</span></label></div>';
 right.appendChild(kill);
-const ip=document.createElement('section');ip.className='card';
-ip.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.stats.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="refresh-ip"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="ip-body"><span class="field__hint">'+esc(t('home.stats.idle'))+'</span></div><p class="field__hint"><a href="'+esc(BASE)+'my-ip" target="_blank" rel="noopener">'+esc(t('home.stats.link'))+'</a></p>';
-right.appendChild(ip);
 const pool=document.createElement('section');pool.className='card';
 pool.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('egress.pool.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="home-pool-refresh"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="home-pool"><span class="field__hint">'+esc(t('egress.pool.idle'))+'</span></div>';
 right.appendChild(pool);
-const uc=document.createElement('section');uc.className='card';
-uc.innerHTML='<div class="card__head"><div><div class="card__title">'+esc(t('users.title'))+'</div><div class="field__hint">'+esc(t('home.users.desc'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('home.users.manage'))+'</a></div><div id="home-users">'+loadingBox({rows:2})+'</div>';
-right.appendChild(uc);
 if(S.status){
 const st=document.createElement('section');st.className='card';
 const u=S.status.usage||{requestsToday:0,requestsTotal:0};
 const todayStr=u.requestsToday!=null?fmtInt(u.requestsToday):'—';
 const totalStr=u.requestsTotal!=null?fmtInt(u.requestsTotal):'—';
-st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="check-update">'+esc(t('home.status.checkUpdate'))+'</button></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(todayStr)+'</span><span class="mono">'+esc(totalStr)+'</span></div><div id="traffic-chart"></div>';
+st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(todayStr)+'</span><span class="mono">'+esc(totalStr)+'</span></div><div id="traffic-chart"></div>';
 right.appendChild(st)}
 body.appendChild(right);
 recordTraffic();
 renderTraffic();
 loadHomePool();
-loadHomeUsers();
 syncKillUI()}
 function syncKillUI(){
 const on=!!(S.status&&S.status.killSwitch);
@@ -205,26 +184,4 @@ const k=e.ip+':'+e.port;const pr=map.get(k);
 const latency=pr&&pr.latencyMs!=null?esc(String(pr.latencyMs))+'ms':'';
 const status=pr?(pr.status==='ok'?'<span class="glyph-ok">✓ '+latency+'</span>':'<span class="glyph-bad">✗</span>'):'<span class="pool-status">'+esc(t('egress.pool.untested'))+'</span>';
 return '<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc(k)+'</span><span class="pool-status">'+status+'</span></div>'}).join('')}
-async function loadHomeUsers(){
-const box=$('home-users');if(!box)return;
-box.innerHTML=loadingBox({rows:2,label:'common.loading'});
-try{const d=await loadUsersShared(false);S.users=d;renderHomeUsers()}catch(e){if(e&&e.status===401)return;const net=e&&e.status===0;box.innerHTML=errorCard({title:'users.load_failed',msg:net?'toast.networkError':null,retryAction:'data-retry="home-users"'})}}
-function renderHomeUsers(){
-const box=$('home-users');if(!box)return;
-const all=S.users||[];const active=all.filter(u=>u.enabled&&!isUserExpired(u)).length;
-box.innerHTML='<div class="row" style="border:0"><span class="lbl">'+esc(t('home.users.active'))+'</span><span class="mono">'+fmtInt(active)+'</span>'+usersCapacityChip(all.length)+'</div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('home.users.manage'))+'</a>'}
-async function loadMyIp(){const box=$('ip-body');
-if(!box)return;
-box.innerHTML=loadingBox({rows:2});
-try{
-const d=await fetch(BASE+'my-ip',{credentials:'same-origin',headers:{Accept:'application/json'}});
-if(!d.ok)throw 0;
-const j=await d.json();
-const data=j&&j.ok!==undefined?j.data:j;
-box.innerHTML='<table class="tbl"><tbody>'
-+'<tr><td data-l="'+esc(t('home.stats.via_cf'))+'"><code dir="ltr" class="mono">'+esc(data.cfEgressIp||'—')+(data.colo?' · '+esc(data.colo):'')+'</code></td><td class="h-cell" data-l="'+esc(t('home.stats.via_other'))+'"><code dir="ltr" class="mono">'+esc(data.ip||'—')+'</code></td></tr>'
-+'<tr><td data-l="'+esc(t('home.stats.colo'))+'">'+esc(data.colo||'—')+'</td><td data-l="'+esc(t('home.stats.country'))+'">'+esc(data.country||'—')+'</td></tr>'
-+'<tr><td data-l="'+esc(t('home.stats.city'))+'">'+esc(data.city||'—')+'</td><td data-l="'+esc(t('home.stats.asn'))+'">'+esc(data.asn||'—')+'</td></tr>'
-+'</tbody></table>'}
- catch(e){const net=e&&e.status===0;box.innerHTML=errorCard({title:'home.stats.failed',msg:net?'toast.networkError':null,retryAction:'data-retry="my-ip"'})}}
 

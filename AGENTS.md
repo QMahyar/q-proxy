@@ -67,7 +67,7 @@ The panel is **not** a single HTML file anymore. Build-time sources live in `src
 | `qr.js`, `states.js` | QR encoder; `emptyCard`/`loadingBox`/`errorCard` builders (every loader: loading→content→errorCard(retry)) |
 | `home.js` | state, hash router (5 views + back-compat redirects), home view |
 | `subs.js` | Subscriptions hub (`#/subs`) — every URL the worker serves |
-| `warp.js` | WARP views (7 format families, amnezia toggle, preset honesty) |
+| `warp.js` | WARP views (4 format families + global Amnezia switch, preset honesty) |
 | `users.js` | user table (expiry countdown, quota, scope chips, search, capacity) |
 | `users-modal.js`, `share.js` | create/edit modal; unified ShareSheet |
 | `chrome.js`, `sections*.js`, `fields-*.js`, `cards.js`, `totp.js`, `section-io.js`, `settings.js` | chart/banner/shortcuts/undo-redo; settings split across 8 modules (registry, render, validate, cards, totp, modal, IO, 4-line glue) |
@@ -97,7 +97,7 @@ src/handlers/            tunnel, subscribe, warp-sub, users-sub, doh, myip(requi
                          api/* (auth+status, settings+bootstrap/export/import/reset, status+suburls, killswitch,
                          warp, users, telegram setup/remove/webhook, version/check)
 src/warp/                WARP core: config parsers, api client, store (accounts/presets/amnezia),
-                         formats/registry (17 output formats), expand/cache/zip
+                         formats/registry (4 output families + global Amnezia switch), expand/cache/zip
 src/crypto/x25519.ts     hand-rolled X25519 (RFC 7748), zero-dep keypairs
 src/ui/assets.ts         panel.html (minified), login.html, camo.html as strings
 ```

@@ -45,23 +45,23 @@ describe("panel dict single-language heap retention", () => {
   it("keeps both languages when the qp_lang cookie is absent (boot reconciliation may switch language)", () => {
     const probe = bootDict("");
     expect(probe.LANG).toBe("fa");
-    expect(probe.enKeys).toBeGreaterThan(400);
-    expect(probe.faKeys).toBeGreaterThan(400);
+    expect(probe.enKeys).toBeGreaterThan(350);
+    expect(probe.faKeys).toBeGreaterThan(350);
   });
 
   it("drops the English copy once the cookie pins fa (heap-side single-language retention)", () => {
     const probe = bootDict("qp_lang=fa");
     expect(probe.LANG).toBe("fa");
-    expect(probe.faKeys).toBeGreaterThan(400);
+    expect(probe.faKeys).toBeGreaterThan(350);
     expect(probe.enKeys).toBe(0);
     expect(probe.t("nav.home")).toBe("خانه");
-    expect(probe.t("users.limit")).toContain("اشتراک");
+    expect(probe.t("home.subs.quota")).toContain("اشتراک");
   });
 
   it("drops the Persian copy once the cookie pins en", () => {
     const probe = bootDict("qp_lang=en");
     expect(probe.LANG).toBe("en");
-    expect(probe.enKeys).toBeGreaterThan(400);
+    expect(probe.enKeys).toBeGreaterThan(350);
     expect(probe.faKeys).toBe(0);
     expect(probe.t("nav.home")).toBe("Home");
   });

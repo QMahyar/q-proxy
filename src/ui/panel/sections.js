@@ -8,8 +8,8 @@ p.id='sp-'+s.key;p.role='tabpanel';p.setAttribute('aria-labelledby','st-'+s.key)
 p.hidden=true;
 let h='';
 if(s.key==='protocols'){
-const protoCards=s.cards.slice(0,4);
-const commonCards=s.cards.slice(4);
+const protoCards=s.cards.slice(0,1);
+const commonCards=s.cards.slice(1);
 h+='<div class="grid2">';protoCards.forEach(c=>{h+=cardHtml(c)});h+='</div>';
 commonCards.forEach(c=>{h+=cardHtml(c)});
  } else {

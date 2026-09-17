@@ -3,7 +3,6 @@ import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import type { Settings } from "../../src/types/settings";
 import { generateNodes } from "../../src/nodes/generate";
 import type { NodeBuilderContext } from "../../src/types/context";
-import type { ProxyNode } from "../../src/types/node";
 
 const HOST = "worker.example.workers.dev";
 
@@ -13,9 +12,6 @@ function settings(): Settings {
     securePath: "sp12345678",
     sessionSecret: "x".repeat(64),
     vlessUuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
-    vmessUuid: "1386f85e-657b-4d6e-9d56-78badb75e1fd",
-    trojanPassword: "secretpass123",
-    ssPassword: "sspass12345",
     randomizeSniCase: false,
   };
 }
@@ -27,20 +23,20 @@ function ctx(s: Settings, url = `https://${HOST}/sub`, cf?: Record<string, unkno
 }
 
 describe("generateNodes port/security pairing", () => {
-  it("emits one node per enabled protocol on the default port for a bare hostname", () => {
+  it("emits one vless node on the default port for a bare hostname", () => {
     const nodes = generateNodes(ctx(settings()));
-    expect(nodes.length).toBe(4);
+    expect(nodes.length).toBe(1);
     expect(nodes.every((n) => n.port === 443 && n.security === "tls")).toBe(true);
     expect(new Set(nodes.map((n) => n.address))).toEqual(new Set([HOST]));
     expect(nodes.every((n) => n.tags.includes("workers-dev"))).toBe(true);
   });
 
-  it("uses the default port for bare addresses and respects an explicit port", () => {
+  it("uses the default port for bare lines and respects an explicit port", () => {
     const s = settings();
-    s.addresses = [{ address: "1.2.3.4" }, { address: "5.6.7.8", port: 2052 }];
+    s.customEndpoints = ["1.2.3.4", "5.6.7.8:2052"];
     const nodes = generateNodes(ctx(s));
     const a = nodes.filter((n) => n.address === "1.2.3.4");
-    expect(a.length).toBe(4);
+    expect(a.length).toBe(1);
     expect(new Set(a.map((n) => n.port))).toEqual(new Set([443]));
     expect(a.every((n) => n.security === "tls")).toBe(true);
     const b = nodes.filter((n) => n.address === "5.6.7.8");
@@ -48,9 +44,9 @@ describe("generateNodes port/security pairing", () => {
     expect(b.every((n) => n.security === "none" && n.sni === null)).toBe(true);
   });
 
-  it("parses an inline ip:port in the address field", () => {
+  it("parses an inline ip:port in the custom line", () => {
     const s = settings();
-    s.addresses = [{ address: "5.6.7.8:2053" }];
+    s.customEndpoints = ["5.6.7.8:2053"];
     const nodes = generateNodes(ctx(s));
     expect(new Set(nodes.map((n) => n.port))).toEqual(new Set([2053]));
     expect(nodes.every((n) => n.security === "tls")).toBe(true);
@@ -59,58 +55,53 @@ describe("generateNodes port/security pairing", () => {
   it("defaults to 443 when defaultPort is set to a CF TLS port", () => {
     const s = settings();
     s.defaultPort = 8443;
-    s.addresses = [{ address: "1.2.3.4" }];
+    s.customEndpoints = ["1.2.3.4"];
     const nodes = generateNodes(ctx(s));
     expect(new Set(nodes.map((n) => n.port))).toEqual(new Set([8443]));
   });
 
   it("drops a pinned port outside both CF port families", () => {
     const s = settings();
-    s.addresses = [{ address: "1.2.3.4", port: 9999 }];
+    s.customEndpoints = ["1.2.3.4:9999"];
     const nodes = generateNodes(ctx(s)).filter((n) => n.address === "1.2.3.4");
     expect(nodes.length).toBe(0);
   });
 
-  it("skips address entries that are disabled", () => {
+  it("emits only ticked presets and skips unticked ones", () => {
     const s = settings();
-    s.addresses = [{ address: "1.2.3.4" }, { address: "5.6.7.8", enabled: false }];
+    s.cdnPresets = ["cf-443-a"];
     const nodes = generateNodes(ctx(s));
-    expect(nodes.some((n) => n.address === "1.2.3.4")).toBe(true);
-    expect(nodes.some((n) => n.address === "5.6.7.8")).toBe(false);
+    expect(nodes.some((n) => n.address === "104.17.0.0")).toBe(true);
+    expect(nodes.some((n) => n.address === "104.18.0.0")).toBe(false);
   });
 });
 
 describe("generateNodes paths and early data", () => {
-  it("uses /{prefix}/{suffix} with ed param and disables early data for ss", () => {
+  it("uses /{prefix}/{suffix} with ed param", () => {
     const nodes = generateNodes(ctx(settings()));
+    expect(nodes.length).toBe(1);
     const vless = nodes.find((n) => n.kind === "vless")!;
     expect(vless.path.startsWith("/vl/")).toBe(true);
     const suffix = vless.path.split("/")[2]!.split("?")[0]!;
     expect(suffix).toMatch(/^[A-Za-z0-9]{8,16}$/);
     expect(vless.path).toContain("ed=2048");
     expect(vless.earlyData).toBe(2048);
-    const ss = nodes.find((n) => n.kind === "ss")!;
-    expect(ss.path.startsWith("/ss/")).toBe(true);
-    expect(ss.path.includes("?ed=")).toBe(false);
-    expect(ss.earlyData).toBe(0);
-    expect(nodes.find((n) => n.kind === "trojan")!.path.startsWith("/tr/")).toBe(true);
-    expect(nodes.find((n) => n.kind === "vmess")!.path.startsWith("/vm/")).toBe(true);
   });
 
   it("drops the ed param when early data disabled", () => {
     const s = settings();
     s.earlyDataEnabled = false;
-    expect(generateNodes(ctx(s)).filter((n) => n.kind !== "ss").every((n) => !n.path.includes("ed="))).toBe(true);
+    expect(generateNodes(ctx(s)).every((n) => !n.path.includes("ed="))).toBe(true);
   });
 });
 
 describe("generateNodes address axis and tags", () => {
   it("tags an IP connect as clean-ip and uses the worker hostname as host/sni", () => {
     const s = settings();
-    s.addresses = [{ address: "1.0.0.1" }];
+    s.customEndpoints = ["1.0.0.1"];
     const nodes = generateNodes(ctx(s));
     const clean = nodes.filter((n) => n.address === "1.0.0.1");
-    expect(clean.length).toBe(4);
+    expect(clean.length).toBe(1);
     expect(clean[0]!.tags).toContain("clean-ip");
     expect(clean[0]!.host).toBe(HOST);
     expect(clean[0]!.sni).toBe(HOST);
@@ -118,19 +109,12 @@ describe("generateNodes address axis and tags", () => {
 
   it("tags a domain connect as custom-domain and uses the domain as host/sni", () => {
     const s = settings();
-    s.addresses = [{ address: "alt.example.net" }];
+    s.customEndpoints = ["alt.example.net"];
     const nodes = generateNodes(ctx(s));
     const d = nodes.filter((n) => n.address === "alt.example.net");
     expect(d[0]!.tags).toContain("custom-domain");
     expect(d[0]!.host).toBe("alt.example.net");
     expect(d[0]!.sni).toBe("alt.example.net");
-  });
-
-  it("masks an IP connect with a per-address host/sni override", () => {
-    const s = settings();
-    s.addresses = [{ address: "1.2.3.4", host: "cdn.example.net", sni: "cdn.example.net" }];
-    const nodes = generateNodes(ctx(s));
-    expect(nodes.every((n) => n.host === "cdn.example.net" && n.sni === "cdn.example.net")).toBe(true);
   });
 });
 
@@ -138,13 +122,24 @@ describe("generateNodes fragment variants", () => {
   it("adds a fragment variant for every TLS address when enabled", () => {
     const s = settings();
     s.fragment.mode = "medium";
-    s.addresses = [{ address: "1.0.0.1" }];
+    s.customEndpoints = ["1.0.0.1"];
     const nodes = generateNodes(ctx(s));
     const frags = nodes.filter((n) => n.variant === "fragment");
-    expect(frags.length).toBe(4);
+    expect(frags.length).toBe(1);
     expect(frags.every((n) => n.security === "tls" && n.tags.includes("fragment"))).toBe(true);
     const fv = frags.find((n) => n.kind === "vless")!;
     expect(fv.path).toContain("ed=2048&frag=medium");
+  });
+
+  it("gives preset CDN endpoints fragment variants like any TLS address", () => {
+    const s = settings();
+    s.fragment.mode = "medium";
+    s.cdnPresets = ["cf-443-a", "cf-80-a"];
+    const nodes = generateNodes(ctx(s));
+    const tlsFrags = nodes.filter((n) => n.address === "104.17.0.0" && n.port === 443 && n.variant === "fragment");
+    expect(tlsFrags.length).toBe(1);
+    expect(tlsFrags[0]!.path).toContain("frag=medium");
+    expect(nodes.some((n) => n.address === "104.17.0.0" && n.port === 80 && n.variant === "fragment")).toBe(false);
   });
 
   it("omits fragment variants when mode is off", () => {
@@ -152,60 +147,79 @@ describe("generateNodes fragment variants", () => {
   });
 });
 
-describe("generateNodes address composition guarantee", () => {
-  it("emits only the worker hostname when addresses is empty", () => {
+describe("generateNodes address composition guarantee (presets + custom + hostname only)", () => {
+  it("emits only the worker hostname when nothing is selected", () => {
     expect(new Set(generateNodes(ctx(settings())).map((n) => n.address))).toEqual(new Set([HOST]));
   });
 
-  it("never introduces addresses beyond the configured addresses", () => {
+  it("never introduces addresses beyond presets, custom lines, and hostname", () => {
     const s = settings();
-    s.addresses = [{ address: "1.2.3.4", port: 2053 }, { address: "5.6.7.8" }];
-    const allowed = new Set(["1.2.3.4", "5.6.7.8"]);
+    s.cdnPresets = ["cf-443-a"];
+    s.customEndpoints = ["1.2.3.4:2053", "5.6.7.8"];
+    const allowed = new Set(["104.17.0.0", "1.2.3.4", "5.6.7.8"]);
     for (const n of generateNodes(ctx(s))) expect(allowed.has(n.address), `unexpected address ${n.address}`).toBe(true);
+  });
+
+  it("ignores unknown preset ids and pre-cut addresses data", () => {
+    const s = settings();
+    s.cdnPresets = ["cf-443-a", "retired-preset"];
+    (s as unknown as Record<string, unknown>).addresses = [{ address: "9.9.9.9" }];
+    const addrs = new Set(generateNodes(ctx(s)).map((n) => n.address));
+    expect(addrs).toEqual(new Set(["104.17.0.0"]));
+  });
+
+  it("dedupes preset/custom/hostname overlaps by host and port", () => {
+    const s = settings();
+    s.cdnPresets = ["cf-443-a"];
+    s.customEndpoints = ["104.17.0.0:443", "104.17.0.0:8443"];
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.filter((n) => n.address === "104.17.0.0" && n.port === 443)).toHaveLength(1);
+    expect(nodes.filter((n) => n.address === "104.17.0.0" && n.port === 8443)).toHaveLength(1);
   });
 });
 
 describe("generateNodes caps and toggles", () => {
   it("caps output at maxNodesPerFormat", () => {
     const s = settings();
-    s.maxNodesPerFormat = 3;
-    expect(generateNodes(ctx(s)).length).toBe(3);
+    s.customEndpoints = ["1.2.3.4", "5.6.7.8"];
+    s.maxNodesPerFormat = 1;
+    expect(generateNodes(ctx(s)).length).toBe(1);
     s.maxNodesPerFormat = 0;
     expect(generateNodes(ctx(s))).toEqual([]);
   });
 
-  it("skips disabled protocols and protocols with empty credentials", () => {
+  it("skips vless when disabled or credential is empty", () => {
     const s = settings();
-    s.vmessEnabled = false;
-    s.trojanPassword = "";
-    const nodes = generateNodes(ctx(s));
-    expect(nodes.every((n) => n.kind === "vless" || n.kind === "ss")).toBe(true);
-    expect(nodes.length).toBe(2);
+    s.vlessEnabled = false;
+    expect(generateNodes(ctx(s))).toEqual([]);
+    const s2 = settings();
+    s2.vlessUuid = "";
+    expect(generateNodes(ctx(s2))).toEqual([]);
+    const s3 = settings();
+    s3.vlessEnabled = false;
+    s3.vlessUuid = "";
+    expect(generateNodes(ctx(s3))).toEqual([]);
+    expect(generateNodes(ctx(settings())).every((n) => n.kind === "vless")).toBe(true);
   });
 });
 
-describe("generateNodes fair cap rotation", () => {
-  it("round-robins across protocol kinds under the cap", () => {
+describe("generateNodes single-kind cap", () => {
+  it("emits at most one node per address under the cap", () => {
     const s = settings();
+    s.customEndpoints = ["1.2.3.4", "5.6.7.8"];
     s.maxNodesPerFormat = 6;
     const nodes = generateNodes(ctx(s));
     expect(nodes.map((n) => n.name)).toEqual([
-      `VLESS ${HOST} 443 Workers-Dev`,
-      `VMESS ${HOST} 443 Workers-Dev`,
-      `TROJAN ${HOST} 443 Workers-Dev`,
-      `SS ${HOST} 443 Workers-Dev`,
+      `VLESS 1.2.3.4 443 Clean-IP-Workers-Dev`,
+      `VLESS 5.6.7.8 443 Clean-IP-Workers-Dev`,
     ]);
   });
 
-  it("spreads the cap evenly across remaining kinds when one is disabled", () => {
+  it("caps output across addresses", () => {
     const s = settings();
-    s.ssEnabled = false;
-    s.maxNodesPerFormat = 30;
-    const nodes = generateNodes(ctx(s));
-    const count = (k: ProxyNode["kind"]): number => nodes.filter((n) => n.kind === k).length;
-    expect(count("vless")).toBe(1);
-    expect(count("vmess")).toBe(1);
-    expect(count("trojan")).toBe(1);
+    s.customEndpoints = ["1.2.3.4", "5.6.7.8"];
+    s.maxNodesPerFormat = 1;
+    expect(generateNodes(ctx(s)).length).toBe(1);
   });
 });
 
@@ -231,40 +245,23 @@ describe("generateNodes naming enrichment", () => {
     expect(sa[0]!.toLowerCase()).toBe(HOST.toLowerCase());
   });
 
-  it("a per-address label overrides the node name", () => {
+  it("name template expands placeholders", () => {
     const s = settings();
-    s.addresses = [{ address: "1.2.3.4", label: "US-Blue" }];
-    const nodes = generateNodes(ctx(s));
-    expect(nodes[0]!.name).toBe("US-Blue");
-    expect(nodes.every((n) => n.name.startsWith("US-Blue"))).toBe(true);
-  });
-
-  it("a per-address label overrides the name template", () => {
-    const s = settings();
-    s.addresses = [{ address: "1.2.3.4", label: "NY" }];
-    s.nameTemplate = "{IP}";
-    const nodes = generateNodes(ctx(s));
-    expect(nodes[0]!.name).toBe("NY");
-    expect(nodes.every((n) => n.name.startsWith("NY"))).toBe(true);
-  });
-
-  it("name template expands placeholders when no label", () => {
-    const s = settings();
-    s.addresses = [{ address: "1.2.3.4" }];
+    s.customEndpoints = ["1.2.3.4"];
     s.nameTemplate = "{FLAG}{PROTOCOL_LABEL} {IP}:{PORT}";
     const nodes = generateNodes(ctx(s, undefined, { country: "US" }));
     expect(nodes.find((n) => n.kind === "vless")!.name).toBe("\u{1F1FA}\u{1F1F8}VLESS 1.2.3.4:443");
   });
 
-  it("encodes variant and tag tokens when no label or template", () => {
+  it("encodes variant and tag tokens", () => {
     const s = settings();
-    s.addresses = [{ address: "1.0.0.1", port: 2052 }];
+    s.customEndpoints = ["1.0.0.1:2052"];
     const name = generateNodes(ctx(s)).find((n) => n.security === "none")!.name;
     expect(name).toContain("Plain");
     expect(name).toContain("Workers-Dev");
     expect(name).toContain("Clean-IP");
     const s2 = settings();
-    s2.addresses = [{ address: "1.0.0.1" }];
+    s2.customEndpoints = ["1.0.0.1"];
     expect(generateNodes(ctx(s2)).find((n) => n.security === "tls")!.name).toContain("Clean-IP");
   });
 });
@@ -310,63 +307,11 @@ describe("generateNodes ECH wiring", () => {
     const s = settings();
     s.echEnabled = true;
     s.echAuto = true;
-    s.addresses = [{ address: "5.6.7.8", port: 2052 }];
+    s.customEndpoints = ["5.6.7.8:2052"];
     const nodes = generateNodes(ctx(s));
     const plain = nodes.filter((n) => n.security === "none");
     expect(plain.length).toBeGreaterThan(0);
     expect(plain.every((n) => n.ech === null)).toBe(true);
-  });
-});
-
-describe("generateNodes country filter", () => {
-  function tagged(): Settings {
-    const s = settings();
-    s.addresses = [
-      { address: "1.1.1.1", country: "DE" },
-      { address: "2.2.2.2", country: "US" },
-      { address: "3.3.3.3" },
-    ];
-    return s;
-  }
-
-  function addrs(url: string, s?: Settings): Set<string> {
-    return new Set(generateNodes(ctx(s ?? tagged(), url)).map((n) => n.address));
-  }
-
-  it("returns every address when no ?country= param is present", () => {
-    expect(addrs(`https://${HOST}/sub`)).toEqual(new Set(["1.1.1.1", "2.2.2.2", "3.3.3.3"]));
-  });
-
-  it("keeps matching tagged entries and always keeps untagged ones", () => {
-    expect(addrs(`https://${HOST}/sub?country=DE`)).toEqual(new Set(["1.1.1.1", "3.3.3.3"]));
-    expect(addrs(`https://${HOST}/sub?country=US`)).toEqual(new Set(["2.2.2.2", "3.3.3.3"]));
-  });
-
-  it("matches comma-separated lists case-insensitively", () => {
-    expect(addrs(`https://${HOST}/sub?country=de,us`)).toEqual(
-      new Set(["1.1.1.1", "2.2.2.2", "3.3.3.3"]),
-    );
-    expect(addrs(`https://${HOST}/sub?country= De , uS `)).toEqual(
-      new Set(["1.1.1.1", "2.2.2.2", "3.3.3.3"]),
-    );
-  });
-
-  it("keeps only untagged entries when no tag matches", () => {
-    expect(addrs(`https://${HOST}/sub?country=JP`)).toEqual(new Set(["3.3.3.3"]));
-  });
-
-  it("always includes the worker hostname fallback", () => {
-    const s = settings();
-    s.addresses = [];
-    const nodes = generateNodes(ctx(s, `https://${HOST}/sub?country=DE`));
-    expect(new Set(nodes.map((n) => n.address))).toEqual(new Set([HOST]));
-  });
-
-  it("ignores an empty or invalid filter value", () => {
-    const full = new Set(["1.1.1.1", "2.2.2.2", "3.3.3.3"]);
-    expect(addrs(`https://${HOST}/sub?country=`)).toEqual(full);
-    expect(addrs(`https://${HOST}/sub?country=xyz`)).toEqual(full);
-    expect(addrs(`https://${HOST}/sub?country=,,,`)).toEqual(full);
   });
 });
 
@@ -380,7 +325,7 @@ describe("generateNodes vlessFlow stamping", () => {
   it("stamps the configured flow onto TLS vless nodes only", () => {
     const s = settings();
     s.vlessFlow = "xtls-rprx-vision";
-    s.addresses = [{ address: "1.2.3.4" }, { address: "5.6.7.8", port: 2052 }];
+    s.customEndpoints = ["1.2.3.4", "5.6.7.8:2052"];
     const nodes = generateNodes(ctx(s));
     const tls = nodes.filter((n) => n.kind === "vless" && n.security === "tls");
     const plain = nodes.filter((n) => n.kind === "vless" && n.security === "none");
@@ -391,125 +336,3 @@ describe("generateNodes vlessFlow stamping", () => {
   });
 });
 
-describe("generateNodes ssDirect marking", () => {
-  it("defaults ss direct to false", () => {
-    for (const n of generateNodes(ctx(settings()))) {
-      if (n.kind === "ss") expect(n.direct).toBe(false);
-    }
-  });
-
-  it("marks every ss node direct when enabled", () => {
-    const s = settings();
-    s.ssDirect = true;
-    const nodes = generateNodes(ctx(s));
-    const ss = nodes.filter((n) => n.kind === "ss");
-    expect(ss.length).toBeGreaterThan(0);
-    expect(ss.every((n) => n.kind === "ss" && n.direct === true)).toBe(true);
-    expect(nodes.filter((n) => n.kind !== "ss").every((n) => !("direct" in n))).toBe(true);
-  });
-});
-
-describe("generateNodes remote nodes (admin scope)", () => {
-  const PBK = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
-
-  function remoteSettings(): Settings {
-    const s = settings();
-    s.remoteNodes = [
-      {
-        kind: "reality",
-        name: "VPS Reality",
-        address: "203.0.113.10",
-        port: 443,
-        uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
-        sni: "www.microsoft.com",
-        pbk: PBK,
-        sid: "6ba85179",
-        flow: "xtls-rprx-vision",
-        spx: "/",
-        fp: "chrome",
-      },
-      {
-        kind: "hy2",
-        name: "VPS Hy2",
-        address: "203.0.113.11",
-        port: 4443,
-        password: "hy2secret",
-        sni: "example.com",
-        obfs: "",
-        obfsPassword: "",
-      },
-    ];
-    return s;
-  }
-
-  it("appends configured remote nodes after worker nodes", () => {
-    const nodes = generateNodes(ctx(remoteSettings()));
-    expect(nodes.length).toBe(6);
-    const reality = nodes.find((n) => n.kind === "reality")!;
-    expect(reality.name).toBe("VPS Reality");
-    expect(reality.address).toBe("203.0.113.10");
-    expect(reality.port).toBe(443);
-    if (reality.kind !== "reality") throw new Error("unreachable");
-    expect(reality.uuid).toBe("d342d11e-d424-4583-b36e-524ab1f0afa4");
-    expect(reality.pbk).toBe(PBK);
-    expect(reality.sid).toBe("6ba85179");
-    expect(reality.variant).toBe("normal");
-    const hy2 = nodes.find((n) => n.kind === "hy2")!;
-    expect(hy2.name).toBe("VPS Hy2");
-    if (hy2.kind !== "hy2") throw new Error("unreachable");
-    expect(hy2.password).toBe("hy2secret");
-    expect(hy2.variant).toBe("normal");
-  });
-
-  it("emits no remote nodes when remoteNodes is empty", () => {
-    const nodes = generateNodes(ctx(settings()));
-    expect(nodes.some((n) => n.kind === "reality" || n.kind === "hy2")).toBe(false);
-  });
-
-  it("dedupes remote names against worker node names", () => {
-    const s = remoteSettings();
-    s.remoteNodes = [
-      {
-        kind: "hy2",
-        name: "VPS Hy2",
-        address: "203.0.113.11",
-        port: 4443,
-        password: "a",
-        sni: "example.com",
-        obfs: "",
-        obfsPassword: "",
-      },
-      {
-        kind: "hy2",
-        name: "VPS Hy2",
-        address: "203.0.113.12",
-        port: 4443,
-        password: "b",
-        sni: "example.com",
-        obfs: "",
-        obfsPassword: "",
-      },
-    ];
-    const names = generateNodes(ctx(s))
-      .filter((n) => n.kind === "hy2")
-      .map((n) => n.name);
-    expect(names).toEqual(["VPS Hy2", "VPS Hy2 2"]);
-  });
-
-  it("counts remote nodes against maxNodesPerFormat", () => {
-    const s = remoteSettings();
-    s.maxNodesPerFormat = 5;
-    const nodes = generateNodes(ctx(s));
-    expect(nodes.length).toBe(5);
-    expect(nodes.filter((n) => n.kind === "reality" || n.kind === "hy2")).toHaveLength(1);
-  });
-
-  it("keeps the address-composition guarantee: only worker hosts plus admin remoteNodes", () => {
-    const s = remoteSettings();
-    s.addresses = [{ address: "1.2.3.4", port: 2053 }];
-    const allowed = new Set(["1.2.3.4", "203.0.113.10", "203.0.113.11"]);
-    for (const n of generateNodes(ctx(s))) {
-      expect(allowed.has(n.address), `unexpected address ${n.address}`).toBe(true);
-    }
-  });
-});

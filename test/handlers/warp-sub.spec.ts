@@ -4,6 +4,7 @@ import type { Env } from "../../src/types/env";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import type { Settings } from "../../src/types/settings";
 import { WARP_ACCOUNT_PREFIX, WARP_TOKEN_PREFIX } from "../../src/warp/store";
+import { ASSETS } from "../../src/ui/assets";
 
 function kvStub(rows: Record<string, unknown>): Env {
   return {
@@ -51,26 +52,52 @@ function warpRows(): Record<string, unknown> {
   };
 }
 
-function request(): Request {
-  return new Request(`https://w.test/sp12345678/sub/wg/${TOKEN}/wireguard-uri`);
+function request(format: string): Request {
+  return new Request(`https://w.test/sp12345678/sub/wg/${TOKEN}/${format}`);
 }
 
+const DELETED_FORMATS = [
+  "wireguard-conf-amnezia",
+  "throne-amnezia",
+  "wireguard-uri",
+  "singbox-amnezia",
+  "singbox-legacy",
+  "singbox-legacy-amnezia",
+  "xray",
+  "clash",
+  "clash-amnezia",
+  "surge",
+  "surfboard",
+  "loon",
+  "egern",
+];
+
 describe("handleWarpSub", () => {
-  it("serves a wireguard-uri sub with the 60s cache-throttle headers", async () => {
-    const res = await handleWarpSub(request(), kvStub(warpRows()), settings());
+  it("serves a surviving throne sub with the 60s cache-throttle headers", async () => {
+    const res = await handleWarpSub(request("throne"), kvStub(warpRows()), settings());
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     expect(res.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
     expect(res.headers.get("profile-update-interval")).toBe("12");
     expect(res.headers.get("expires")).toBeTypeOf("string");
     const body = await res.text();
-    expect(body.startsWith("wireguard://")).toBe(true);
+    expect(body.startsWith("wg://")).toBe(true);
     expect(body).toContain("162.159.192.1:2408");
+  });
+
+  it("serves deleted formats as camouflage identical to unknown names", async () => {
+    const rows = kvStub(warpRows());
+    const s = settings();
+    for (const format of [...DELETED_FORMATS, "not-a-format"]) {
+      const res = await handleWarpSub(request(format), rows, s);
+      expect(res.status, format).toBe(200);
+      expect(await res.text(), format).toBe(ASSETS.camo);
+    }
   });
 
   it("returns 404 without cache headers for an unknown token", async () => {
     const res = await handleWarpSub(
-      new Request(`https://w.test/sp12345678/sub/wg/${TOKEN}/wireguard-uri`),
+      new Request(`https://w.test/sp12345678/sub/wg/${TOKEN}/throne`),
       kvStub({}),
       settings(),
     );

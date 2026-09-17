@@ -47,7 +47,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function gotoPanel(page, hash) {
   if (hash !== undefined) await page.evaluate(h => { location.hash = h; }, hash);
   await page.waitForFunction(() => {
-    const views = [...document.querySelectorAll('#view-home,#view-subs,#view-users,#view-warp,#view-settings')];
+    const views = [...document.querySelectorAll('#view-home,#view-subs,#view-warp,#view-settings')];
     return views.some(v => !v.hidden);
   }, null, { timeout: T.nav });
   await page.waitForTimeout(T.settle);
@@ -59,7 +59,7 @@ async function gotoSub(page, sec) {
 }
 async function waitForPanel(page) {
   await page.waitForFunction(() => {
-    const views = [...document.querySelectorAll('#view-home,#view-subs,#view-users,#view-warp,#view-settings')];
+    const views = [...document.querySelectorAll('#view-home,#view-subs,#view-warp,#view-settings')];
     return views.some(v => !v.hidden);
   }, null, { timeout: T.nav });
   await page.waitForTimeout(400);
@@ -121,10 +121,10 @@ async function step1_login(page) {
 
 async function step2_tabs(page) {
   const tabs = await page.$$eval('#nav .tab', els => els.map(e => ({ id: e.id, label: (e.textContent || '').trim() })));
-  assert(tabs.length === 5, 'expected 5 tabs, got ' + tabs.length);
+  assert(tabs.length === 4, 'expected 4 tabs, got ' + tabs.length);
   assert(tabs.every(t => t.label.length > 0), 'a tab label is empty');
   assert(tabs.every(t => !KEY_PAT.test(t.label)), 'raw dict key leaked into tab label: ' + JSON.stringify(tabs));
-  ok('tabs', '5 tabs, labeled: ' + tabs.map(t => t.label).join(' / '));
+  ok('tabs', '4 tabs, labeled: ' + tabs.map(t => t.label).join(' / '));
 }
 
 async function step3_home(page) {
@@ -161,19 +161,31 @@ async function step3_home(page) {
   const restored = await page.locator('#home-body [data-kill]').first().isChecked();
   assert(restored === before, 'kill switch did not restore (checked=' + restored + ', expected ' + before + ')');
   ok('home-killswitch-restore', 'back to ' + restored);
-  // IP refresh must not console-error (result may be error card if upstream blocked — that is tolerated)
-  await page.evaluate(() => { const b = document.querySelector('#home-body [data-action="refresh-ip"]'); if (b) b.click(); });
-  await page.waitForFunction(() => ((document.getElementById('ip-body') || {}).textContent || '').length > 0, null, { timeout: 12000 }).catch(() => {});
-  const ipBody = await page.evaluate(() => (document.getElementById('ip-body') || {}).textContent || '');
-  assert(ipBody.length > 0, 'ip-body still empty 12s after refresh (my-ip fetch hung)');
-  ok('home-ip-refresh', 'refresh ran, ip-body non-empty (' + ipBody.replace(/\s+/g, ' ').slice(0, 48) + '…)');
+  // my-ip card gone: ip-body absent, no refresh-ip action, no my-ip link
+  const myIpGone = await page.evaluate(() => ({
+    ipBody: !!document.getElementById('ip-body'),
+    refreshIp: !!document.querySelector('#home-body [data-action="refresh-ip"]'),
+    myIpLink: document.body.innerHTML.includes('my-ip'),
+  }));
+  assert(!myIpGone.ipBody && !myIpGone.refreshIp && !myIpGone.myIpLink, 'my-ip surface survived: ' + JSON.stringify(myIpGone));
+  ok('home-no-myip', 'ip-body/refresh-ip/my-ip link absent');
+  // version-check button gone, version text survives
+  const noVerCheck = await page.evaluate(() => !!document.querySelector('#home-body [data-action="check-update"]'));
+  assert(!noVerCheck, 'version-check button survived');
+  ok('home-no-versioncheck', 'check-update absent, version text kept');
+  // relay pool refresh still works (surviving home card)
+  await page.evaluate(() => { const b = document.querySelector('#home-body [data-action="home-pool-refresh"]'); if (b) b.click(); });
+  await page.waitForFunction(() => ((document.getElementById('home-pool') || {}).textContent || '').length > 0, null, { timeout: 12000 }).catch(() => {});
+  const poolBody = await page.evaluate(() => (document.getElementById('home-pool') || {}).textContent || '');
+  assert(poolBody.length > 0, 'home-pool still empty 12s after refresh');
+  ok('home-pool-refresh', 'refresh ran, home-pool non-empty (' + poolBody.replace(/\s+/g, ' ').slice(0, 48) + '…)');
 }
 
 async function step4_subs(page, context) {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
   await gotoPanel(page, '#/subs');
   const mainRows = await page.$$eval('#subs-body [id^="hub-u"]', els => els.length);
-  assert(mainRows >= 6, 'expected >=6 main format rows, got ' + mainRows);
+  assert(mainRows === 2, 'expected 2 main format rows (base64+singbox), got ' + mainRows);
   // expander opens with ?target= variant
   const det = page.locator('#subs-body details.subs-acc').first();
   await det.locator('summary').click();
@@ -199,11 +211,15 @@ async function step4_subs(page, context) {
   await page.waitForTimeout(500);
   const clipAfter = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''));
   assert(clipAfter === urlBack && clipAfter.length > 10, 'clipboard mismatch: ' + JSON.stringify((clipAfter || '').slice(0, 40)));
-  // per-user section shows alpha
-  await page.waitForFunction(() => {
-    const box = document.getElementById('subs-users');
-    return box && box.textContent && box.textContent.includes('alpha');
-  }, null, { timeout: T.nav });
+  // per-user section gone (single-admin slim-down)
+  const noSubsUsers = await page.evaluate(() => !document.getElementById('subs-users'));
+  assert(noSubsUsers, 'per-user subs section survived');
+  // my-ip utility row gone, DoH row survives
+  const utilsGone = await page.evaluate(() => ({
+    myip: !!document.getElementById('hub-myip'),
+    doh: !!document.getElementById('hub-doh'),
+  }));
+  assert(!utilsGone.myip && utilsGone.doh, 'subs utils my-ip/DoH wrong: ' + JSON.stringify(utilsGone));
   // WARP link-out works
   await page.click('#subs-body a[href="#/warp"]');
   await page.waitForTimeout(T.navTo + T.settle);
@@ -218,93 +234,27 @@ async function step4_subs(page, context) {
     return row ? row.querySelectorAll('[data-action="qr"]').length : -1;
   });
   assert(infoQr === 0, 'info footer row has QR button(s): ' + infoQr);
-  ok('subs-hub', mainRows + ' formats, ?target= variant, mode=fragment toggle, clipboard byte-match, alpha listed, warp link-out, info footer QR-free');
+  ok('subs-hub', mainRows + ' formats (base64+singbox), ?target= variant, mode=fragment toggle, clipboard byte-match, no per-user section, warp link-out, info footer QR-free');
 }
 
 async function step5_users(page) {
-  await gotoPanel(page, '#/users');
-  await page.waitForFunction(() => {
-    const tb = document.getElementById('users-rows');
-    return tb && !tb.textContent.includes('Loading');
-  }, null, { timeout: T.nav });
-  // capacity chip matches count (locale-aware digits: FA renders ۲ از ۵۰)
-  const cap = await page.evaluate(() => {
-    const slot = document.getElementById('users-capacity-slot');
-    const txt = slot ? slot.textContent : '';
-    const en = txt.match(/(\d+)\s*\/\s*(\d+)/);
-    const fa = txt.match(/([۰-۹]+)\s+از\s+([۰-۹]+)/);
-    const de = s => s.replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06f0));
-    const m = en || (fa ? { 1: de(fa[1]), 2: de(fa[2]) } : null);
-    const rows = document.querySelectorAll('#users-rows tr').length;
-    const empty = !!document.querySelector('#users-rows .empty-card');
-    return { n: m ? Number(m[1]) : null, max: m ? Number(m[2]) : null, rows, empty };
-  });
-  assert(cap.n !== null && cap.max === 50, 'capacity chip missing/bad: ' + JSON.stringify(cap));
-  const dataRows = cap.empty ? 0 : cap.rows;
-  assert(cap.n === dataRows, 'capacity chip ' + cap.n + ' != rendered rows ' + dataRows);
-  // alpha row: expiry countdown + quota + scope chips (countdown is locale-aware: "in 12d" or "۱۲ روز دیگر")
-  const alpha = page.locator('#users-rows tr', { hasText: /0\s*\/\s*100|[۰-۹]\s*\/\s*[۰-۹]{2,}/ }).first();
-  const rowTxt = await alpha.textContent();
-  assert(/alpha/i.test(rowTxt), 'quota-bearing row is not an alpha row: ' + rowTxt.slice(0, 60));
-  const hasCountdown = (/in \d+d|in \d+h/.test(rowTxt)) || /[۰-۹]+ (روز|ساعت) دیگر/.test(rowTxt);
-  assert(hasCountdown, 'alpha row missing expiry countdown (row: ' + rowTxt.slice(0, 80) + ')');
-  const hasQuota = (/0\s*\/\s*100/.test(rowTxt)) || /[۰-۹]\s*\/\s*[۰-۹]{2,}/.test(rowTxt);
-  assert(hasQuota, 'alpha row missing quota 0/100');
-  assert(/All|همه/.test(rowTxt), 'alpha row missing ALL scope chip');
-  // search filters
-  await page.fill('#users-search', 'zzz-nomatch');
-  await page.waitForTimeout(300);
-  const filtered = await page.evaluate(() => (document.getElementById('users-rows') || {}).textContent || '');
-  assert(filtered.includes('match') === false || filtered.includes('No users match'), 'search no-match state wrong');
-  await page.fill('#users-search', 'alpha');
-  await page.waitForTimeout(300);
-  const shown = await page.evaluate(() => (document.getElementById('users-rows') || {}).textContent || '');
-  assert(shown.includes('alpha') && !shown.includes('Alpha') === false || shown.includes('alpha'), 'search "alpha" did not show alpha row');
-  await page.fill('#users-search', '');
-  await page.waitForTimeout(300);
-  // create walkuser -> ShareSheet
-  await page.click('[data-action="users-add"]');
-  await page.waitForSelector('#m-user:not([hidden])', { timeout: 5000 });
-  await page.fill('#mu-name', 'walkuser');
-  await page.click('#mu-go');
-  await page.waitForSelector('#m-share:not([hidden])', { timeout: 8000 });
-  const share = await page.evaluate(() => ({
-    url: (document.getElementById('share-url') || {}).value || '',
-    title: (document.getElementById('share-title') || {}).textContent || '',
-    warnVisible: !(document.getElementById('share-warning') || {}).hidden,
-    warnText: (document.getElementById('share-warning') || {}).textContent || '',
+  // Deleted users view redirects home (single-admin slim-down); no users tab, view, or modal survives.
+  await page.evaluate(h => { location.hash = h; }, '#/users');
+  await page.waitForTimeout(T.navTo + T.settle);
+  const redir = await page.evaluate(() => ({
+    hash: location.hash,
+    homeVisible: !document.getElementById('view-home').hidden,
+    noUsersView: !document.getElementById('view-users'),
+    noUsersTab: !document.getElementById('tab-users'),
+    noUserModal: !document.getElementById('m-user'),
   }));
-  assert(share.url.includes('/sub/u/'), 'ShareSheet URL is not a per-user sub URL: ' + share.url.slice(0, 60));
-  assert(share.warnVisible && share.warnText.length > 3, 'shown-once warning missing');
-  const qrPainted = await page.evaluate(() => {
-    const c = document.getElementById('share-canvas');
-    if (!c || !c.width) return false;
-    const ctx = c.getContext('2d');
-    const d = ctx.getImageData(0, 0, c.width, c.height).data;
-    for (let i = 3; i < d.length; i += 4 * 97) if (d[i] !== 0) return true;
-    return false;
-  });
-  assert(qrPainted, 'share QR canvas blank');
-  // share copy works
-  await page.click('#share-copy');
-  await page.waitForTimeout(400);
-  const clipUser = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''));
-  assert(clipUser === share.url, 'ShareSheet copy byte-mismatch');
-  await page.click('#share-close');
-  await page.waitForTimeout(250);
-  // delete walkuser (confirm dialog)
-  const wrow = page.locator('#users-rows tr', { hasText: 'walkuser' }).first();
-  await wrow.locator('[data-action="users-del"]').click();
-  await page.waitForSelector('#m-confirm:not([hidden])', { timeout: 5000 });
-  await page.click('#cf-ok');
-  await page.waitForFunction(() => !document.body.textContent.includes('walkuser'), null, { timeout: 8000 });
-  const capAfter = await page.evaluate(() => {
-    const m = (document.getElementById('users-capacity-slot') || {}).textContent || '';
-    const m2 = m.match(/(\d+)\s*\/\s*(\d+)/);
-    return m2 ? Number(m2[1]) : null;
-  });
-  assert(capAfter === cap.n, 'user count not restored after delete (' + capAfter + ' vs ' + cap.n + ')');
-  ok('users', 'capacity chip ' + cap.n + '/50 == rows, alpha row (countdown/quota/scope), search, create->ShareSheet(URL+warning+QR+copy), delete w/ confirm, count restored');
+  assert(redir.hash === '#/home' && redir.homeVisible, 'deleted #/users did not land on home: ' + JSON.stringify(redir));
+  assert(redir.noUsersView && redir.noUsersTab && redir.noUserModal, 'users surface survived: ' + JSON.stringify(redir));
+  await page.evaluate(h => { location.hash = h; }, '#/settings/users');
+  await page.waitForTimeout(T.navTo + T.settle);
+  const redir2 = await page.evaluate(() => ({ hash: location.hash, homeVisible: !document.getElementById('view-home').hidden }));
+  assert(redir2.hash === '#/home' && redir2.homeVisible, 'deleted #/settings/users did not land on home: ' + JSON.stringify(redir2));
+  ok('users-removed', '#/users -> #/home, #/settings/users -> #/home, no tab/view/modal');
 }
 
 async function step6_warp(page) {
@@ -328,32 +278,56 @@ async function step6_warp(page) {
     return { sub, acct };
   });
   assert(firstCard && (firstCardIdx.sub === 0), 'Subscription URLs card is not first in detail (sub=' + firstCardIdx.sub + ', acct=' + firstCardIdx.acct + ')');
-  // 7 family groups render
+  // 4 family groups render, one download row each
   const groups = await page.$$eval('#warp-detail-subs .warp-group', els => els.map(e => e.dataset.warpGroup));
-  assert(groups.length === 7, 'expected 7 WARP family groups, got ' + groups.length + ': ' + JSON.stringify(groups));
-  // amnezia toggle flips variant visibility (initial state follows the account: accounts with
-  // amnezia_overrides start with the toggle ON, per warp.js warpAmzShow=!!a.amnezia_overrides)
-  const amzTotal = await page.$$eval('#warp-detail-subs .fmt-row[data-amz]', els => els.length);
-  const toggleBefore = await page.evaluate(() => document.getElementById('warp-amz-toggle').checked);
-  const visibleBefore = await page.$$eval('#warp-detail-subs .fmt-row[data-amz]:not([hidden])', els => els.length);
-  assert(amzTotal > 0, 'no amnezia variant rows rendered');
-  assert(toggleBefore === (visibleBefore === amzTotal), 'amnezia visibility does not follow toggle state (checked=' + toggleBefore + ', visible=' + visibleBefore + '/' + amzTotal + ')');
-  // flip the toggle via DOM click (Playwright check/uncheck hangs on this live-rebound input)
-  await page.evaluate(() => document.getElementById('warp-amz-toggle').click());
-  await page.waitForTimeout(350);
-  const visibleFlipped = await page.$$eval('#warp-detail-subs .fmt-row[data-amz]:not([hidden])', els => els.length);
-  assert(toggleBefore ? visibleFlipped === 0 : visibleFlipped === amzTotal, 'amnezia toggle did not flip visibility (got ' + visibleFlipped + '/' + amzTotal + ')');
-  // restore original toggle state
-  await page.evaluate(() => document.getElementById('warp-amz-toggle').click());
-  await page.waitForTimeout(300);
-  // preset select shows Custom placeholder if custom endpoints
-  const preset = await page.evaluate(() => {
-    const sel = document.getElementById('warp-preset');
-    if (!sel) return null;
-    const custom = [...sel.options].find(o => o.value === '__custom');
-    return custom ? { selected: custom.selected, label: custom.textContent } : null;
-  });
-  assert(preset && preset.selected && /Custom/.test(preset.label), 'custom preset placeholder missing/not selected: ' + JSON.stringify(preset));
+  assert(groups.length === 4, 'expected 4 WARP family groups, got ' + groups.length + ': ' + JSON.stringify(groups));
+  for (const fam of ['wireguard', 'throne', 'singbox', 'v2rayn']) assert(groups.includes(fam), 'missing WARP family group: ' + fam);
+  const fmtRows = await page.$$eval('#warp-detail-subs .fmt-row', els => els.length);
+  assert(fmtRows === 4, 'expected 4 WARP download rows, got ' + fmtRows);
+  // global Amnezia toggle moves values, nothing else (toggle lives on the WARP section).
+  // Saves are async fire-and-forget server-side (PUT 200 races the edge purge),
+  // so every step below POLLS to a stable state instead of sleeping fixed timeouts.
+  const singboxUrl = await page.evaluate(() => [...document.querySelectorAll('#warp-detail-subs .copy-field code')].map(c => c.textContent).find(u => u.endsWith('/singbox')));
+  assert(singboxUrl, 'no singbox sub URL on detail');
+  await gotoPanel(page, '#/warp');
+  await page.waitForSelector('#warp-amnezia-toggle', { timeout: T.nav });
+  const savedToggle = async (want) => {
+    await page.waitForFunction(async (w) => {
+      try {
+        const r = await fetch('api/warp/settings/amnezia', { headers: { 'X-Q-Panel': '1' } });
+        const j = await r.json();
+        return !!((j && j.data && j.data.amneziaEnabled)) === w;
+      } catch { return false; }
+    }, want, { timeout: 20000, polling: 1000 });
+  };
+  const setToggle = async (on) => {
+    // flip via DOM click (Playwright check/uncheck hangs on this live-rebound input)
+    await page.evaluate((want) => {
+      const tg = document.getElementById('warp-amnezia-toggle');
+      if (!!tg.checked !== want) tg.click();
+    }, on);
+    await page.click('[data-action="warp-amnezia-save"]');
+    await savedToggle(on);
+  };
+  const expectSingbox = async (tag, wantAmz) => {
+    await page.waitForFunction(async ([u, t, want]) => {
+      // cache-bust: each poll must miss the browser HTTP cache (60s public);
+      // the edge key strips search, so the server still sees the same URL
+      const r = await fetch(u + (u.includes('?') ? '&' : '?') + 'probe=' + t + '-' + Date.now());
+      const txt = await r.text();
+      return want ? txt.includes('"amnezia_wg"') : !txt.includes('amnezia_wg');
+    }, [singboxUrl, tag, wantAmz], { timeout: 25000, polling: 1500 });
+  };
+  await setToggle(false);
+  await expectSingbox('off', false);
+  await setToggle(true);
+  await expectSingbox('on', true);
+  await setToggle(false);
+  await expectSingbox('restored', false);
+  // back to detail for the rotate flow below (state-safe: toggle restored off)
+  await gotoPanel(page, '#/warp');
+  await page.click('#warp-body a.acct-card');
+  await page.waitForSelector('#warp-detail-subs .fmt-row', { timeout: T.nav });
   // rotate token: URL changes after confirm (documented behavior: WARP regen shows
   // toast + re-render rather than ShareSheet — regen response carries only the token;
   // per-format URL construction lives in warp.js, logged as Task-11 follow-up)
@@ -376,7 +350,33 @@ async function step6_warp(page) {
   assert(shareClosed, 'Escape: ShareSheet ended up open');
   const focusOk = await page.evaluate(() => document.activeElement !== null);
   assert(focusOk, 'no activeElement after Escape');
-  ok('warp-detail', 'URLs card first, 7 groups, amnezia toggle flips visibility, Custom(n) preset placeholder, rotate changes URL, Escape clean');
+  // global endpoints card: tick default preset + custom line -> save -> detail subs carry it
+  await gotoPanel(page, '#/warp');
+  await page.waitForSelector('#warp-endpoints input[data-warp-preset="default"]', { timeout: T.nav });
+  await page.locator('#warp-endpoints input[data-warp-preset="default"]').click({ force: true });
+  await page.fill('#warp-eps-custom', '162.159.192.1:2408');
+  await page.waitForTimeout(300);
+  await page.click('[data-action="warp-endpoints-save"]');
+  await page.waitForTimeout(1500);
+  await page.click('#warp-body a.acct-card');
+  await page.waitForSelector('#warp-detail-subs .fmt-row', { timeout: T.nav });
+  // copy-fields hold sub URLs, not endpoints: fetch the throne text sub and check content
+  const hasEndpoint = await page.evaluate(async () => {
+    const urls = [...document.querySelectorAll('#warp-detail-subs .copy-field code')].map(c => c.textContent);
+    const throne = urls.find(u => u.endsWith('/throne'));
+    if (!throne) return false;
+    const r = await fetch(throne);
+    return (await r.text()).includes('162.159.192.1:2408');
+  });
+  assert(hasEndpoint, 'detail subs missing global custom endpoint');
+  // clear back to preset-only (state-safe for reruns)
+  await gotoPanel(page, '#/warp');
+  await page.waitForSelector('#warp-eps-custom', { timeout: T.nav });
+  await page.fill('#warp-eps-custom', '');
+  await page.waitForTimeout(300);
+  await page.click('[data-action="warp-endpoints-save"]');
+  await page.waitForTimeout(1500);
+  ok('warp-detail', 'URLs card first, 4 groups, global Amnezia toggle moves values, global endpoints reach detail subs, rotate changes URL, Escape clean');
 }
 
 async function step7_settings(page) {
@@ -468,7 +468,67 @@ async function step7_settings(page) {
     await page.click('#sp-advanced [data-action="section-save"]');
     await page.waitForTimeout(1200);
     assert(saves.length === savesBeforeBack + 1, 'routing-off save: expected exactly 1 PUT, got ' + (saves.length - savesBeforeBack));
-    ok('settings-roundtrips', 'profileTitle + fragment-low + routing toggle persisted & reverted; exactly 1 PUT per save (' + saves.length + ' PUTs observed)');
+    // endpoint presets: tick cf-443-a -> persisted -> both outputs carry 104.17.0.0 -> untick
+    await gotoSub(page, 'addresses');
+    const preset = page.locator('#sp-addresses input[data-preset="cf-443-a"]');
+    await preset.click({ force: true });
+    await page.waitForTimeout(300);
+    const savesBeforePreset = saves.length;
+    await page.click('#sp-addresses [data-action="section-save"]');
+    await page.waitForTimeout(1200);
+    assert(saves.length === savesBeforePreset + 1, 'preset save: expected exactly 1 PUT, got ' + (saves.length - savesBeforePreset));
+    await navAfterSave(page);
+    await gotoSub(page, 'addresses');
+    assert(await page.locator('#sp-addresses input[data-preset="cf-443-a"]').isChecked(), 'preset tick not persisted');
+    const subText = await page.evaluate(async (sp) => {
+      const r = await fetch(location.origin + '/' + sp + '/sub?target=base64');
+      const b64 = await r.text();
+      const bin = atob(b64);
+      const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    }, SP).catch(() => null);
+    assert(subText && subText.includes('104.17.0.0:443'), 'base64 sub missing ticked preset endpoint');
+    await preset.click({ force: true });
+    await page.waitForTimeout(300);
+    await page.click('#sp-addresses [data-action="section-save"]');
+    await page.waitForTimeout(1200);
+    // custom box: invalid line blocks the save (server 422, state untouched) with a named error
+    await gotoSub(page, 'addresses');
+    const box = page.locator('#sp-addresses textarea[data-bind="customEndpoints"]');
+    const settingsBefore = await page.evaluate(async (sp) => {
+      const r = await fetch(location.origin + '/' + sp + '/api/settings', { headers: { 'X-Q-Panel': '1' } });
+      return (await r.json()).data.customEndpoints;
+    }, SP);
+    await box.fill('203.0.113.9:443\nbogus!!\n9.9.9.9:22');
+    await page.waitForTimeout(500);
+    await page.click('#sp-addresses [data-action="section-save"]');
+    await page.waitForTimeout(1200);
+    const fieldErr = await page.evaluate(() => {
+      const el = document.querySelector('#sp-addresses textarea[data-bind="customEndpoints"]');
+      const fw = el ? el.closest('.field') : null;
+      const err = fw ? fw.querySelector('.field__error') : null;
+      return err ? err.textContent : '';
+    });
+    assert(fieldErr.includes('line 2') && fieldErr.includes('bogus!!'), 'per-line error missing/naming wrong (got ' + JSON.stringify(fieldErr) + ')');
+    const settingsAfterBad = await page.evaluate(async (sp) => {
+      const r = await fetch(location.origin + '/' + sp + '/api/settings', { headers: { 'X-Q-Panel': '1' } });
+      return (await r.json()).data.customEndpoints;
+    }, SP);
+    assert(JSON.stringify(settingsAfterBad) === JSON.stringify(settingsBefore), 'rejected save mutated state');
+    await box.fill('203.0.113.9:443');
+    await page.waitForTimeout(500);
+    const savesBeforeCustom = saves.length;
+    await page.click('#sp-addresses [data-action="section-save"]');
+    await page.waitForTimeout(1200);
+    assert(saves.length === savesBeforeCustom + 1, 'custom save: expected exactly 1 PUT');
+    await navAfterSave(page);
+    await gotoSub(page, 'addresses');
+    assert((await box.inputValue()).includes('203.0.113.9:443'), 'custom line not persisted');
+    await box.fill('');
+    await page.waitForTimeout(500);
+    await page.click('#sp-addresses [data-action="section-save"]');
+    await page.waitForTimeout(1200);
+    ok('settings-roundtrips', 'profileTitle + fragment-low + routing toggle + endpoints persisted & reverted; exactly 1 PUT per save (' + saves.length + ' PUTs observed)');
   } finally {
     page.off('request', counter);
   }
@@ -499,24 +559,27 @@ async function step9_a11y(page) {
     focused: document.activeElement.id,
     selected: [...document.querySelectorAll('#nav .tab')].filter(t => t.getAttribute('aria-selected') === 'true').map(t => t.id),
   }));
-  assert(moved.focused === 'tab-subs', 'ArrowRight did not move focus to tab-subs (got ' + moved.focused + ')');
+  // selection follows the arrow and the view navigates (the router moves focus to the view
+  // heading per the pre-existing SPA convention, so focus is not asserted here)
   assert(moved.selected.includes('tab-subs'), 'aria-selected did not follow focus');
+  assert(moved.focused === 'subs-h1' || moved.focused === 'tab-subs', 'unexpected focus after arrow nav (got ' + moved.focused + ')');
   await page.keyboard.press('ArrowLeft');
   await page.waitForTimeout(300);
-  // addr card inputs all have label[for]
+  // endpoint widgets are labelled: preset checkboxes wrapped in <label>, custom textarea has label[for]
   await gotoSub(page, 'addresses');
   await page.waitForTimeout(400);
   const orphan = await page.evaluate(() => {
     const orphans = [];
-    document.querySelectorAll('#sp-addresses .addr-card__field, #sp-addresses .remote-card .addr-card__field').forEach(wrap => {
-      const ctrl = wrap.querySelector('input,select');
-      if (!ctrl) return;
+    document.querySelectorAll('#sp-addresses input[data-preset]').forEach(ctrl => {
+      if (!ctrl.closest('label')) orphans.push('no-label: ' + ctrl.dataset.preset);
+    });
+    document.querySelectorAll('#sp-addresses textarea[data-bind]').forEach(ctrl => {
       if (!ctrl.id) { orphans.push('no-id'); return; }
       if (!document.querySelector('label[for="' + CSS.escape(ctrl.id) + '"]')) orphans.push('no-label: ' + ctrl.id);
     });
     return orphans;
   });
-  assert(orphan.length === 0, 'orphan inputs in addr cards: ' + JSON.stringify(orphan));
+  assert(orphan.length === 0, 'orphan inputs in endpoint widgets: ' + JSON.stringify(orphan));
   // ECH preview dir=auto in FA
   await page.evaluate(() => { document.cookie = 'qp_lang=fa; Path=/; Max-Age=31536000; SameSite=Lax'; location.reload(); });
   await waitForPanel(page);
@@ -533,7 +596,7 @@ async function step9_a11y(page) {
   await page.evaluate(() => { document.cookie = 'qp_lang=en; Path=/; Max-Age=31536000; SameSite=Lax'; location.reload(); });
   await waitForPanel(page);
   await dismissWizard(page);
-  ok('a11y', 'ArrowRight/Left moves tabs + aria-selected follows, 0 orphan addr inputs, ECH dir=auto in FA');
+  ok('a11y', 'ArrowRight/Left moves tabs + aria-selected follows, 0 orphan endpoint inputs, ECH dir=auto in FA');
 }
 
 async function step10_i18n(page) {
@@ -543,11 +606,11 @@ async function step10_i18n(page) {
   const dir = await page.evaluate(() => document.documentElement.getAttribute('dir'));
   assert(dir === 'rtl', 'dir != rtl in FA (got ' + dir + ')');
   const leaked = [];
-  for (const h of ['#/home', '#/subs', '#/users', '#/warp', '#/settings/general', '#/settings/protocols', '#/settings/addresses', '#/settings/egress', '#/settings/tunnel', '#/settings/advanced']) {
+  for (const h of ['#/home', '#/subs', '#/warp', '#/settings/general', '#/settings/protocols', '#/settings/addresses', '#/settings/egress', '#/settings/tunnel', '#/settings/advanced']) {
     await page.evaluate(hash => { location.hash = hash; }, h);
     await page.waitForTimeout(T.navTo);
     const found = await page.evaluate(() => {
-      const v = [...document.querySelectorAll('#view-home,#view-subs,#view-users,#view-warp,#view-settings')].find(v => !v.hidden);
+      const v = [...document.querySelectorAll('#view-home,#view-subs,#view-warp,#view-settings')].find(v => !v.hidden);
       if (!v) return [];
       const out = [];
       v.querySelectorAll('*').forEach(el => {
@@ -564,7 +627,7 @@ async function step10_i18n(page) {
   await page.evaluate(() => { document.cookie = 'qp_lang=en; Path=/; Max-Age=31536000; SameSite=Lax'; location.reload(); });
   await waitForPanel(page);
   await dismissWizard(page);
-  ok('i18n', 'FA dir=rtl, zero raw dict keys across 10 views, back to EN');
+  ok('i18n', 'FA dir=rtl, zero raw dict keys across 9 views, back to EN');
 }
 
 async function step11_mobile(context) {
@@ -579,20 +642,20 @@ async function step11_mobile(context) {
     await mpage.waitForURL('**/panel', { timeout: T.nav });
     await waitForPanel(mpage);
     await dismissWizard(mpage);
-    const views = [['home', '#/home'], ['subs', '#/subs'], ['users', '#/users'], ['settings-protocols', '#/settings/protocols']];
+    const views = [['home', '#/home'], ['subs', '#/subs'], ['warp', '#/warp'], ['settings-protocols', '#/settings/protocols']];
     for (const [name, h] of views) {
       await mpage.evaluate(hash => { location.hash = hash; }, h);
       await mpage.waitForTimeout(T.navTo + T.settle);
       const sw = await mpage.evaluate(() => document.scrollingElement.scrollWidth);
       assert(sw <= 375, name + ': scrollWidth=' + sw + ' > 375');
-      // tabs unmasked: all 5 tabs have offsetParent (visible/scrollable, none display:none)
+      // tabs unmasked: all 4 tabs have offsetParent (visible/scrollable, none display:none)
       const tabs = await mpage.evaluate(() => {
         const els = [...document.querySelectorAll('#nav .tab')];
         return { count: els.length, allVisible: els.every(t => t.offsetParent !== null) };
       });
-      assert(tabs.count === 5 && tabs.allVisible, name + ': tabs count/visible bad ' + JSON.stringify(tabs));
+      assert(tabs.count === 4 && tabs.allVisible, name + ': tabs count/visible bad ' + JSON.stringify(tabs));
     }
-    ok('mobile-375', 'home/subs/users/settings-protocols: scrollWidth<=375, 5 tabs unmasked');
+    ok('mobile-375', 'home/subs/warp/settings-protocols: scrollWidth<=375, 4 tabs unmasked');
   } finally {
     await mctx.close();
   }
@@ -608,6 +671,9 @@ async function step12_undo(page) {
   await page.keyboard.type('X');
   const val1 = await inp.inputValue();
   assert(val1 === orig + 'X', 'typed value wrong: ' + val1);
+  // the dirty/undo snapshot push is debounced (~120ms after the last keystroke);
+  // wait for it to land before exercising section undo
+  await page.waitForTimeout(350);
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(250);
   const val2 = await inp.inputValue();
@@ -641,7 +707,8 @@ try {
   await context.addInitScript(() => { try { localStorage.setItem('qp_wizard_done', '1'); } catch (e) {} });
   const page = await context.newPage();
   page.on('pageerror', e => consoleErrors.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource.*40[13]/.test(m.text())) consoleErrors.push('console: ' + m.text()); });
+  // 40x resource errors are walk-triggered probes (401/403 auth gates, 422 intentional invalid saves); anything else fails the contract
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource.*(40[123]|422)/.test(m.text())) consoleErrors.push('console: ' + m.text()); });
   page.on('dialog', d => d.dismiss().catch(() => {}));
 
   const steps = [

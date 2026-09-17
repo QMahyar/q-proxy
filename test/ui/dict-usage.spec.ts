@@ -66,7 +66,7 @@ describe("ui/dict usage guard", () => {
   const enKeys = Object.keys(dict.en);
 
   it("parses a non-trivial bilingual dictionary", () => {
-    expect(enKeys.length).toBeGreaterThan(400);
+    expect(enKeys.length).toBeGreaterThan(350);
     expect(dict.en["nav.home"]).toBe("Home");
     expect(typeof dict.fa["nav.home"]).toBe("string");
     expect((dict.fa["nav.home"] ?? "").length).toBeGreaterThan(0);

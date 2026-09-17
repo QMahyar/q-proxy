@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   emitterOptions,
   renderSubscriptionBody,
@@ -11,18 +11,16 @@ import type { ProxyNode } from "../../src/types/node";
 import { decodeBase64 } from "../../src/utils/base64";
 
 function settings(): Settings {
-  return {
-    ...structuredClone(DEFAULT_SETTINGS),
-    remoteSubUrls: [],
-  };
+  return structuredClone(DEFAULT_SETTINGS);
 }
 
-function node(variant: "normal" | "fragment", kind: ProxyNode["kind"]): ProxyNode {
-  const base = {
-    name: `${kind} ${variant}`,
+function node(variant: "normal" | "fragment"): ProxyNode {
+  return {
+    kind: "vless",
+    name: `vless ${variant}`,
     address: "w.test",
     port: 443,
-    security: "tls" as const,
+    security: "tls",
     sni: "w.test",
     host: "w.test",
     path: "/p",
@@ -31,39 +29,20 @@ function node(variant: "normal" | "fragment", kind: ProxyNode["kind"]): ProxyNod
     alpn: [],
     ech: null,
     variant,
-    tags: [] as ProxyNode["tags"],
+    tags: [],
+    uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
   };
-  if (kind === "vless") return { ...base, kind, uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4" };
-  if (kind === "vmess")
-    return { ...base, kind, uuid: "1386f85e-657b-4d6e-9d56-78badb75e1fd", cipher: "auto" as const, alterId: 0 as const };
-  if (kind === "trojan") return { ...base, kind, password: "pass123456" };
-  if (kind === "reality")
-    return {
-      ...base,
-      kind,
-      uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
-      pbk: "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0",
-      sid: "",
-      flow: "xtls-rprx-vision",
-      spx: "/",
-    };
-  if (kind === "hy2") return { ...base, kind, password: "pass123456", obfs: "", obfsPassword: "" };
-  return { ...base, kind: "ss" as const, method: "aes-128-gcm" as const, password: "sspass12345" };
 }
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
 
 describe("selectVariantNodes", () => {
   it("keeps only the requested variant", () => {
-    const all = [node("normal", "vless"), node("fragment", "vless")];
+    const all = [node("normal"), node("fragment")];
     expect(selectVariantNodes(all, "normal").map((n) => n.variant)).toEqual(["normal"]);
     expect(selectVariantNodes(all, "fragment").map((n) => n.variant)).toEqual(["fragment"]);
   });
 
   it("falls back to all nodes when fragment filter is empty", () => {
-    const all = [node("normal", "trojan"), node("normal", "ss")];
+    const all = [node("normal"), node("normal")];
     const picked = selectVariantNodes(all, "fragment");
     expect(picked).toHaveLength(2);
   });
@@ -80,13 +59,12 @@ describe("emitterOptions", () => {
     const input = {
       settings: s,
       nodes: [],
-      format: "clash" as const,
+      format: "singbox" as const,
       isFragmentMode: true,
-      subscriptionUrl: "https://w.test/sub?target=clash",
+      subscriptionUrl: "https://w.test/sub?target=singbox",
     };
     const opts = emitterOptions(input);
     expect(opts.isFragment).toBe(true);
-    expect(opts.remoteDns).toBe(s.remoteDns);
     expect(opts.updateIntervalHours).toBe(s.subUpdateIntervalHours);
     expect(opts.rules?.bypassDomains).toEqual(["a.test"]);
     opts.rules!.bypassDomains.push("mutated.test");
@@ -95,27 +73,21 @@ describe("emitterOptions", () => {
 });
 
 describe("renderSubscriptionBody", () => {
-  it("renders non-base64 formats through the emitter registry", async () => {
+  it("renders singbox through the emitter registry", async () => {
     const body = await renderSubscriptionBody({
       settings: settings(),
-      nodes: [node("normal", "trojan")],
-      format: "surge",
+      nodes: [node("normal")],
+      format: "singbox",
       isFragmentMode: false,
-      subscriptionUrl: "https://w.test/sub?target=surge",
+      subscriptionUrl: "https://w.test/sub?target=singbox",
     });
-    expect(body).toContain("#!MANAGED-CONFIG https://w.test/sub?target=surge");
+    expect(body).toContain('"type": "vless"');
   });
 
-  it("base64 body merges own share URIs with fetched remote lines", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(btoa("ss://remote@203.0.113.9:1#R"), { status: 200 })),
-    );
-    const s = settings();
-    s.remoteSubUrls = ["https://r/sub"];
+  it("base64 body contains own share URIs only (remote merge removed)", async () => {
     const body = await renderSubscriptionBody({
-      settings: s,
-      nodes: [node("normal", "vless")],
+      settings: settings(),
+      nodes: [node("normal")],
       format: "base64",
       isFragmentMode: false,
       subscriptionUrl: "https://w.test/sub?target=base64",
@@ -124,20 +96,14 @@ describe("renderSubscriptionBody", () => {
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) throw new Error("unreachable");
     const text = new TextDecoder().decode(decoded.value);
-    expect(text.split("\n")[0]!.startsWith("vless://")).toBe(true);
-    expect(text).toContain("ss://remote@203.0.113.9:1");
+    const lines = text.split("\n").filter((l) => l.length > 0);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.startsWith("vless://")).toBe(true);
   });
 });
 
 describe("SUB_CONTENT_TYPES", () => {
-  it("covers every subscription format", () => {
-    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual([
-      "base64",
-      "clash",
-      "loon",
-      "quantumult",
-      "singbox",
-      "surge",
-    ]);
+  it("covers every surviving subscription format", () => {
+    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual(["base64", "singbox"]);
   });
 });

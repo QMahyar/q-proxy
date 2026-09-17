@@ -79,7 +79,7 @@ export async function ensureWarpDefaults(env: { QPROXY_KV: KvLike }): Promise<vo
   }
   const global = await env.QPROXY_KV.get(WARP_GLOBAL_KEY, "json");
   if (global === null) {
-    const seed: WarpGlobalSettings = { amnezia: { ...DEFAULT_AMNEZIA } };
+    const seed: WarpGlobalSettings = { amnezia: { ...DEFAULT_AMNEZIA }, amneziaEnabled: false };
     await env.QPROXY_KV.put(WARP_GLOBAL_KEY, JSON.stringify(seed));
   }
 }
@@ -262,10 +262,11 @@ function isAccount(raw: unknown): raw is WarpAccount {
 export async function getGlobalSettings(env: { QPROXY_KV: KvLike }): Promise<WarpGlobalSettings> {
   const raw = (await env.QPROXY_KV.get(WARP_GLOBAL_KEY, "json")) as unknown;
   if (raw !== null && typeof raw === "object") {
-    const amnezia = pickAmnezia((raw as Record<string, unknown>).amnezia);
-    if (amnezia !== null) return { amnezia };
+    const rec = raw as Record<string, unknown>;
+    const amnezia = pickAmnezia(rec.amnezia);
+    if (amnezia !== null) return { amnezia, amneziaEnabled: rec.amneziaEnabled === true };
   }
-  return { amnezia: { ...DEFAULT_AMNEZIA } };
+  return { amnezia: { ...DEFAULT_AMNEZIA }, amneziaEnabled: false };
 }
 
 export async function setGlobalSettings(env: { QPROXY_KV: KvLike }, settings: WarpGlobalSettings): Promise<void> {

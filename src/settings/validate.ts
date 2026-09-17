@@ -1,20 +1,13 @@
 import type {
-  AddressSetting,
-  Fingerprint,
-  RemoteNodeSetting,
   Settings,
 } from "../types/settings";
-import { CF_PLAIN_PORTS, CF_TLS_PORTS, DEFAULT_SETTINGS, MAX_REMOTE_NODES } from "../types/settings";
+import { CF_PLAIN_PORTS, CF_TLS_PORTS, DEFAULT_SETTINGS } from "../types/settings";
 import {
-  FINGERPRINTS,
-  HOST_TOKEN_RE,
   SETTING_FIELD_DESCRIPTORS,
-  VLESS_FLOWS,
   type SettingFieldSpec,
 } from "./fields";
 import { isPlainObject } from "./migrate";
-import { decodeBase64Url } from "../utils/base64";
-import { bracketIpv6, isIpLiteral, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
+import { isIpLiteral, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
 
 export type ValidationResult =
   | { ok: true; value: Settings }
@@ -25,13 +18,7 @@ const CF_TLS_PORT_SET = new Set<number>(CF_TLS_PORTS);
 const KNOWN_ALPN = ["h2", "http/1.1", "h3"];
 
 const TG_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{35}$/;
-const REMOTE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const REMOTE_SID_RE = /^[0-9a-fA-F]{1,8}$/;
-const HY2_OBFS_MODES = ["", "salamander"] as const;
 const TG_CHAT_ID_RE = /^(?:@[A-Za-z0-9_]{4,64}|-?\d{1,20})?$/;
-const TOTP_SECRET_RE = /^[A-Z2-7]{16,128}$/;
-const TOTP_RECOVERY_RE = /^[0-9a-f]{64}$/;
-const TOTP_MAX_RECOVERY_CODES = 16;
 
 function fail(fields: Record<string, string>, key: string, msg: string): void {
   if (!(key in fields)) fields[key] = msg;
@@ -182,7 +169,7 @@ function strArrayField(
   setField(target, key as keyof typeof target & string, sanitizeStrArray(v, opts));
 }
 
-function addressListField(
+function presetIdListField(
   patch: Record<string, unknown>,
   out: Settings,
   key: string,
@@ -192,88 +179,67 @@ function addressListField(
   const v = patch[key];
   if (v === undefined) return;
   if (!Array.isArray(v)) {
-    fail(fields, key, "must be an array of address entries");
+    fail(fields, key, "must be an array of preset ids");
     return;
   }
   const seen = new Set<string>();
-  const result: AddressSetting[] = [];
+  const result: string[] = [];
+  for (const raw of v) {
+    if (typeof raw !== "string" || raw.trim().length === 0) {
+      fail(fields, key, "entries must be non-empty preset ids");
+      return;
+    }
+    const id = raw.trim();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+    if (result.length >= maxItems) break;
+  }
+  setField(out, key as keyof Settings & string, result);
+}
+
+function endpointLinesField(
+  patch: Record<string, unknown>,
+  out: Settings,
+  key: string,
+  fields: Record<string, string>,
+  maxItems: number,
+  enforceCfPorts: boolean,
+): void {
+  const v = patch[key];
+  if (v === undefined) return;
+  if (!Array.isArray(v)) {
+    fail(fields, key, "must be an array of endpoint lines");
+    return;
+  }
+  const result: string[] = [];
   for (let i = 0; i < v.length; i++) {
-    const item = v[i];
-    if (!isPlainObject(item)) {
-      fail(fields, key, `entry ${i + 1} must be an object`);
-      continue;
+    const raw = v[i];
+    if (typeof raw !== "string") {
+      fail(fields, key, `line ${i + 1} must be a string`);
+      return;
     }
-    const rec = item as Record<string, unknown>;
-    const addrRaw = typeof rec.address === "string" ? rec.address.trim() : "";
-    if (addrRaw.length === 0) {
-      fail(fields, key, `entry ${i + 1} is missing an address`);
-      continue;
+    const line = raw.trim();
+    if (line.length === 0) continue;
+    if (line.length > 253) {
+      fail(fields, key, `line ${i + 1} "${line.slice(0, 64)}" is too long`);
+      return;
     }
-    const hp = parseHostPort(addrRaw, 0);
+    const hp = parseHostPort(line, 0);
     if (hp === null || hp.host.length === 0) {
-      fail(fields, key, `entry ${i + 1} has an invalid address`);
-      continue;
+      fail(fields, key, `line ${i + 1} "${line.slice(0, 64)}" is not a valid ip:port entry`);
+      return;
     }
     const hostValid = isIpLiteral(hp.host) || (HOSTNAME_RE.test(hp.host) && hp.host.length <= 253 && !hp.host.includes(":"));
     if (!hostValid) {
-      fail(fields, key, `entry ${i + 1} address must be an IP or hostname`);
-      continue;
+      fail(fields, key, `line ${i + 1} "${line.slice(0, 64)}" address must be an IP or hostname`);
+      return;
     }
-    let port = typeof rec.port === "number" ? rec.port : hp.port > 0 ? hp.port : undefined;
-    if (port !== undefined) {
-      if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        fail(fields, key, `entry ${i + 1} port must be 1-65535`);
-        continue;
-      }
-      if (!CF_PORT_SET.has(port)) {
-        fail(fields, key, `entry ${i + 1} port ${port} is not a Cloudflare-proxied port`);
-        continue;
-      }
+    if (hp.port > 0 && enforceCfPorts && !CF_PORT_SET.has(hp.port)) {
+      fail(fields, key, `line ${i + 1} "${line.slice(0, 64)}" port ${hp.port} is not a Cloudflare-proxied port`);
+      return;
     }
-    const label = typeof rec.label === "string" ? rec.label.trim() : "";
-    if (label.length > 64) {
-      fail(fields, key, `entry ${i + 1} label is too long`);
-      continue;
-    }
-    const entry: AddressSetting = { address: bracketIpv6(hp.host) };
-    if (port !== undefined) entry.port = port;
-    if (label.length > 0) entry.label = label;
-    if (rec.enabled === false) entry.enabled = false;
-    const hostField = typeof rec.host === "string" ? rec.host.trim() : "";
-    if (hostField.length > 0) {
-      if (!HOSTNAME_RE.test(hostField) || hostField.length > 253) {
-        fail(fields, key, `entry ${i + 1} host must be a hostname`);
-        continue;
-      }
-      entry.host = hostField;
-    }
-    const sniField = typeof rec.sni === "string" ? rec.sni.trim() : "";
-    if (sniField.length > 0) {
-      if (!HOSTNAME_RE.test(sniField) || sniField.length > 253) {
-        fail(fields, key, `entry ${i + 1} sni must be a hostname`);
-        continue;
-      }
-      entry.sni = sniField;
-    }
-    const countryRaw = rec.country;
-    if (countryRaw !== undefined && countryRaw !== null) {
-      if (typeof countryRaw !== "string") {
-        fail(fields, key, `entry ${i + 1} country must be a 2-letter country code`);
-        continue;
-      }
-      const normalized = countryRaw.trim().toUpperCase();
-      if (normalized.length > 0) {
-        if (!/^[A-Z]{2}$/.test(normalized)) {
-          fail(fields, key, `entry ${i + 1} country must be a 2-letter country code`);
-          continue;
-        }
-        entry.country = normalized;
-      }
-    }
-    const dedupeKey = `${entry.address}:${entry.port ?? "auto"}`.toLowerCase();
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-    result.push(entry);
+    result.push(line);
     if (result.length >= maxItems) break;
   }
   if (result.length > maxItems) {
@@ -388,9 +354,6 @@ function applyCustomField(
   fields: Record<string, string>,
 ): void {
   switch (path) {
-    case "remoteNodes":
-      validateRemoteNodes(patch, out, fields);
-      return;
     case "allowedIps": {
       const allowV = patch["allowedIps"];
       if (allowV === undefined) return;
@@ -420,8 +383,17 @@ function applyCustomField(
       out.allowedIps = cleaned;
       return;
     }
-    case "addresses":
-      addressListField(patch, out, "addresses", fields, 64);
+    case "cdnPresets":
+      presetIdListField(patch, out, "cdnPresets", fields, 64);
+      return;
+    case "customEndpoints":
+      endpointLinesField(patch, out, "customEndpoints", fields, 64, true);
+      return;
+    case "warpPresets":
+      presetIdListField(patch, out, "warpPresets", fields, 64);
+      return;
+    case "warpCustomEndpoints":
+      endpointLinesField(patch, out, "warpCustomEndpoints", fields, 64, false);
       return;
     case "defaultPort": {
       const v = intField(patch, "defaultPort", fields, 1, 65535);
@@ -464,55 +436,12 @@ function applyCustomField(
       }
       return;
     }
-    case "chainProxy.uri": {
-      const uri = strField(patch, "uri", fields, { maxLen: 2048 });
-      if (uri !== undefined) out.chainProxy.uri = uri;
-      if (out.chainProxy.enabled) {
-        let parsedHost = "";
-        let parsedOk = false;
-        try {
-          const parsed = new URL(out.chainProxy.uri);
-          parsedOk =
-            (parsed.protocol === "socks5:" || parsed.protocol === "http:") &&
-            parsed.hostname.length > 0;
-          if (parsedOk) parsedHost = parsed.hostname;
-        } catch {
-          parsedOk = false;
-        }
-        if (!parsedOk) fail(fields, "uri", "must be a socks5:// or http:// proxy URI");
-        else if (isLocalOrPrivateTarget(parsedHost)) fail(fields, "uri", "must not target a local or private address");
-      }
-      return;
-    }
     case "dohUpstream": {
       const v = strField(patch, "dohUpstream", fields, { maxLen: 253 });
       if (v !== undefined) {
         if (!isHttpUrl(v)) fail(fields, "dohUpstream", "must be a valid http(s) URL");
         else if (isLocalOrPrivateTarget(new URL(v).hostname)) fail(fields, "dohUpstream", "must not target a local or private address");
         else out.dohUpstream = v;
-      }
-      return;
-    }
-    case "remoteDns": {
-      const v = strField(patch, "remoteDns", fields, { maxLen: 253, minLen: 1 });
-      if (v !== undefined) {
-        if (isHttpUrl(v)) {
-          if (isLocalOrPrivateTarget(new URL(v).hostname)) fail(fields, "remoteDns", "must not target a local or private address");
-          else out.remoteDns = v;
-        } else if (HOST_TOKEN_RE.test(v)) {
-          const hp = parseHostPort(v, 443);
-          if (hp === null || isLocalOrPrivateTarget(hp.host)) fail(fields, "remoteDns", "must not target a local or private address");
-          else out.remoteDns = `https://${bracketIpv6(hp.host)}/dns-query`;
-        } else fail(fields, "remoteDns", "must be a URL or IP/hostname");
-      }
-      return;
-    }
-    case "camouflage.url": {
-      const url = strField(patch, "url", fields, { maxLen: 2048 });
-      if (url !== undefined) out.camouflage.url = url;
-      if (out.camouflage.mode === "proxy") {
-        if (!isHttpUrl(out.camouflage.url)) fail(fields, "url", "must be a valid http(s) URL when camouflage mode is proxy");
-        else if (isLocalOrPrivateTarget(new URL(out.camouflage.url).hostname)) fail(fields, "url", "must not target a local or private address");
       }
       return;
     }
@@ -551,184 +480,7 @@ function applyCustomField(
       }
       return;
     }
-    case "totp.secret": {
-      const secret = strField(patch, "secret", fields, { maxLen: 128 });
-      if (secret !== undefined) {
-        const normalized = secret.trim().replace(/[\s-]+/g, "").toUpperCase();
-        if (normalized.length > 0 && !TOTP_SECRET_RE.test(normalized))
-          fail(fields, "secret", "must be base32 (A-Z and 2-7)");
-        else out.totp.secret = normalized;
-      }
-      if (out.totp.enabled && out.totp.secret.length === 0)
-        fail(fields, "secret", "a secret is required to enable two-factor authentication");
-      return;
-    }
-    case "totp.recoveryCodes": {
-      const codes = patch["recoveryCodes"];
-      if (codes === undefined) return;
-      if (!Array.isArray(codes)) {
-        fail(fields, "recoveryCodes", "must be an array of strings");
-        return;
-      }
-      const seen = new Set<string>();
-      const cleaned: string[] = [];
-      for (const raw of codes) {
-        if (typeof raw !== "string") {
-          fail(fields, "recoveryCodes", "entries must be strings");
-          return;
-        }
-        const item = raw.trim().toLowerCase();
-        if (!TOTP_RECOVERY_RE.test(item)) {
-          fail(fields, "recoveryCodes", "entries must be SHA-256 hex digests");
-          return;
-        }
-        if (seen.has(item)) continue;
-        seen.add(item);
-        cleaned.push(item);
-      }
-      if (cleaned.length > TOTP_MAX_RECOVERY_CODES) {
-        fail(fields, "recoveryCodes", `at most ${TOTP_MAX_RECOVERY_CODES} recovery codes`);
-        return;
-      }
-      out.totp.recoveryCodes = cleaned;
-      return;
-    }
   }
-}
-
-function remoteHostOk(host: string): boolean {
-  const bare = host.replace(/^\[|\]$/g, "");
-  if (isIpLiteral(bare)) return true;
-  return HOSTNAME_RE.test(bare) && bare.length <= 253 && !bare.includes(":");
-}
-
-function remoteDomainOk(value: string): boolean {
-  return value.length > 0 && value.length <= 253 && HOSTNAME_RE.test(value);
-}
-
-function validateRemoteNodes(
-  patch: Record<string, unknown>,
-  out: Settings,
-  fields: Record<string, string>,
-): void {
-  const v = patch["remoteNodes"];
-  if (v === undefined) return;
-  if (!Array.isArray(v)) {
-    fail(fields, "remoteNodes", "must be an array of remote nodes");
-    return;
-  }
-  if (v.length > MAX_REMOTE_NODES) {
-    fail(fields, "remoteNodes", `too many entries (max ${MAX_REMOTE_NODES})`);
-    return;
-  }
-  const result: RemoteNodeSetting[] = [];
-  for (let i = 0; i < v.length; i++) {
-    const label = `entry ${i + 1}`;
-    const item = v[i];
-    if (!isPlainObject(item)) {
-      fail(fields, "remoteNodes", `${label} must be an object`);
-      continue;
-    }
-    const rec = item as Record<string, unknown>;
-    if (rec.kind !== "reality" && rec.kind !== "hy2") {
-      fail(fields, "remoteNodes", `${label} kind must be reality or hy2`);
-      continue;
-    }
-    const name = typeof rec.name === "string" ? rec.name.trim() : "";
-    if (name.length === 0 || name.length > 64) {
-      fail(fields, "remoteNodes", `${label} name must be 1-64 characters`);
-      continue;
-    }
-    const addrRaw = typeof rec.address === "string" ? rec.address.trim() : "";
-    const hp = parseHostPort(addrRaw, 0);
-    if (hp === null || hp.host.length === 0 || !remoteHostOk(hp.host)) {
-      fail(fields, "remoteNodes", `${label} address must be an IP or hostname`);
-      continue;
-    }
-    const bareHost = hp.host.replace(/^\[|\]$/g, "");
-    if (isLocalOrPrivateTarget(bareHost)) {
-      fail(fields, "remoteNodes", `${label} address must not target a local or private address`);
-      continue;
-    }
-    const port = typeof rec.port === "number" ? rec.port : hp.port > 0 ? hp.port : 0;
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      fail(fields, "remoteNodes", `${label} port must be 1-65535`);
-      continue;
-    }
-    const sni = typeof rec.sni === "string" ? rec.sni.trim() : "";
-    if (!remoteDomainOk(sni)) {
-      fail(fields, "remoteNodes", `${label} sni must be a hostname`);
-      continue;
-    }
-    if (rec.kind === "reality") {
-      const uuid = typeof rec.uuid === "string" ? rec.uuid.trim() : "";
-      if (!REMOTE_UUID_RE.test(uuid)) {
-        fail(fields, "remoteNodes", `${label} uuid must be a UUID`);
-        continue;
-      }
-      const pbk = typeof rec.pbk === "string" ? rec.pbk.trim() : "";
-      const decoded = pbk.length > 0 ? decodeBase64Url(pbk) : null;
-      if (decoded === null || !decoded.ok || decoded.value.length !== 32) {
-        fail(fields, "remoteNodes", `${label} pbk must decode to a 32-byte public key`);
-        continue;
-      }
-      const sid = typeof rec.sid === "string" ? rec.sid.trim() : "";
-      if (sid.length > 0 && !REMOTE_SID_RE.test(sid)) {
-        fail(fields, "remoteNodes", `${label} sid must be hex of at most 8 characters`);
-        continue;
-      }
-      const flow = rec.flow === undefined || rec.flow === null ? "xtls-rprx-vision" : rec.flow;
-      if (typeof flow !== "string" || !(VLESS_FLOWS as readonly string[]).includes(flow)) {
-        fail(fields, "remoteNodes", `${label} flow must be empty or xtls-rprx-vision`);
-        continue;
-      }
-      const spx = rec.spx === undefined || rec.spx === null ? "/" : rec.spx;
-      if (typeof spx !== "string" || spx.length > 64) {
-        fail(fields, "remoteNodes", `${label} spx must be at most 64 characters`);
-        continue;
-      }
-      const fp = rec.fp === undefined || rec.fp === null || rec.fp === "" ? "chrome" : rec.fp;
-      if (typeof fp !== "string" || !(FINGERPRINTS as readonly string[]).includes(fp)) {
-        fail(fields, "remoteNodes", `${label} fp must be a known fingerprint`);
-        continue;
-      }
-      result.push({
-        kind: "reality",
-        name,
-        address: bracketIpv6(hp.host),
-        port,
-        uuid,
-        sni,
-        pbk,
-        sid,
-        flow,
-        spx,
-        fp: fp as Fingerprint,
-      });
-      continue;
-    }
-    const password = typeof rec.password === "string" ? rec.password : "";
-    if (password.length === 0 || password.length > 128) {
-      fail(fields, "remoteNodes", `${label} password must be 1-128 characters`);
-      continue;
-    }
-    const obfs = rec.obfs === undefined || rec.obfs === null ? "" : rec.obfs;
-    if (typeof obfs !== "string" || !(HY2_OBFS_MODES as readonly string[]).includes(obfs)) {
-      fail(fields, "remoteNodes", `${label} obfs must be empty or salamander`);
-      continue;
-    }
-    const obfsPassword = rec.obfsPassword === undefined || rec.obfsPassword === null ? "" : rec.obfsPassword;
-    if (typeof obfsPassword !== "string" || obfsPassword.length > 128) {
-      fail(fields, "remoteNodes", `${label} obfsPassword must be at most 128 characters`);
-      continue;
-    }
-    if (obfs.length > 0 && obfsPassword.length === 0) {
-      fail(fields, "remoteNodes", `${label} obfsPassword is required when obfs is set`);
-      continue;
-    }
-    result.push({ kind: "hy2", name, address: bracketIpv6(hp.host), port, password, sni, obfs, obfsPassword });
-  }
-  setField(out, "remoteNodes" as keyof Settings & string, result);
 }
 
 function validateBootstrapConsistency(out: Settings, fields: Record<string, string>): void {

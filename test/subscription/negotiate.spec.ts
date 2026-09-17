@@ -9,25 +9,28 @@ function req(url: string, ua?: string): Request {
 
 describe("pickSubFormat negotiation priority", () => {
   it("target= wins over any UA", () => {
-    expect(pickSubFormat(req("https://w/sp/sub?target=clash", "Mozilla/5.0"))).toBe("clash");
+    expect(pickSubFormat(req("https://w/sp/sub?target=singbox", "Mozilla/5.0"))).toBe("singbox");
     expect(pickSubFormat(req("https://w/sp/sub?target=singbox", "clash-verge/1"))).toBe("singbox");
     expect(pickSubFormat(req("https://w/sp/sub?target=base64", "Loon/3"))).toBe("base64");
   });
 
-  it("rejects invalid target values with BadRequest", () => {
+  it("rejects invalid and deleted target values with BadRequest", () => {
     expect(() => pickSubFormat(req("https://w/sp/sub?target=SINGBOX", "clash-verge/1"))).toThrow();
     expect(() => pickSubFormat(req("https://w/sp/sub?target=hysteria", "v2rayNG/1.8"))).toThrow();
+    for (const dead of ["clash", "surge", "loon", "quantumult"]) {
+      expect(() => pickSubFormat(req(`https://w/sp/sub?target=${dead}`, "v2rayNG/1.8"))).toThrow();
+    }
   });
 
-  it("classifies the R4 priority table by UA", () => {
-    expect(pickSubFormat(req("https://w/sp/sub", "clash-verge/v1.2.3"))).toBe("clash");
-    expect(pickSubFormat(req("https://w/sp/sub", "ClashforWindows/0.20"))).toBe("clash");
-    expect(pickSubFormat(req("https://w/sp/sub", "mihomo/1.18"))).toBe("clash");
+  it("classifies the surviving priority table by UA", () => {
+    expect(pickSubFormat(req("https://w/sp/sub", "clash-verge/v1.2.3"))).toBe("base64");
+    expect(pickSubFormat(req("https://w/sp/sub", "ClashforWindows/0.20"))).toBe("base64");
+    expect(pickSubFormat(req("https://w/sp/sub", "mihomo/1.18"))).toBe("base64");
     expect(pickSubFormat(req("https://w/sp/sub", "SagerNet/sing-box/1.8.0"))).toBe("singbox");
     expect(pickSubFormat(req("https://w/sp/sub", "HiddifyNext/1.0"))).toBe("singbox");
     expect(pickSubFormat(req("https://w/sp/sub", "NekoBox/1.2"))).toBe("singbox");
-    expect(pickSubFormat(req("https://w/sp/sub", "Surge iOS/2520"))).toBe("surge");
-    expect(pickSubFormat(req("https://w/sp/sub", "Loon/3.2.4"))).toBe("loon");
+    expect(pickSubFormat(req("https://w/sp/sub", "Surge iOS/2520"))).toBe("base64");
+    expect(pickSubFormat(req("https://w/sp/sub", "Loon/3.2.4"))).toBe("base64");
     expect(pickSubFormat(req("https://w/sp/sub", "v2rayNG/1.8.14"))).toBe("base64");
     expect(pickSubFormat(req("https://w/sp/sub", "ShadowRocket/88"))).toBe("base64");
   });
@@ -43,18 +46,18 @@ describe("pickSubFormat negotiation priority", () => {
   });
 
   it("path segment target beats UA sniffing but not query target", () => {
-    expect(pickSubFormat(req("https://w/sp/sub/u/x/clash", "Loon/3"), "clash")).toBe("clash");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/singbox", "Loon/3"), "singbox")).toBe("singbox");
     expect(pickSubFormat(req("https://w/sp/sub/u/x/base64", "Loon/3"), "base64")).toBe("base64");
-    expect(pickSubFormat(req("https://w/sp/sub/u/x/singbox", "Loon/3"), "surge")).toBe("surge");
-    expect(pickSubFormat(req("https://w/sp/sub/u/x/clash?target=surge", "Loon/3"), "clash")).toBe("surge");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/singbox", "Loon/3"), "base64")).toBe("base64");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/singbox?target=base64", "Loon/3"), "singbox")).toBe("base64");
   });
 
   it("ignores an invalid path target and falls through", () => {
-    expect(pickSubFormat(req("https://w/sp/sub/u/x/hysteria", "clash-verge/1"), "hysteria")).toBe("clash");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/hysteria", "clash-verge/1"), "hysteria")).toBe("base64");
     expect(pickSubFormat(req("https://w/sp/sub/u/x/hysteria"), "hysteria")).toBe("base64");
   });
 
   it("view=html still wins over the path target", () => {
-    expect(pickSubFormat(req("https://w/sp/sub/u/x/clash?view=html"), "clash")).toBeNull();
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/singbox?view=html"), "singbox")).toBeNull();
   });
 });

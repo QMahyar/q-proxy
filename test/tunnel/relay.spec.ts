@@ -9,7 +9,7 @@ import {
   consumeBucket,
   ratelimitKey,
   tryConsume,
-} from "../../src/users/ratelimit";
+} from "../../src/tunnel/ratelimit";
 import type { RelayOptions, RelayClientSink } from "../../src/tunnel/relay";
 import type { EstablishedEgress, EgressVia, Socket } from "../../src/types/tunnel";
 import { concatBytes, utf8Decode, utf8Encode } from "../../src/utils/bytes";
