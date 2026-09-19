@@ -1,4 +1,3 @@
-import type { Env } from "../../types/env";
 import type { RouteHandler } from "../../types/context";
 import type { Settings } from "../../types/settings";
 import { jsonOk } from "../../core/respond";

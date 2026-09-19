@@ -1,4 +1,3 @@
-import type { Env } from "../../types/env";
 import type { Settings } from "../../types/settings";
 import type { RouteHandler } from "../../types/context";
 import { UnauthorizedError, ValidationError } from "../../core/errors";

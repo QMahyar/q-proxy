@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { SELF, env as cfEnv } from "cloudflare:test";
-import type { Env } from "../../src/types/env";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { seed, SETTINGS_KEY, testKv } from "../helpers/seed";
 import { invalidateSettingsCache } from "../../src/settings/store";

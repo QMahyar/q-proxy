@@ -1,4 +1,3 @@
-import type { Env } from "../types/env";
 import type { Settings } from "../types/settings";
 import { AppError } from "./errors";
 import { jsonError, redirect } from "./respond";

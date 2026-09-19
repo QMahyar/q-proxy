@@ -1,4 +1,3 @@
-import type { Env } from "../types/env";
 import type { Settings } from "../types/settings";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../types/settings";
 import { migrateSettings } from "./migrate";

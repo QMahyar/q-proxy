@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { servePanelPage, serveLoginPage } from "../../src/handlers/panel-page";
 import { ASSETS } from "../../src/ui/assets";
-import type { Env } from "../../src/types/env";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 
 const env = {} as Env;

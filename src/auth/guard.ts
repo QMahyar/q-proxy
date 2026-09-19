@@ -1,4 +1,3 @@
-import type { Env } from "../types/env";
 import type { RouteHandler } from "../types/context";
 import { ForbiddenError, RateLimitedError, UnauthorizedError } from "../core/errors";
 import { getSessionFloor, verifySession } from "./session";

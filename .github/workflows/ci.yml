@@ -19,5 +19,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npx wrangler types src/env.d.ts && git diff --exit-code -- src/env.d.ts
       - run: npm test
       - run: npm run build

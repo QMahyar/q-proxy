@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SELF, env as cfEnv } from "cloudflare:test";
-import type { Env } from "../../src/types/env";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { telegramWebhookSecret } from "../../src/handlers/api/telegram";
 import { seed, SETTINGS_KEY, testKv } from "../helpers/seed";

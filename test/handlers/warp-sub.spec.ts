@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { handleWarpSub } from "../../src/handlers/warp-sub";
-import type { Env } from "../../src/types/env";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import type { Settings } from "../../src/types/settings";
 import { WARP_ACCOUNT_PREFIX, WARP_TOKEN_PREFIX } from "../../src/warp/store";

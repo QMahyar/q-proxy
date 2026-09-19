@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { handleSubscribe } from "../../src/handlers/subscribe";
-import type { Env } from "../../src/types/env";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import type { Settings } from "../../src/types/settings";
 import { decodeBase64 } from "../../src/utils/base64";

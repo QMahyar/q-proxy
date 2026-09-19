@@ -1,4 +1,3 @@
-import type { Env } from "../types/env";
 import type { UsageSnapshot } from "../types/context";
 import { bindAuditContext, log } from "./log";
 import { dayKeyUtc } from "../utils/time";

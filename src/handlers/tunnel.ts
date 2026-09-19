@@ -1,7 +1,6 @@
 import type { RouteHandler } from "../types/context";
 import type { Settings } from "../types/settings";
 import type { DialTarget, DnsPacketRelay } from "../types/tunnel";
-import type { Env } from "../types/env";
 import { NotFoundError, RateLimitedError } from "../core/errors";
 import { log } from "../core/log";
 import { recordBytes } from "../core/counters";

@@ -8,7 +8,6 @@ import {
   SESSION_TTL_SECONDS,
   verifySession,
 } from "../../src/auth/session";
-import type { Env } from "../../src/types/env";
 import { bytesToHex, utf8Encode } from "../../src/utils/bytes";
 import { decodeBase64Url, encodeBase64Url } from "../../src/utils/base64";
 import { unixNow } from "../../src/utils/time";

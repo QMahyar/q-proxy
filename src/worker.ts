@@ -1,4 +1,3 @@
-import type { Env } from "./types/env";
 import { routeRequest } from "./core/router";
 import { bindCounterContext } from "./core/counters";
 import { errorToResponse } from "./core/respond";
@@ -17,9 +16,4 @@ export default {
       return errorToResponse(err, currentDebugEnabled());
     }
   },
-  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
-    try {
-      await ensureInitialized(env);
-    } catch {}
-  },
-};
+} satisfies ExportedHandler<Env>;

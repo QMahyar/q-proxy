@@ -1,4 +1,3 @@
-import type { Env } from "../types/env";
 import { decodeBase64Url, encodeBase64Url } from "../utils/base64";
 import { hmacSha256Hex } from "../utils/hmac";
 import { constantTimeEqual } from "../utils/random";
