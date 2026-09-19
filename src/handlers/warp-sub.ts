@@ -21,7 +21,7 @@ function notFound(): Response {
   });
 }
 
-export const handleWarpSub: RouteHandler = async (req, env, s) => {
+export const handleWarpSub: RouteHandler = async (req, env, s, reqCtx) => {
   const url = new URL(req.url);
   const route = resolveSecureRoute(url, s);
   if (route === null || route.kind !== "warp-sub") return notFound();
@@ -60,6 +60,6 @@ export const handleWarpSub: RouteHandler = async (req, env, s) => {
   };
   const body: BodyInit = typeof result === "string" ? result : new Uint8Array(result);
   const res = new Response(body as BodyInit, { status: 200, headers });
-  if (edgeCache !== null) afterResponse(edgeCache.put(cacheKey, res.clone()));
+  if (edgeCache !== null) afterResponse(reqCtx, edgeCache.put(cacheKey, res.clone()));
   return res;
 };

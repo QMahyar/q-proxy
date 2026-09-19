@@ -22,7 +22,7 @@ export const handleStatus: RouteHandler = async (req, env, s) => {
   });
 };
 
-export const handleKillSwitch: RouteHandler = async (req, env, _s) => {
+export const handleKillSwitch: RouteHandler = async (req, env, _s, ctx) => {
   assertCsrf(req);
   const body = await readJsonObject(req);
   if (typeof body.enabled !== "boolean") {
@@ -31,7 +31,7 @@ export const handleKillSwitch: RouteHandler = async (req, env, _s) => {
   const fresh = await loadSettingsFresh(env);
   const v = validateSettings({ ...fresh, killSwitch: body.enabled });
   if (!v.ok) throw new ValidationError(v.fields);
-  audit("killswitch", { ip: clientIp(req), enabled: body.enabled }, env);
+  audit("killswitch", { ip: clientIp(req), enabled: body.enabled }, env, ctx);
   const rev = await saveSettings(env, v.value);
   return jsonOk({ killSwitch: body.enabled, rev });
 };

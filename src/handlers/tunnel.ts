@@ -17,7 +17,6 @@ import { createVlessInbound } from "../protocols/vless";
 import { openEgressWithSpeculativeDirect } from "../tunnel/egress";
 import { createRelay } from "../tunnel/relay";
 import { createDnsPacketRelay } from "../tunnel/resolver";
-import { getCounterContext } from "../core/counters";
 import { acceptTunnelSocket } from "../tunnel/websocket";
 import { concatBytes, utf8Encode } from "../utils/bytes";
 
@@ -44,7 +43,7 @@ function createInbound(kind: TunnelKind, s: Settings): ProtocolInbound<TunnelPar
   return createVlessInbound(s.vlessUuid);
 }
 
-export const handleTunnel: RouteHandler = async (req, env, s) => {
+export const handleTunnel: RouteHandler = async (req, env, s, ctx) => {
   const kind = identifyTunnel(new URL(req.url).pathname, s);
   if (kind === null) throw new NotFoundError("unknown tunnel path");
   const gate = await tryConsume(env, `tunnel:${clientIp(req)}`);
@@ -53,15 +52,12 @@ export const handleTunnel: RouteHandler = async (req, env, s) => {
     earlyDataEnabled: s.earlyDataEnabled,
     earlyDataMaxBytes: s.earlyDataMaxBytes,
   });
-  const session = driveSession(accepted.ws, kind, s, accepted.earlyData, env).catch((err: unknown) => {
+  void driveSession(accepted.ws, kind, s, accepted.earlyData, env, ctx).catch((err: unknown) => {
     log.error("tunnel", "driveSession unhandled", String(err));
     try {
       if (accepted.ws.readyState !== 3) accepted.ws.close(1011);
     } catch {}
   });
-  const ctx = getCounterContext();
-  if (ctx !== null && typeof ctx.waitUntil === "function") ctx.waitUntil(session);
-  else void session;
   return new Response(null, { status: 101, webSocket: accepted.client });
 };
 
@@ -71,6 +67,7 @@ async function driveSession(
   s: Settings,
   earlyData: Uint8Array | null,
   env: Env,
+  ctx?: ExecutionContext | null,
 ): Promise<void> {
   const inbound = createInbound(kind, s);
   const acc = new ByteAccumulator();
@@ -167,13 +164,13 @@ async function driveSession(
       const handle = relayHandle;
       void relayHandle.run(established).then(
         () => {
-          void recordBytes(env, { bytesUp: handle.bytesUp, bytesDown: handle.bytesDown }).catch(
+          void recordBytes(env, { bytesUp: handle.bytesUp, bytesDown: handle.bytesDown }, ctx).catch(
             (err: unknown) => log.error("counters", "record bytes failed", String(err)),
           );
         },
         (err: unknown) => {
           log.error("tunnel", "relay crashed", String(err));
-          void recordBytes(env, { bytesUp: handle.bytesUp, bytesDown: handle.bytesDown }).catch(() => {});
+          void recordBytes(env, { bytesUp: handle.bytesUp, bytesDown: handle.bytesDown }, ctx).catch(() => {});
           safeClose(1011);
         },
       );

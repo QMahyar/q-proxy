@@ -52,7 +52,7 @@ function changedTopLevelKeys(before: Settings, after: Settings): string[] {
   return out.sort();
 }
 
-export const handleSaveSettings: RouteHandler = async (req, _env, s) => {
+export const handleSaveSettings: RouteHandler = async (req, _env, s, ctx) => {
   const body = await readJsonObject(req);
   for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "passwordIsBootstrap", "seededAt"]) delete (body as Record<string, unknown>)[k];
   const fresh = await loadSettingsFresh(_env);
@@ -60,12 +60,12 @@ export const handleSaveSettings: RouteHandler = async (req, _env, s) => {
   void s;
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);
-  audit("settings.save", { ip: clientIp(req), keys: changedTopLevelKeys(fresh, result.value) });
+  audit("settings.save", { ip: clientIp(req), keys: changedTopLevelKeys(fresh, result.value) }, undefined, ctx);
   const rev = await saveSettings(_env, result.value);
   return jsonOk({ saved: true, rev });
 };
 
-export const handleResetSettings: RouteHandler = async (req, env, _s) => {
+export const handleResetSettings: RouteHandler = async (req, env, _s, ctx) => {
   const freshSrc = await loadSettingsFresh(env);
   void _s;
   const fresh = structuredClone(DEFAULT_SETTINGS);
@@ -74,7 +74,7 @@ export const handleResetSettings: RouteHandler = async (req, env, _s) => {
   }
   const result = validateSettings(fresh);
   if (!result.ok) throw new ValidationError(result.fields);
-  audit("settings.reset", { ip: clientIp(req), keys: changedTopLevelKeys(freshSrc, result.value) });
+  audit("settings.reset", { ip: clientIp(req), keys: changedTopLevelKeys(freshSrc, result.value) }, undefined, ctx);
   const rev = await saveSettings(env, result.value);
   return jsonOk({ saved: true, rev });
 };
@@ -96,7 +96,7 @@ export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
   });
 };
 
-export const handleImportSettings: RouteHandler = async (req, env, s) => {
+export const handleImportSettings: RouteHandler = async (req, env, s, ctx) => {
   const body = await readJsonObject(req);
   const incoming = (body as Record<string, unknown>).settings;
   if (incoming === null || typeof incoming !== "object" || Array.isArray(incoming)) {
@@ -120,7 +120,7 @@ export const handleImportSettings: RouteHandler = async (req, env, s) => {
   }
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);
-  audit("settings.import", { ip: clientIp(req), keys: changedTopLevelKeys(fresh, result.value) });
+  audit("settings.import", { ip: clientIp(req), keys: changedTopLevelKeys(fresh, result.value) }, undefined, ctx);
   const rev = await saveSettings(env, result.value);
   return jsonOk({ saved: true, rev, imported: publicSettingsView(result.value) });
 };

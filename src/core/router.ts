@@ -57,16 +57,16 @@ function killSwitchResponse(): Response {
 }
 
 function authedCsrf(handler: RouteHandler): RouteHandler {
-  return authed(async (req, env, s) => {
+  return authed(async (req, env, s, ctx) => {
     assertCsrf(req);
-    return handler(req, env, s);
+    return handler(req, env, s, ctx);
   });
 }
 
 function csrfOnly(handler: RouteHandler): RouteHandler {
-  return async (req, env, s) => {
+  return async (req, env, s, ctx) => {
     assertCsrf(req);
-    return handler(req, env, s);
+    return handler(req, env, s, ctx);
   };
 }
 
@@ -94,14 +94,14 @@ function bootstrapAllowed(route: ApiRouteDescriptor, req: Request): boolean {
 }
 
 function bootstrapGated(handler: RouteHandler, route: ApiRouteDescriptor): RouteHandler {
-  return async (req, env, s) => {
+  return async (req, env, s, ctx) => {
     if (s.passwordIsBootstrap && !bootstrapAllowed(route, req)) return passwordChangeRequired();
-    return handler(req, env, s);
+    return handler(req, env, s, ctx);
   };
 }
 
-const settingsGetOrSave: RouteHandler = (req, env, s) =>
-  req.method === "GET" ? handleGetSettings(req, env, s) : handleSaveSettings(req, env, s);
+const settingsGetOrSave: RouteHandler = (req, env, s, ctx) =>
+  req.method === "GET" ? handleGetSettings(req, env, s, ctx) : handleSaveSettings(req, env, s, ctx);
 
 const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
   "auth-login": { methods: ["POST"], auth: "none", handler: handleLogin },
@@ -131,14 +131,15 @@ async function dispatchApi(
   req: Request,
   env: Env,
   s: Settings,
+  ctx?: ExecutionContext | null,
 ): Promise<Response> {
   const route = API_ROUTES[api]!;
   if (route.methods.length > 0) expectMethods(req, route.methods);
-  if (route.auth === "none") return route.handler(req, env, s);
+  if (route.auth === "none") return route.handler(req, env, s, ctx);
   if (route.auth === "read" || req.method === "GET") {
-    return authed(bootstrapGated(route.handler, route))(req, env, s);
+    return authed(bootstrapGated(route.handler, route))(req, env, s, ctx);
   }
-  return authedCsrf(bootstrapGated(route.handler, route))(req, env, s);
+  return authedCsrf(bootstrapGated(route.handler, route))(req, env, s, ctx);
 }
 
 async function dispatchSecureRoute(
@@ -146,6 +147,7 @@ async function dispatchSecureRoute(
   req: Request,
   env: Env,
   s: Settings,
+  ctx?: ExecutionContext | null,
 ): Promise<Response> {
   switch (route.kind) {
     case "root":
@@ -153,22 +155,22 @@ async function dispatchSecureRoute(
       return redirect(`/${s.securePath}/panel`, 302);
     case "page":
       expectMethods(req, ["GET"]);
-      return route.page === "panel" ? servePanelPage(req, env, s) : serveLoginPage(req, env, s);
+      return route.page === "panel" ? servePanelPage(req, env, s, ctx) : serveLoginPage(req, env, s, ctx);
     case "doh":
-      return handleDoh(req, env, s);
+      return handleDoh(req, env, s, ctx);
     case "sub":
       expectMethods(req, ["GET"]);
-      void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
-      return handleSubscribe(req, env, s);
+      void recordConnection(env, undefined, ctx).catch((err: unknown) => log.error("counters", "record failed", String(err)));
+      return handleSubscribe(req, env, s, ctx);
     case "warp-sub":
       expectMethods(req, ["GET", "HEAD"]);
-      return handleWarpSub(req, env, s);
+      return handleWarpSub(req, env, s, ctx);
     case "api":
-      return dispatchApi(route.api, req, env, s);
+      return dispatchApi(route.api, req, env, s, ctx);
   }
 }
 
-export async function routeRequest(req: Request, env: Env): Promise<Response> {
+export async function routeRequest(req: Request, env: Env, ctx?: ExecutionContext | null): Promise<Response> {
   if (req.method === "OPTIONS") methodNotAllowed();
   const url = new URL(req.url);
 
@@ -182,18 +184,18 @@ export async function routeRequest(req: Request, env: Env): Promise<Response> {
   setDebugEnabled(s.debugLogging);
 
   if (url.pathname === "/robots.txt") {
-    return handleCamouflage(req, env, s);
+    return handleCamouflage(req, env, s, ctx);
   }
 
   if (identifyTunnel(url.pathname, s) !== null) {
-    if (!isUpgradeRequest(req)) return handleCamouflage(req, env, s);
+    if (!isUpgradeRequest(req)) return handleCamouflage(req, env, s, ctx);
     if (s.killSwitch) return killSwitchResponse();
-    void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
-    return handleTunnel(req, env, s);
+    void recordConnection(env, undefined, ctx).catch((err: unknown) => log.error("counters", "record failed", String(err)));
+    return handleTunnel(req, env, s, ctx);
   }
 
   const route = resolveSecureRoute(url, s);
-  if (route !== null) return dispatchSecureRoute(route, req, env, s);
+  if (route !== null) return dispatchSecureRoute(route, req, env, s, ctx);
 
-  return handleCamouflage(req, env, s);
+  return handleCamouflage(req, env, s, ctx);
 }

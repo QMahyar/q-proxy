@@ -107,7 +107,7 @@ async function buildAccount(body: Record<string, unknown>, config: WarpAccount["
   };
 }
 
-export const handleWarpApi: RouteHandler = async (req, env, s) => {
+export const handleWarpApi: RouteHandler = async (req, env, s, ctx) => {
   const url = new URL(req.url);
   const segs = url.pathname.split("/").filter((p) => p.length > 0);
   const warpIdx = segs.indexOf("warp", 1);
@@ -142,7 +142,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
         void removeWarpDevice(reg.warpId, reg.warpToken).catch(() => {});
         throw err;
       }
-      audit("warp.account.create", { ip: clientIp(req), id: account.id });
+      audit("warp.account.create", { ip: clientIp(req), id: account.id }, undefined, ctx);
       return jsonOk({ account: sanitizeAccount(account) });
     }
     if (rest[1] === "import" && rest.length === 2 && method === "POST") {
@@ -156,7 +156,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
       if (!parsed.ok) throw new ValidationError({ config: parsed.reason });
       const account = await buildAccount(body, parsed.config);
       await storeAccount(env, account);
-      audit("warp.account.import", { ip: clientIp(req), id: account.id });
+      audit("warp.account.import", { ip: clientIp(req), id: account.id }, undefined, ctx);
       return jsonOk({ account: sanitizeAccount(account) });
     }
     const id = rest[1];
@@ -174,14 +174,14 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
         }
         await storeAccount(env, account);
         await purgeWarpSub(origin, s.securePath, account.token).catch(() => {});
-        audit("warp.account.update", { ip: clientIp(req), id: account.id });
+        audit("warp.account.update", { ip: clientIp(req), id: account.id }, undefined, ctx);
         return jsonOk({ account: sanitizeAccount(account) });
       }
       if (rest.length === 2 && method === "DELETE") {
         await deleteAccount(env, account);
         void removeWarpDevice(account.warp_id, account.warp_token).catch(() => {});
         await purgeWarpSub(origin, s.securePath, account.token).catch(() => {});
-        audit("warp.account.delete", { ip: clientIp(req), id: account.id });
+        audit("warp.account.delete", { ip: clientIp(req), id: account.id }, undefined, ctx);
         return jsonOk({ deleted: true });
       }
       if (rest.length === 3 && rest[2] === "regenerate-token" && method === "POST") {
@@ -191,7 +191,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
           purgeWarpSub(origin, s.securePath, oldToken).catch(() => {}),
           purgeWarpSub(origin, s.securePath, token).catch(() => {}),
         ]);
-        audit("warp.account.regenerate-token", { ip: clientIp(req), id: account.id });
+        audit("warp.account.regenerate-token", { ip: clientIp(req), id: account.id }, undefined, ctx);
         return jsonOk({ token });
       }
     }
@@ -214,7 +214,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
       presets.push(preset);
       await savePresets(env, presets);
       void purgeAll();
-      audit("warp.preset.create", { ip: clientIp(req), id: preset.id });
+      audit("warp.preset.create", { ip: clientIp(req), id: preset.id }, undefined, ctx);
       return jsonOk({ preset });
     }
     const id = rest[1];
@@ -231,7 +231,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
         }
         await savePresets(env, presets);
         void purgeAll();
-        audit("warp.preset.update", { ip: clientIp(req), id });
+        audit("warp.preset.update", { ip: clientIp(req), id }, undefined, ctx);
         return jsonOk({ preset: presets[index] });
       }
       if (method === "DELETE") {
@@ -242,7 +242,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
         presets.splice(index, 1);
         await savePresets(env, presets);
         void purgeAll();
-        audit("warp.preset.delete", { ip: clientIp(req), id });
+        audit("warp.preset.delete", { ip: clientIp(req), id }, undefined, ctx);
         return jsonOk({ deleted: true });
       }
     }
@@ -266,7 +266,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s) => {
       }
       await setGlobalSettings(env, { amnezia: check.value, amneziaEnabled });
       void purgeAll();
-      audit("warp.amnezia.update", { ip: clientIp(req) });
+      audit("warp.amnezia.update", { ip: clientIp(req) }, undefined, ctx);
       return jsonOk({ amnezia: check.value, amneziaEnabled });
     }
   }
