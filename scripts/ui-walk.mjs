@@ -179,6 +179,17 @@ async function step3_home(page) {
   const poolBody = await page.evaluate(() => (document.getElementById('home-pool') || {}).textContent || '');
   assert(poolBody.length > 0, 'home-pool still empty 12s after refresh');
   ok('home-pool-refresh', 'refresh ran, home-pool non-empty (' + poolBody.replace(/\s+/g, ' ').slice(0, 48) + '…)');
+  // pool settles into rows, an error card with retry, or an empty card with retry — never a blank
+  const poolState = await page.evaluate(() => {
+    const b = document.getElementById('home-pool');
+    if (!b) return 'missing';
+    if (b.querySelector('.pool-row')) return 'rows';
+    if (b.querySelector('.empty-card--error')) return b.querySelector('[data-retry="home-pool"]') ? 'error-retry' : 'error-noretry';
+    if (b.querySelector('.empty-card')) return b.querySelector('[data-retry="home-pool"]') ? 'empty-retry' : 'empty-noretry';
+    return 'other';
+  });
+  assert(poolState === 'rows' || poolState === 'error-retry' || poolState === 'empty-retry', 'home-pool has no rows and no retryable state (got ' + poolState + ')');
+  ok('home-pool-state', 'settled into ' + poolState);
 }
 
 async function step4_subs(page, context) {
@@ -529,6 +540,20 @@ async function step7_settings(page) {
     await page.click('#sp-addresses [data-action="section-save"]');
     await page.waitForTimeout(1200);
     ok('settings-roundtrips', 'profileTitle + fragment-low + routing toggle + endpoints persisted & reverted; exactly 1 PUT per save (' + saves.length + ' PUTs observed)');
+    // egress pool card: fetch settles into rows, an error card with retry, or an empty card with retry
+    await gotoSub(page, 'egress');
+    await page.click('[data-action="pool-fetch"]');
+    await page.waitForFunction(() => { const el = document.getElementById('pool-list'); return el && !el.querySelector('.loading-box'); }, null, { timeout: 20000 }).catch(() => {});
+    const poolState = await page.evaluate(() => {
+      const el = document.getElementById('pool-list');
+      if (!el) return 'missing';
+      if (el.querySelector('.pool-row')) return 'rows';
+      if (el.querySelector('.empty-card--error')) return el.querySelector('[data-action="pool-fetch"]') ? 'error-retry' : 'error-noretry';
+      if (el.querySelector('.empty-card')) return el.querySelector('[data-action="pool-fetch"]') ? 'empty-retry' : 'empty-noretry';
+      return 'other';
+    });
+    assert(poolState === 'rows' || poolState === 'error-retry' || poolState === 'empty-retry', 'pool-list has no rows and no retryable state (got ' + poolState + ')');
+    ok('settings-pool', 'pool card settled into ' + poolState);
   } finally {
     page.off('request', counter);
   }

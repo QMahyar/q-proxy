@@ -34,7 +34,7 @@ catch(e){if(e&&e.status===401)return;box.innerHTML=errorCard({title:'egress.pool
 function renderPool(){
 const box=$('pool-list');if(!box)return;
 const pool=(S.pool&&S.pool.pool)||[];
-if(!pool.length){box.innerHTML='<span class="field__hint">'+esc(t('egress.pool.empty'))+'</span>';return}
+if(!pool.length){box.innerHTML=emptyCard({title:'egress.pool.empty',cta:'common.retry',attrs:'data-action="pool-fetch"'});return}
 const probe=((S.pool&&S.pool.probe)||[]);
 const map=new Map();probe.forEach(p=>{map.set(p.ip+':'+p.port,p)});
 const poolSrc=(S.poolSource||'list');

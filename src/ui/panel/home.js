@@ -177,7 +177,7 @@ try{S.pool=await api('api/proxy-pool?probe=1',{fresh:true});renderHomePool()}cat
 function renderHomePool(){
 const box=$('home-pool');if(!box)return;
 const pool=(S.pool&&S.pool.pool)||[];
-if(!pool.length){box.innerHTML='<span class="field__hint">'+esc(t('egress.pool.empty'))+'</span>';return}
+if(!pool.length){box.innerHTML=emptyCard({title:'egress.pool.empty',cta:'common.retry',attrs:'data-retry="home-pool"'});return}
 const probe=((S.pool&&S.pool.probe)||[]);const map=new Map();probe.forEach(p=>map.set(p.ip+':'+p.port,p));
 box.innerHTML=pool.slice(0,8).map(function(e){
 const k=e.ip+':'+e.port;const pr=map.get(k);

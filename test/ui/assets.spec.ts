@@ -686,6 +686,18 @@ describe("panel ui p16 states", () => {
     }
   });
 
+  it("pairs every pool empty state with a working retry", () => {
+    for (const [file, hook] of [
+      ["home.js", 'data-retry="home-pool"'],
+      ["warp.js", 'data-action="pool-fetch"'],
+    ] as Array<[string, string]>) {
+      const src = readFileSync(join(process.cwd(), "src", "ui", "panel", file), "utf8");
+      expect(src).toContain("emptyCard({title:'egress.pool.empty',cta:'common.retry'");
+      expect(src).toContain(hook);
+    }
+    expect(html).toContain("emptyCard({title:'egress.pool.empty',cta:'common.retry'");
+  });
+
   it("routes every loading surface through loadingBox and keeps the warp retry handler", () => {
     expect(html.match(/loadingBox\(/g)?.length).toBeGreaterThanOrEqual(6);
     expect(html).not.toContain("+'<span class=\"spin\" style=\"display:inline-block;vertical-align:middle\"></span>'");
