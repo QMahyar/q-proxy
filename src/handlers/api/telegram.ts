@@ -154,15 +154,10 @@ function updateChat(update: TelegramUpdate): TelegramChat | undefined {
 function chatMatches(update: TelegramUpdate, s: Settings): boolean {
   const wanted = s.telegram.chatId;
   if (wanted.length === 0) return false;
+  if (wanted.startsWith("@")) return false;
   const chat = updateChat(update);
   const id = chat?.id;
-  if (id !== undefined && id !== null && String(id) === wanted) return true;
-  const wantUsername = normalizeTelegramChatId(wanted);
-  if (wantUsername.startsWith("@")) {
-    const username = chat?.username;
-    return typeof username === "string" && username.length > 0 && `@${username.toLowerCase()}` === wantUsername;
-  }
-  return false;
+  return id !== undefined && id !== null && String(id) === wanted;
 }
 
 interface BotReply {

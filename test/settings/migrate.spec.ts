@@ -121,3 +121,26 @@ describe("MIGRATIONS[2] vless-warp slimdown cut", () => {
     expect(merged.camouflage).toEqual({ mode: "static" });
   });
 });
+
+describe("telegram identity lock migration", () => {
+  it("clears a legacy @username chatId so validation keeps passing", () => {
+    const blob = {
+      version: SETTINGS_VERSION,
+      updatedAt: Date.now(),
+      data: { ...structuredClone(DEFAULT_SETTINGS), telegram: { enabled: true, botToken: "t", chatId: "@opsalerts" } },
+    };
+    const out = migrateSettings(blob);
+    expect(out.telegram.chatId).toBe("");
+  });
+
+  it("keeps numeric and empty chat ids untouched", () => {
+    for (const chatId of ["424242", "-100999", ""]) {
+      const blob = {
+        version: SETTINGS_VERSION,
+        updatedAt: Date.now(),
+        data: { ...structuredClone(DEFAULT_SETTINGS), telegram: { enabled: true, botToken: "t", chatId } },
+      };
+      expect(migrateSettings(blob).telegram.chatId).toBe(chatId);
+    }
+  });
+});

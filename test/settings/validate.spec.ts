@@ -334,11 +334,11 @@ describe("telegram settings block", () => {
 
   it("accepts a full valid telegram patch", () => {
     const result = validateSettings({
-      telegram: { enabled: true, botToken: VALID_TOKEN, chatId: "@my_channel" },
+      telegram: { enabled: true, botToken: VALID_TOKEN, chatId: "424242" },
     });
     expect(result.ok).toBe(true);
     if (result.ok)
-      expect(result.value.telegram).toEqual({ enabled: true, botToken: VALID_TOKEN, chatId: "@my_channel" });
+      expect(result.value.telegram).toEqual({ enabled: true, botToken: VALID_TOKEN, chatId: "424242" });
   });
 
   it("rejects a malformed token shape when enabled", () => {
@@ -357,16 +357,24 @@ describe("telegram settings block", () => {
     expect(cleared.ok).toBe(true);
   });
 
-  it("rejects chat ids that are not numeric or @names", () => {
-    for (const chatId of ["not valid", "@a", "12ab!"]) {
+  it("rejects non-numeric chat ids including @usernames", () => {
+    for (const chatId of ["not valid", "@a", "12ab!", "@my_channel", "@OpsAlerts"]) {
       const result = validateSettings({ telegram: { chatId } });
       expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.fields["telegram.chatId"]).toBeTruthy();
+      if (!result.ok) expect(result.fields["telegram.chatId"]).toMatch(/numeric/);
+    }
+  });
+
+  it("accepts numeric, negative, and empty chat ids", () => {
+    for (const chatId of ["424242", "-100999", ""]) {
+      const result = validateSettings({ telegram: { chatId } });
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.telegram.chatId).toBe(chatId);
     }
   });
 
   it("caps chat id length at 64 characters", () => {
-    const result = validateSettings({ telegram: { chatId: "@" + "a".repeat(70) } });
+    const result = validateSettings({ telegram: { chatId: "9".repeat(70) } });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.fields["telegram.chatId"]).toBeTruthy();
   });

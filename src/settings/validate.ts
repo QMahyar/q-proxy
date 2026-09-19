@@ -18,7 +18,7 @@ const CF_TLS_PORT_SET = new Set<number>(CF_TLS_PORTS);
 const KNOWN_ALPN = ["h2", "http/1.1", "h3"];
 
 const TG_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{35}$/;
-const TG_CHAT_ID_RE = /^(?:@[A-Za-z0-9_]{4,64}|-?\d{1,20})?$/;
+const TG_CHAT_ID_RE = /^(?:-?\d{1,20})?$/;
 
 function fail(fields: Record<string, string>, key: string, msg: string): void {
   if (!(key in fields)) fields[key] = msg;
@@ -475,7 +475,7 @@ function applyCustomField(
       const chatId = strField(patch, "chatId", fields, { maxLen: 64 });
       if (chatId !== undefined) {
         const trimmed = chatId.trim();
-        if (!TG_CHAT_ID_RE.test(trimmed)) fail(fields, "chatId", "must be a numeric chat id or @channelname");
+        if (!TG_CHAT_ID_RE.test(trimmed)) fail(fields, "chatId", "must be a numeric chat id (message the bot once, then use the numeric id; @usernames are not accepted)");
         else out.telegram.chatId = trimmed;
       }
       return;

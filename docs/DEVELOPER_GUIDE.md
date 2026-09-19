@@ -280,7 +280,7 @@ Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},f
 - `GET api/status`; `POST api/killswitch {enabled}` → `{killSwitch, rev}`; `GET api/suburls` (two targets + info entry)
 - `ANY api/warp/{…}` → accounts/presets/amnezia sub-dispatch
 - `GET api/proxy-pool` (+ `?probe=1`) and `ANY api/address-probe` → pool inspection helpers
-- `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated; also handles `callback_query` with `tg:*` data via `telegramMenuKeyboard()` — `/start`+`/menu` attach it with Status / Subscription / Kill ON / Kill OFF, taps answer + `editMessageText` in place)
+- `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated; also handles `callback_query` with `tg:*` data via `telegramMenuKeyboard()` — `/start`+`/menu` attach it with Status / Subscription / Kill ON / Kill OFF, taps answer + `editMessageText` in place). Bot identity is numeric chat IDs only: `telegram.chatId` validation rejects `@usernames`, the webhook matches `String(chat.id)` exactly, and `migrateSettings` clears any legacy `@` value to `""` on load (fail closed).
 
 Method guards live in the declarative `API_ROUTES` table in `src/core/router.ts` (`Record<ApiRouteName, {methods, auth: none|read|write, handler, bootstrap?: "allow"|"read"}>` + a 5-line dispatcher: method gate, then none⇒direct / read⇒authed / write⇒authed on GET else authedCsrf, with authed handlers additionally wrapped in `bootstrapGated` for the bootstrap lock); `OPTIONS` on APIs → 405.
 

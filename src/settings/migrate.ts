@@ -140,5 +140,9 @@ export function migrateSettings(raw: unknown): Settings {
   }
   const out = deepMergeDefaults(DEFAULT_SETTINGS, payload);
   out.version = SETTINGS_VERSION;
+  if (typeof out.telegram.chatId === "string" && out.telegram.chatId.length > 0 && !/^-?\d{1,20}$/.test(out.telegram.chatId)) {
+    log.info("settings/migrate", "cleared legacy @username telegram chatId (numeric ids only)");
+    out.telegram.chatId = "";
+  }
   return out;
 }
