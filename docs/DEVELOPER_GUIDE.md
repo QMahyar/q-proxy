@@ -273,7 +273,7 @@ Cross-imports only via frozen symbols. Adding a file outside ownership requires 
 Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},fields?}`. Key endpoints (session unless noted):
 
 - `POST api/auth/login` `{password}` → sets `q_session` (password-only; no second factor); success data gains `mustChangePassword: true` while `passwordIsBootstrap` is on; `POST api/auth/setup` accepted only while password unset and within 24 h of `seededAt` (else 409 `ALREADY_SET` / 409 `SETUP_WINDOW_EXPIRED`); `POST api/auth/password` (session+CSRF) → `{changed:true}` and clears `passwordIsBootstrap`; while the flag is on, non-exempt authed APIs answer `403 PASSWORD_CHANGE_REQUIRED` (allowlist: logout, password, bootstrap, GET settings — see §10)
-- `GET /healthz` → `{ok:true, version, colo}` (no auth, `no-store`)
+- `GET /healthz` → `{ok:true}` static (no auth, `no-store`; carries no version)
 - `GET api/settings` → redacted view; `PUT api/settings` (CSRF) → `{saved:true, rev}` or 422 `{fields}`; `POST api/settings/reset` → `{saved:true, rev}`
 - `GET api/settings/export` → secrets-stripped JSON (`securePath` stripped); `POST api/settings/import` → `{saved:true, rev, imported}`; a backup with version below 3 is rejected whole with a pre-cut incompatibility message and nothing applied
 - `GET api/bootstrap` → `{settings, status, subUrls}` aggregate with ETag/304

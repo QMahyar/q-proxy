@@ -83,9 +83,9 @@ describe("router dispatch", () => {
     const res = await SELF.fetch("https://example.com/healthz");
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/json");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
     const data = await body(res);
-    expect(data.ok).toBe(true);
-    expect(typeof data.version).toBe("string");
+    expect(data).toEqual({ ok: true });
 
     const rejected = await SELF.fetch("https://example.com/healthz", { method: "POST" });
     expect(rejected.status).toBe(405);

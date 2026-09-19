@@ -1,10 +1,5 @@
-import { appVersion } from "../settings/store";
-
-export const handleHealth = async (req: Request): Promise<Response> => {
-  const cf = req.cf as { colo?: string } | undefined;
-  const colo = cf?.colo ?? null;
-  const body = JSON.stringify({ ok: true, version: appVersion(), colo });
-  return new Response(body, {
+export const handleHealth = async (_req: Request): Promise<Response> => {
+  return new Response(JSON.stringify({ ok: true }), {
     status: 200,
     headers: {
       "Content-Type": "application/json; charset=utf-8",

@@ -9,13 +9,18 @@ Clone the repo, then:
 
 ```bash
 python deploy.py                                   # interactive menu: New / Update / Delete / List / Token
-python deploy.py deploy --target workers --name my-panel --password 'S3cure99'   # flag-driven (agents/CI)
+python deploy.py deploy --target workers --name my-panel --password-stdin <<< 'S3cure99'   # flag-driven (agents/CI): password via stdin, never argv
 python deploy.py update --name my-panel            # re-upload code, keeps password + data
 python deploy.py urls --name my-panel              # reprint login/panel/sub links from KV
 python deploy.py delete --kind panel --name my-panel   # remove everything (type-to-confirm)
 python deploy.py list                              # list workers, pages, KV, D1
 python deploy.py mk-token --key <cfk_...> --email you@x.com --account <id>   # mint a scoped token
 ```
+
+Secrets never travel on argv and are never printed: the panel password comes
+from `--password-stdin` (piped, as above), `QPROXY_PASSWORD`, or a hidden
+prompt; the API token from `CLOUDFLARE_API_TOKEN` or a hidden paste prompt.
+`--password` / `--token` still work but print a process-list warning.
 
 The script mints (or accepts) a scoped API token, creates KV + D1 named after
 your panel, applies migrations, deploys to Workers **or** Pages Advanced Mode,
