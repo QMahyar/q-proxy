@@ -698,6 +698,16 @@ describe("panel ui p16 states", () => {
     expect(html).toContain("emptyCard({title:'egress.pool.empty',cta:'common.retry'");
   });
 
+  it("confirms WARP endpoint switches when accounts exist, with bilingual copy", () => {
+    for (const key of ["warp.confirm.endpoints_title", "warp.confirm.endpoints_body"]) {
+      expect(html.match(new RegExp(`'${key}':'`, "g"))?.length).toBe(2);
+    }
+    const warpPart = readFileSync(join(process.cwd(), "src", "ui", "panel", "warp.js"), "utf8");
+    const actionsPart = readFileSync(join(process.cwd(), "src", "ui", "panel", "actions.js"), "utf8");
+    expect(warpPart).toContain("t('warp.endpoints.count',{n:custom.length})");
+    expect(actionsPart).toContain("confirmDialog('warp.confirm.endpoints_title','warp.confirm.endpoints_body'");
+  });
+
   it("routes every loading surface through loadingBox and keeps the warp retry handler", () => {
     expect(html.match(/loadingBox\(/g)?.length).toBeGreaterThanOrEqual(6);
     expect(html).not.toContain("+'<span class=\"spin\" style=\"display:inline-block;vertical-align:middle\"></span>'");

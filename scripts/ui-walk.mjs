@@ -301,6 +301,14 @@ async function step6_warp(page) {
   const singboxUrl = await page.evaluate(() => [...document.querySelectorAll('#warp-detail-subs .copy-field code')].map(c => c.textContent).find(u => u.endsWith('/singbox')));
   assert(singboxUrl, 'no singbox sub URL on detail');
   await gotoPanel(page, '#/warp');
+  // Custom endpoints carry a live count chip next to the label
+  const customCount = await page.evaluate(() => {
+    const ta = document.getElementById('warp-eps-custom');
+    const chip = ta && ta.closest('.field') ? ta.closest('.field').querySelector('.stat-chip') : null;
+    return chip ? chip.textContent : null;
+  });
+  assert(customCount && /\d+/.test(customCount), 'custom endpoints count chip missing (got ' + JSON.stringify(customCount) + ')');
+  ok('warp-custom-count', 'custom label shows count (' + customCount.trim() + ')');
   await page.waitForSelector('#warp-amnezia-toggle', { timeout: T.nav });
   const savedToggle = async (want) => {
     await page.waitForFunction(async (w) => {

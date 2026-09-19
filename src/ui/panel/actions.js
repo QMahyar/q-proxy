@@ -122,9 +122,15 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  const ta=$('warp-eps-custom');
  const custom=ta?ta.value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0):[];
  const showErr=msg=>{const fw=ta?ta.closest('.field'):null;const err=fw?fw.querySelector('.field__error'):null;if(err)err.textContent=msg;if(ta)ta.setAttribute('aria-invalid','true')};
- withBusy(el,()=>api('api/settings/save',{method:'PUT',body:{warpPresets:ids,warpCustomEndpoints:custom}})
+ const curIds=new Set(Array.isArray(S.set&&S.set.warpPresets)?S.set.warpPresets:[]);
+ const curCustom=Array.isArray(S.set&&S.set.warpCustomEndpoints)?S.set.warpCustomEndpoints.map(l=>String(l).trim()).filter(l=>l.length>0):[];
+ const same=ids.length===curIds.size&&ids.every(id=>curIds.has(id))&&custom.length===curCustom.length&&custom.every((l,i)=>l===curCustom[i]);
+ const doSave=()=>withBusy(el,()=>api('api/settings/save',{method:'PUT',body:{warpPresets:ids,warpCustomEndpoints:custom}})
  .then(()=>{Object.assign(S.set,{warpPresets:ids,warpCustomEndpoints:custom});toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(renderWarpSection)})
- .catch(err=>{if(err&&err.fields&&(err.fields.warpPresets||err.fields.warpCustomEndpoints))showErr(err.fields.warpCustomEndpoints||err.fields.warpPresets);else toastErr(err)}))},
+ .catch(err=>{if(err&&err.fields&&(err.fields.warpPresets||err.fields.warpCustomEndpoints))showErr(err.fields.warpCustomEndpoints||err.fields.warpPresets);else toastErr(err)}));
+ const accounts=S.warp&&S.warp.accounts?S.warp.accounts.length:0;
+ if(accounts>0&&!same){confirmDialog('warp.confirm.endpoints_title','warp.confirm.endpoints_body',true,{n:accounts}).then(yes=>{if(yes)doSave()});return}
+ doSave()},
   'shortcuts'(){renderShortcuts();openModal('m-keys')},
   'boot-retry'(){boot()},
  'close-keys'(){closeModal('m-keys')},
