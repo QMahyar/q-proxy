@@ -6,7 +6,13 @@ Self-hosted Cloudflare Worker proxy panel. VLESS, VMess, Trojan, Shadowsocks ove
 
 ## Deploy
 
-Two ways. No `wrangler`, no `git` needed.
+Three ways. No `wrangler`, no `git` needed.
+
+### Way 0 — Deploy Button (one click, no CLI)
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/QMahyar/q-proxy)
+
+Then add the KV + D1 bindings in the dashboard (3 min) and open the panel — the setup card and the in-panel wizard finish the job. Full steps: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ### Way 1 — Manual (dashboard, 3 min)
 

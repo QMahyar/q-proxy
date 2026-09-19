@@ -2,6 +2,20 @@
 
 All supported deploy paths — pick the one that fits your environment.
 
+## Way B — Deploy Button (no CLI, includes Cloudflare signup)
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/QMahyar/q-proxy)
+
+One click, no terminal. The button walks a newcomer through Cloudflare
+signup, forks the repo, and deploys the Worker. Then finish the two bindings
+the button cannot create (about 3 minutes, all in the dashboard):
+
+1. **KV** — Workers & Pages → your `q-proxy` worker → Settings → Bindings → Add KV `QPROXY_KV` → Create namespace → Save → Deploy.
+2. **D1** — Dashboard → D1 → Create `q-proxy` → apply `migrations/0001_init.sql` in the SQL console → worker Settings → Bindings → Add D1 `QPROXY_DB` → Save → Deploy.
+3. Visit `https://q-proxy.<sub>.workers.dev/` once, read `securePath` from KV `qproxy:settings`, and open `https://.../<sp>/panel` — the setup card plus the in-panel wizard finish the job.
+
+If the button flow ever drifts from these steps, Way 1 (manual paste) below is the same deploy written out click by click.
+
 ## Way 0 — deploy.py (recommended: interactive or flag-driven)
 
 Single self-contained Python file, stdlib only (no pip, no node, no wrangler).
