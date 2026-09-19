@@ -84,6 +84,18 @@ describe("renderSubscriptionBody", () => {
     expect(body).toContain('"type": "vless"');
   });
 
+  it("renders clash through the emitter registry", async () => {
+    const body = await renderSubscriptionBody({
+      settings: settings(),
+      nodes: [node("normal")],
+      format: "clash",
+      isFragmentMode: false,
+      subscriptionUrl: "https://w.test/sub?target=clash",
+    });
+    expect(body).toContain("type: vless");
+    expect(body).toContain("MATCH,PROXY");
+  });
+
   it("base64 body contains own share URIs only (remote merge removed)", async () => {
     const body = await renderSubscriptionBody({
       settings: settings(),
@@ -104,6 +116,6 @@ describe("renderSubscriptionBody", () => {
 
 describe("SUB_CONTENT_TYPES", () => {
   it("covers every surviving subscription format", () => {
-    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual(["base64", "singbox"]);
+    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual(["base64", "clash", "singbox"]);
   });
 });

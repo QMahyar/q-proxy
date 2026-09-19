@@ -75,9 +75,19 @@ describe("subscription pipeline", () => {
     for (const name of expectedNames(settings)) expect(tags).toContain(name);
   });
 
+  it("renders one clash vless proxy per generated node with all names present", async () => {
+    await seedAddresses(ONE_ADDRESS);
+    const { settings } = await readSettings();
+    const res = await SELF.fetch(`${BASE}/sub?target=clash`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("yaml");
+    const body = await res.text();
+    for (const name of expectedNames(settings)) expect(body).toContain(`name: ${name}`);
+  });
+
   it("rejects deleted format targets as invalid", async () => {
     await seedAddresses(ONE_ADDRESS);
-    for (const dead of ["clash", "surge", "loon", "quantumult"]) {
+    for (const dead of ["surge", "loon", "quantumult"]) {
       const res = await SELF.fetch(`${BASE}/sub?target=${dead}`);
       expect(res.status, dead).toBe(400);
     }

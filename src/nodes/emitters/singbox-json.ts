@@ -1,9 +1,8 @@
 import type { ProxyNode } from "../../types/node";
 import { isIpLiteral } from "../../utils/net";
-import { TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
+import { DEFAULT_PROXY_DNS, TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 
-const DEFAULT_PROXY_DNS = "https://8.8.8.8/dns-query";
 const DEFAULT_URL_TEST_INTERVAL_SEC = 300;
 
 const DNS_SERVER_SCHEMES: Record<string, { type: string; defaultPort: number }> = {

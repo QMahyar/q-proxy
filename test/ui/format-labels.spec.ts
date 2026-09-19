@@ -62,14 +62,15 @@ describe("panel format-labels registry", () => {
     expect(new Set(order).size).toBe(order.length);
   });
 
-  it("orders base64 first, then singbox (VLESS slim-down: base64+singbox only)", () => {
+  it("orders base64 first, then singbox, then clash", () => {
     const order = parseOrder();
-    expect(order).toEqual(["base64", "singbox"]);
+    expect(order).toEqual(["base64", "singbox", "clash"]);
   });
 
   it("mirrors the server's content-type families (sanity on format identity)", () => {
     expect(SUB_CONTENT_TYPES.base64).toContain("text/plain");
     expect(SUB_CONTENT_TYPES.singbox).toContain("json");
+    expect(SUB_CONTENT_TYPES.clash).toContain("yaml");
   });
 });
 

@@ -17,15 +17,15 @@ describe("pickSubFormat negotiation priority", () => {
   it("rejects invalid and deleted target values with BadRequest", () => {
     expect(() => pickSubFormat(req("https://w/sp/sub?target=SINGBOX", "clash-verge/1"))).toThrow();
     expect(() => pickSubFormat(req("https://w/sp/sub?target=hysteria", "v2rayNG/1.8"))).toThrow();
-    for (const dead of ["clash", "surge", "loon", "quantumult"]) {
+    for (const dead of ["surge", "loon", "quantumult"]) {
       expect(() => pickSubFormat(req(`https://w/sp/sub?target=${dead}`, "v2rayNG/1.8"))).toThrow();
     }
   });
 
   it("classifies the surviving priority table by UA", () => {
-    expect(pickSubFormat(req("https://w/sp/sub", "clash-verge/v1.2.3"))).toBe("base64");
-    expect(pickSubFormat(req("https://w/sp/sub", "ClashforWindows/0.20"))).toBe("base64");
-    expect(pickSubFormat(req("https://w/sp/sub", "mihomo/1.18"))).toBe("base64");
+    expect(pickSubFormat(req("https://w/sp/sub", "clash-verge/v1.2.3"))).toBe("clash");
+    expect(pickSubFormat(req("https://w/sp/sub", "ClashforWindows/0.20"))).toBe("clash");
+    expect(pickSubFormat(req("https://w/sp/sub", "mihomo/1.18"))).toBe("clash");
     expect(pickSubFormat(req("https://w/sp/sub", "SagerNet/sing-box/1.8.0"))).toBe("singbox");
     expect(pickSubFormat(req("https://w/sp/sub", "HiddifyNext/1.0"))).toBe("singbox");
     expect(pickSubFormat(req("https://w/sp/sub", "NekoBox/1.2"))).toBe("singbox");
@@ -52,8 +52,13 @@ describe("pickSubFormat negotiation priority", () => {
     expect(pickSubFormat(req("https://w/sp/sub/u/x/singbox?target=base64", "Loon/3"), "singbox")).toBe("base64");
   });
 
+  it("target=clash resolves directly and via path segment", () => {
+    expect(pickSubFormat(req("https://w/sp/sub?target=clash", "Mozilla/5.0"))).toBe("clash");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/clash", "v2rayNG/1.8"), "clash")).toBe("clash");
+  });
+
   it("ignores an invalid path target and falls through", () => {
-    expect(pickSubFormat(req("https://w/sp/sub/u/x/hysteria", "clash-verge/1"), "hysteria")).toBe("base64");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/hysteria", "clash-verge/1"), "hysteria")).toBe("clash");
     expect(pickSubFormat(req("https://w/sp/sub/u/x/hysteria"), "hysteria")).toBe("base64");
   });
 

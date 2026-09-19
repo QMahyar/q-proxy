@@ -182,10 +182,10 @@ Rules: all increments are single-statement `ON CONFLICT … DO UPDATE` UPSERTs (
 
 ## 6. Subscription Outputs Are Frozen
 
-The VLESS subscription surface is exactly two targets — `base64` and `singbox` — plus the browser info page. There is no pipeline for adding further VLESS targets in this codebase state:
+The VLESS subscription surface is exactly three targets — `base64`, `singbox`, and `clash` — plus the browser info page. There is no pipeline for adding further VLESS targets in this codebase state:
 
-1. **Types:** `SubFormat` in `src/core/ua.ts` is `"base64" | "singbox"`; `classifyUA` sniffs sing-box tokens, base64-client tokens, browsers, and defaults to base64.
-2. **Emitters:** `src/nodes/emitters/registry.ts` (`EMITTERS` covers sing-box only; base64 renders in `src/subscription/render.ts`).
+1. **Types:** `SubFormat` in `src/core/ua.ts` is `"base64" | "singbox" | "clash"`; `classifyUA` sniffs sing-box tokens, then clash tokens (`clash`/`mihomo`/`stash`), then base64-client tokens, browsers, and defaults to base64.
+2. **Emitters:** `src/nodes/emitters/registry.ts` (`EMITTERS` covers sing-box + clash; base64 renders in `src/subscription/render.ts`).
 3. **Negotiation:** `SUB_FORMATS` in `src/subscription/negotiate.ts` is the single source of the target list; unknown `?target=` values throw `invalid target`.
 4. **Serving one-liners:** content types in `SUB_CONTENT_TYPES` (`src/subscription/render.ts`), extensions in `EXTENSIONS` (`src/subscription/headers.ts`), labels in `src/handlers/subscribe.ts`, `?target=` entries in `buildSubUrls` (`src/handlers/api/status.ts`).
 5. **Tests:** golden snapshots in `test/nodes/emitters/`, UA cases in `test/core/ua.spec.ts`, content-type/extension cases in `test/subscription/`.
@@ -277,7 +277,7 @@ Success envelope `{ok:true,data:…}`; failure `{ok:false,error:{code,message},f
 - `GET api/settings` → redacted view; `PUT api/settings` (CSRF) → `{saved:true, rev}` or 422 `{fields}`; `POST api/settings/reset` → `{saved:true, rev}`
 - `GET api/settings/export` → secrets-stripped JSON (`securePath` stripped); `POST api/settings/import` → `{saved:true, rev, imported}`; a backup with version below 3 is rejected whole with a pre-cut incompatibility message and nothing applied
 - `GET api/bootstrap` → `{settings, status, subUrls}` aggregate with ETag/304
-- `GET api/status`; `POST api/killswitch {enabled}` → `{killSwitch, rev}`; `GET api/suburls` (two targets + info entry)
+- `GET api/status`; `POST api/killswitch {enabled}` → `{killSwitch, rev}`; `GET api/suburls` (three targets + info entry)
 - `ANY api/warp/{…}` → accounts/presets/amnezia sub-dispatch
 - `GET api/proxy-pool` (+ `?probe=1`) and `ANY api/address-probe` → pool inspection helpers
 - `POST telegram/setup` / `telegram/remove` (session+CSRF); `POST telegram/webhook/{secret}` (public, HMAC-gated; also handles `callback_query` with `tg:*` data via `telegramMenuKeyboard()` — `/start`+`/menu` attach it with Status / Subscription / Kill ON / Kill OFF, taps answer + `editMessageText` in place). Bot identity is numeric chat IDs only: `telegram.chatId` validation rejects `@usernames`, the webhook matches `String(chat.id)` exactly, and `migrateSettings` clears any legacy `@` value to `""` on load (fail closed).

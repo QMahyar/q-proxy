@@ -41,8 +41,8 @@ function decodeBody(body: string): string {
 }
 
 describe("EMITTERS registry", () => {
-  it("covers exactly the surviving sync SubFormat (base64 renders async via renderSubscriptionBody)", () => {
-    expect(Object.keys(EMITTERS).sort()).toEqual(["singbox"]);
+  it("covers exactly the surviving sync SubFormats (base64 renders async via renderSubscriptionBody)", () => {
+    expect(Object.keys(EMITTERS).sort()).toEqual(["clash", "singbox"]);
   });
 });
 

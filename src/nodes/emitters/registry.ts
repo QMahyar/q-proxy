@@ -1,5 +1,6 @@
 import type { SubFormat } from "../../core/ua";
 import type { ProxyNode } from "../../types/node";
+import { emitClashYaml } from "./clash-yaml";
 import { emitSingBoxJson } from "./singbox-json";
 
 export interface EmitRules {
@@ -17,6 +18,8 @@ export interface EmitOptions {
 }
 
 export const TEST_URL = "https://www.gstatic.com/generate_204";
+
+export const DEFAULT_PROXY_DNS = "https://8.8.8.8/dns-query";
 
 export function bareServer(address: string): string {
   return address.replace(/^\[/, "").replace(/\]$/, "");
@@ -56,4 +59,5 @@ export type SyncSubFormat = Exclude<SubFormat, "base64">;
 
 export const EMITTERS: Record<SyncSubFormat, NodeEmitter> = {
   singbox: emitSingBoxJson,
+  clash: emitClashYaml,
 };

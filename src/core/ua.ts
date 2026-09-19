@@ -1,6 +1,7 @@
-export type SubFormat = "base64" | "singbox";
+export type SubFormat = "base64" | "singbox" | "clash";
 
 const SINGBOX_TOKENS = ["sing-box", "singbox", "hiddify", "nekobox", "karing", "throne", "nekoray", "sfa", "sfi", "sfm", "sft"];
+const CLASH_TOKENS = ["clash", "mihomo", "stash"];
 const BASE64_CLIENT_TOKENS = [
   "v2rayng",
   "v2rayn",
@@ -20,6 +21,7 @@ export function classifyUA(ua: string): SubFormat | "browser" {
   const s = ua.toLowerCase();
   if (s.length === 0) return "base64";
   if (containsAny(s, SINGBOX_TOKENS)) return "singbox";
+  if (containsAny(s, CLASH_TOKENS)) return "clash";
   if (containsAny(s, BASE64_CLIENT_TOKENS)) return "base64";
   if (s.startsWith("mozilla/") || s.includes("chrome/") || s.includes("safari/") || s.includes("firefox/")) {
     return "browser";

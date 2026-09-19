@@ -42,7 +42,7 @@ describe("handleSubscribe", () => {
     expect(res.headers.get("content-type")).toContain("text/html");
     const body = await res.text();
     expect(body).toContain("https://w.test/sp12345678/sub?target=singbox");
-    expect(body).not.toContain("?target=clash");
+    expect(body).toContain("https://w.test/sp12345678/sub?target=clash");
     expect(body).toContain("اندپوینت");
     expect(body.toLowerCase()).not.toContain("vless://");
   });
@@ -76,19 +76,29 @@ describe("handleSubscribe", () => {
     expect(new Set(lines).size).toBe(lines.length);
   });
 
-  it("negotiates a former clash UA to base64 (deleted formats fall back)", async () => {
+  it("negotiates a clash UA to the clash emitter", async () => {
     const res = await handleSubscribe(
       request("https://w.test/sp12345678/sub", "clash-verge/v2.0"),
       envStub(),
       settings(),
     );
-    expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(res.headers.get("content-type")).toBe("text/yaml; charset=utf-8");
+  });
+
+  it("serves target=clash as yaml with the clash filename", async () => {
+    const res = await handleSubscribe(
+      request("https://w.test/sp12345678/sub?target=clash", BROWSER),
+      envStub(),
+      settings(),
+    );
+    expect(res.headers.get("content-type")).toBe("text/yaml; charset=utf-8");
+    expect(res.headers.get("content-disposition")).toContain(".yaml");
+    const text = await res.text();
+    expect(text).toContain("proxies:");
+    expect(text).toContain("type: vless");
   });
 
   it("rejects deleted targets as invalid", async () => {
-    await expect(
-      handleSubscribe(request("https://w.test/sp12345678/sub?target=clash"), envStub(), settings()),
-    ).rejects.toMatchObject({ status: 400 });
     await expect(
       handleSubscribe(request("https://w.test/sp12345678/sub?target=surge"), envStub(), settings()),
     ).rejects.toMatchObject({ status: 400 });

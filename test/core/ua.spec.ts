@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import { classifyUA } from "../../src/core/ua";
 
 describe("classifyUA", () => {
-  it("maps former clash-family UAs to base64 (format removed)", () => {
-    expect(classifyUA("clash-verge/v2.1.3")).toBe("base64");
-    expect(classifyUA("ClashMetaForAndroid/2.11.5")).toBe("base64");
-    expect(classifyUA("mihomo/1.18 linux")).toBe("base64");
-    expect(classifyUA("Stash/2.7 (iPhone)")).toBe("base64");
-    expect(classifyUA("ClashVerge/2.0")).toBe("base64");
+  it("maps clash-family UAs to the clash emitter", () => {
+    expect(classifyUA("clash-verge/v2.1.3")).toBe("clash");
+    expect(classifyUA("ClashMetaForAndroid/2.11.5")).toBe("clash");
+    expect(classifyUA("mihomo/1.18 linux")).toBe("clash");
+    expect(classifyUA("Stash/2.7 (iPhone)")).toBe("clash");
+    expect(classifyUA("ClashVerge/2.0")).toBe("clash");
   });
 
   it("does not match bare meta or verge tokens", () => {
     expect(classifyUA("Meta/1.0")).toBe("base64");
     expect(classifyUA("Verge/3.2")).toBe("base64");
-    expect(classifyUA("clash-verge/2.0")).toBe("base64");
+    expect(classifyUA("clash-verge/2.0")).toBe("clash");
   });
 
   it("sing-box family", () => {
@@ -26,7 +26,7 @@ describe("classifyUA", () => {
     expect(classifyUA("nekoray/3.26")).toBe("singbox");
   });
 
-  it("sing-box wins over a browser token in a composite UA", () => {
+  it("sing-box wins over clash tokens in a composite UA", () => {
     expect(classifyUA("Mozilla/5.0 (Throne/1.2.4)")).toBe("singbox");
     expect(classifyUA("sing-box 1.13.0; ClashMeta; mihomo/1.19.16")).toBe("singbox");
   });

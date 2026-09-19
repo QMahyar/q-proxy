@@ -22,6 +22,7 @@ import { escapeHtml } from "../utils/html";
 const FORMAT_LABELS: Record<SubFormat, string> = {
   base64: "Base64 / v2rayNG",
   singbox: "sing-box",
+  clash: "Clash / Mihomo",
 };
 
 function settingsCacheStamp(s: Settings): string {

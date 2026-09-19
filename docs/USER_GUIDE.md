@@ -194,9 +194,10 @@ Base path: `GET /{sp}/sub` (`src/handlers/subscribe.ts`, `src/core/router.ts:160
 |------------|----------------|--------|--------------|------|
 | `base64` | `v2rayng`/`v2rayn`/`shadowrocket`/`happ`/`streisand`… | Base64 | `text/plain` | Std padded base64 of `\n`-joined `vless://` links |
 | `singbox` | `sing-box`/`singbox`/`sfa`/`hiddify`/`nekobox`/`karing` | sing-box JSON | `application/json` | Full profile: tun+mixed inbounds, DNS detour, `urltest` best-ping |
+| `clash` | `clash`/`mihomo`/`stash` | Clash YAML | `text/yaml` | Mihomo-compatible profile: vless+ws proxies, `urltest` group, REJECT/DIRECT rules |
 | *(none, browser UA)* | `mozilla/`/`chrome/`/`safari/`/`firefox` | Info page | `text/html` | Bilingual EN/FA landing with per-format copy/QR |
 
-Those two targets are the whole list. Priority: `?target=` param > UA tokens > `base64` fallback; browsers get the info page. Any other `?target=` value is rejected with `400 invalid target` — never remapped, never substituted. Non-browser UAs get `Content-Disposition: attachment` + `Subscription-Userinfo` / `Profile-Title` headers (`src/subscription/headers.ts`).
+Those three targets are the whole list. Priority: `?target=` param > UA tokens > `base64` fallback; browsers get the info page. Any other `?target=` value is rejected with `400 invalid target` — never remapped, never substituted. Non-browser UAs get `Content-Disposition: attachment` + `Subscription-Userinfo` / `Profile-Title` headers (`src/subscription/headers.ts`).
 
 Fragment variant: `?mode=fragment` filters nodes to the fragment family (presets in `src/nodes/fragments.ts`). Shadowrocket/Happ UAs on mixed subs get `fragment=` URI params automatically.
 
@@ -206,6 +207,7 @@ Fragment variant: `?mode=fragment` filters nodes to the fragment family (presets
 |--------|-------|
 | **v2rayNG** (Android) | Copy `/{sp}/sub?target=base64` → v2rayNG → `+` → Import from clipboard; or scan QR from panel Home |
 | **sing-box / SFA** | Use `?target=singbox` URL → SFA → Add profile from URL → enable tun `auto_route` |
+| **Clash Verge / Mihomo** | Use `/{sp}/sub?target=clash` URL → Profiles → New profile from URL; select the `PROXY` group |
 | **Shadowrocket** (iOS) | Use base64 sub; fragment param auto-appended when UA is Shadowrocket — verify `fragment=` appears in URI preview |
 
 Screenshot placeholders: *QR modal + "Copy URL" toast + per-format tabs on info page*
