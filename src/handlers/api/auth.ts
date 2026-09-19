@@ -3,7 +3,7 @@ import type { RouteHandler } from "../../types/context";
 import { UnauthorizedError, ValidationError } from "../../core/errors";
 import { jsonError, jsonOk, readJsonObject } from "../../core/respond";
 import { log } from "../../core/log";
-import { hashPassword, verifyPassword } from "../../auth/password";
+import { hashPassword, passwordStrengthError, verifyPassword } from "../../auth/password";
 import {
   bumpSessionFloor,
   clearedSessionCookie,
@@ -107,8 +107,9 @@ export const handleSetup: RouteHandler = async (req, env, s) => {
     return jsonError(409, "SETUP_WINDOW_EXPIRED", "setup window has expired");
   }
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
-  if (newPassword.length < 8) {
-    throw new ValidationError({ newPassword: "must be at least 8 characters" });
+  const weakReason = passwordStrengthError(newPassword);
+  if (weakReason !== null) {
+    throw new ValidationError({ newPassword: weakReason });
   }
   const { hash, salt } = await hashPassword(newPassword, fresh.sessionSecret);
   const v = validateSettings({ ...structuredClone(fresh), passwordHash: hash, passwordSalt: salt, passwordIsBootstrap: true, seededAt: fresh.seededAt > 0 ? fresh.seededAt : Date.now() });
@@ -140,8 +141,9 @@ export const handlePasswordChange: RouteHandler = async (req, env, _s) => {
     ).ok;
   if (!currentOk) throw new UnauthorizedError("invalid password");
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
-  if (newPassword.length < 8) {
-    throw new ValidationError({ newPassword: "must be at least 8 characters" });
+  const weakReason = passwordStrengthError(newPassword);
+  if (weakReason !== null) {
+    throw new ValidationError({ newPassword: weakReason });
   }
   const { hash, salt } = await hashPassword(newPassword, fresh.sessionSecret);
   const v = validateSettings({

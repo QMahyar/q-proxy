@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { PBKDF2_ITERATIONS, hashPassword, verifyPassword } from "../../src/auth/password";
+import { PBKDF2_ITERATIONS, hashPassword, passwordStrengthError, verifyPassword } from "../../src/auth/password";
+
+describe("password strength rule", () => {
+  it("rejects short, letters-only, and digits-only secrets", () => {
+    for (const pw of ["short1a", "password", "PASSWORD", "12345678", "abcdefgh", "        "]) {
+      expect(passwordStrengthError(pw), pw).toMatch(/8 characters.*letter.*digit/);
+    }
+  });
+
+  it("accepts letters-and-digits secrets of length 8 or more", () => {
+    for (const pw of ["s3cur3p4ss", "correct-horse-42", "ABCD1234", "1a2b3c4d"]) {
+      expect(passwordStrengthError(pw), pw).toBeNull();
+    }
+  });
+});
 
 describe("password hashing", () => {
   it("uses the documented PBKDF2-SHA256 iteration compromise", () => {

@@ -539,6 +539,52 @@ describe("onboarding bootstrap password", () => {
   });
 });
 
+describe("password strength rules", () => {
+  const WEAK = ["password", "12345678", "abcdefgh", "ABCDEFGH", "short1a", "        "];
+
+  it("rejects weak secrets on setup with an inline field error", async () => {
+    for (const newPassword of WEAK) {
+      resetThrottle();
+      await seed(kv, SP);
+      const res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword }, { "X-Q-Panel": "1" }));
+      expect(res.status, newPassword).toBe(422);
+      expect((await body(res)).fields.newPassword, newPassword).toMatch(/8 characters.*letter.*digit/);
+    }
+  });
+
+  it("rejects weak secrets on change with an inline field error", async () => {
+    for (const newPassword of WEAK) {
+      resetThrottle();
+      await seed(kv, SP);
+      let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
+      expect(res.status).toBe(200);
+      await clearBootstrapFlag();
+      const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+      res = await SELF.fetch(
+        `${BASE}/api/auth/password`,
+        post({ currentPassword: PASSWORD, newPassword }, { Cookie: cookie, "X-Q-Panel": "1" }),
+      );
+      expect(res.status, newPassword).toBe(422);
+      expect((await body(res)).fields.newPassword, newPassword).toMatch(/8 characters.*letter.*digit/);
+    }
+  });
+
+  it("accepts a letters-and-digits secret on both endpoints", async () => {
+    resetThrottle();
+    await seed(kv, SP);
+    let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: "s3cur3p4ss" }, { "X-Q-Panel": "1" }));
+    expect(res.status).toBe(200);
+    await clearBootstrapFlag();
+    const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
+    res = await SELF.fetch(
+      `${BASE}/api/auth/password`,
+      post({ currentPassword: "s3cur3p4ss", newPassword: "4n0th3rs3cret" }, { Cookie: cookie, "X-Q-Panel": "1" }),
+    );
+    expect(res.status).toBe(200);
+    expect((await body(res)).data.changed).toBe(true);
+  });
+});
+
 describe("setup window", () => {
   it("allows setup on a fresh boot and shortly after seeding", async () => {
     resetThrottle();
