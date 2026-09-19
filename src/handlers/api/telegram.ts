@@ -1,6 +1,6 @@
 import type { RouteHandler } from "../../types/context";
 import type { Settings } from "../../types/settings";
-import { jsonOk } from "../../core/respond";
+import { jsonOk, readJsonObject } from "../../core/respond";
 import { assertCsrf } from "../../auth/guard";
 import { constantTimeEqual } from "../../utils/random";
 import { hmacSha256Hex } from "../../utils/hmac";
@@ -256,8 +256,7 @@ export const handleTelegramWebhook: RouteHandler = async (req, env, s) => {
   if ((!pathOk && !headerOk) || !s.telegram.enabled || s.telegram.botToken.length === 0) return silentOk();
   let update: TelegramUpdate;
   try {
-    const raw: unknown = await req.json();
-    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return silentOk();
+    const raw: unknown = await readJsonObject(req);
     update = raw as TelegramUpdate;
   } catch {
     return silentOk();

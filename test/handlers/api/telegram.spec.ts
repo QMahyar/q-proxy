@@ -213,6 +213,20 @@ describe("handleTelegramWebhook", () => {
     }
   });
 
+  it("cuts an adversarial-size webhook body at the cap instead of buffering it whole", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    const padding = "x".repeat(100 * 1024);
+    const req = new Request(`https://panel.example.com/testpath/telegram/webhook/${secret}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ update_id: 9, message: { message_id: 9, chat: { id: Number(CHAT_ID) }, text: "/status", padding } }),
+    });
+    const res = await handleTelegramWebhook(req, new FakeKV().asEnv() as never, makeSettings());
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { data: unknown }).data).toEqual({});
+    expect(calls.length).toBe(0);
+  });
+
   it("never leaks the bot token when outbound fetch fails", async () => {
     vi.stubGlobal(
       "fetch",

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dayKeyUtc } from "../../src/utils/time";
+// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
+import { readFileSync } from "node:fs";
 
 type CountersModule = typeof import("../../src/core/counters");
 type LogModule = typeof import("../../src/core/log");
@@ -111,5 +113,13 @@ describe("explicit request context (no globals)", () => {
     expect(b.seen.length).toBe(1);
     expect(a.seen[0]).not.toBe(b.seen[0]);
     await Promise.allSettled([...a.seen, ...b.seen]);
+  });
+
+  it("parks no tunnel lifetime past the response (waitUntil lives only in the bounded sinks)", () => {
+    const tunnel = readFileSync("src/handlers/tunnel.ts", "utf8") as string;
+    expect(tunnel).not.toContain("waitUntil");
+    for (const file of ["src/core/counters.ts", "src/core/log.ts"]) {
+      expect((readFileSync(file, "utf8") as string)).toContain("waitUntil");
+    }
   });
 });
