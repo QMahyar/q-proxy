@@ -118,7 +118,7 @@ Keep the full `https://<worker>/ <securePath>` URL — rotating the path invalid
 
 ### 4.1 Home
 
-- **Status card** — `GET /{sp}/api/status` (`src/handlers/api/status.ts`): version (`__APP_VERSION__`), colo, `killSwitch`, usage counters.
+- **Status card** — `GET /{sp}/api/status` (`src/handlers/api/status.ts`): version (`__APP_VERSION__`), colo, `killSwitch`, usage counters. Every usage figure is an estimate (`estimated: true`): the worker has no byte meter, so tunnel bytes are counted where visible and anything uncounted falls back to `requestsTotal × 1 MiB`. The same estimate feeds `Subscription-Userinfo`, the Telegram `/status` line, and the panel card — they always agree because they share one source (`readUsage`).
 - **Subscription URLs** — `GET /{sp}/api/suburls`: one URL per format with QR (client-side JS, no `/qrcode` endpoint). Copy/QR per format.
 - **Quick toggle** — Kill Switch without opening Settings.
 

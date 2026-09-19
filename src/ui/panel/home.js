@@ -136,7 +136,7 @@ const st=document.createElement('section');st.className='card';
 const u=S.status.usage||{requestsToday:0,requestsTotal:0};
 const todayStr=u.requestsToday!=null?fmtInt(u.requestsToday):'—';
 const totalStr=u.requestsTotal!=null?fmtInt(u.requestsTotal):'—';
-st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(todayStr)+'</span><span class="mono">'+esc(totalStr)+'</span></div><div id="traffic-chart"></div>';
+st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><span class="field__hint">'+esc(t('home.status.estimate'))+'</span></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(todayStr)+'</span><span class="mono">'+esc(totalStr)+'</span></div><div id="traffic-chart"></div>';
 right.appendChild(st)}
 body.appendChild(right);
 recordTraffic();

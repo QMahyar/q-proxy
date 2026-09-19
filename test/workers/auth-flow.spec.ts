@@ -170,6 +170,9 @@ describe("panel auth lifecycle", () => {
     expect(status.hasPassword).toBe(true);
     expect(typeof status.usage.requestsToday).toBe("number");
     expect(typeof status.usage.requestsTotal).toBe("number");
+    expect(typeof status.usage.bytesUpTotal).toBe("number");
+    expect(typeof status.usage.bytesDownTotal).toBe("number");
+    expect(status.usage.estimated).toBe(true);
 
     res = await SELF.fetch(`${BASE}/api/suburls`, { headers: { Cookie: cookie } });
     expect(res.status).toBe(200);

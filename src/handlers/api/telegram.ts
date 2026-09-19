@@ -5,6 +5,7 @@ import { assertCsrf } from "../../auth/guard";
 import { constantTimeEqual } from "../../utils/random";
 import { hmacSha256Hex } from "../../utils/hmac";
 import { readUsage } from "../../core/counters";
+import { estimatedDownloadBytes } from "../../subscription/headers";
 import { appVersion, loadSettingsFresh, saveSettings } from "../../settings/store";
 import { validateSettings } from "../../settings/validate";
 import { resolveHostname } from "../../core/routes";
@@ -32,16 +33,16 @@ const MSG = {
   en: {
     help: () =>
       "Commands:\n/status — version, kill switch, usage\n/sub — subscription URLs\n/kill on|off — toggle kill switch",
-    status: (version: string, killOn: boolean, today: number, total: number) =>
-      `Version: ${version}\nKill switch: ${killOn ? "ON" : "OFF"}\nToday: ${today} requests\nTotal: ${total} requests`,
+    status: (version: string, killOn: boolean, today: number, total: number, download: string) =>
+      `Version: ${version}\nKill switch: ${killOn ? "ON" : "OFF"}\nToday: ${today} requests\nTotal: ${total} requests\nDownload: ~${download} (estimate)`,
     sub: (urls: string) => urls,
     kill: (on: boolean) => `Kill switch ${on ? "enabled" : "disabled"}`,
   },
   fa: {
     help: () =>
       "دستورها:\n/status — نسخه، کلید قطع، مصرف\n/sub — نشانی‌های اشتراک\n/kill on|off — کلید قطع",
-    status: (version: string, killOn: boolean, today: number, total: number) =>
-      `نسخه: ${version}\nکلید قطع: ${killOn ? "روشن" : "خاموش"}\nامروز: ${today} درخواست\nمجموع: ${total} درخواست`,
+    status: (version: string, killOn: boolean, today: number, total: number, download: string) =>
+      `نسخه: ${version}\nکلید قطع: ${killOn ? "روشن" : "خاموش"}\nامروز: ${today} درخواست\nمجموع: ${total} درخواست\nدانلود: ~${download} (تخمینی)`,
     sub: (urls: string) => urls,
     kill: (on: boolean) => `کلید قطع ${on ? "فعال شد" : "غیرفعال شد"}`,
   },
@@ -165,9 +166,27 @@ interface BotReply {
   keyboard: boolean;
 }
 
+function formatBytesEstimate(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Math.floor(bytes);
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return unit === 0 ? `${value} B` : `${value.toFixed(1)} ${units[unit]}`;
+}
+
 async function replyStatus(env: Env, s: Settings): Promise<string> {
   const usage = await readUsage(env);
-  return langFor(s).status(appVersion(), s.killSwitch, usage.requestsToday, usage.requestsTotal);
+  return langFor(s).status(
+    appVersion(),
+    s.killSwitch,
+    usage.requestsToday,
+    usage.requestsTotal,
+    formatBytesEstimate(estimatedDownloadBytes(usage)),
+  );
 }
 
 function replySub(s: Settings, req: Request): string {

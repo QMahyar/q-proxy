@@ -143,6 +143,14 @@ describe("handleTelegramWebhook", () => {
     expect(String(sent.body.text)).toContain("Version: 0.0.0-dev");
     expect(String(sent.body.text)).toMatch(/Today: \d+ requests/);
     expect(String(sent.body.text)).toMatch(/Total: \d+ requests/);
+    expect(String(sent.body.text)).toMatch(/Download: ~[\d.]+ (B|KB|MB|GB|TB) \(estimate\)/);
+  });
+
+  it("labels the persian status download as an estimate", async () => {
+    const secret = await telegramWebhookSecret(SESSION_SECRET);
+    await handleTelegramWebhook(webhookRequest("/status", CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings({ language: "fa" }));
+    const sent = await lastSent();
+    expect(String(sent.body.text)).toContain("(تخمینی)");
   });
 
   it("flips killSwitch through saveSettings on /kill on", async () => {

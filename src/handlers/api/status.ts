@@ -4,10 +4,28 @@ import { ValidationError } from "../../core/errors";
 import { audit } from "../../core/log";
 import { jsonOk, readJsonObject } from "../../core/respond";
 import { resolveHostname } from "../../core/routes";
-import { readUsage } from "../../core/counters";
+import { readUsage, type UsageWithBytes } from "../../core/counters";
 import { assertCsrf, clientIp } from "../../auth/guard";
 import { appVersion, loadSettingsFresh, saveSettings } from "../../settings/store";
 import { validateSettings } from "../../settings/validate";
+
+export interface UsageView {
+  requestsToday: number;
+  requestsTotal: number;
+  bytesUpTotal: number;
+  bytesDownTotal: number;
+  estimated: true;
+}
+
+export function usageView(usage: UsageWithBytes): UsageView {
+  return {
+    requestsToday: usage.requestsToday,
+    requestsTotal: usage.requestsTotal,
+    bytesUpTotal: usage.bytesUpTotal,
+    bytesDownTotal: usage.bytesDownTotal,
+    estimated: true,
+  };
+}
 
 export const handleStatus: RouteHandler = async (req, env, s) => {
   const usage = await readUsage(env);
@@ -18,7 +36,7 @@ export const handleStatus: RouteHandler = async (req, env, s) => {
     colo: colo ?? null,
     language: s.language,
     hasPassword: s.passwordHash !== null,
-    usage: { requestsToday: usage.requestsToday, requestsTotal: usage.requestsTotal },
+    usage: usageView(usage),
   });
 };
 
