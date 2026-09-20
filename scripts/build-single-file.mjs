@@ -1,6 +1,6 @@
 import * as esbuild from "esbuild";
 import { execFileSync, execSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync, writeSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -134,7 +134,12 @@ function buildPanelHtml() {
 }
 
 if (process.argv.includes("--assemble-only")) {
-  process.stdout.write(buildPanelHtml());
+  const out = Buffer.from(buildPanelHtml(), "utf8");
+  for (let off = 0; off < out.length;) {
+    const wrote = writeSync(1, out.subarray(off, Math.min(off + 65536, out.length)));
+    if (wrote <= 0) throw new Error("stdout truncated");
+    off += wrote;
+  }
   process.exit(0);
 }
 
