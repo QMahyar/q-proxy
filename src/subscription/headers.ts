@@ -16,13 +16,17 @@ export interface UserinfoBytes {
   bytesDownTotal?: number;
 }
 
+export function estimatedDownloadBytes(usage: Pick<UsageSnapshot, "requestsTotal"> & UserinfoBytes): number {
+  const down = usage.bytesDownTotal ?? 0;
+  return down > 0 ? down : usage.requestsTotal * BYTES_PER_REQUEST;
+}
+
 export function subscriptionUserinfo(
   usage: Pick<UsageSnapshot, "requestsTotal"> & UserinfoBytes,
   expireAt?: number | null,
 ): string {
   const up = usage.bytesUpTotal ?? 0;
-  const down = usage.bytesDownTotal ?? 0;
-  let userinfo = `upload=${up > 0 ? up : 0}; download=${down > 0 ? down : usage.requestsTotal * BYTES_PER_REQUEST}`;
+  let userinfo = `upload=${up > 0 ? up : 0}; download=${estimatedDownloadBytes(usage)}`;
   if (expireAt !== null && expireAt !== undefined && expireAt > 0) {
     userinfo += `; expire=${Math.floor(expireAt / 1000)}`;
   }
@@ -31,11 +35,9 @@ export function subscriptionUserinfo(
 
 export const EXTENSIONS: Record<SubFormat, string> = {
   base64: "txt",
-  clash: "yaml",
   singbox: "json",
-  surge: "conf",
-  loon: "conf",
-  quantumult: "conf",
+  clash: "yaml",
+  xray: "json",
 };
 
 export const SUB_THROTTLE_SECONDS = 60;

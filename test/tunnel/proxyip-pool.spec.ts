@@ -158,6 +158,25 @@ describe("fetchPoolUrl", () => {
     expect(await fetchPoolUrl("ftp://pool.example/list")).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("cuts an adversarial-size response at the cap instead of buffering it whole", async () => {
+    const CHUNK = 64 * 1024;
+    let pulled = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pulled >= CHUNK * 10) {
+          controller.close();
+          return;
+        }
+        pulled += CHUNK;
+        controller.enqueue(new Uint8Array(CHUNK).fill(65));
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(stream)));
+    expect(await fetchPoolUrl("https://pool.example/huge")).toEqual([]);
+    expect(pulled).toBeLessThan(CHUNK * 10);
+    expect(pulled).toBeLessThanOrEqual(256 * 1024 + 2 * CHUNK);
+  });
 });
 
 describe("parsePoolEndpoints", () => {

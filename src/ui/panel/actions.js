@@ -8,14 +8,15 @@ try{p=typeof fn==='function'?fn():Promise.resolve(fn)}catch(err){release();throw
 return Promise.resolve(p).then(v=>{release();return v===undefined?true:v},e=>{release();throw e})}
 const ACTIONS={
 copy(el){
+if(el.dataset.busy==='1')return;
 const valEl=el.dataset.copyId?$(el.dataset.copyId):null;
 const val=el.dataset.copyValue||(valEl?valEl.textContent:'');
-el.dataset.busy='1';
+el.dataset.busy='1';el.setAttribute('aria-busy','true');
 let p;
 try{p=copyText(val||'')}catch(err){p=Promise.resolve(false)}
 p.then(ok=>{
-delete el.dataset.busy;
-if(!ok){toast(t('toast.networkError'),'err');return}
+delete el.dataset.busy;el.removeAttribute('aria-busy');
+if(!ok){toast(t('share.copy_failed'),'err');return}
 el.classList.add('copied');
 const use=el.querySelector('use');
 if(use){use.setAttribute('href','#i-check');setTimeout(()=>{use.setAttribute('href','#i-copy');el.classList.remove('copied')},900)}
@@ -66,22 +67,13 @@ await withBusy($('discard-btn'),()=>{[...S.dirty].forEach(sec=>discardSection(se
  await withBusy(el,()=>api('api/settings/import',{method:'POST',body:{settings:parsed.settings}}));
  toast(t('general.backup.imported'),'ok');location.reload()}
  else toast(t('general.backup.badfile'),'err')}
- catch(err){if(err&&err.fields)toast(Object.values(err.fields)[0],'err');else toastErr(err)}
+ catch(err){if(err&&err.fields){const first=String(Object.values(err.fields)[0]);toast(first.indexOf('pre-cut')>=0?t('general.backup.precut'):first,'err')}else toastErr(err)}
  finally{fileInput.value=''}};
  fileInput.click()},
- 'check-update'(el){
- withBusy(el,async()=>{
- try{
- const d=await api('api/version/check',{fresh:true});
- if(d.latest===null)toast(t('home.status.updateCheckFailed'),'err');
- else if(d.updateAvailable)toast(t('home.status.updateAvailable',{v:d.latest.replace(/^v/,'')}),'ok');
- else toast(t('home.status.upToDate'),'ok')}
- catch(err){toastErr(err)}})},
  'reset-defaults'(el){
  confirmDialog('confirm.reset_title','confirm.reset_body',true).then(async yes=>{
 if(!yes)return;
 try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));location.reload()}catch(err){toastErr(err)}})},
- 'refresh-ip'(){loadMyIp()},
  accent(el){
  const a=el.dataset.accent||'cyan';
  if(a==='cyan')delete document.documentElement.dataset.accent;
@@ -96,64 +88,51 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  'warp-regen'(el){
  confirmDialog('warp.confirm.regen_title','warp.confirm.regen_body',true).then(async yes=>{
  if(!yes)return;
- try{await withBusy(el,()=>api('api/warp/account/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));
- toast(t('users.toast.regen'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})},
+ try{const d=await withBusy(el,()=>api('api/warp/account/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));
+ const tok=d&&d.token;if(tok&&S.warp){const url=warpSubUrl(tok,'wireguard-conf');openShareSheet({title:t('share.title_rotated'),url:url,fileName:'warp-'+el.dataset.id+'.conf',note:'once'})}else toast(t('warp.toast.regen'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))}catch(err){toastErr(err)}})},
  'warp-delete'(el){
  confirmDialog('warp.confirm.delete_title','warp.confirm.delete_body',true).then(async yes=>{
  if(!yes)return;
  try{await withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'DELETE',mutate:true}));
  toast(t('warp.toast.deleted'),'ok');invalidateWarp();location.hash='#/warp'}catch(err){toastErr(err)}})},
- 'warp-amnezia-reset'(el){
- withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:null}})
- .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))})
- .catch(err=>toastErr(err)))},
- 'warp-save'(el){
+  'warp-save'(el){
  const id=el.dataset.id;const field=el.dataset.field;
  const patch={};
  if(field==='name')patch.name=$('warp-name').value.trim();
  if(field==='dns')patch.dns=$('warp-dns').value.trim();
- if(field==='preset')patch.endpoint_list={type:'preset',preset_id:$('warp-preset').value};
  withBusy(el,()=>api('api/warp/account/'+id,{method:'PUT',body:patch})
  .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(id))})
  .catch(err=>toastErr(err)))},
- 'warp-amnezia-save'(el){
-  const body={};
-  ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const el2=$('amz-'+k);if(!el2)return;const v=el2.value.trim();if(v.length>0)body[k]=v});
-  const i1el=$('amz-I1');const i1=i1el?i1el.value.trim():'';if(i1.length>0)body.I1=i1;
-  withBusy(el,()=>api('api/warp/settings/amnezia',{method:'PUT',body:{amnezia:body}})
-  .then(d=>{if(!S.warp)S.warp={accounts:[],presets:[],amnezia:null};S.warp.amnezia=d.amnezia;toast(t('common.saved'),'ok')})
-  .catch(err=>toastErr(err)))},
+  'warp-amnezia-save'(el){
+   const body={};
+   ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const el2=$('amz-'+k);if(!el2)return;const v=el2.value.trim();if(v.length>0)body[k]=v});
+   const i1el=$('amz-I1');const i1=i1el?i1el.value.trim():'';if(i1.length>0)body.I1=i1;
+   const tg=$('warp-amnezia-toggle');const on=tg?tg.checked:!!(S.warp&&S.warp.amneziaEnabled);
+   withBusy(el,()=>api('api/warp/settings/amnezia',{method:'PUT',body:{amnezia:body,amneziaEnabled:on}})
+   .then(d=>{if(!S.warp)S.warp={accounts:[],presets:[],amnezia:null,amneziaEnabled:false};S.warp.amnezia=d.amnezia;S.warp.amneziaEnabled=d.amneziaEnabled===true;toast(t('common.saved'),'ok')})
+   .catch(err=>toastErr(err)))},
   'warp-preset-del'(el){
   const p=S.warp&&S.warp.presets?S.warp.presets.find(x=>x.id===el.dataset.id):null;
   confirmDialog('confirm.presetDelete.title','confirm.presetDelete.message',true,{name:p?p.name:'',n:p&&p.endpoints?p.endpoints.length:0}).then(async yes=>{
   if(!yes)return;
   try{await withBusy(el,()=>api('api/warp/presets/'+el.dataset.id,{method:'DELETE',mutate:true}));
   toast(t('warp.toast.presetDeleted'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}catch(err){toastErr(err)}})},
-  'warp-custom-eps-save'(el){
-  const eps=$('warp-custom-eps').value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
-  withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{endpoint_list:{type:'custom',custom_endpoints:eps}}})
-  .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))})
-  .catch(err=>toastErr(err)))},
-  'warp-account-amnezia-save'(el){
-  const body={};
-  ['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4'].forEach(k=>{const inp=$('amza-'+k);if(!inp)return;const v=inp.value.trim();if(v.length>0)body[k]=v});
-  const i1el=$('amza-I1');const i1=i1el?i1el.value.trim():'';if(i1.length>0)body.I1=i1;
-  withBusy(el,()=>api('api/warp/account/'+el.dataset.id,{method:'PUT',body:{amnezia_overrides:Object.keys(body).length?body:null}})
-  .then(()=>{toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(()=>renderWarpDetail(el.dataset.id))})
-  .catch(err=>toastErr(err)))},
- 'close-user-modal'(el){closeModal(el.dataset.modal)},
- 'users-add'(){openUserModal()},
- 'users-edit'(el){openUserModal(el.dataset.id)},
- 'users-reload'(){loadUsers()},
- 'users-del'(el){
- confirmDialog('users.confirm_delete_title','users.confirm_delete_body',true).then(async yes=>{
- if(!yes)return;
- try{await withBusy(el,()=>api('api/users/'+el.dataset.id,{method:'DELETE',mutate:true}));toast(t('users.toast.deleted'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
- 'users-regen'(el){
- confirmDialog('users.confirm_regen_title','users.confirm_regen_body',true).then(async yes=>{
- if(!yes)return;
- try{const d=await withBusy(el,()=>api('api/users/'+el.dataset.id+'/regenerate-token',{method:'POST',body:{}}));const tok=d&&d.token;if(tok)openShareSheet({title:t('share.title_rotated'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'});else toast(t('users.toast.regen'),'ok');await loadUsers()}catch(err){toastErr(err)}})},
- 'shortcuts'(){renderShortcuts();openModal('m-keys')},
+ 'warp-endpoints-save'(el){
+ const ids=[...document.querySelectorAll('#warp-endpoints input[data-warp-preset]')].filter(c=>c.checked).map(c=>c.dataset.warpPreset);
+ const ta=$('warp-eps-custom');
+ const custom=ta?ta.value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0):[];
+ const showErr=msg=>{const fw=ta?ta.closest('.field'):null;const err=fw?fw.querySelector('.field__error'):null;if(err)err.textContent=msg;if(ta)ta.setAttribute('aria-invalid','true')};
+ const curIds=new Set(Array.isArray(S.set&&S.set.warpPresets)?S.set.warpPresets:[]);
+ const curCustom=Array.isArray(S.set&&S.set.warpCustomEndpoints)?S.set.warpCustomEndpoints.map(l=>String(l).trim()).filter(l=>l.length>0):[];
+ const same=ids.length===curIds.size&&ids.every(id=>curIds.has(id))&&custom.length===curCustom.length&&custom.every((l,i)=>l===curCustom[i]);
+ const doSave=()=>withBusy(el,()=>api('api/settings/save',{method:'PUT',body:Object.assign({warpPresets:ids,warpCustomEndpoints:custom},typeof S.rev==='number'?{baseRev:S.rev}:{})})
+ .then((d)=>{if(d&&typeof d.rev==='number')S.rev=d.rev;Object.assign(S.set,{warpPresets:ids,warpCustomEndpoints:custom});toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(renderWarpSection)})
+ .catch(err=>{if(err&&err.code==='CONFLICT'){toast(t('settings.conflict'),'err');rebaseSettings().then(()=>renderWarpSection());return}if(err&&err.fields&&(err.fields.warpPresets||err.fields.warpCustomEndpoints))showErr(err.fields.warpCustomEndpoints||err.fields.warpPresets);else toastErr(err)}));
+ const accounts=S.warp&&S.warp.accounts?S.warp.accounts.length:0;
+ if(accounts>0&&!same){confirmDialog('warp.confirm.endpoints_title','warp.confirm.endpoints_body',true,{n:accounts}).then(yes=>{if(yes)doSave()});return}
+ doSave()},
+  'shortcuts'(){renderShortcuts();openModal('m-keys')},
+  'boot-retry'(){boot()},
  'close-keys'(){closeModal('m-keys')},
  'wizard-skip'(){wizardDone()},
  'wizard-protocols'(){wizardDone();location.hash='#/settings/protocols'},
@@ -163,10 +142,6 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  maybeWizard()},
  'backup-export'(){try{localStorage.setItem(EXPORT_KEY,String(Date.now()))}catch(e){}setTimeout(maybeBackupBanner,500)},
  'backup-dismiss'(){try{localStorage.setItem(BACKUP_DISMISS,String(Date.now()))}catch(e){}$('backup-banner').hidden=true},
- 'users-bulk-enable'(el){runBulkUsers('confirm.bulk.enable',{enabled:true},el)},
- 'users-bulk-disable'(el){runBulkUsers('confirm.bulk.disable',{enabled:false},el)},
- 'users-bulk-del'(el){runBulkUsers('confirm.bulk.delete',{delete:true},el)},
- 'users-bulk-extend'(el){const pick=$('users-bulk-expiry');const v=pick?pick.value:'';if(!v){toast(t('users.bulk.empty_expiry'),'err');return}runBulkUsers('confirm.bulk.extend',{expiresAt:new Date(v).getTime()},el)},
  'tg-setup'(el){
  withBusy(el,async()=>{
  try{const d=await api('api/telegram/setup',{method:'POST',body:{}});
@@ -180,44 +155,29 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  else toast(t('tg.remove_fail')+(d.description?' · '+d.description:''),'err')}
  catch(err){toastErr(err)}})()},
   'theme-toggle'(){const cur=getTheme();const nxt=cur==='dark'?'light':'dark';try{localStorage.setItem(THEME_KEY,nxt)}catch(e){}applyTheme(nxt);},
-  'addr-add'(el){
-   const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
-   if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({},body.children.length));
-   const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
-   markDirty(el)},
-  'addr-del'(el){
-   const card=el.closest('.addr-card'),body=el.closest('[data-addr-body]');
-   if(body&&card){card.remove();
-   const list=el.closest('[data-type="addrList"]');
-   if(list&&list.querySelectorAll('[data-addr-body] .addr-card').length===0){const empty=list.querySelector('.addr-empty');if(empty)empty.style.display=''}
-   }
-   markDirty()},
-  'remote-add'(el){
-   const list=el.closest('[data-type="remoteList"]');const body=list&&list.querySelector('[data-remote-body]');
-   if(body){
-   if(body.querySelectorAll('.remote-card').length>=20){toast(t('remote.nodes.max'),'err');return}
-   body.insertAdjacentHTML('beforeend',remoteNodeCardHtml({},body.children.length));
-   const empty=list&&list.querySelector('.remote-empty');if(empty)empty.style.display='none'}
-   markDirty(el)},
-  'remote-del'(el){
-   const card=el.closest('.remote-card'),body=el.closest('[data-remote-body]');
-   if(body&&card){card.remove();
-   const list=el.closest('[data-type="remoteList"]');
-   if(list&&list.querySelectorAll('[data-remote-body] .remote-card').length===0){const empty=list.querySelector('.remote-empty');if(empty)empty.style.display=''}
-   }
-   markDirty()},
-  'addr-hostname'(el){
-   const list=el.closest('[data-type="addrList"]');const body=list&&list.querySelector('[data-addr-body]');
-   if(body){body.insertAdjacentHTML('beforeend',addrCardHtml({address:location.hostname},body.children.length));
-   const empty=list&&list.querySelector('.addr-empty');if(empty)empty.style.display='none'}
-   markDirty(el)},
   'addr-probe'(el){
    withBusy(el,()=>api('api/address-probe',{fresh:true})
-   .then(d=>{S.addrHealth=d&&d.results||[];renderAddrDots()})
+   .then(d=>{const r=d&&d.results||[];const ok=r.filter(x=>x.status==='ok').length;toast(t('endpoints.probe.done',{ok:ok,n:r.length}),ok===r.length&&r.length>0?'ok':'err')})
    .catch(err=>toastErr(err)))},
   'pool-fetch'(el){loadPool(false)},
   'pool-test'(el){loadPool(true)},
   'home-pool-refresh'(el){loadHomePool()},
+  'subs-import-preview'(el){
+  const ta=$('sub-import-text');const box=$('sub-import-preview');if(!ta||!box)return;
+  box.innerHTML=loadingBox({rows:2});
+  withBusy(el,()=>api('api/sub-import',{method:'POST',body:{text:ta.value}})
+  .then(d=>{renderImportPreview(d&&d.sources||[])})
+  .catch(()=>{box.innerHTML=errorCard({title:'common.error',retryAction:'data-action="subs-import-preview"'})}))},
+  'subs-import-confirm'(el){
+  if(!subImportEndpoints.length)return;
+  const cur=Array.isArray(S.set&&S.set.customEndpoints)?S.set.customEndpoints.map(l=>String(l).trim()).filter(l=>l.length>0):[];
+  const merged=cur.slice();const have=new Set(cur.map(l=>l.toLowerCase()));
+  subImportEndpoints.forEach(e=>{if(!have.has(e.toLowerCase())){have.add(e.toLowerCase());merged.push(e)}});
+  const body={customEndpoints:merged};
+  if(typeof S.rev==='number')body.baseRev=S.rev;
+  withBusy(el,()=>api('api/settings/save',{method:'PUT',body:body})
+  .then(d=>{if(d&&typeof d.rev==='number')S.rev=d.rev;Object.assign(S.set,{customEndpoints:merged});const ta=$('sub-import-text');if(ta)ta.value='';subImportEndpoints=[];renderSubsView();toast(t('common.saved'),'ok')})
+  .catch(err=>{if(err&&err.code==='CONFLICT'){toast(t('settings.conflict'),'err');rebaseSettings().then(()=>renderSubsView());return}if(err&&err.fields&&err.fields.customEndpoints)toast(String(err.fields.customEndpoints),'err');else toastErr(err)}))},
   'pool-add'(el){
    const addr=el.dataset.addr||'';
    const ta=document.querySelector('#sp-egress [data-bind="proxyIps"]');
@@ -250,69 +210,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  if(err&&err.status===401)setFw('fw-sec-cur',t('security.wrong_current'));
  else if(err&&err.fields&&err.fields.newPassword)setFw('fw-sec-new',String(err.fields.newPassword));
  else toastErr(err)}
- finally{el.disabled=false}})()},
- 'totp-start'(el){
- (async()=>{
- if(TOTP.started&&!TOTP.confirmed){
- if(!(await confirmDialog('totp.setup','totp.warn.restart',true)))return}
- el.disabled=true;
- try{
- const raw=new Uint8Array(20);crypto.getRandomValues(raw);
- const secret=totpB32Encode(raw);
- const plain=[];const hashes=[];
- const ABC='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
- for(let i=0;i<10;i++){const b=new Uint8Array(8);crypto.getRandomValues(b);let s='';for(let j=0;j<8;j++)s+=ABC[b[j]%ABC.length];const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));hashes.push([...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,'0')).join(''));plain.push(s.slice(0,4)+'-'+s.slice(4))}
- TOTP={secret:secret,hashes:hashes,plain:plain,started:true,confirmed:false};
- renderTotpSetup()}
- catch(err){toastErr(err)}
- finally{el.disabled=false}})()},
- 'totp-qr'(el){
- if(TOTP.secret)openQr(totpIssuerUrl(TOTP.secret))},
- 'totp-confirm'(el){
- const saved=$('totp-saved');
- if(saved&&!saved.checked){el.disabled=true;return}
- (async()=>{
- const inp=$('totp-code');if(!inp)return;
- const fw=$('fw-totp-code');const perr=fw?fw.querySelector('.field__error'):null;
- if(perr)perr.textContent='';if(fw)fw.classList.remove('field--error');
- el.disabled=true;
- try{
- if(!(await totpCheck(TOTP.secret,inp.value))){if(fw)fw.classList.add('field--error');if(perr)perr.textContent=t('totp.wrong_code');inp.focus();inp.select();return}
- await api('api/settings/save',{method:'PUT',body:{totp:{enabled:true,secret:TOTP.secret,recoveryCodes:TOTP.hashes}}});
- TOTP.confirmed=true;
- toast(t('totp.enabled_ok'),'ok');
- renderTotpDone()}
- catch(err){toastErr(err)}
- finally{el.disabled=false}})()},
- 'totp-codes-download'(){
- try{
- const blob=new Blob([totpCodesFile()],{type:'text/plain;charset=utf-8'});
- const url=URL.createObjectURL(blob);
- const a=document.createElement('a');
- a.href=url;a.download='q-proxy-recovery-codes.txt';
- document.body.appendChild(a);a.click();a.remove();
- setTimeout(()=>URL.revokeObjectURL(url),1000)}
- catch(err){toastErr(err)}},
- 'totp-disable'(el){
- (async()=>{
- if(!(await confirmDialog('totp.confirm_disable','totp.confirm_disable_body',true)))return;
- el.disabled=true;
- try{
- await api('api/settings/save',{method:'PUT',body:{totp:{enabled:false}}});
- toast(t('totp.disabled_ok'),'ok');
- totpReset()}
- catch(err){toastErr(err)}
  finally{el.disabled=false}})()}};
-async function runBulkUsers(titleKey,patch,el){
-const ids=[...BULK];
-if(!ids.length)return;
-if(!(await confirmDialog(titleKey,'confirm.bulk.message',true,{n:ids.length})))return;
-try{const d=await withBusy(el,()=>api('api/users/bulk',{method:'POST',body:{ids:ids,patch:patch}}));
-BULK.clear();updateBulkBar();
-let msg=t('users.bulk.done',{updated:d.updated,deleted:d.deleted});
-if(d.unknown)msg+=t('users.bulk.unknown',{unknown:d.unknown});
-toast(msg,'ok');await loadUsers()}
-catch(err){toastErr(err)}}
 function forceFlagged(){
 if(S.set&&S.set.passwordIsBootstrap===true)return true;
 try{return sessionStorage.getItem('qproxy_force_change')==='1'}catch(e){return false}}
@@ -356,11 +254,18 @@ if(el){
 const fn=ACTIONS[el.dataset.action];
 if(fn)fn(el);
 return}
+const retry=e.target.closest('[data-retry]');
+if(retry){
+const k=retry.getAttribute('data-retry');
+if(k==='home-pool')loadHomePool();
+return}
+const wretry=e.target.closest('[data-warp-retry]');
+if(wretry){wretry.disabled=true;retryWarp(wretry.getAttribute('data-warp-retry')||'');return}
 const chip=e.target.closest('[data-chip]');
 if(chip){handleChip(chip);return}
 const mode=e.target.closest('[data-mode]');
 if(mode){
-S.subMode=mode.dataset.mode;
+S.subMode=mode.dataset.mode;try{localStorage.setItem('qp_submode',S.subMode)}catch(err){}
 mode.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===mode)));
 const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
 document.querySelectorAll('#home-body [id^="sub-u"] code').forEach((code,i)=>{
@@ -388,58 +293,25 @@ applyFragmentPresetUi(chip.dataset.preset)}
 refreshShowIf();
 validateAllLineEditors()}
 function onChange(e){
-if(e.target.matches('[data-totp-saved]')){
-TOTP.confirmed=e.target.checked;
-const body=$('totp-body');
-const btn=body?body.querySelector('[data-action="totp-confirm"]'):null;
-if(btn)btn.disabled=!e.target.checked;
-return}
-if(e.target.matches('[data-remote-field="kind"]')){
-const card=e.target.closest('.remote-card');
-if(card){const cur=readRemoteCard(card);cur.kind=e.target.value;card.outerHTML=remoteNodeCardHtml(cur,Number(card.dataset.remoteIndex||0))}
-markDirty(e.target);return}
-if(e.target.matches('[data-addr-field]')){markDirty(e.target);return}
-if(e.target.matches('[data-addr-enabled-input]')){
-const card=e.target.closest('.addr-card');
-if(card){card.dataset.addrEnabled=e.target.checked?'1':'0';card.classList.toggle('addr-card--off',!e.target.checked)}
-markDirty(e.target);return}
-const usel=e.target.closest('[data-user-select]');
-if(usel){if(usel.checked)BULK.add(usel.dataset.userSelect);else BULK.delete(usel.dataset.userSelect);updateBulkBar();return}
-if(e.target.id==='users-select-all'){const ids=(S.users||[]).map(u=>u.id);if(e.target.checked)ids.forEach(id=>BULK.add(id));else BULK.clear();renderUserRows();return}
-if(e.target.closest('[data-user-toggle]')){
-const sw=e.target.closest('.switch');
-if(sw.dataset.busy==='1'){e.target.checked=!e.target.checked;return}
-sw.dataset.busy='1';sw.classList.add('pending');
-(async()=>{try{await api('api/users/'+e.target.dataset.userToggle,{method:'PUT',body:{enabled:e.target.checked}});toast(t('users.toast.saved'),'ok');await loadUsers()}catch(err){e.target.checked=!e.target.checked;toastErr(err)}finally{sw.classList.remove('pending');delete sw.dataset.busy}})();
-return}
-if(e.target.closest('[data-user-proto-all]')){
-if(e.target.checked)document.querySelectorAll('#mu-protocols input[data-user-proto]').forEach(i=>{i.checked=false});
-return}
-if(e.target.closest('[data-user-proto]')&&e.target.checked){
-const allBox=document.querySelector('#mu-protocols input[data-user-proto-all]');
-if(allBox)allBox.checked=false;
-return}
-if(e.target.id==='warp-preset'){const id=(location.hash.match(/^#\/warp\/([0-9a-f-]+)/i)||[])[1];if(id){(async()=>{try{await api('api/warp/account/'+id,{method:'PUT',body:{endpoint_list:{type:'preset',preset_id:e.target.value}}});toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(()=>renderWarpDetail(id))}catch(err){toastErr(err)}})()}return}
 if(e.target.closest('[data-kill]')){setKillSwitch(e.target.checked);return}
 const bind=e.target.closest('[data-bind]');
 if(bind){
 if(bind.tagName==='TEXTAREA')validateOneEditor(bind);
 markDirty(bind);
-if(/^vlessEnabled$|^vmessEnabled$|^trojanEnabled$|^ssEnabled$/.test(bind.dataset.bind))applyProtoDim()
+if(/^vlessEnabled$/.test(bind.dataset.bind))applyProtoDim()
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()}}
+let dirtyTimer=null;
 function onInput(e){
-if(e.target.matches('[data-remote-field]')){markDirty(e.target);return}
-if(e.target.matches('[data-addr-field]')){markDirty(e.target);return}
 const bind=e.target.closest('[data-bind]');
 if(!bind)return;
-if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250)}
+if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250);clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(bind),120);return}
 else if(bind.tagName==='INPUT'){
 const msg=scalarError(bind);
 const fw=fieldWrapOf(bind);
 if(!msg&&fw&&fw.classList.contains('field--error')){fw.classList.remove('field--error');bind.removeAttribute('aria-invalid')}
 updateCharCount(bind)}
 if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()
-markDirty(bind)}
+clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(bind),120)}
 let eventsWired=false;
 function wireEvents(){
 if(eventsWired)return;
@@ -453,12 +325,10 @@ const el=e.target;
 if(el&&el.dataset&&el.dataset.bind&&el.tagName==='INPUT')blurValidateEl(el)});
 $('m-confirm').addEventListener('click',e=>{if(e.target===$('m-confirm'))settleConfirm(false)});
 $('m-share').addEventListener('click',e=>{if(e.target===$('m-share'))closeModal('m-share')});
-$('m-share').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-share'),e)});
 $('cf-cancel').addEventListener('click',()=>settleConfirm(false));
 $('cf-ok').addEventListener('click',()=>settleConfirm(true));
-$('m-share').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-share'),e)});
 $('m-confirm').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-confirm'),e)});
-['m-warp-generate','m-warp-import','m-warp-preset','m-user','m-share','m-keys'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($(id),e)}));
+['m-warp-generate','m-warp-import','m-warp-preset','m-share','m-keys','m-wizard'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus(el,e)})});
 document.addEventListener('keydown',globalKeys);
 document.addEventListener('keydown',e=>{
 if(e.key==='Escape'){
@@ -467,7 +337,6 @@ else if(!$('m-share').hidden)closeModal('m-share');
 else if(!$('m-warp-generate').hidden)closeModal('m-warp-generate');
 else if(!$('m-warp-import').hidden)closeModal('m-warp-import');
 else if(!$('m-warp-preset').hidden)closeModal('m-warp-preset');
-else if(!$('m-user').hidden)closeModal('m-user');
 else if(!$('m-wizard').hidden)wizardDone();
 else if(!$('m-keys').hidden)closeModal('m-keys')}});
 window.addEventListener('hashchange',navigate);
@@ -476,18 +345,14 @@ window.addEventListener('beforeunload',e=>{
 if(S.dirty.size){e.preventDefault();e.returnValue=''}});
 wireTabKeys($('nav'),'.tab');
 wireTabKeys($('subtabs'),'.subtab');
-$('wg-go').addEventListener('click',async()=>{
-const btn=$('wg-go');btn.disabled=true;
+$('wg-go').addEventListener('click',()=>withBusy($('wg-go'),async()=>{
 try{const d=await api('api/warp/account/generate',{method:'POST',body:{name:$('wg-name').value.trim()}});
 closeModal('m-warp-generate');toast(t('warp.toast.generated'),'ok');invalidateWarp();location.hash='#/warp/'+d.account.id}
-catch(err){toastErr(err)}
-finally{btn.disabled=false}});
-$('wi-go').addEventListener('click',async()=>{
-const btn=$('wi-go');btn.disabled=true;
+catch(err){toastErr(err)}}));
+$('wi-go').addEventListener('click',()=>withBusy($('wi-go'),async()=>{
 try{const d=await api('api/warp/account/import',{method:'POST',body:{name:$('wi-name').value.trim(),config:$('wi-config').value}});
 closeModal('m-warp-import');toast(t('warp.toast.imported'),'ok');invalidateWarp();location.hash='#/warp/'+d.account.id}
-catch(err){if(err&&err.fields&&err.fields.config){$('wi-error').textContent=err.fields.config;$('wi-error').style.display='block'}else toastErr(err)}
-finally{btn.disabled=false}});
+catch(err){if(err&&err.fields&&err.fields.config){$('wi-error').textContent=err.fields.config;$('wi-error').style.display='block';const ta=$('wi-config');if(ta){ta.setAttribute('aria-invalid','true');const eid='err-wi';$('wi-error').id=eid;ta.setAttribute('aria-describedby',eid);announce($('wi-error').textContent)}}else toastErr(err)}}));
 $('wp-go').addEventListener('click',async()=>{
 const btn=$('wp-go');btn.disabled=true;
 const m=$('m-warp-preset');const editId=m.dataset.presetId||'';
@@ -498,30 +363,16 @@ if(editId)await api('api/warp/presets/'+editId,{method:'PUT',body:{name:$('wp-na
 else await api('api/warp/presets',{method:'POST',body:{name:$('wp-name').value.trim(),endpoints,dns:dns.length?dns:null}});
 closeModal('m-warp-preset');toast(t('common.saved'),'ok');invalidateWarp();loadWarpIfNeeded().then(renderWarpSection)}
 catch(err){if(err&&err.fields){$('wp-error').textContent=Object.values(err.fields)[0]||t('common.error');$('wp-error').style.display='block'}else toastErr(err)}
-finally{btn.disabled=false}});
-$('mu-go').addEventListener('click',async()=>{
-const btn=$('mu-go');btn.disabled=true;
-const m=$('m-user');const editId=m.dataset.userId||'';
-const picked=[...document.querySelectorAll('#mu-protocols input[type=checkbox]:checked')].map(i=>i.value);
-const body={name:$('mu-name').value.trim(),protocols:picked.includes('all')?'all':picked};
-const limit=$('mu-limit').value.trim();body.dailyReqLimit=limit===''?null:Number(limit);
-const exp=$('mu-expiry').value;body.expiresAt=exp===''?null:new Date(exp).getTime();
-const ovAddr=$('mu-ov-address').value.trim(),ovPort=$('mu-ov-port').value.trim(),ovLabel=$('mu-ov-label2').value.trim();
-if(ovAddr.length>0){body.addressOverride={address:ovAddr};if(ovPort.length>0)body.addressOverride.port=Number(ovPort);if(ovLabel.length>0)body.addressOverride.label=ovLabel}
-else body.addressOverride=null;
-try{
-if(editId){await api('api/users/'+editId,{method:'PUT',body});closeModal('m-user');toast(t('users.toast.saved'),'ok')}
-else{const d=await api('api/users',{method:'POST',body});const tok=d&&d.user&&d.user.token;closeModal('m-user');toast(t('users.toast.created'),'ok');if(tok)openShareSheet({title:t('share.title_user_created'),url:userSubUrl(tok),fileName:'q-proxy-subscription.txt',note:'once'})}
-await loadUsers()}
-catch(err){if(err&&err.fields){$('mu-error').textContent=Object.values(err.fields)[0]||t('common.error');$('mu-error').style.display='block'}else toastErr(err)}
 finally{btn.disabled=false}})}
 function wireTabKeys(bar,sel){
 bar.addEventListener('keydown',e=>{
 const tabs=[...bar.querySelectorAll(sel)];
 const idx=tabs.indexOf(document.activeElement);
 if(idx<0)return;
+const rtl=document.documentElement.dir==='rtl';
 let next=null;
-if(e.key==='ArrowRight'||e.key==='ArrowLeft')next=(idx+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+if((e.key==='ArrowRight'&&!rtl)||(e.key==='ArrowLeft'&&rtl))next=(idx+1)%tabs.length;
+else if((e.key==='ArrowLeft'&&!rtl)||(e.key==='ArrowRight'&&rtl))next=(idx-1+tabs.length)%tabs.length;
 else if(e.key==='Home')next=0;
 else if(e.key==='End')next=tabs.length-1;
 if(next!=null){e.preventDefault();tabs[next].focus();tabs[next].click()}})}
@@ -530,7 +381,7 @@ openShareSheet({url:url})}
 function currentSection(){
 const r=parseRoute();
 return r.view==='settings'?r.sec:'general'}
-function renderBootSkeleton(){const body=$('home-body');if(!body)return;body.innerHTML='<div class="skel-card"><div class="skel-row"><div class="skeleton skel-avatar"></div><div class="skel-col"><div class="skeleton skel-a"></div><div class="skeleton skel-b"></div><div class="skeleton skel-c"></div></div></div><div class="skeleton skel-pill"></div></div><div class="skel-card"><div class="skeleton skel-a"></div><div class="skeleton skel-b"></div><div class="skeleton skel-c"></div><div class="skeleton skel-a"></div></div>'}
+function renderBootSkeleton(){const body=$('home-body');if(!body)return;body.innerHTML='<div class="loading-box" role="status">'+loadingBox({rows:4,label:'common.loading'})+'</div>'}
 async function boot(){
 buildShell();
 wireEvents();
@@ -538,6 +389,7 @@ renderBootSkeleton();
 try{
 const d=await api('api/bootstrap');
 S.set=d.settings||{};
+S.rev=typeof S.set.rev==='number'?S.set.rev:null;
 S.status=d.status||null;
 S.subs=(d.subUrls&&d.subUrls.urls)||[]}
 catch(e){
@@ -545,6 +397,7 @@ if(e&&e.status===401)return;
 if(e&&e.code==='PASSWORD_CHANGE_REQUIRED')return;
 S.set={};
 toastErr(e);
+const body=$('home-body');if(body)body.innerHTML=errorCard({title:'common.error',msg:e&&e.status===0?'toast.networkError':null,retryAction:'data-action="boot-retry"'});
 return}
 try{if(!/(?:^|;\s*)qp_lang=(en|fa)/.test(document.cookie)&&S.set&&(S.set.language==='en'||S.set.language==='fa')){LANG=S.set.language;setLangCookie(LANG);document.documentElement.lang=LANG;document.documentElement.dir=LANG==='fa'?'rtl':'ltr';buildShell()}}catch(e){}
 if(forceFlagged())showForceChange();
@@ -559,13 +412,12 @@ closeModal('m-wizard');
 try{localStorage.setItem('qp_wizard_done','1')}catch(e){}}
 function maybeWizard(){
 try{if(localStorage.getItem('qp_wizard_done'))return}catch(e){}
-const protoCount=['vlessEnabled','vmessEnabled','trojanEnabled','ssEnabled'].filter(k=>S.set&&S.set[k]).length;
+const protoCount=['vlessEnabled'].filter(k=>S.set&&S.set[k]).length;
 let step=protoCount>0?1:0;
 const body=$('wiz-body');
 function render(){
-const firstSub=(S.subs||[]).find(u=>u.format==='base64'&&!isInfoEntry(u));
 if(step===0){$('wiz-title').textContent=t('wizard.title');body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s1_body'))+'</p><a class="btn btn--primary btn--sm" href="#/settings/protocols" data-action="wizard-protocols">'+esc(t('wizard.s1_cta'))+'</a>';$('wiz-next').style.display='none'}
-else if(step===1){$('wiz-title').textContent=t('wizard.s2_title');body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s2_body'))+'</p>'+(firstSub?copyFieldHtml(subUrlWithMode(firstSub.url),'wiz-sub'):'<p class="field__error" style="display:block">'+esc(t('home.subs.empty_msg'))+'</p>');$('wiz-next').style.display='';$('wiz-next').textContent=t('common.confirm')}
+else if(step===1){$('wiz-title').textContent=t('wizard.s2_title');const entries=mainSubEntries();body.innerHTML='<p class="field__hint" style="margin-block-end:12px">'+esc(t('wizard.s2_body'))+'</p>'+(entries.length?entries.map((entry,i)=>'<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(formatLabel(entry.format))+'</span>'+copyFieldHtml(subUrlWithMode(entry.url),'wiz-sub'+i)+'</div>').join(''):'<p class="field__error" style="display:block">'+esc(t('home.subs.empty_msg'))+'</p>');$('wiz-next').style.display='';$('wiz-next').textContent=t('common.confirm')}
 else{$('wiz-title').textContent=t('wizard.s3_title');body.innerHTML='<p class="field__hint">'+esc(t('wizard.s3_body'))+'</p>';$('wiz-next').textContent=t('wizard.done')}}
 $('wiz-skip').textContent=t('wizard.skip');
 $('wiz-skip').setAttribute('data-action','wizard-skip');

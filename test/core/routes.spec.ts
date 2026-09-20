@@ -14,11 +14,11 @@ describe("splitPath", () => {
 });
 
 describe("identifyTunnel", () => {
-  it("matches configured prefixes with valid suffix", () => {
+  it("matches the vless prefix with valid suffix and nothing else", () => {
     expect(identifyTunnel("/vl/abcdefgh", s)).toBe("vless");
-    expect(identifyTunnel("/vm/abcdefgh12345678", s)).toBe("vmess");
-    expect(identifyTunnel("/tr/ABCDEFGH", s)).toBe("trojan");
-    expect(identifyTunnel("/ss/sssuffix12", s)).toBe("ss");
+    expect(identifyTunnel("/vm/abcdefgh12345678", s)).toBeNull();
+    expect(identifyTunnel("/tr/ABCDEFGH", s)).toBeNull();
+    expect(identifyTunnel("/ss/sssuffix12", s)).toBeNull();
   });
 
   it("requires suffix of 8-32 alnum chars", () => {
@@ -57,12 +57,12 @@ describe("resolveSecureRoute", () => {
     expect(resolveSecureRoute(new URL("https://x.com/mysecret1/x"), s)).toBeNull();
   });
 
-  it("pages and endpoints", () => {
+  it("pages and endpoints (my-ip removed)", () => {
     expect(resolveSecureRoute(new URL("https://x.com/mysecret1/panel"), s)).toEqual({ kind: "page", page: "panel" });
     expect(resolveSecureRoute(new URL("https://x.com/mysecret1/login"), s)).toEqual({ kind: "page", page: "login" });
     expect(resolveSecureRoute(new URL("https://x.com/mysecret1/sub"), s)).toEqual({ kind: "sub" });
     expect(resolveSecureRoute(new URL("https://x.com/mysecret1/doh"), s)).toEqual({ kind: "doh" });
-    expect(resolveSecureRoute(new URL("https://x.com/mysecret1/my-ip"), s)).toEqual({ kind: "myip" });
+    expect(resolveSecureRoute(new URL("https://x.com/mysecret1/my-ip"), s)).toBeNull();
   });
 
   it("api routes incl nested settings paths", () => {
@@ -88,50 +88,15 @@ describe("resolveSecureRoute", () => {
   });
 
   it("sub accepts query params", () => {
-    expect(resolveSecureRoute(new URL("https://x.com/mysecret1/sub?target=clash"), s)).toEqual({ kind: "sub" });
+    expect(resolveSecureRoute(new URL("https://x.com/mysecret1/sub?target=singbox"), s)).toEqual({ kind: "sub" });
   });
 });
 
 describe("resolveHostname", () => {
-  it("returns the request host", () => {
+  it("returns the request host (no configured hostname source remains)", () => {
     const url = new URL("https://worker.example.com/sub");
     expect(resolveHostname(makeTestSettings(), url)).toBe("worker.example.com");
     expect(resolveHostname(makeTestSettings({}), new URL("https://alt.example.net/sub"))).toBe("alt.example.net");
-  });
-
-  it("prefers the first configured hostname over the request host", () => {
-    const s = makeTestSettings({ addresses: [{ address: "custom.example.com" }] });
-    expect(resolveHostname(s, new URL("https://worker.example.com/sub"))).toBe("custom.example.com");
-  });
-
-  it("skips disabled entries and IP literals", () => {
-    const s = makeTestSettings({
-      addresses: [
-        { address: "1.2.3.4" },
-        { address: "standby.example.net", enabled: false },
-        { address: "primary.example.org" },
-      ],
-    });
-    expect(resolveHostname(s, new URL("https://worker.example.com/sub"))).toBe("primary.example.org");
-  });
-
-  it("falls back to the request host when no hostname is configured", () => {
-    const onlyIp = makeTestSettings({ addresses: [{ address: "1.2.3.4" }] });
-    expect(resolveHostname(onlyIp, new URL("https://worker.example.com/sub"))).toBe("worker.example.com");
-    const emptyAddr = makeTestSettings({ addresses: [{ address: "  " }] });
-    expect(resolveHostname(emptyAddr, new URL("https://worker.example.com/sub"))).toBe("worker.example.com");
-  });
-
-  it("honors legacy hostnameOverride over addresses and request host", () => {
-    const s = makeTestSettings({ addresses: [{ address: "custom.example.com" }] }) as unknown as Record<string, unknown>;
-    s.hostnameOverride = "override.example.net";
-    expect(resolveHostname(s as never, new URL("https://worker.example.com/sub"))).toBe("override.example.net");
-  });
-
-  it("honors legacy customDomains over addresses and request host", () => {
-    const s = makeTestSettings({ addresses: [{ address: "custom.example.com" }] }) as unknown as Record<string, unknown>;
-    s.customDomains = ["legacy.example.org"];
-    expect(resolveHostname(s as never, new URL("https://worker.example.com/sub"))).toBe("legacy.example.org");
   });
 });
 
@@ -148,10 +113,7 @@ describe("resolveSecureRoute full matrix", () => {
     ["/login", { kind: "page", page: "login" }],
     ["/sub", { kind: "sub" }],
     [`/sub/wg/${UUID}/throne`, { kind: "warp-sub" }],
-    [`/sub/u/${UUID}`, { kind: "user-sub" }],
-    [`/sub/u/${UUID}/clash`, { kind: "user-sub" }],
     ["/doh", { kind: "doh" }],
-    ["/my-ip", { kind: "myip" }],
     ["/telegram/setup", { kind: "api", api: "telegram-setup" }],
     ["/telegram/remove", { kind: "api", api: "telegram-remove" }],
     [`/telegram/webhook/${HEX16}`, { kind: "api", api: "telegram-webhook" }],
@@ -166,13 +128,10 @@ describe("resolveSecureRoute full matrix", () => {
     ["/api/bootstrap", { kind: "api", api: "bootstrap" }],
     ["/api/killswitch", { kind: "api", api: "killswitch" }],
     ["/api/suburls", { kind: "api", api: "suburls" }],
+    ["/api/sub-import", { kind: "api", api: "sub-import" }],
     ["/api/warp", { kind: "api", api: "warp" }],
     ["/api/warp/account", { kind: "api", api: "warp" }],
     ["/api/warp/account/x/regenerate-token", { kind: "api", api: "warp" }],
-    ["/api/users", { kind: "api", api: "users" }],
-    [`/api/users/${UUID}`, { kind: "api", api: "users" }],
-    [`/api/users/${UUID}/regenerate-token`, { kind: "api", api: "users" }],
-    ["/api/version/check", { kind: "api", api: "version-check" }],
     ["/api/settings", { kind: "api", api: "settings-get" }],
     ["/api/settings/save", { kind: "api", api: "settings-save" }],
     ["/api/settings/reset", { kind: "api", api: "settings-reset" }],
@@ -187,13 +146,20 @@ describe("resolveSecureRoute full matrix", () => {
     "/login/extra",
     "/sub/extra",
     "/doh/extra",
+    "/my-ip",
     "/my-ip/extra",
     `/sub/wg/not-a-uuid/throne`,
     `/sub/wg/${UUID}`,
+    `/sub/u/${UUID}`,
     `/sub/u/not-a-uuid`,
+    `/sub/u/${UUID}/clash`,
     `/sub/u/${UUID}/clash/extra`,
     `/sub/u/${UUID}/a/b/c`,
     "/sub/wg",
+    "/api/users",
+    `/api/users/${UUID}`,
+    `/api/users/${UUID}/regenerate-token`,
+    "/api/version/check",
     "/telegram",
     "/telegram/other",
     "/telegram/webhook",
@@ -207,6 +173,7 @@ describe("resolveSecureRoute full matrix", () => {
     "/api/bootstrap/extra",
     "/api/killswitch/extra",
     "/api/suburls/extra",
+    "/api/sub-import/extra",
     "/api/version",
     "/api/version/check/extra",
     "/api/settings/save/extra",

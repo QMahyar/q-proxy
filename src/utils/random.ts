@@ -1,6 +1,4 @@
 export const ALNUM_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-export const TROJAN_PASSWORD_EXTRA = "!@$&*_-+.";
-export const TROJAN_PASSWORD_CHARSET = ALNUM_CHARSET + TROJAN_PASSWORD_EXTRA;
 
 export function randomBytes(n: number): Uint8Array {
   const b = new Uint8Array(n);

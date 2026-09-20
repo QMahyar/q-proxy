@@ -1,6 +1,5 @@
-import type { Env } from "../types/env";
 import type { UsageSnapshot } from "../types/context";
-import { bindAuditContext, log } from "./log";
+import { log } from "./log";
 import { dayKeyUtc } from "../utils/time";
 
 export const COUNTERS_KV_KEY = "qproxy:counters";
@@ -14,7 +13,6 @@ interface CounterBuffer {
   bytesDownDelta: number;
   connectionsSinceFlush: number;
   lastFlushMs: number;
-  ctx: ExecutionContext | null;
 }
 
 const buffer: CounterBuffer = {
@@ -24,7 +22,6 @@ const buffer: CounterBuffer = {
   bytesDownDelta: 0,
   connectionsSinceFlush: 0,
   lastFlushMs: Date.now(),
-  ctx: null,
 };
 
 let flushing = false;
@@ -73,27 +70,18 @@ export function clearCounterBufferForTests(): void {
   flushing = false;
 }
 
-export function bindCounterContext(ctx: ExecutionContext): void {
-  buffer.ctx = ctx;
-  bindAuditContext(ctx);
-}
-
-export function getCounterContext(): ExecutionContext | null {
-  return buffer.ctx;
-}
-
-export function afterResponse(p: Promise<unknown>): void {
+export function afterResponse(ctx: ExecutionContext | null | undefined, p: Promise<unknown>): void {
   const tracked = p.then(
     () => undefined,
     () => undefined,
   );
-  if (buffer.ctx) waitUntil(tracked);
+  waitUntil(ctx, tracked);
 }
 
-function waitUntil(promise: Promise<void>): void {
-  if (buffer.ctx === null) return;
+function waitUntil(ctx: ExecutionContext | null | undefined, promise: Promise<void>): void {
+  if (ctx === null || ctx === undefined) return;
   try {
-    buffer.ctx.waitUntil(promise);
+    ctx.waitUntil(promise);
   } catch {
     void promise;
   }
@@ -181,17 +169,17 @@ async function readStored(env: Env): Promise<StoredUsage> {
   return readStoredKv(env);
 }
 
-export async function recordConnection(env: Env, bytes?: ConnectionBytes): Promise<void> {
+export async function recordConnection(env: Env, bytes?: ConnectionBytes, ctx?: ExecutionContext | null): Promise<void> {
   buffer.todayDelta += 1;
   buffer.totalDelta += 1;
   buffer.connectionsSinceFlush += 1;
   ingestBytes(bytes);
-  await maybeFlush(env);
+  await maybeFlush(env, ctx);
 }
 
-export async function recordBytes(env: Env, bytes: ConnectionBytes): Promise<void> {
+export async function recordBytes(env: Env, bytes: ConnectionBytes, ctx?: ExecutionContext | null): Promise<void> {
   ingestBytes(bytes);
-  await maybeFlush(env);
+  await maybeFlush(env, ctx);
 }
 
 function ingestBytes(bytes: ConnectionBytes | undefined): void {
@@ -205,6 +193,7 @@ async function flushKv(
   capturedTotal: number,
   capturedUp: number,
   capturedDown: number,
+  ctx?: ExecutionContext | null,
 ): Promise<void> {
   const stored = await readStoredKv(env);
   const writeDay = dayKeyUtc();
@@ -224,7 +213,7 @@ async function flushKv(
     () => undefined,
     () => undefined,
   );
-  waitUntil(tracked);
+  waitUntil(ctx, tracked);
   await put.catch((err: unknown) => log.error("counters", "flush failed", String(err)));
 }
 
@@ -261,7 +250,7 @@ async function flushD1(
   };
 }
 
-async function maybeFlush(env: Env): Promise<void> {
+async function maybeFlush(env: Env, ctx?: ExecutionContext | null): Promise<void> {
   const stale = Date.now() - buffer.lastFlushMs >= FLUSH_INTERVAL_MS;
   if (!stale && buffer.connectionsSinceFlush < FLUSH_EVERY_CONNECTIONS) return;
   if (flushing) return;
@@ -282,10 +271,10 @@ async function maybeFlush(env: Env): Promise<void> {
       try {
         await flushD1(db, capturedToday, capturedTotal, capturedUp, capturedDown);
       } catch {
-        await flushKv(env, capturedToday, capturedTotal, capturedUp, capturedDown);
+        await flushKv(env, capturedToday, capturedTotal, capturedUp, capturedDown, ctx);
       }
     } else {
-      await flushKv(env, capturedToday, capturedTotal, capturedUp, capturedDown);
+      await flushKv(env, capturedToday, capturedTotal, capturedUp, capturedDown, ctx);
     }
   } finally {
     flushing = false;

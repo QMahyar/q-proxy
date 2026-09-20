@@ -97,7 +97,8 @@ describe("panel html", () => {
     expect(html).toContain('id="view-home"');
     expect(html).toContain('id="view-subs"');
     expect(html).toContain('id="view-settings"');
-    expect(html).toContain('id="view-users"');
+    expect(html).not.toContain('id="view-users"');
+    expect(html).not.toContain('id="tab-users"');
     expect(html).toContain('id="view-warp"');
     expect(html).toContain('role="tablist"');
     expect(html).toContain("role='tabpanel'");
@@ -116,16 +117,17 @@ describe("panel html", () => {
     expect(html).toContain("showSubsView()");
   });
 
-  it("promotes users and warp to top-level tabs with back-compat redirects", () => {
-    expect(html).toContain('id="tab-users"');
+  it("promotes warp to a top-level tab; deleted users view redirects home", () => {
+    expect(html).not.toContain('id="tab-users"');
     expect(html).toContain('id="tab-warp"');
-    expect(html).toContain('href="#/users"');
+    expect(html).not.toContain('href="#/users"');
     expect(html).toContain('href="#/warp"');
-    expect(html).toContain("'nav.users':'Users'");
-    expect(html).toContain("'nav.users':'کاربران'");
-    expect(html).toContain("seg[1]==='users')return{view:'users',redirect:true}");
+    expect(html).not.toContain("'nav.users':'Users'");
+    expect(html).not.toContain("'nav.users':'کاربران'");
+    expect(html).toContain("if(seg[1]==='users')return{view:'home'}");
+    expect(html).toContain("if(seg[0]==='users')return{view:'home'}");
+    expect(html).toContain("Unknown or deleted views redirect to home");
     expect(html).toContain("seg[1]==='warp')return seg[2]?");
-    expect(html).toContain("'#/users':'#/warp'");
   });
 
   it("embeds the bilingual dictionary with Persian content", () => {
@@ -151,7 +153,9 @@ describe("panel html", () => {
     expect(html).toContain("api/settings/reset");
     expect(html).toContain("api/killswitch");
     expect(html).toContain("api/auth/logout");
-    expect(html).toContain("my-ip");
+    expect(html).not.toContain("my-ip");
+    expect(html).not.toContain("api/version/check");
+    expect(html).not.toContain("api/users/");
     expect(html).toContain("X-Q-Panel");
     expect(html).toContain("credentials:'same-origin'");
   });
@@ -174,26 +178,20 @@ describe("panel html", () => {
     for (const removed of ["fragment'", "chain'", "sources'"]) {
       expect(html).not.toContain(`key:'${removed}`);
     }
-    expect(html).toContain("SETTINGS_SEC_ALIAS={fragment:'tunnel',chain:'tunnel',sources:'egress'}");
+    expect(html).toContain("SETTINGS_SEC_ALIAS={fragment:'tunnel'}");
     for (const bind of [
       "profileTitle",
       "debugLogging",
       "vlessEnabled",
       "vlessUuid",
-      "vmessUuid",
-      "trojanPassword",
-      "ssMethod",
       "earlyDataMaxBytes",
       "fingerprint",
       "randomizeSniCase",
       "addresses",
       "defaultPort",
       "nameTemplate",
-      "remoteSubUrls",
-      "proxyIpMode",
       "proxyIps",
       "proxyIpPoolUrl",
-      "nat64Prefixes",
       "fragment.mode",
       "fragment.packets",
       "fragment.lengthMin",
@@ -202,21 +200,41 @@ describe("panel html", () => {
       "fragment.delayMax",
       "fragment.maxSplitMin",
       "fragment.maxSplitMax",
-      "chainProxy.enabled",
-      "chainProxy.uri",
       "enableUdp53",
       "dohUpstream",
-      "urlTestIntervalSec",
       "subUpdateIntervalHours",
       "maxNodesPerFormat",
-      "speedtestIntercept",
       "camouflage.mode",
-      "camouflage.url",
       "routingRules.bypassLan",
       "routingRules.customBlock",
     ]) {
       expect(html).toContain(`'${bind}'`);
     }
+    for (const removedBind of [
+      "vmessUuid",
+      "trojanPassword",
+      "ssMethod",
+      "ssPassword",
+      "ssPath",
+      "ssDirect",
+      "remoteSubUrls",
+      "remoteNodes",
+      "proxyIpMode",
+      "nat64Prefixes",
+      "chainProxy.enabled",
+      "chainProxy.uri",
+      "remoteDns",
+      "urlTestIntervalSec",
+      "speedtestIntercept",
+      "camouflage.url",
+      "vmessEnabled",
+      "trojanEnabled",
+      "ssEnabled",
+    ]) {
+      expect(html).not.toContain(`'${removedBind}'`);
+    }
+    expect(html).not.toContain("proxy','advanced.camouflage.proxy");
+    expect(html).not.toContain("'advanced.camouflage.proxy'");
   });
 
   it("merges settings to six subtabs with a SECTIONS ↔ tabs.settings 1:1 drift guard", () => {
@@ -349,9 +367,9 @@ describe("panel ui p08", () => {
     expect(html).not.toContain("location.replace(nb+'/panel')");
   });
 
-  it("refreshes subscriptions after a general or addresses save", () => {
+  it("refreshes subscriptions after a general, addresses, or protocols save", () => {
     expect(html).toContain("async function refreshSubUrls()");
-    expect(html).toMatch(/sec==='general'\|\|sec==='addresses'/);
+    expect(html).toMatch(/sec==='general'\|\|sec==='addresses'\|\|sec==='protocols'/);
   });
 
   it("keeps language toggle labels present in both dictionaries", () => {
@@ -370,41 +388,38 @@ describe("panel ui p08", () => {
     expect(html).toMatch(/applyFragmentPresetUi\(String\(getPath\(S\.set,'fragment\.mode'\)\|\|'off'\)\)/);
   });
 
-  it("shows a retryable error state instead of an empty users table on failure", () => {
-    expect(html).toContain("usersLoadFailed");
-    expect(html).toContain("data-action=\"users-reload\"");
-    expect(html).toContain("'users.load_failed'");
+  it("shows a retryable error state for the surviving pool/warp/boot surfaces (users table gone)", () => {
+    expect(html).not.toContain("usersLoadFailed");
+    expect(html).not.toContain("data-action=\"users-reload\"");
+    expect(html).not.toContain("'users.load_failed'");
     expect(html).toContain("'common.retry'");
+    expect(html).toContain('data-retry="home-pool"');
+    expect(html).toContain('data-action="pool-fetch"');
   });
 
-  it("renders a token hint with rotate affordance instead of the dead URL branch", () => {
+  it("drops the per-user token hint branch (WARP rotation via ShareSheet survives)", () => {
     expect(html).not.toContain("u.token?userSubUrl");
     expect(html).not.toContain("const url=u.token?");
-    expect(html).toContain("esc(u.tokenHint||'')");
-    expect(html).toContain("'users.token.hint_title'");
-    expect(html).toContain("'users.token.hint_title':'فقط چند نویسهٔ نخست");
-    expect(html).toContain("'users.token.regen':'Regenerate token'");
-    expect(html).toContain("'users.col.token':'Subscription token'");
-    expect(html).toContain("'users.col.token':'توکن اشتراک'");
+    expect(html).not.toContain("esc(u.tokenHint||'')");
+    expect(html).not.toContain("'users.token.hint_title'");
+    expect(html).not.toContain("'users.col.token'");
+    expect(html).toContain("'share.title_rotated'");
+    expect(html).not.toContain("'share.title_user_created'");
   });
 
-  it("labels the per-user quota as a subscription fetch limit with a UTC reset note", () => {
-    expect(html).toContain("'users.limit':'Daily subscription fetch limit'");
-    expect(html).toContain("'users.limit':'سقف روزانهٔ دریافت اشتراک'");
-    expect(html.match(/'users\.limit_reset':/g)?.length).toBe(2);
-    expect(html).toContain("resets at 00:00 UTC");
-    expect(html).toContain("t('users.limit_reset')");
+  it("drops the per-user quota strings (single-admin request budget only)", () => {
+    expect(html).not.toContain("'users.limit':'Daily subscription fetch limit'");
+    expect(html).not.toContain("'users.limit_reset':");
+    expect(html).not.toContain("t('users.limit_reset')");
+    expect(html).toContain("'home.subs.quota'");
   });
 
-  it("replaces the bare zero-user row with an empty card, capacity note and CTA", () => {
-    expect(html).toContain("'users.empty_msg'");
-    expect(html).toContain("Up to 50 users.");
-    expect(html).toContain("'users.empty_cta':'Create first user'");
-    expect(html).toContain("'users.empty_cta':'ساخت نخستین کاربر'");
-    expect(html).toContain("تا ۵۰ کاربر");
-    expect(html).toContain('id="users-thead"');
-    expect(html).toContain("if(th)th.hidden=empty");
-    expect(html).toContain("function usersEmptyHtml()");
+  it("drops the zero-user empty card (users view gone)", () => {
+    expect(html).not.toContain("'users.empty_msg'");
+    expect(html).not.toContain("'users.empty_cta'");
+    expect(html).not.toContain("function usersEmptyHtml()");
+    expect(html).not.toContain('id="users-thead"');
+    expect(html).toContain("function subsEmptyHtml(){return emptyCard(");
   });
 
   it("replaces the QR and rotation modals with one ShareSheet component", () => {
@@ -421,9 +436,10 @@ describe("panel ui p08", () => {
     expect(html).not.toContain("showRotation");
     expect(html).not.toContain("copyText(url)");
     expect(html).toContain("note:'once'");
+    expect(html).not.toContain('id="m-user"');
     expect(html.match(/'share\.copy':'/g)?.length).toBe(2);
     expect(html.match(/'share\.warning':'/g)?.length).toBe(2);
-    expect(html.match(/'share\.title_user_created':'/g)?.length).toBe(2);
+    expect(html).not.toContain("'share.title_user_created':'");
     expect(html.match(/'share\.title_rotated':'/g)?.length).toBe(2);
   });
 
@@ -639,9 +655,9 @@ describe("panel ui p16 states", () => {
     expect(html).toContain("skel-bar");
   });
 
-  it("adopts the empty-card builder on users, subs and warp", () => {
-    expect(html).toContain("function usersEmptyHtml(){");
-    expect(html).toMatch(/function usersEmptyHtml\(\)\{\s*return emptyCard\(/);
+  it("adopts the empty-card builder on subs and warp (users view gone)", () => {
+    expect(html).not.toContain("function usersEmptyHtml(){");
+    expect(html).not.toContain("usersCardHtml");
     expect(html).toContain("function subsEmptyHtml(){return emptyCard(");
     expect(html).toContain("ac.insertAdjacentHTML('beforeend',emptyCard(");
     expect(html.match(/sh\+=emptyCard\(/g)).toBeNull();
@@ -650,22 +666,69 @@ describe("panel ui p16 states", () => {
 
   it("pairs every errorCard usage with a retry action", () => {
     const uses = [...html.matchAll(/errorCard\(\{([^}]*)\}\)/g)].map((m) => m[1]);
-    expect(uses.length).toBeGreaterThanOrEqual(6);
+    expect(uses.length).toBeGreaterThanOrEqual(4);
     for (const u of uses) expect(u).toContain("retryAction:");
     for (const attr of [
-      'data-action="users-reload"',
       'data-action="pool-fetch"',
-      'data-retry="subs-users"',
       'data-retry="home-pool"',
-      'data-retry="home-users"',
-      'data-retry="my-ip"',
+      'data-action="boot-retry"',
+      'data-warp-retry',
     ]) {
       expect(html).toContain(attr);
     }
+    for (const gone of [
+      'data-action="users-reload"',
+      'data-retry="subs-users"',
+      'data-retry="home-users"',
+      'data-retry="my-ip"',
+    ]) {
+      expect(html).not.toContain(gone);
+    }
+  });
+
+  it("pairs every pool empty state with a working retry", () => {
+    for (const [file, hook] of [
+      ["home.js", 'data-retry="home-pool"'],
+      ["warp.js", 'data-action="pool-fetch"'],
+    ] as Array<[string, string]>) {
+      const src = readFileSync(join(process.cwd(), "src", "ui", "panel", file), "utf8");
+      expect(src).toContain("emptyCard({title:'egress.pool.empty',cta:'common.retry'");
+      expect(src).toContain(hook);
+    }
+    expect(html).toContain("emptyCard({title:'egress.pool.empty',cta:'common.retry'");
+  });
+
+  it("renders the fastest-node guidance block with per-format honest copy", () => {
+    for (const key of ["subs.ping.title", "subs.ping.body"]) {
+      expect(html.match(new RegExp(`'${key.replace(/\./g, "\\.")}':'`, "g"))?.length).toBe(2);
+    }
+    expect(html).toContain('id="subs-ping"');
+    expect(html).toContain("function subsPingHtml()");
+  });
+
+  it("renders the foreign-import card with preview-then-confirm actions", () => {
+    for (const key of ["subs.import.title", "subs.import.desc", "subs.import.placeholder", "subs.import.preview", "subs.import.confirm", "subs.import.source", "subs.import.empty"]) {
+      expect(html.match(new RegExp(`'${key.replace(/\./g, "\\.")}':'`, "g"))?.length).toBe(2);
+    }
+    expect(html).toContain('id="sub-import-text"');
+    expect(html).toContain('id="sub-import-preview"');
+    expect(html).toContain('data-action="subs-import-preview"');
+    expect(html).toContain('data-action="subs-import-confirm"');
+    expect(html).toContain("api/sub-import");
+  });
+
+  it("confirms WARP endpoint switches when accounts exist, with bilingual copy", () => {
+    for (const key of ["warp.confirm.endpoints_title", "warp.confirm.endpoints_body"]) {
+      expect(html.match(new RegExp(`'${key}':'`, "g"))?.length).toBe(2);
+    }
+    const warpPart = readFileSync(join(process.cwd(), "src", "ui", "panel", "warp.js"), "utf8");
+    const actionsPart = readFileSync(join(process.cwd(), "src", "ui", "panel", "actions.js"), "utf8");
+    expect(warpPart).toContain("t('warp.endpoints.count',{n:custom.length})");
+    expect(actionsPart).toContain("confirmDialog('warp.confirm.endpoints_title','warp.confirm.endpoints_body'");
   });
 
   it("routes every loading surface through loadingBox and keeps the warp retry handler", () => {
-    expect(html.match(/loadingBox\(/g)?.length).toBeGreaterThanOrEqual(8);
+    expect(html.match(/loadingBox\(/g)?.length).toBeGreaterThanOrEqual(6);
     expect(html).not.toContain("+'<span class=\"spin\" style=\"display:inline-block;vertical-align:middle\"></span>'");
     expect(html).toContain("if(!S.warp&&!warpLoadError){const panel=$('warp-body')");
     expect(html).toContain("data-warp-retry");
@@ -749,11 +812,18 @@ describe("panel ui p15 a11y", () => {
     expect(html).toMatch(/\[role="radio"\],\[aria-checked\]/);
   });
 
-  it("associates every address-card and remote-node field label with a generated id", () => {
-    expect(html).toMatch(/const fid=nextId\('addr'\+i\+'-'\+k\)/);
-    expect(html).toMatch(/const fid=nextId\('rmt'\+i\+'-'\+k\)/);
-    expect(html).not.toMatch(/<label>'+esc\(t\('remote\.nodes\.(kind|flow|fp|password|obfs|obfsPassword)'\)\)+'<\/label><(?:select|input)(?![^>]*id=)/);
-    expect(html).toMatch(/data-addr-enabled-input aria-label="/);
+  it("labels every endpoint widget control (preset checks + custom textarea)", () => {
+    expect(html).toContain('data-type="presetChecks"');
+    expect(html).toContain('input type="checkbox" data-preset="');
+    expect(html).toContain('<label class="check">');
+    expect(html).toContain('<textarea rows="5"');
+    expect(html).toContain("data-validate=\"'+(f.validate||'')+'\"");
+    expect(html).not.toContain("addrCardHtml");
+    expect(html).not.toContain("data-addr-field");
+    expect(html).not.toContain("data-addr-enabled-input");
+    expect(html).not.toContain("remoteNodeCardHtml");
+    expect(html).not.toContain("readRemoteCard");
+    expect(html).not.toContain("data-remote-field");
   });
 
   it("keeps the ECH preview direction auto so Persian renders correctly", () => {
@@ -761,13 +831,12 @@ describe("panel ui p15 a11y", () => {
     expect(html).not.toContain('data-ech-preview dir="ltr"');
   });
 
-  it("gives modal validation errors role=alert and labels the override inputs", () => {
+  it("gives modal validation errors role=alert (user modal gone)", () => {
     expect(html).toContain('id="wi-error" role="alert"');
     expect(html).toContain('id="wp-error" role="alert"');
-    expect(html).toContain('id="mu-error" role="alert"');
-    expect(html).toMatch(/<label for="mu-ov-address" id="mu-ov-address-label">/);
-    expect(html).toMatch(/<label for="mu-ov-port" id="mu-ov-port-label">/);
-    expect(html).toMatch(/<label for="mu-ov-label2" id="mu-ov-label-label">/);
+    expect(html).not.toContain('id="mu-error"');
+    expect(html).not.toContain('id="m-user"');
+    expect(html).not.toContain("mu-ov-address");
   });
 
   it("registers a11y.js in the panel assembly order", () => {
@@ -810,6 +879,46 @@ describe("dead-code resurrection guards", () => {
     "common.no",
     "fragment.enable",
     "users.bulk.confirm",
+    "showUsersView",
+    "loadHomeUsers",
+    "renderHomeUsers",
+    "loadMyIp",
+    "loadUsersShared",
+    "isUserExpired",
+    "usersCardHtml",
+    "usersCapacityChip",
+    "openUserModal",
+    "totpCheck",
+    "totpCardHtml",
+    "renderTotpSetup",
+    "totpB32Encode",
+    "remoteNodeCardHtml",
+    "readRemoteCard",
+    "addrCardHtml",
+    "data-addr-field",
+    "data-addr-enabled-input",
+    "'addr-add'",
+    "'addr-del'",
+    "'addr-hostname'",
+    "userSubUrl",
+    "userChip",
+    "invalidateUsersCache",
+    "subsUserRowHtml",
+    "renderSubsUsers",
+    "loadSubsUsers",
+    "subsUsersHtml",
+    "vmessEnabled",
+    "trojanEnabled",
+    "remoteSubUrls",
+    "remoteNodes",
+    "proxyIpMode",
+    "nat64Prefixes",
+    "chainProxy",
+    "remoteDns",
+    "urlTestIntervalSec",
+    "speedtestIntercept",
+    "camouflage.url",
+    "totp.started",
   ];
 
   const cssSymbols = [
@@ -850,8 +959,11 @@ describe("panel settings split (Task 20)", () => {
   it("registers the split modules in the assembly order at dependency-safe positions", () => {
     const order = orderOf();
     const at = (n: string) => order.indexOf(`"${n}"`);
-    for (const f of ["users-modal.js", "sections-registry.js", "fields-render.js", "cards.js", "totp.js", "fields-validate.js", "section-io.js", "sections.js"]) {
+    for (const f of ["sections-registry.js", "fields-render.js", "cards.js", "fields-validate.js", "section-io.js", "sections.js"]) {
       expect(at(f), `missing from PANEL_JS_ORDER: ${f}`).toBeGreaterThan(-1);
+    }
+    for (const gone of ["users-modal.js", "totp.js", "users.js"]) {
+      expect(at(gone), `resurrected in PANEL_JS_ORDER: ${gone}`).toBe(-1);
     }
     expect(at("home.js")).toBeLessThan(at("sections-registry.js"));
     expect(at("settings.js")).toBeLessThan(at("sections-registry.js"));
@@ -864,7 +976,7 @@ describe("panel settings split (Task 20)", () => {
 
   it("keeps every settings module under the 300-line target with settings.js as slim glue", () => {
     const counts: Record<string, number> = {};
-    for (const f of ["settings.js", "sections-registry.js", "fields-render.js", "fields-validate.js", "cards.js", "totp.js", "users-modal.js", "section-io.js", "sections.js"]) {
+    for (const f of ["settings.js", "sections-registry.js", "fields-render.js", "fields-validate.js", "cards.js", "section-io.js", "sections.js"]) {
       counts[f] = part(f).split("\n").length;
       expect(counts[f], `${f} over 300 lines`).toBeLessThan(300);
     }
@@ -877,13 +989,15 @@ describe("panel settings split (Task 20)", () => {
       "SECTIONS", "FL", "bindHtml", "cardHtml", "cardBodyHtml", "renderSettings",
       "readBind", "writeBind", "collectSection", "diffSection", "markDirty",
       "applySection", "discardSection", "updateApplyBar", "wireApplyBarUr",
-      "openUserModal", "totpCheck", "totpCardHtml", "renderTotpSetup",
       "normalizeSettingsHash", "validIpOrHost", "SCALAR_RULES", "urStack",
       "captureUndoBase", "restoreSection", "undoSection", "redoSection",
     ];
     for (const sym of symbols) {
       const matches = corpus.match(new RegExp(`\b(?:function |const |let )${sym}\b`, "g")) ?? [];
       expect(matches.length, `${sym} declared ${matches.length} times`).toBeLessThanOrEqual(1);
+    }
+    for (const gone of ["openUserModal", "totpCheck", "totpCardHtml", "renderTotpSetup"]) {
+      expect(corpus.includes(gone), `resurrected: ${gone}`).toBe(false);
     }
   });
 
@@ -893,18 +1007,16 @@ describe("panel settings split (Task 20)", () => {
     expect(html).toContain("typeof source==='string'?source:sectionOf(source)");
     expect(html).toContain("function sectionOf(");
     expect(html).toContain("function sectionMatchesSnapshot(");
-    expect(html.match(/markDirty\(e\.target\)/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
-    expect(html).toContain("markDirty(bind)");
+    expect(html.match(/markDirty\(bind\)/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
     expect(html).toContain("markDirty(chip)");
     expect(html).toContain("markDirty(sec)");
     expect(html).toContain("markDirty(ta)");
+    expect(html).not.toContain("markDirty(e.target)");
   });
 
   it("leaves no settings.js sediment behind in the moved modules", () => {
     expect(part("section-io.js")).toContain("function collectSection(");
     expect(part("sections-registry.js")).toContain("const SECTIONS=[");
-    expect(part("users-modal.js")).toContain("function openUserModal(");
-    expect(part("totp.js")).toContain("function totpCheck(");
     expect(part("settings.js")).not.toMatch(/function (?![a-zA-Z]*normalizeSettingsHash)/);
     expect(part("settings.js")).toContain("normalizeSettingsHash");
   });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { expandAccount, type WarpEmitContext } from "../../src/warp/expand";
 import { WARP_EMITTERS } from "../../src/warp/formats/registry";
 import type { WarpAccount } from "../../src/types/warp";
+import { makeTestSettings } from "../helpers/settings";
 
 class FakeKV {
   map = new Map<string, string>();
@@ -81,55 +82,12 @@ const CONF_BODY_AMNEZIA = [
   "",
 ].join("\n");
 
-const WG_URI =
-  "wireguard://eCtXvJp6Nv6gMdQDj8Sj9ABXQKwmLlTAmT7wvFjZB1I%3D@162.159.192.1:2408" +
-  "?publickey=bmXOC%2BF1FxEMF9dyiK2H5%2F1SUtzH0JuVo51h2wPfgyo%3D" +
-  "&address=10.2.0.2%2F32%2C%202606%3A4700%3A110%3A8d4a%3A%3A%2F128" +
-  "&mtu=1280&reserved=5,6,7#Home%20ISP\n";
-
-const CLASH_BASE = [
-  "proxies:",
-  "  - name: 'Home ISP'",
-  "    type: wireguard",
-  "    server: 162.159.192.1",
-  "    port: 2408",
-  "    ip: 10.2.0.2",
-  "    ipv6: 2606:4700:110:8d4a::",
-  "    private-key: 'eCtXvJp6Nv6gMdQDj8Sj9ABXQKwmLlTAmT7wvFjZB1I='",
-  "    public-key: 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo='",
-  "    allowed-ips: ['0.0.0.0/0','::/0']",
-  "    udp: true",
-  "    reserved: [5,6,7]",
-  "    mtu: 1280",
-  "    persistent-keepalive: 25",
-];
-
-const CLASH = [...CLASH_BASE, ""].join("\n");
-
-const CLASH_AMNEZIA = [...CLASH_BASE, "    amnezia-wg-option:", "      jc: 5", "      jmin: 50", "      jmax: 1000", ""].join("\n");
-
-const SURGE = [
-  "[Proxy]",
-  "Home ISP = wireguard, section-name=Home ISP",
-  "",
-  "[WireGuard Home ISP]",
-  "private-key = eCtXvJp6Nv6gMdQDj8Sj9ABXQKwmLlTAmT7wvFjZB1I=",
-  "self-ip = 10.2.0.2",
-  "self-ip-v6 = 2606:4700:110:8d4a::",
-  "dns-server = 1.1.1.1",
-  "mtu = 1280",
-  'peer = (public-key = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=, allowed-ips = "0.0.0.0/0, ::/0", endpoint = 162.159.192.1:2408, keepalive = 25, client-id = 5/6/7)',
-  "",
-].join("\n");
-
-const LOON =
-  "Home ISP = wireguard,interface-ip=10.2.0.2,interface-ipv6=2606:4700:110:8d4a::" +
-  ',private-key="eCtXvJp6Nv6gMdQDj8Sj9ABXQKwmLlTAmT7wvFjZB1I=",mtu=1280,dns=1.1.1.1,dnsv6=1.1.1.1,keepalive=25' +
-  ',peers=[{public-key="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",allowed-ips="0.0.0.0/0, ::/0"' +
-  ",endpoint=162.159.192.1:2408,reserved=[5,6,7]}]\n";
-
 async function singleRow(): Promise<WarpEmitContext> {
-  const ctx = await expandAccount(env, mkAccount());
+  const ctx = await expandAccount(
+    env,
+    mkAccount(),
+    makeTestSettings({ warpPresets: [], warpCustomEndpoints: ["162.159.192.1:2408"] }),
+  );
   return { ...ctx, rows: [ctx.rows[0]!] };
 }
 
@@ -152,28 +110,6 @@ describe("warp conf golden", () => {
     expect(text).not.toContain("Jc = ");
   });
 
-  it("amnezia zip variant inserts the junk params after MTU", async () => {
-    const zip = WARP_EMITTERS["wireguard-conf-amnezia"](await singleRow()) as Uint8Array;
-    expect(new DataView(zip.buffer).getUint32(0, true)).toBe(0x04034b50);
-    const text = zipLatin1(zip);
-    expect(text).toContain(CONF_BODY_AMNEZIA);
-  });
-});
-
-describe("warp uri golden", () => {
-  it("emits the exact wireguard:// uri line", async () => {
-    expect(WARP_EMITTERS["wireguard-uri"](await singleRow())).toBe(WG_URI);
-  });
-});
-
-describe("warp clash golden", () => {
-  it("emits the exact clash wireguard proxy", async () => {
-    expect(WARP_EMITTERS.clash(await singleRow())).toBe(CLASH);
-  });
-
-  it("amnezia variant appends the exact amnezia-wg-option block", async () => {
-    expect(WARP_EMITTERS["clash-amnezia"](await singleRow())).toBe(CLASH_AMNEZIA);
-  });
 });
 
 describe("warp singbox golden", () => {
@@ -202,23 +138,29 @@ describe("warp singbox golden", () => {
     expect(out).toContain('"persistent_keepalive_interval": 25');
     expect(out).not.toContain("amnezia_wg");
   });
+});
 
-  it("amnezia variant adds the exact amnezia_wg block", async () => {
-    const out = WARP_EMITTERS["singbox-amnezia"](await singleRow()) as string;
+describe("warp amnezia toggle goldens", () => {
+  async function toggleRow(on: boolean): Promise<WarpEmitContext> {
+    const { getGlobalSettings, setGlobalSettings } = await import("../../src/warp/store");
+    const cur = await getGlobalSettings(env);
+    await setGlobalSettings(env, { amnezia: cur.amnezia, amneziaEnabled: on });
+    try {
+      return await singleRow();
+    } finally {
+      await setGlobalSettings(env, { amnezia: cur.amnezia, amneziaEnabled: false });
+    }
+  }
+
+  it("renders the retired wireguard-conf-amnezia bytes when the toggle is on", async () => {
+    const zip = WARP_EMITTERS["wireguard-conf"](await toggleRow(true)) as Uint8Array;
+    expect(zipLatin1(zip)).toContain(CONF_BODY_AMNEZIA);
+  });
+
+  it("renders the retired singbox-amnezia bytes when the toggle is on", async () => {
+    const out = WARP_EMITTERS.singbox(await toggleRow(true)) as string;
     const doc = JSON.parse(out) as { endpoints: Array<{ amnezia_wg: Record<string, unknown> }> };
     expect(doc.endpoints[0]!.amnezia_wg).toEqual({ jc: 5, jmin: 50, jmax: 1000 });
     expect(out).toContain('"amnezia_wg": {\n        "jc": 5,\n        "jmin": 50,\n        "jmax": 1000\n      }');
-  });
-});
-
-describe("warp surge golden", () => {
-  it("emits the exact surge sections with client-id", async () => {
-    expect(WARP_EMITTERS.surge(await singleRow())).toBe(SURGE);
-  });
-});
-
-describe("warp loon golden", () => {
-  it("emits the exact single-line loon entry", async () => {
-    expect(WARP_EMITTERS.loon(await singleRow())).toBe(LOON);
   });
 });

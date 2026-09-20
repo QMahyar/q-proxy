@@ -1,4 +1,3 @@
-import type { Env } from "../types/env";
 import type { Settings } from "../types/settings";
 import { AppError } from "./errors";
 import { jsonError, redirect } from "./respond";
@@ -18,14 +17,12 @@ import { handleTunnel } from "../handlers/tunnel";
 import { isUpgradeRequest } from "../tunnel/websocket";
 import { handleDoh } from "../handlers/doh";
 import { handleSubscribe } from "../handlers/subscribe";
-import { handleMyIp } from "../handlers/myip";
 import { handleRobots } from "../handlers/robots";
 import { handleHealth } from "../handlers/health";
 
 import { serveLoginPage, servePanelPage } from "../handlers/panel-page";
 import { handleCamouflage } from "../handlers/camouflage";
 import { handleWarpSub } from "../handlers/warp-sub";
-import { handleUserSub } from "../handlers/users-sub";
 import { handleLogin, handleLogout, handlePasswordChange, handleSetup, handleAuthStatus } from "../handlers/api/auth";
 import {
   handleGetSettings,
@@ -35,13 +32,12 @@ import {
   handleImportSettings,
 } from "../handlers/api/settings";
 import { handleKillSwitch, handleStatus, handleSubUrls } from "../handlers/api/status";
+import { handleSubImport } from "../handlers/api/sub-import";
 import { handleBootstrap } from "../handlers/api/bootstrap";
 import { handleWarpApi } from "../handlers/api/warp";
-import { handleUsersApi } from "../handlers/api/users";
 import { handleProxyPoolApi } from "../handlers/api/proxy-pool";
 import { handleAddressProbeApi } from "../handlers/api/address-probe";
 import { handleTelegramRemove, handleTelegramSetup, handleTelegramWebhook } from "../handlers/api/telegram";
-import { handleVersionCheck } from "../handlers/api/version";
 
 function methodNotAllowed(): never {
   throw new AppError("method not allowed", 405, "METHOD");
@@ -62,16 +58,16 @@ function killSwitchResponse(): Response {
 }
 
 function authedCsrf(handler: RouteHandler): RouteHandler {
-  return authed(async (req, env, s) => {
+  return authed(async (req, env, s, ctx) => {
     assertCsrf(req);
-    return handler(req, env, s);
+    return handler(req, env, s, ctx);
   });
 }
 
 function csrfOnly(handler: RouteHandler): RouteHandler {
-  return async (req, env, s) => {
+  return async (req, env, s, ctx) => {
     assertCsrf(req);
-    return handler(req, env, s);
+    return handler(req, env, s, ctx);
   };
 }
 
@@ -99,16 +95,14 @@ function bootstrapAllowed(route: ApiRouteDescriptor, req: Request): boolean {
 }
 
 function bootstrapGated(handler: RouteHandler, route: ApiRouteDescriptor): RouteHandler {
-  return async (req, env, s) => {
+  return async (req, env, s, ctx) => {
     if (s.passwordIsBootstrap && !bootstrapAllowed(route, req)) return passwordChangeRequired();
-    return handler(req, env, s);
+    return handler(req, env, s, ctx);
   };
 }
 
-const guardedMyIp = authed(handleMyIp);
-
-const settingsGetOrSave: RouteHandler = (req, env, s) =>
-  req.method === "GET" ? handleGetSettings(req, env, s) : handleSaveSettings(req, env, s);
+const settingsGetOrSave: RouteHandler = (req, env, s, ctx) =>
+  req.method === "GET" ? handleGetSettings(req, env, s, ctx) : handleSaveSettings(req, env, s, ctx);
 
 const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
   "auth-login": { methods: ["POST"], auth: "none", handler: handleLogin },
@@ -122,12 +116,11 @@ const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
   "settings-reset": { methods: ["POST"], auth: "write", handler: handleResetSettings },
   "settings-export": { methods: ["GET"], auth: "read", handler: handleExportSettings },
   "settings-import": { methods: ["POST"], auth: "write", handler: handleImportSettings },
-  "version-check": { methods: ["GET"], auth: "read", handler: handleVersionCheck },
   status: { methods: ["GET"], auth: "read", handler: handleStatus },
   killswitch: { methods: ["POST"], auth: "write", handler: handleKillSwitch },
   suburls: { methods: ["GET"], auth: "read", handler: handleSubUrls },
+  "sub-import": { methods: ["POST"], auth: "write", handler: handleSubImport },
   warp: { methods: [], auth: "write", handler: handleWarpApi },
-  users: { methods: [], auth: "write", handler: handleUsersApi },
   "proxy-pool": { methods: [], auth: "write", handler: handleProxyPoolApi },
   "address-probe": { methods: [], auth: "write", handler: handleAddressProbeApi },
   "telegram-webhook": { methods: ["POST"], auth: "none", handler: handleTelegramWebhook },
@@ -140,14 +133,15 @@ async function dispatchApi(
   req: Request,
   env: Env,
   s: Settings,
+  ctx?: ExecutionContext | null,
 ): Promise<Response> {
   const route = API_ROUTES[api]!;
   if (route.methods.length > 0) expectMethods(req, route.methods);
-  if (route.auth === "none") return route.handler(req, env, s);
+  if (route.auth === "none") return route.handler(req, env, s, ctx);
   if (route.auth === "read" || req.method === "GET") {
-    return authed(bootstrapGated(route.handler, route))(req, env, s);
+    return authed(bootstrapGated(route.handler, route))(req, env, s, ctx);
   }
-  return authedCsrf(bootstrapGated(route.handler, route))(req, env, s);
+  return authedCsrf(bootstrapGated(route.handler, route))(req, env, s, ctx);
 }
 
 async function dispatchSecureRoute(
@@ -155,6 +149,7 @@ async function dispatchSecureRoute(
   req: Request,
   env: Env,
   s: Settings,
+  ctx?: ExecutionContext | null,
 ): Promise<Response> {
   switch (route.kind) {
     case "root":
@@ -162,29 +157,22 @@ async function dispatchSecureRoute(
       return redirect(`/${s.securePath}/panel`, 302);
     case "page":
       expectMethods(req, ["GET"]);
-      return route.page === "panel" ? servePanelPage(req, env, s) : serveLoginPage(req, env, s);
+      return route.page === "panel" ? servePanelPage(req, env, s, ctx) : serveLoginPage(req, env, s, ctx);
     case "doh":
-      return handleDoh(req, env, s);
+      return handleDoh(req, env, s, ctx);
     case "sub":
       expectMethods(req, ["GET"]);
-      void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
-      return handleSubscribe(req, env, s);
+      void recordConnection(env, undefined, ctx).catch((err: unknown) => log.error("counters", "record failed", String(err)));
+      return handleSubscribe(req, env, s, ctx);
     case "warp-sub":
       expectMethods(req, ["GET", "HEAD"]);
-      return handleWarpSub(req, env, s);
-    case "user-sub":
-      expectMethods(req, ["GET", "HEAD"]);
-      void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
-      return handleUserSub(req, env, s);
-    case "myip":
-      expectMethods(req, ["GET"]);
-      return guardedMyIp(req, env, s);
+      return handleWarpSub(req, env, s, ctx);
     case "api":
-      return dispatchApi(route.api, req, env, s);
+      return dispatchApi(route.api, req, env, s, ctx);
   }
 }
 
-export async function routeRequest(req: Request, env: Env): Promise<Response> {
+export async function routeRequest(req: Request, env: Env, ctx?: ExecutionContext | null): Promise<Response> {
   if (req.method === "OPTIONS") methodNotAllowed();
   const url = new URL(req.url);
 
@@ -198,18 +186,18 @@ export async function routeRequest(req: Request, env: Env): Promise<Response> {
   setDebugEnabled(s.debugLogging);
 
   if (url.pathname === "/robots.txt") {
-    return handleCamouflage(req, env, s);
+    return handleCamouflage(req, env, s, ctx);
   }
 
   if (identifyTunnel(url.pathname, s) !== null) {
-    if (!isUpgradeRequest(req)) return handleCamouflage(req, env, s);
+    if (!isUpgradeRequest(req)) return handleCamouflage(req, env, s, ctx);
     if (s.killSwitch) return killSwitchResponse();
-    void recordConnection(env).catch((err: unknown) => log.error("counters", "record failed", String(err)));
-    return handleTunnel(req, env, s);
+    void recordConnection(env, undefined, ctx).catch((err: unknown) => log.error("counters", "record failed", String(err)));
+    return handleTunnel(req, env, s, ctx);
   }
 
   const route = resolveSecureRoute(url, s);
-  if (route !== null) return dispatchSecureRoute(route, req, env, s);
+  if (route !== null) return dispatchSecureRoute(route, req, env, s, ctx);
 
-  return handleCamouflage(req, env, s);
+  return handleCamouflage(req, env, s, ctx);
 }

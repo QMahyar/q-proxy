@@ -12,14 +12,11 @@ const BASE = `https://example.com/${SP}`;
 
 const CREDS = {
   vlessUuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
-  vmessUuid: "1386f85e-657b-4d6e-9d56-78badb75e1fd",
-  trojanPassword: "secretpass12345",
-  ssPassword: "sspass123456789",
   randomizeSniCase: false,
 };
 
-const ONE_ADDRESS = [{ address: "203.0.113.10", port: 443 }];
-const TWO_ADDRESSES = [{ address: "203.0.113.10", port: 443 }, { address: "203.0.113.20", port: 443 }];
+const ONE_ADDRESS = ["203.0.113.10:443"];
+const TWO_ADDRESSES = ["203.0.113.10:443", "203.0.113.20:443"];
 
 async function readSettings(): Promise<{ settings: Settings; updatedAt: number }> {
   const raw = (await kv.get(SETTINGS_KEY)) as string | null;
@@ -35,59 +32,74 @@ function expectedNames(s: Settings): string[] {
   return nodes.map((n) => n.name);
 }
 
-function clashProxyNames(yaml: string): string[] {
-  const lines = yaml.split("\n");
-  const start = lines.indexOf("proxies:");
-  const end = lines.indexOf("proxy-groups:");
-  const names: string[] = [];
-  for (const line of lines.slice(start + 1, end === -1 ? undefined : end)) {
-    const m = /^  - name: "(.*)"$/.exec(line);
-    if (m !== null) names.push(m[1]!);
-  }
-  return names;
+function singboxVlessTags(json: string): string[] {
+  const doc = JSON.parse(json) as { outbounds: Array<{ type: string; tag: string }> };
+  return doc.outbounds.filter((o) => o.type === "vless").map((o) => o.tag);
 }
 
-function clashGroupProxies(yaml: string): string[] {
-  const m = /^    proxies: (\[.*\])$/m.exec(yaml);
-  return m === null ? [] : (JSON.parse(m[1]!) as string[]);
-}
-
-async function fetchClash(): Promise<string> {
-  const res = await SELF.fetch(`${BASE}/sub?target=clash`);
+async function fetchSingbox(): Promise<string> {
+  const res = await SELF.fetch(`${BASE}/sub?target=singbox`);
   expect(res.status).toBe(200);
-  expect(res.headers.get("Content-Type")).toContain("yaml");
+  expect(res.headers.get("Content-Type")).toContain("json");
   return res.text();
 }
 
-async function seedAddresses(addresses: typeof ONE_ADDRESS): Promise<number> {
-  await seed(kv, SP, { ...CREDS, addresses });
+async function seedAddresses(customEndpoints: typeof ONE_ADDRESS): Promise<number> {
+  await seed(kv, SP, { ...CREDS, customEndpoints });
   return (await readSettings()).updatedAt;
 }
 
 describe("subscription pipeline", () => {
-  it("renders one clash proxy per generated node with all names present", async () => {
+  it("renders one sing-box vless outbound per generated node with all names present", async () => {
     await seedAddresses(ONE_ADDRESS);
     const { settings } = await readSettings();
-    const body = await fetchClash();
-    const names = clashProxyNames(body);
+    const body = await fetchSingbox();
+    const tags = singboxVlessTags(body);
     const want = expectedNames(settings);
     expect(want.length).toBeGreaterThan(0);
-    expect(names).toHaveLength(want.length);
-    for (const name of want) expect(names).toContain(name);
-    expect(clashGroupProxies(body)).toEqual(names);
+    expect(tags).toHaveLength(want.length);
+    for (const name of want) expect(tags).toContain(name);
   });
 
   it("picks up a settings change on the next fetch", async () => {
     const stamp = await seedAddresses(ONE_ADDRESS);
-    const before = await fetchClash();
+    const before = await fetchSingbox();
     while (Date.now() <= stamp) await new Promise((r) => setTimeout(r, 2));
     await seedAddresses(TWO_ADDRESSES);
     const { settings } = await readSettings();
-    const after = await fetchClash();
+    const after = await fetchSingbox();
     expect(after).not.toBe(before);
-    const names = clashProxyNames(after);
-    expect(names).toHaveLength(expectedNames(settings).length);
-    expect(names.length).toBeGreaterThan(clashProxyNames(before).length);
-    for (const name of expectedNames(settings)) expect(names).toContain(name);
+    const tags = singboxVlessTags(after);
+    expect(tags).toHaveLength(expectedNames(settings).length);
+    expect(tags.length).toBeGreaterThan(singboxVlessTags(before).length);
+    for (const name of expectedNames(settings)) expect(tags).toContain(name);
+  });
+
+  it("renders one clash vless proxy per generated node with all names present", async () => {
+    await seedAddresses(ONE_ADDRESS);
+    const clashSettings = await readSettings();
+    const clashRes = await SELF.fetch(`${BASE}/sub?target=clash`);
+    expect(clashRes.status).toBe(200);
+    expect(clashRes.headers.get("Content-Type")).toContain("yaml");
+    const clashBody = await clashRes.text();
+    for (const name of expectedNames(clashSettings.settings)) expect(clashBody).toContain(`name: ${name}`);
+  });
+
+  it("renders one xray vless outbound per generated node", async () => {
+    await seedAddresses(ONE_ADDRESS);
+    const { settings } = await readSettings();
+    const res = await SELF.fetch(`${BASE}/sub?target=xray`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("json");
+    const doc = JSON.parse(await res.text()) as { outbounds: Array<{ protocol: string }> };
+    const tags = expectedNames(settings);
+    expect(doc.outbounds.filter((o) => o.protocol === "vless")).toHaveLength(tags.length);
+  });
+  it("rejects deleted format targets as invalid", async () => {
+    await seedAddresses(ONE_ADDRESS);
+    for (const dead of ["surge", "loon", "quantumult"]) {
+      const res = await SELF.fetch(`${BASE}/sub?target=${dead}`);
+      expect(res.status, dead).toBe(400);
+    }
   });
 });

@@ -19,7 +19,7 @@ describe("pruneBoundedRegistry call-site contract", () => {
     expect(registry.has("k2048")).toBe(true);
   });
 
-  it("holds exactly 1024 entries for VMess replay registry semantics", () => {
+  it("holds exactly 1024 entries for replay-registry semantics", () => {
     const registry = new Map<string, number>();
     const now = 2000;
     const limit = 1024;

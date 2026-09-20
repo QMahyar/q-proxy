@@ -35,7 +35,7 @@ function updateApplyBar(){
 const ab=$('apply-btn');
 $('applybar').hidden=S.dirty.size===0;
 if(!ab||ab.dataset.busy==='1'){}
-else{ab.disabled=false;ab.textContent=t('common.apply')}
+else{ab.disabled=false;const n=S.dirty.size;ab.textContent=n>1?t('common.apply_count',{n:n}):t('common.apply');ab.title=n>1?[...S.dirty].join(', '):''}
 const st=urStack(currentSection());
 const ub=$('ur-undo'),rb=$('ur-redo');
 if(ub)ub.disabled=!st.undo.length;
@@ -58,21 +58,24 @@ if(ref){inner.insertBefore(u,ref);inner.insertBefore(r,ref)}
 else inner.append(u,r);
 updateApplyBar()}
 async function refreshSubUrls(){
-try{sessionStorage.removeItem('qpe:api/bootstrap');sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
-try{const d=await api('api/bootstrap',{fresh:true});S.subs=(d.subUrls&&d.subUrls.urls)||[];renderHome()}catch(e){}}
+try{const d=await api('api/bootstrap');S.subs=(d.subUrls&&d.subUrls.urls)||[];renderHome()}catch(e){toastErr(e)}}
 async function applySection(sec){
 clearFieldErrors(sec);
 try{
 const{cur,patch}=diffSection(sec);
 if(Object.keys(patch).length===0){markDirty(sec);return}
-await api('api/settings/save',{method:'PUT',body:patch});
+const body=JSON.parse(JSON.stringify(patch));
+if(typeof S.rev==='number')body.baseRev=S.rev;
+const saved=await api('api/settings/save',{method:'PUT',body:body});
+if(saved&&typeof saved.rev==='number')S.rev=saved.rev;
 Object.assign(S.set,JSON.parse(JSON.stringify(cur)));
 pushUndo(sec,S.snap[sec]||'{}');
 S.snap[sec]=JSON.stringify(cur);
 markDirty(sec);
  toast(t('toast.settingsSaved'),'ok');
-  if(sec==='general'||sec==='addresses')await refreshSubUrls()}
+  if(sec==='general'||sec==='addresses'||sec==='protocols')await refreshSubUrls()}
 catch(e){
+if(e&&e.code==='CONFLICT'){toast(t('settings.conflict'),'err');await rebaseSettings();return}
 if(e&&e.fields&&Object.keys(e.fields).length){
 let n=0;
 for(const path in e.fields){
@@ -81,6 +84,17 @@ n++}
 toast(t('common.fixErrors',{count:n}),'err')}
 else toastErr(e)}
 finally{updateApplyBar()}}
+async function rebaseSettings(){
+try{
+const fresh=await api('api/settings',{fresh:true});
+if(!fresh||typeof fresh!=='object')return;
+S.set=fresh;
+if(typeof fresh.rev==='number')S.rev=fresh.rev;
+renderSettings();
+SECTIONS.forEach(s=>{try{S.snap[s.key]=JSON.stringify(collectSection(s.key))}catch(err){}});
+markDirty();
+if(typeof refreshShowIf==='function')refreshShowIf();
+await refreshSubUrls()}catch(err){toastErr(err)}}
 function discardSection(sec){
 let snap={};
 try{snap=JSON.parse(S.snap[sec]||'{}')}catch(e){}
@@ -149,9 +163,9 @@ function undoSection(){
 const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
 const st=urStack(sec);if(!st.undo.length)return;
 st.redo.push(JSON.stringify(collectSection(sec)));
-restoreSection(sec,st.undo.pop())}
+restoreSection(sec,st.undo.pop());announce(t('shortcuts.undo'))}
 function redoSection(){
 const sec=currentSection();const panel=$('sp-'+sec);if(!panel)return;
 const st=urStack(sec);if(!st.redo.length)return;
 st.undo.push(JSON.stringify(collectSection(sec)));
-restoreSection(sec,st.redo.pop())}
+restoreSection(sec,st.redo.pop());announce(t('shortcuts.redo'))}

@@ -1,6 +1,6 @@
 import * as esbuild from "esbuild";
 import { execFileSync, execSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync, writeSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -13,7 +13,7 @@ const PANEL_HTML = resolve(root, "src/ui/panel.html");
 const PANEL_HEAD_MARKER = "<!--panel:head-js-->";
 const PANEL_CSS_MARKER = "<!--panel:css-->";
 const PANEL_JS_MARKER = "<!--panel:js-->";
-const PANEL_JS_ORDER = ["dict.js", "format-labels.js", "lib.js", "a11y.js", "qr.js", "states.js", "home.js", "warp.js", "users.js", "users-modal.js", "subs.js", "share.js", "chrome.js", "settings.js", "sections-registry.js", "fields-render.js", "cards.js", "totp.js", "fields-validate.js", "section-io.js", "sections.js", "actions.js"];
+const PANEL_JS_ORDER = ["dict.js", "format-labels.js", "lib.js", "a11y.js", "qr.js", "states.js", "home.js", "warp.js", "subs.js", "share.js", "chrome.js", "settings.js", "sections-registry.js", "fields-render.js", "cards.js", "fields-validate.js", "section-io.js", "sections.js", "actions.js"];
 
 function panelPart(name) {
   const text = readFileSync(join(PANEL_DIR, name), "utf8");
@@ -134,7 +134,12 @@ function buildPanelHtml() {
 }
 
 if (process.argv.includes("--assemble-only")) {
-  process.stdout.write(buildPanelHtml());
+  const out = Buffer.from(buildPanelHtml(), "utf8");
+  for (let off = 0; off < out.length;) {
+    const wrote = writeSync(1, out.subarray(off, Math.min(off + 65536, out.length)));
+    if (wrote <= 0) throw new Error("stdout truncated");
+    off += wrote;
+  }
   process.exit(0);
 }
 

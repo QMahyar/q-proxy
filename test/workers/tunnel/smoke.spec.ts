@@ -1,7 +1,7 @@
 /// <reference path="../../../node_modules/@cloudflare/vitest-pool-workers/types/cloudflare-test.d.ts" />
 import { describe, expect, it } from "vitest";
 import { SELF, env } from "cloudflare:test";
-import { ratelimitKey } from "../../../src/users/ratelimit";
+import { ratelimitKey } from "../../../src/tunnel/ratelimit";
 import { seed, testKv } from "../../helpers/seed";
 
 const kv = testKv(env);

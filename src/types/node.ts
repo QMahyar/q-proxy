@@ -1,4 +1,4 @@
-import type { Fingerprint, SsMethod } from "./settings";
+import type { Fingerprint } from "./settings";
 
 export type NodeVariant = "normal" | "fragment";
 
@@ -32,47 +32,4 @@ export interface VlessNode extends NodeBase {
   flow?: string | null;
 }
 
-export interface VMessNode extends NodeBase {
-  kind: "vmess";
-  uuid: string;
-  cipher: "auto" | "none" | "zero" | "aes-128-gcm" | "chacha20-poly1305";
-  alterId: 0;
-}
-
-export interface TrojanNode extends NodeBase {
-  kind: "trojan";
-  password: string;
-}
-
-export interface SSNode extends NodeBase {
-  kind: "ss";
-  method: SsMethod;
-  password: string;
-  direct?: boolean;
-}
-
-export interface RealityNode extends NodeBase {
-  kind: "reality";
-  uuid: string;
-  pbk: string;
-  sid: string;
-  flow: string;
-  spx: string;
-}
-
-export interface Hy2Node extends NodeBase {
-  kind: "hy2";
-  password: string;
-  obfs: string;
-  obfsPassword: string;
-}
-
-export type ProxyNode = VlessNode | VMessNode | TrojanNode | SSNode | RealityNode | Hy2Node;
-
-export const REMOTE_NODE_KINDS = ["reality", "hy2"] as const;
-
-export type RemoteNodeKind = (typeof REMOTE_NODE_KINDS)[number];
-
-export function isRemoteNode(node: ProxyNode): node is RealityNode | Hy2Node {
-  return node.kind === "reality" || node.kind === "hy2";
-}
+export type ProxyNode = VlessNode;

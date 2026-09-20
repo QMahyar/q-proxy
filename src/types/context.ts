@@ -1,7 +1,6 @@
-import type { Env } from "./env";
 import type { Settings } from "./settings";
 
-export type RouteHandler = (req: Request, env: Env, s: Settings) => Promise<Response>;
+export type RouteHandler = (req: Request, env: Env, s: Settings, ctx?: ExecutionContext | null) => Promise<Response>;
 
 export interface NodeBuilderContext {
   settings: Settings;

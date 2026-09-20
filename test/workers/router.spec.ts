@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SELF, env as cfEnv } from "cloudflare:test";
-import type { Env } from "../../src/types/env";
-import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
+import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import { telegramWebhookSecret } from "../../src/handlers/api/telegram";
-import { clearUsersMemoForTests, clearUserTotalsForTests } from "../../src/users/store";
 import { seed, SETTINGS_KEY, testKv } from "../helpers/seed";
 import { invalidateSettingsCache } from "../../src/settings/store";
 
@@ -58,73 +56,8 @@ async function setupAdmin(): Promise<{ cookie: string; csrfHeaders: Record<strin
   return { cookie, csrfHeaders: { Cookie: cookie, "X-Q-Panel": "1" } };
 }
 
-async function createUser(
-  csrfHeaders: Record<string, string>,
-  payload: Record<string, unknown>,
-): Promise<Record<string, any>> {
-  const res = await SELF.fetch(`${BASE}/api/users`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...csrfHeaders },
-    body: JSON.stringify(payload),
-  });
-  expect(res.status).toBe(200);
-  return (await body(res)).data.user as Record<string, any>;
-}
-
-async function settingsCacheStamp(): Promise<string> {
-  const raw = (await kv.get(SETTINGS_KEY)) as string | null;
-  const updatedAt = (() => {
-    try {
-      const v = (JSON.parse(raw ?? "null") as { updatedAt?: unknown } | null)?.updatedAt;
-      return typeof v === "number" && Number.isFinite(v) ? v : Date.now();
-    } catch {
-      return Date.now();
-    }
-  })();
-  return `W/"${updatedAt}-${SETTINGS_VERSION}"`;
-}
-
-async function waitForEdgeCache(url: string, ms = 4000): Promise<void> {
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    if ((await caches.default.match(url)) !== undefined) return;
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  throw new Error(`edge cache never populated for ${url}`);
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function waitForUsage(token: string, ms = 4000): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  const hash = await sha256Hex(token);
-  const perUserKey = `qproxy:user-usage:${today}:${hash}`;
-  const legacyKey = `qproxy:user-usage:${today}`;
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    const row = await env.QPROXY_DB.prepare("SELECT hits FROM user_usage WHERE day = ? AND token_hash = ?")
-      .bind(today, hash)
-      .first<{ hits: number }>()
-      .catch(() => null);
-    if (row !== null && typeof row.hits === "number" && row.hits > 0) return;
-    if ((await kv.get(perUserKey)) !== null) return;
-    const rows = JSON.parse(((await kv.get(legacyKey)) as string | null) ?? "[]") as Array<{ token: string }>;
-    if (rows.some((r) => r.token === token || r.token === hash)) return;
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  throw new Error(`usage row for ${token} never recorded`);
-}
-
 afterEach(() => {
   vi.unstubAllGlobals();
-});
-
-beforeEach(() => {
-  clearUsersMemoForTests();
-  clearUserTotalsForTests();
 });
 
 describe("router dispatch", () => {
@@ -150,9 +83,9 @@ describe("router dispatch", () => {
     const res = await SELF.fetch("https://example.com/healthz");
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("application/json");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
     const data = await body(res);
-    expect(data.ok).toBe(true);
-    expect(typeof data.version).toBe("string");
+    expect(data).toEqual({ ok: true });
 
     const rejected = await SELF.fetch("https://example.com/healthz", { method: "POST" });
     expect(rejected.status).toBe(405);
@@ -184,28 +117,23 @@ describe("router dispatch", () => {
     expect(res.headers.get("Content-Type")).toContain("text/html");
   });
 
-  it("gates version-check behind auth", async () => {
+  it("serves removed routes exactly like unknown paths (camouflage)", async () => {
     await seed(kv, SP);
-    let res = await SELF.fetch(`${BASE}/api/version/check`);
-    expect(res.status).toBe(401);
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        return new Response(JSON.stringify({ tag_name: "v1.2.0" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
-
-    const { cookie } = await setupAdmin();
-    res = await SELF.fetch(`${BASE}/api/version/check`, { headers: { Cookie: cookie } });
-    expect(res.status).toBe(200);
-    const data = await body(res);
-    expect(typeof data.data.current).toBe("string");
-    expect(data.data.latest).toBe("v1.2.0");
-    expect(typeof data.data.updateAvailable).toBe("boolean");
+    const unknown = await SELF.fetch("https://example.com/totally/unknown/path");
+    expect(unknown.status).toBe(200);
+    const unknownBody = await unknown.text();
+    for (const path of [
+      `${BASE}/api/version/check`,
+      `${BASE}/api/users`,
+      `${BASE}/my-ip`,
+      `${BASE}/sub/u/33333333-3333-4333-8333-333333333333?target=base64`,
+      "https://example.com/vm/abcd1234efgh",
+      "https://example.com/ss/abcd1234efgh",
+    ]) {
+      const res = await SELF.fetch(path);
+      expect(res.status, path).toBe(unknown.status);
+      expect(await res.text(), path).toBe(unknownBody);
+    }
   });
 
   it("falls through non-upgrade tunnel hits and unknown paths to camouflage", async () => {
@@ -259,9 +187,6 @@ describe("router dispatch", () => {
 
       res = await SELF.fetch(`${BASE}/api/status`, post({}));
       expect(res.status).toBe(405);
-
-      res = await SELF.fetch(`${BASE}/my-ip`);
-      expect(res.status).toBe(401);
     });
 
     it("enforces the dispatchApi method/auth matrix", async () => {
@@ -270,7 +195,6 @@ describe("router dispatch", () => {
         `${BASE}/api/suburls`,
         `${BASE}/api/bootstrap`,
         `${BASE}/api/settings/export`,
-        `${BASE}/api/version/check`,
       ];
       for (const url of getOnly) {
         const res = await SELF.fetch(url, post({}));
@@ -286,6 +210,7 @@ describe("router dispatch", () => {
         `${BASE}/api/killswitch`,
         `${BASE}/api/settings/reset`,
         `${BASE}/api/settings/import`,
+        `${BASE}/api/sub-import`,
         `${BASE}/api/auth/login`,
         `${BASE}/api/auth/logout`,
         `${BASE}/api/auth/setup`,
@@ -310,8 +235,6 @@ describe("router dispatch", () => {
         `${BASE}/api/bootstrap`,
         `${BASE}/api/settings`,
         `${BASE}/api/settings/export`,
-        `${BASE}/api/version/check`,
-        `${BASE}/api/users`,
         `${BASE}/api/warp/presets`,
       ];
       for (const url of protectedGet) {
@@ -326,8 +249,6 @@ describe("router dispatch", () => {
 
       res = await SELF.fetch(`${BASE}/api/settings`, { headers: cookieOnly });
       expect(res.status).toBe(200);
-      res = await SELF.fetch(`${BASE}/api/users`, { headers: cookieOnly });
-      expect(res.status).toBe(200);
       res = await SELF.fetch(`${BASE}/api/warp/presets`, { headers: cookieOnly });
       expect(res.status).toBe(200);
 
@@ -337,7 +258,7 @@ describe("router dispatch", () => {
         { url: `${BASE}/api/killswitch`, init: post({ enabled: false }, cookieOnly) },
         { url: `${BASE}/api/settings/reset`, init: post({}, cookieOnly) },
         { url: `${BASE}/api/settings/import`, init: post({ settings: {} }, cookieOnly) },
-        { url: `${BASE}/api/users`, init: post({ name: "Matrix" }, cookieOnly) },
+        { url: `${BASE}/api/sub-import`, init: post({ text: "vless://x@y:443" }, cookieOnly) },
         { url: `${BASE}/api/auth/password`, init: post({}, cookieOnly) },
         { url: `${BASE}/telegram/setup`, init: post({}, cookieOnly) },
         { url: `${BASE}/telegram/remove`, init: post({}, cookieOnly) },
@@ -359,12 +280,17 @@ describe("router dispatch", () => {
       expect(res.status).toBe(200);
     });
 
-    it("authorizes my-ip after setup and hides unknown paths behind camo-off 404s", async () => {
-      let res = await SELF.fetch(`${BASE}/my-ip`, { headers: { Cookie: cookie } });
-      expect(res.status).toBe(200);
-      expect(res.headers.get("Content-Type")).toContain("text/html");
+    it("serves removed paths as camouflage and hides unknown paths behind camo-off 404s", async () => {
+      const camo = await SELF.fetch("https://example.com/some/random/junk");
+      expect(camo.status).toBe(200);
+      const camoBody = await camo.text();
+      for (const path of [`${BASE}/my-ip`, `${BASE}/sub/u/33333333-3333-4333-8333-333333333333`]) {
+        const res = await SELF.fetch(path, { headers: { Cookie: cookie } });
+        expect(res.status, path).toBe(200);
+        expect(await res.text(), path).toBe(camoBody);
+      }
 
-      res = await SELF.fetch(`${BASE}/api/settings`, put({ camouflage: { mode: "off" } }, csrfHeaders));
+      let res = await SELF.fetch(`${BASE}/api/settings`, put({ camouflage: { mode: "off" } }, csrfHeaders));
       expect(res.status).toBe(200);
 
       res = await SELF.fetch("https://example.com/some/random/junk");
@@ -376,7 +302,7 @@ describe("router dispatch", () => {
       expect((await body(res)).error.code).toBe("NOT_FOUND");
     });
 
-    it("serves the camouflage proxy fallback when the upstream is unreachable", async () => {
+    it("rejects camouflage proxy mode at save (static/off only)", async () => {
       const res = await SELF.fetch(
         `${BASE}/api/settings`,
         put(
@@ -384,21 +310,17 @@ describe("router dispatch", () => {
           csrfHeaders,
         ),
       );
-      expect(res.status).toBe(200);
-
-      const fallback = await SELF.fetch("https://example.com/proxy/fallback/check");
-      expect(fallback.status).toBe(200);
-      expect(fallback.headers.get("Content-Type")).toContain("text/html");
-    }, 20000);
+      expect(res.status).toBe(422);
+    });
 
     it("blocks tunnel upgrades under kill switch and restores them after", async () => {
       let res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: true }, csrfHeaders));
       expect(res.status).toBe(200);
 
-      res = await SELF.fetch("https://example.com/vm/abcd1234efgh", { headers: UPGRADE_HEADERS });
+      res = await SELF.fetch("https://example.com/vl/abcd1234efgh", { headers: UPGRADE_HEADERS });
       expect(res.status).toBe(503);
 
-      res = await SELF.fetch("https://example.com/ss/abcd1234efgh");
+      res = await SELF.fetch("https://example.com/vm/abcd1234efgh");
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toContain("text/html");
 
@@ -416,10 +338,23 @@ describe("router dispatch", () => {
       }
     });
 
-    it("serves subscriptions, doh and the reset roundtrip", async () => {
-      let res = await SELF.fetch(`${BASE}/sub?target=clash`);
+    it("serves subscriptions, rejects deleted targets, and runs doh plus the reset roundtrip", async () => {
+      let res = await SELF.fetch(`${BASE}/sub?target=singbox`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("json");
+
+      res = await SELF.fetch(`${BASE}/sub?target=clash`);
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toContain("yaml");
+      expect(await res.text()).toContain("proxies:");
+
+      res = await SELF.fetch(`${BASE}/sub?target=xray`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("json");
+      expect(await res.text()).toContain("leastPing");
+
+      res = await SELF.fetch(`${BASE}/sub?target=surge`);
+      expect(res.status).toBe(400);
 
       res = await SELF.fetch(`${BASE}/sub`);
       expect(res.status).toBe(200);
@@ -462,7 +397,6 @@ describe("router dispatch", () => {
       `${BASE}/api/status`,
       `${BASE}/api/suburls`,
       `${BASE}/api/settings/export`,
-      `${BASE}/api/version/check`,
     ];
     for (const url of gated) {
       const denied = await SELF.fetch(url, { headers: { Cookie: cookie } });
@@ -584,7 +518,7 @@ describe("router dispatch", () => {
     before.data.profileTitle = "fresh-concurrent";
     await kv.put(SETTINGS_KEY, JSON.stringify(before));
 
-    res = await SELF.fetch(`${BASE}/api/settings`, put({ urlTestIntervalSec: 600 }, csrfHeaders));
+    res = await SELF.fetch(`${BASE}/api/settings`, put({ maxNodesPerFormat: 600 }, csrfHeaders));
     expect(res.status).toBe(200);
     const saved = (await body(res)).data;
     expect(saved.saved).toBe(true);
@@ -593,7 +527,7 @@ describe("router dispatch", () => {
     res = await SELF.fetch(`${BASE}/api/settings`, { headers: { Cookie: cookie } });
     const view = (await body(res)).data;
     expect(view.profileTitle).toBe("fresh-concurrent");
-    expect(view.urlTestIntervalSec).toBe(600);
+    expect(view.maxNodesPerFormat).toBe(600);
 
     res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: true }, csrfHeaders));
     expect(res.status).toBe(200);
@@ -814,7 +748,7 @@ describe("router dispatch", () => {
       headers: { "Content-Type": "application/json", ...csrfHeaders },
       body: JSON.stringify({ name: "Sub Test", config: conf }),
     });
-    const account = (await body(res)).data.account as { token: string };
+    const account = (await body(res)).data.account as { id: string; token: string };
 
     res = await SELF.fetch(`${BASE}/sub/wg/${account.token}/throne`);
     expect(res.status).toBe(200);
@@ -836,200 +770,64 @@ describe("router dispatch", () => {
     res = await SELF.fetch(`${BASE}/sub/wg/11111111-1111-4111-8111-111111111111/throne`);
     expect(res.status).toBe(404);
 
-    res = await SELF.fetch(`${BASE}/sub/wg/${account.token}/not-a-format`);
-    expect(res.status).toBe(404);
+    const unknown = await SELF.fetch("https://example.com/totally/unknown/path");
+    expect(unknown.status).toBe(200);
+    const unknownBody = await unknown.text();
+    for (const format of [
+      "wireguard-conf-amnezia",
+      "throne-amnezia",
+      "wireguard-uri",
+      "singbox-amnezia",
+      "singbox-legacy",
+      "singbox-legacy-amnezia",
+      "xray",
+      "clash",
+      "clash-amnezia",
+      "surge",
+      "surfboard",
+      "loon",
+      "egern",
+      "not-a-format",
+    ]) {
+      res = await SELF.fetch(`${BASE}/sub/wg/${account.token}/${format}`);
+      expect(res.status, format).toBe(unknown.status);
+      expect(await res.text(), format).toBe(unknownBody);
+    }
 
     res = await SELF.fetch(`${BASE}/sub/wg/not-a-uuid/throne`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/html");
-  });
 
-  it("covers the user center: admin CRUD, token subs, 410/429 and camouflage fallthrough", async () => {
-    await seed(kv, SP);
-
-    let res = await SELF.fetch(`${BASE}/api/users`);
-    expect(res.status).toBe(401);
-
-    res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
-    const __raw = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { updatedAt?: number; data: Record<string, unknown> };
-    __raw.data.passwordIsBootstrap = false;
-    __raw.updatedAt = Date.now();
-    await kv.put(SETTINGS_KEY, JSON.stringify(__raw));
-    invalidateSettingsCache();
-    const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
-    const csrfHeaders = { Cookie: cookie, "X-Q-Panel": "1" };
-
-    res = await SELF.fetch(`${BASE}/api/users`, { headers: { Cookie: cookie } });
-    expect(res.status).toBe(200);
-    expect(((await body(res)).data.users as unknown[]).length).toBe(0);
-
-    res = await SELF.fetch(`${BASE}/api/warp/nonsense`, { headers: { Cookie: cookie } });
-    expect(res.status).toBe(404);
-    res = await SELF.fetch(`${BASE}/api/users`, post({}, { Cookie: cookie }));
-    expect(res.status).toBe(403);
-
-    res = await SELF.fetch(`${BASE}/api/users`, {
+    res = await SELF.fetch(`${BASE}/api/warp/account/${account.id}/regenerate-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...csrfHeaders },
-      body: JSON.stringify({ name: "Alice" }),
+      body: "{}",
     });
     expect(res.status).toBe(200);
-    const user = (await body(res)).data.user as Record<string, any>;
-    expect(user.token).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    expect(user.enabled).toBe(true);
-    expect(user.protocols).toBe("all");
-
-    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, put({ name: "Bob" }, csrfHeaders));
-    expect(res.status).toBe(200);
-    expect(((await body(res)).data.user as Record<string, unknown>).name).toBe("Bob");
-
-    res = await SELF.fetch(`${BASE}/api/users`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...csrfHeaders },
-      body: JSON.stringify({ name: "" }),
-    });
-    expect(res.status).toBe(422);
-    res = await SELF.fetch(`${BASE}/api/users`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...csrfHeaders },
-      body: JSON.stringify({ name: "X", protocols: ["vless", "nope"] }),
-    });
-    expect(res.status).toBe(422);
-
-    const createdAt = new Date().toISOString();
-    await env.QPROXY_DB.batch([
-      env.QPROXY_DB.prepare(
-        "INSERT INTO users(id, name, token_hash, token_hint, enabled, expires_at, daily_req_limit, protocols, address_override, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).bind(
-        "55555555-5555-4555-8555-555555555555",
-        "Old",
-        await sha256Hex("33333333-3333-4333-8333-333333333333"),
-        "33333333…",
-        1,
-        Date.now() - 1000,
-        null,
-        '"all"',
-        null,
-        createdAt,
-      ),
-      env.QPROXY_DB.prepare(
-        "INSERT INTO users(id, name, token_hash, token_hint, enabled, expires_at, daily_req_limit, protocols, address_override, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).bind(
-        "66666666-6666-4666-8666-666666666666",
-        "Off",
-        await sha256Hex("44444444-4444-4444-8444-444444444444"),
-        "44444444…",
-        0,
-        null,
-        null,
-        '["ss"]',
-        null,
-        createdAt,
-      ),
-    ]);
-    clearUsersMemoForTests();
-
-    res = await SELF.fetch(`${BASE}/sub/u/33333333-3333-4333-8333-333333333333?target=base64`);
-    expect(res.status).toBe(410);
-    res = await SELF.fetch(`${BASE}/sub/u/44444444-4444-4444-8444-444444444444?target=clash`);
-    expect(res.status).toBe(410);
-
-    res = await SELF.fetch(`${BASE}/sub/u/not-a-uuid`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/html");
-    res = await SELF.fetch(`${BASE}/sub/u/77777777-7777-4777-8777-777777777777`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/html");
-
-    res = await SELF.fetch(`${BASE}/sub/u/${user.token}?target=base64`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/plain");
-    expect(atob((await res.text()).trim()).length).toBeGreaterThan(0);
-
-    res = await SELF.fetch(
-      `${BASE}/sub/u/${user.token}?view=html`,
-      { headers: { "User-Agent": "Mozilla/5.0" } },
-    );
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/html");
-    expect(await res.text()).toContain("?target=clash");
-
-    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, put({ dailyReqLimit: 2 }, csrfHeaders));
-    expect(res.status).toBe(200);
-    const today = new Date().toISOString().slice(0, 10);
-    const usageHash = await sha256Hex(user.token as string);
-    await env.QPROXY_DB.prepare(
-      "INSERT INTO user_usage(day, token_hash, hits) VALUES(?, ?, ?) ON CONFLICT(day, token_hash) DO UPDATE SET hits = excluded.hits",
-    )
-      .bind(today, usageHash, 2)
-      .run();
-    res = await SELF.fetch(`${BASE}/sub/u/${user.token}?target=surge`);
-    expect(res.status).toBe(429);
-    expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
-
-    res = await SELF.fetch(`${BASE}/api/users/${user.id}/regenerate-token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...csrfHeaders },
-      body: JSON.stringify({}),
-    });
-    expect(res.status).toBe(200);
-    const freshToken = (await body(res)).data.token as string;
-    expect(freshToken).not.toBe(user.token);
-
-    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, {
-      method: "DELETE",
-      headers: { Cookie: cookie, "X-Q-Panel": "1" },
-    });
-    expect(res.status).toBe(200);
-    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, { headers: { Cookie: cookie } });
+    const rotated = (await body(res)).data.token as string;
+    expect(rotated).not.toBe(account.token);
+    for (const format of ["wireguard-conf", "throne", "v2rayn", "singbox"]) {
+      res = await SELF.fetch(`${BASE}/sub/wg/${rotated}/${format}`);
+      expect(res.status, format).toBe(200);
+    }
+    res = await SELF.fetch(`${BASE}/sub/wg/${account.token}/singbox`);
     expect(res.status).toBe(404);
   });
 
-  it("serves 410 for a freshly disabled user instead of the edge-cached 200", async () => {
+
+  it("serves dead per-user token URLs as camouflage identical to unknown paths", async () => {
     await seed(kv, SP);
-    const { csrfHeaders } = await setupAdmin();
-    const user = await createUser(csrfHeaders, { name: "Cache Reorder" });
-
-    const subUrl = `${BASE}/sub/u/${user.token}?target=base64`;
-    let res = await SELF.fetch(subUrl);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("text/plain");
-
-    const cacheKeyUrl = new URL(subUrl);
-    cacheKeyUrl.searchParams.set("_k", `base64:n:${user.token}`);
-    cacheKeyUrl.searchParams.set("_v", await settingsCacheStamp());
-    await waitForEdgeCache(cacheKeyUrl.toString());
-
-    res = await SELF.fetch(`${BASE}/api/users/${user.id}`, put({ enabled: false }, csrfHeaders));
-    expect(res.status).toBe(200);
-
-    res = await SELF.fetch(subUrl);
-    expect(res.status).toBe(410);
-  });
-
-  it("serves 429 with Retry-After for exhausted quota instead of the edge-cached 200", async () => {
-    await seed(kv, SP);
-    const { csrfHeaders } = await setupAdmin();
-    const user = await createUser(csrfHeaders, { name: "Quota Reorder" });
-
-    let res = await SELF.fetch(
-      `${BASE}/api/users/${user.id}`,
-      put({ dailyReqLimit: 1 }, csrfHeaders),
-    );
-    expect(res.status).toBe(200);
-
-    const subUrl = `${BASE}/sub/u/${user.token}?target=clash`;
-    res = await SELF.fetch(subUrl);
-    expect(res.status).toBe(200);
-
-    await waitForUsage(user.token);
-    const cacheKeyUrl = new URL(subUrl);
-    cacheKeyUrl.searchParams.set("_k", `clash:n:${user.token}`);
-    cacheKeyUrl.searchParams.set("_v", await settingsCacheStamp());
-    await waitForEdgeCache(cacheKeyUrl.toString());
-
-    res = await SELF.fetch(subUrl);
-    expect(res.status).toBe(429);
-    expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
+    const unknown = await SELF.fetch("https://example.com/some/random/junk");
+    expect(unknown.status).toBe(200);
+    const unknownBody = await unknown.text();
+    for (const path of [
+      `${BASE}/sub/u/33333333-3333-4333-8333-333333333333?target=base64`,
+      `${BASE}/sub/u/44444444-4444-4444-8444-444444444444?target=clash`,
+      `${BASE}/sub/u/not-a-uuid`,
+    ]) {
+      const res = await SELF.fetch(path);
+      expect(res.status, path).toBe(200);
+      expect(await res.text(), path).toBe(unknownBody);
+    }
   });
 });

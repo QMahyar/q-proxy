@@ -2,6 +2,20 @@
 
 All supported deploy paths — pick the one that fits your environment.
 
+## Way B — Deploy Button (no CLI, includes Cloudflare signup)
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/QMahyar/q-proxy)
+
+One click, no terminal. The button walks a newcomer through Cloudflare
+signup, forks the repo, and deploys the Worker. Then finish the two bindings
+the button cannot create (about 3 minutes, all in the dashboard):
+
+1. **KV** — Workers & Pages → your `q-proxy` worker → Settings → Bindings → Add KV `QPROXY_KV` → Create namespace → Save → Deploy.
+2. **D1** — Dashboard → D1 → Create `q-proxy` → apply `migrations/0001_init.sql` in the SQL console → worker Settings → Bindings → Add D1 `QPROXY_DB` → Save → Deploy.
+3. Visit `https://q-proxy.<sub>.workers.dev/` once, read `securePath` from KV `qproxy:settings`, and open `https://.../<sp>/panel` — the setup card plus the in-panel wizard finish the job.
+
+If the button flow ever drifts from these steps, Way 1 (manual paste) below is the same deploy written out click by click.
+
 ## Way 0 — deploy.py (recommended: interactive or flag-driven)
 
 Single self-contained Python file, stdlib only (no pip, no node, no wrangler).
@@ -9,13 +23,18 @@ Clone the repo, then:
 
 ```bash
 python deploy.py                                   # interactive menu: New / Update / Delete / List / Token
-python deploy.py deploy --target workers --name my-panel --password 'S3cure99'   # flag-driven (agents/CI)
+python deploy.py deploy --target workers --name my-panel --password-stdin <<< 'S3cure99'   # flag-driven (agents/CI): password via stdin, never argv
 python deploy.py update --name my-panel            # re-upload code, keeps password + data
 python deploy.py urls --name my-panel              # reprint login/panel/sub links from KV
 python deploy.py delete --kind panel --name my-panel   # remove everything (type-to-confirm)
 python deploy.py list                              # list workers, pages, KV, D1
 python deploy.py mk-token --key <cfk_...> --email you@x.com --account <id>   # mint a scoped token
 ```
+
+Secrets never travel on argv and are never printed: the panel password comes
+from `--password-stdin` (piped, as above), `QPROXY_PASSWORD`, or a hidden
+prompt; the API token from `CLOUDFLARE_API_TOKEN` or a hidden paste prompt.
+`--password` / `--token` still work but print a process-list warning.
 
 The script mints (or accepts) a scoped API token, creates KV + D1 named after
 your panel, applies migrations, deploys to Workers **or** Pages Advanced Mode,
@@ -113,6 +132,18 @@ powershell -File scripts/deploy.ps1 -Action update
 ```
 
 Same flow as `deploy.sh` / `deploy-direct.mjs`: auto-detect default branch, create KV, download worker, upload, seed with 2s KV consistency wait, print Panel URL. Also supports `-Title` for multi-project KV titles.
+
+## Deployment matrix
+
+| Path | Needs CLI | Cloudflare signup | KV + D1 | Password handoff | Best for |
+|---|---|---|---|---|---|
+| Deploy Button (Way B) | No | Inside the flow | Dashboard clicks after deploy | Setup card + wizard | First-timers, no terminal |
+| `deploy.py` (Way 0) | Python only | Token paste in flow | Automatic | Your choice, set by script | Guided or flag-driven deploys |
+| Dashboard paste (Way 1) | No | Beforehand | Dashboard clicks | Setup card (24 h) | Click-by-click control |
+| One-liner (Way 2) | Shell only | Token paste in flow | KV automatic, D1 dashboard | Your choice, set by script | Fastest terminal path |
+| `npm run deploy` (Way 3) | Node | Token env beforehand | Automatic | Generated once or your choice | Developers, repeat deploys |
+| Pages (Way 3) | Wrangler | Beforehand | Dashboard/CLI | Setup card (24 h) | Pages hosting |
+| `wrangler deploy` (Way 3) | Wrangler | `wrangler login` beforehand | CLI | Setup card (24 h) | Wrangler-native repeat deploys |
 
 ## D1 database
 

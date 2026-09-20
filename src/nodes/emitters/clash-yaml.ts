@@ -1,158 +1,78 @@
-import type { Hy2Node, ProxyNode, RealityNode } from "../../types/node";
-import { TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
+import type { ProxyNode } from "../../types/node";
+import { DEFAULT_PROXY_DNS, TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
-import type { YamlObject } from "./yaml-writer";
-import { writeYaml } from "./yaml-writer";
 
-const echOpts = (node: ProxyNode): YamlObject => ({ enable: true, "query-server-name": node.ech });
+const PRIVATE_DIRECT_RULES = [
+  "IP-CIDR,127.0.0.0/8,DIRECT",
+  "IP-CIDR,10.0.0.0/8,DIRECT",
+  "IP-CIDR,172.16.0.0/12,DIRECT",
+  "IP-CIDR,192.168.0.0/16,DIRECT",
+];
 
-function wsOpts(node: ProxyNode): YamlObject {
-  const o: YamlObject = { path: node.path, headers: { Host: node.host } };
-  if (nodeHasEarlyData(node)) {
-    o["max-early-data"] = node.earlyData;
-    o["early-data-header-name"] = "Sec-WebSocket-Protocol";
-  }
-  return o;
+function yamlString(value: string): string {
+  if (value.length > 0 && /^[A-Za-z0-9][A-Za-z0-9 _./-]*$/.test(value)) return value;
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
 }
 
-function ssPluginOpts(node: Extract<ProxyNode, { kind: "ss" }>): YamlObject {
-  const o: YamlObject = { mode: "websocket" };
-  if (nodeHasTls(node)) o.tls = true;
-  o.host = node.host;
-  o.path = node.path;
-  return o;
+function yamlList(values: string[]): string {
+  return `[${values.map(yamlString).join(", ")}]`;
 }
 
-function proxyEntry(node: ProxyNode): YamlObject {
-  const isTls = nodeHasTls(node);
-  const p: YamlObject = {
-    name: node.name,
-    type: node.kind,
-    server: bareServer(node.address),
-    port: node.port,
-    udp: true,
-  };
-  if (node.kind === "vless") {
-    p.uuid = node.uuid;
-    if (node.flow) p.flow = node.flow;
-    p.tls = isTls;
-    if (isTls) p.servername = node.sni ?? node.host;
-    if (nodeHasEch(node)) p["ech-opts"] = echOpts(node);
-  } else if (node.kind === "vmess") {
-    p.uuid = node.uuid;
-    p.alterId = node.alterId;
-    p.cipher = node.cipher;
-    p.tls = isTls;
-    if (isTls) p.servername = node.sni ?? node.host;
-    if (nodeHasEch(node)) p["ech-opts"] = echOpts(node);
-  } else if (node.kind === "trojan") {
-    p.password = node.password;
-    if (isTls) {
-      p.sni = node.sni ?? node.host;
-      if (nodeHasEch(node)) p["ech-opts"] = echOpts(node);
-    }
-  } else if (node.kind === "ss") {
-    p.udp = true;
-    p.cipher = node.method;
-    p.password = node.password;
-    if (node.direct !== true) {
-      p.plugin = "v2ray-plugin";
-      p["plugin-opts"] = ssPluginOpts(node);
-      if (isTls) p["skip-cert-verify"] = true;
-    }
-    return p;
+function proxyOf(node: ProxyNode): string {
+  const server = bareServer(node.address);
+  const lines = [
+    `  - name: ${yamlString(node.name)}`,
+    "    type: vless",
+    `    server: ${yamlString(server)}`,
+    `    port: ${node.port}`,
+    `    uuid: ${node.uuid}`,
+    "    udp: true",
+  ];
+  if (nodeHasTls(node)) {
+    lines.push("    tls: true", `    servername: ${yamlString(node.sni ?? node.host)}`, "    skip-cert-verify: true");
+    if (nodeHasAlpn(node)) lines.push(`    alpn: ${yamlList(node.alpn)}`);
+    if (nodeHasFingerprint(node) && node.fingerprint !== null) lines.push(`    fingerprint: ${yamlString(node.fingerprint)}`);
+  } else {
+    lines.push("    tls: false");
   }
-  if (node.kind === "reality") return realityEntry(node);
-  if (node.kind === "hy2") return hy2Entry(node);
-  if (isTls) {
-    p["skip-cert-verify"] = true;
-    if (nodeHasFingerprint(node) && node.fingerprint !== null) p["client-fingerprint"] = node.fingerprint;
-    if (nodeHasAlpn(node)) p.alpn = [...node.alpn];
-  }
-  p.network = "ws";
-  p["ws-opts"] = wsOpts(node);
-  return p;
-}
-
-function realityEntry(node: RealityNode): YamlObject {
-  const p: YamlObject = {
-    name: node.name,
-    type: "vless",
-    server: bareServer(node.address),
-    port: node.port,
-    udp: true,
-    uuid: node.uuid,
-    tls: true,
-    servername: node.sni ?? node.host,
-  };
-  if (node.flow.length > 0) p.flow = node.flow;
-  if (node.fingerprint !== null) p["client-fingerprint"] = node.fingerprint;
-  p.network = "tcp";
-  const realityOpts: YamlObject = { "public-key": node.pbk };
-  if (node.sid.length > 0) realityOpts["short-id"] = node.sid;
-  p["reality-opts"] = realityOpts;
-  return p;
-}
-
-function hy2Entry(node: Hy2Node): YamlObject {
-  const p: YamlObject = {
-    name: node.name,
-    type: "hysteria2",
-    server: bareServer(node.address),
-    port: node.port,
-    udp: true,
-    password: node.password,
-    sni: node.sni ?? node.host,
-    "skip-cert-verify": true,
-  };
-  if (node.obfs.length > 0) {
-    p.obfs = node.obfs;
-    p["obfs-password"] = node.obfsPassword;
-  }
-  return p;
+  lines.push("    network: ws");
+  const early = nodeHasEarlyData(node) ? `, max-early-data: ${node.earlyData}` : "";
+  lines.push(`    ws-opts: {path: ${yamlString(node.path)}, headers: {Host: ${yamlString(node.host)}}${early}}`);
+  return lines.join("\n");
 }
 
 export function emitClashYaml(nodes: readonly ProxyNode[], opts: EmitOptions): string {
   const visible = tlsRequiredNodes(nodes, opts.isFragment);
-  const proxies = visible.map(proxyEntry);
-  const names = proxies.map((p) => String(p.name));
-  const groups: YamlObject[] =
-    names.length > 1
-      ? [
-          {
-            name: "PROXY",
-            type: "url-test",
-            url: TEST_URL,
-            interval: opts.urlTestIntervalSec,
-            tolerance: 50,
-            proxies: names,
-          },
-        ]
-      : names.length === 1
-        ? [{ name: "PROXY", type: "select", proxies: names }]
-        : [];
-  const doc: YamlObject = {
-    "mixed-port": 7890,
-    "allow-lan": false,
-    mode: "rule",
-    "log-level": "info",
-    proxies,
-    "proxy-groups": groups,
-    rules: buildRules(opts, names.length > 0),
-  };
-  return writeYaml(doc);
-}
-
-function buildRules(opts: EmitOptions, hasNodes: boolean): string[] {
-  const r = opts.rules;
-  if (!r) return [hasNodes ? "MATCH,PROXY" : "MATCH,DIRECT"];
-  const out: string[] = [];
-  if (r.blockDomains.length > 0) out.push(...r.blockDomains.map((d) => `DOMAIN-SUFFIX,${d},REJECT`));
-  if (r.blockQuic) out.push("AND,((NETWORK,udp),(DST-PORT,443)),REJECT");
-  if (r.bypassLan) {
-    out.push("IP-CIDR,127.0.0.0/8,DIRECT,no-resolve", "IP-CIDR,10.0.0.0/8,DIRECT,no-resolve", "IP-CIDR,172.16.0.0/12,DIRECT,no-resolve", "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve", "IP-CIDR,::1/128,DIRECT,no-resolve");
+  const names = visible.map((n) => n.name);
+  const out: string[] = [
+    "port: 7890",
+    "socks-port: 7891",
+    "allow-lan: false",
+    "mode: rule",
+    "log-level: info",
+    "dns:",
+    "  enable: true",
+    "  ipv6: false",
+    "  nameserver:",
+    `    - ${DEFAULT_PROXY_DNS}`,
+    "proxies:",
+  ];
+  if (names.length === 0) out.push("  []");
+  else for (const node of visible) out.push(proxyOf(node));
+  out.push("proxy-groups:");
+  if (names.length === 0) {
+    out.push("  - {name: PROXY, type: select, proxies: [DIRECT]}");
+  } else if (names.length === 1) {
+    out.push(`  - {name: PROXY, type: select, proxies: ${yamlList(names)}}`);
+  } else {
+    out.push(`  - {name: PROXY, type: url-test, proxies: ${yamlList(names)}, url: ${TEST_URL}, interval: 300, tolerance: 50}`);
   }
-  if (r.bypassDomains.length > 0) out.push(...r.bypassDomains.map((d) => `DOMAIN-SUFFIX,${d},DIRECT`));
-  out.push(hasNodes ? "MATCH,PROXY" : "MATCH,DIRECT");
-  return out;
+  out.push("rules:");
+  if (opts.rules) {
+    for (const d of opts.rules.blockDomains) out.push(`  - DOMAIN-SUFFIX,${yamlString(d)},REJECT`);
+    for (const d of opts.rules.bypassDomains) out.push(`  - DOMAIN-SUFFIX,${yamlString(d)},DIRECT`);
+  }
+  for (const rule of PRIVATE_DIRECT_RULES) out.push(`  - ${rule}`);
+  out.push("  - MATCH,PROXY");
+  return `${out.join("\n")}\n`;
 }

@@ -1,15 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { handleCamouflage } from "../../src/handlers/camouflage";
 import { ASSETS } from "../../src/ui/assets";
 import { makeTestSettings } from "../helpers/settings";
 
-function settingsWith(mode: "off" | "static" | "proxy", url = "") {
-  return makeTestSettings({ camouflage: { mode, url } });
+function settingsWith(mode: "off" | "static") {
+  return makeTestSettings({ camouflage: { mode } });
 }
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
 
 describe("handleCamouflage", () => {
   it("throws NotFoundError when the mode is off", async () => {
@@ -25,105 +21,27 @@ describe("handleCamouflage", () => {
     expect(await res.text()).toBe(ASSETS.camo);
   });
 
-  it("passes an ok upstream response through in proxy mode", async () => {
-    const upstream = new Response("<h1>upstream page</h1>", {
-      status: 200,
-      headers: { "Content-Type": "text/html; charset=utf-8" },
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => upstream),
-    );
-    const res = await handleCamouflage(
-      new Request("https://x/junk"),
-      {} as never,
-      settingsWith("proxy", "https://camo.example/page"),
-    );
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe("<h1>upstream page</h1>");
-    expect(String(vi.mocked(fetch).mock.calls[0]![0])).toBe("https://camo.example/page/junk");
+  it("serves the identical static page for any unknown path (removed routes look untouched)", async () => {
+    const a = await handleCamouflage(new Request("https://x/old-vm-path/abc12345"), {} as never, settingsWith("static"));
+    const b = await handleCamouflage(new Request("https://x/totally-random-zzz"), {} as never, settingsWith("static"));
+    expect(a.status).toBe(b.status);
+    expect(await a.text()).toBe(await b.text());
   });
 
-  it("resolves asset-looking paths against the configured origin and base path", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("icon", { status: 200 })),
-    );
-    await handleCamouflage(
-      new Request("https://x/favicon.ico"),
-      {} as never,
-      settingsWith("proxy", "https://camo.example/page"),
-    );
-    expect(String(vi.mocked(fetch).mock.calls[0]![0])).toBe("https://camo.example/page/favicon.ico");
-  });
-
-  it("keeps the query string and root base path when resolving the upstream url", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("post", { status: 200 })),
-    );
-    await handleCamouflage(
-      new Request("https://x/post/2?q=1"),
-      {} as never,
-      settingsWith("proxy", "https://camo.example"),
-    );
-    expect(String(vi.mocked(fetch).mock.calls[0]![0])).toBe("https://camo.example/post/2?q=1");
-  });
-
-  it("falls back to the static asset when upstream is not ok", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("nope", { status: 500 })),
-    );
-    const res = await handleCamouflage(
-      new Request("https://x/junk"),
-      {} as never,
-      settingsWith("proxy", "https://camo.example/page"),
-    );
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe(ASSETS.camo);
-  });
-
-  it("falls back to the static asset when fetch rejects", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new Error("boom");
-      }),
-    );
-    const res = await handleCamouflage(
-      new Request("https://x/junk"),
-      {} as never,
-      settingsWith("proxy", ""),
-    );
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe(ASSETS.camo);
-  });
-
-  it("rejects a protocol-relative path that would rebind the upstream host (SSRF)", async () => {
-    const fetchMock = vi.fn(async () => new Response("evil", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-    const res = await handleCamouflage(
-      new Request("https://x//evil.example/steal"),
-      {} as never,
-      settingsWith("proxy", "https://camo.example/page"),
-    );
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe(ASSETS.camo);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("does not follow a redirect to a different origin (SSRF via redirect)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(null, { status: 302, headers: { Location: "https://evil.example/x" } })),
-    );
-    const res = await handleCamouflage(
-      new Request("https://x/junk"),
-      {} as never,
-      settingsWith("proxy", "https://camo.example/page"),
-    );
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe(ASSETS.camo);
+  it("never fetches an upstream (proxy mode is removed)", async () => {
+    const seen: unknown[] = [];
+    const origFetch = globalThis.fetch;
+    (globalThis as Record<string, unknown>).fetch = async (...args: unknown[]) => {
+      seen.push(args[0]);
+      return new Response("evil", { status: 200 });
+    };
+    try {
+      const res = await handleCamouflage(new Request("https://x/junk"), {} as never, settingsWith("static"));
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe(ASSETS.camo);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+    expect(seen).toEqual([]);
   });
 });

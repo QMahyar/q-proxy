@@ -4,8 +4,6 @@ import {
   hkdfSha1,
   hkdfSha1Extract,
   hkdfSha1Expand,
-  vmessKdf,
-  vmessKdf16,
 } from "../../src/crypto/kdf";
 import { bytesToHex, hexToBytes, utf8Encode } from "../../src/utils/bytes";
 
@@ -96,62 +94,3 @@ describe("hkdfSha1 (RFC 5869)", () => {
   });
 });
 
-describe("vmessKdf (nested HMAC-SHA256 per v2fly/Xray)", () => {
-  it("matches the official upstream test vector", async () => {
-    const value = await vmessKdf(
-      utf8Encode("Demo Key for KDF Value Test"),
-      "Demo Path for KDF Value Test",
-      "Demo Path for KDF Value Test2",
-      "Demo Path for KDF Value Test3",
-    );
-    expect(bytesToHex(value)).toBe(
-      "53e9d7e1bd7bd25022b71ead07d8a596efc8a845c7888652fd684b4903dc8892",
-    );
-  });
-
-  it("single path element expands via the HMAC-over-HMAC construction (WebCrypto oracle)", async () => {
-    const key = utf8Encode("some command key");
-    const out = await vmessKdf(key, "AES Auth ID Encryption");
-
-    const k1 = utf8Encode("AES Auth ID Encryption");
-    const ipadBlock = new Uint8Array(64).fill(0x36);
-    const opadBlock = new Uint8Array(64).fill(0x5c);
-    for (let i = 0; i < k1.length; i++) {
-      ipadBlock[i]! ^= k1[i]!;
-      opadBlock[i]! ^= k1[i]!;
-    }
-    const innerHash = await rootHmac(ipadBlock, key);
-    const expected = await rootHmac(opadBlock, innerHash);
-    expect(bytesToHex(out)).toBe(bytesToHex(expected));
-    expect((await vmessKdf16(key, "AES Auth ID Encryption")).length).toBe(16);
-    expect(bytesToHex(await vmessKdf16(key, "AES Auth ID Encryption"))).toBe(
-      bytesToHex(expected).slice(0, 32),
-    );
-  });
-
-  async function rootHmac(padded: Uint8Array, msg: Uint8Array): Promise<Uint8Array> {
-    const ck = await crypto.subtle.importKey(
-      "raw",
-      utf8Encode("VMess AEAD KDF") as BufferSource,
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    return new Uint8Array(await crypto.subtle.sign("HMAC", ck, concat(padded, msg) as BufferSource));
-  }
-
-  it("is deterministic and key-sensitive", async () => {
-    const a = await vmessKdf(utf8Encode("key-a"), "salt");
-    const b = await vmessKdf(utf8Encode("key-a"), "salt");
-    const c = await vmessKdf(utf8Encode("key-b"), "salt");
-    expect(bytesToHex(a)).toBe(bytesToHex(b));
-    expect(bytesToHex(a)).not.toBe(bytesToHex(c));
-  });
-
-  function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
-    const out = new Uint8Array(a.length + b.length);
-    out.set(a);
-    out.set(b, a.length);
-    return out;
-  }
-});

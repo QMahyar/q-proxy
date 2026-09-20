@@ -57,5 +57,8 @@ if(timer)clearTimeout(timer);
 timer=setTimeout(()=>{
 wireRadiogroups(document);
 document.querySelectorAll('[role="radiogroup"],[data-radiogroup]').forEach(syncRadiogroup)},50)};
-new MutationObserver(scan).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-checked','aria-pressed']})}
+const target=document.getElementById('settings-panels')||document.body;
+new MutationObserver(scan).observe(target,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-checked','aria-pressed']});
+const nav=document.getElementById('nav');if(nav)new MutationObserver(scan).observe(nav,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-checked','aria-pressed']});
+const sub=document.getElementById('subtabs');if(sub)new MutationObserver(scan).observe(sub,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-checked','aria-pressed']})}
 })();

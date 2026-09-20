@@ -1,30 +1,27 @@
 
-const WARP_W=[{id:'wireguard-conf',grad:'grad-1'},{id:'wireguard-conf-amnezia',grad:'grad-4'},{id:'throne',grad:'grad-5'},{id:'throne-amnezia',grad:'grad-4'},{id:'wireguard-uri',grad:'grad-2'},{id:'v2rayn',grad:'grad-3'},{id:'singbox',grad:'grad-6'},{id:'singbox-amnezia',grad:'grad-4'},{id:'singbox-legacy',grad:'grad-2'},{id:'singbox-legacy-amnezia',grad:'grad-3'},{id:'xray',grad:'grad-1'},{id:'clash',grad:'grad-5'},{id:'clash-amnezia',grad:'grad-4'},{id:'surge',grad:'grad-6'},{id:'surfboard',grad:'grad-2'},{id:'loon',grad:'grad-3'},{id:'egern',grad:'grad-6'}];
+const WARP_W=[{id:'wireguard-conf',grad:'grad-1'},{id:'throne',grad:'grad-5'},{id:'v2rayn',grad:'grad-3'},{id:'singbox',grad:'grad-6'}];
 function warpFmtLabel(id){return t('warp.fmt.'+id)}
 function warpSubUrl(token,format){return location.origin+BASE+'sub/wg/'+token+'/'+format}
-const WARP_GROUPS=[['wireguard','wireguard-conf','wireguard-conf-amnezia','wireguard-uri'],['throne','throne','throne-amnezia'],['singbox','singbox','singbox-amnezia','singbox-legacy','singbox-legacy-amnezia'],['xray','xray','v2rayn'],['clash','clash','clash-amnezia'],['surge','surge','surfboard'],['loon','loon','egern']];
-const WARP_EXT={'wireguard-conf':'zip','wireguard-conf-amnezia':'zip','throne':'txt','throne-amnezia':'txt','wireguard-uri':'txt','v2rayn':'txt','singbox':'json','singbox-amnezia':'json','singbox-legacy':'json','singbox-legacy-amnezia':'json','xray':'json','clash':'yaml','clash-amnezia':'yaml','surge':'conf','surfboard':'conf','loon':'conf','egern':'yaml'};
-let warpAmzShow=false;let warpPresetGuardPass=false;
-function warpIsAmz(id){return id.slice(-8)==='-amnezia'}
+const WARP_GROUPS=[['wireguard','wireguard-conf'],['throne','throne'],['singbox','singbox'],['v2rayn','v2rayn']];
+const WARP_EXT={'wireguard-conf':'zip','throne':'txt','v2rayn':'txt','singbox':'json'};
 function fmtExtTag(id){const ext=WARP_EXT[id];return ext?'<span dir="ltr" style="flex:none;font-family:var(--font-mono);font-size:10px;color:var(--text-dim);border:1px solid var(--border-strong);border-radius:.375rem;padding:1px 6px">.'+esc(ext)+'</span>':''}
 function renderWarpSubs(a){
 const box=$('warp-detail-subs');if(!box)return;
-let sh='<div style="display:flex;justify-content:flex-end;margin-block-end:2px"><label class="switch"><input type="checkbox" id="warp-amz-toggle"'+(warpAmzShow?' checked':'')+'><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t('warp.groups.amnezia_toggle'))+'</span></label></div>';
+let sh='';
 WARP_GROUPS.forEach(function(g){
 const fam=g[0],ids=g.slice(1);
 sh+='<div class="warp-group" data-warp-group="'+esc(fam)+'"><div style="display:flex;align-items:center;gap:8px;margin-block:12px 2px"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-ghost)">'+esc(t('warp.groups.'+fam))+'</span><span class="stat-chip" style="padding:.125rem .5rem">'+esc(t('warp.groups.count',{n:ids.length}))+'</span></div>';
 WARP_W.forEach(function(f){
 if(ids.indexOf(f.id)<0)return;
-const amz=warpIsAmz(f.id);
-sh+='<div class="fmt-row" data-fmt="'+esc(f.id)+'"'+(amz?' data-amz="1"':'')+(amz&&!warpAmzShow?' hidden':'')+'><span class="fmt-icon '+f.grad+'"><svg aria-hidden="true"><use href="#i-download"/></svg></span><span class="fmt-label">'+esc(warpFmtLabel(f.id))+'</span>'+fmtExtTag(f.id)+copyFieldHtml(warpSubUrl(a.token,f.id),'warp-u'+WARP_W.indexOf(f))+'</div>'});
+sh+='<div class="fmt-row" data-fmt="'+esc(f.id)+'"><span class="fmt-icon '+f.grad+'"><svg aria-hidden="true"><use href="#i-download"/></svg></span><span class="fmt-label">'+esc(warpFmtLabel(f.id))+'</span>'+fmtExtTag(f.id)+copyFieldHtml(warpSubUrl(a.token,f.id),'warp-u'+WARP_W.indexOf(f))+'</div>'});
 sh+='</div>'});
 box.innerHTML=sh}
 let warpPromise=null;let warpLoadError=false;
-function loadWarp(){if(!warpPromise)warpPromise=(async()=>{const[acc,pre,amz]=await Promise.all([api('api/warp/account'),api('api/warp/presets'),api('api/warp/settings/amnezia')]);S.warp={accounts:acc.accounts,presets:pre.presets,amnezia:amz.amnezia};warpLoadError=false;return S.warp})().catch(e=>{warpPromise=null;if(!e||e.status!==401)warpLoadError=true;toastErr(e);throw e});return warpPromise}
+function loadWarp(){if(!warpPromise)warpPromise=(async()=>{const[acc,pre,amz]=await Promise.all([api('api/warp/account'),api('api/warp/presets'),api('api/warp/settings/amnezia')]);S.warp={accounts:acc.accounts,presets:pre.presets,amnezia:amz.amnezia,amneziaEnabled:amz.amneziaEnabled===true};warpLoadError=false;return S.warp})().catch(e=>{warpPromise=null;if(!e||e.status!==401)warpLoadError=true;toastErr(e);throw e});return warpPromise}
 function loadWarpIfNeeded(){return S.warp?Promise.resolve(S.warp):loadWarp().catch(()=>null)}
 function invalidateWarp(){S.warp=null;warpPromise=null;
 try{['api/warp/account','api/warp/presets','api/warp/settings/amnezia'].forEach(function(k){sessionStorage.removeItem('qpc:'+k);sessionStorage.removeItem('qpe:'+k)})}catch(e){}}
-function retryWarp(id){invalidateWarp();warpLoadError=false;loadWarpIfNeeded().then(function(){const r=parseRoute();if(r.view!=='warp')return;if(id)renderWarpDetail(id);else renderWarpSection()})}
+function retryWarp(id){const panel=$('warp-body');if(panel)panel.innerHTML='<section class="card">'+loadingBox({rows:4,label:'common.loading'})+'</section>';invalidateWarp();warpLoadError=false;loadWarpIfNeeded().then(function(){const r=parseRoute();if(r.view!=='warp')return;if(id)renderWarpDetail(id);else renderWarpSection()})}
 function poolCardHtml(){
 return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('egress.pool.title'))+'</div><div class="field__hint">'+esc(t('egress.pool.desc'))+'</div></div><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="pool-fetch">'+esc(t('egress.pool.fetch'))+'</button><button type="button" class="btn btn--primary btn--sm" data-action="pool-test">'+esc(t('egress.pool.test'))+'</button></div></div><div id="pool-list" class="pool-list"><span class="field__hint">'+esc(t('egress.pool.idle'))+'</span></div></section>'}
 async function loadPool(probe){
@@ -37,52 +34,62 @@ catch(e){if(e&&e.status===401)return;box.innerHTML=errorCard({title:'egress.pool
 function renderPool(){
 const box=$('pool-list');if(!box)return;
 const pool=(S.pool&&S.pool.pool)||[];
-if(!pool.length){box.innerHTML='<span class="field__hint">'+esc(t('egress.pool.empty'))+'</span>';return}
+if(!pool.length){box.innerHTML=emptyCard({title:'egress.pool.empty',cta:'common.retry',attrs:'data-action="pool-fetch"'});return}
 const probe=((S.pool&&S.pool.probe)||[]);
 const map=new Map();probe.forEach(p=>{map.set(p.ip+':'+p.port,p)});
 const poolSrc=(S.poolSource||'list');
-const at=S.poolAt?new Date(S.poolAt).toLocaleTimeString():'';
+const at=S.poolAt?new Date(S.poolAt).toLocaleTimeString(LANG==='fa'?'fa-IR':'en-US'):'';
 const head='<div class="pool-meta"><span class="pool-status">'+esc(t('egress.pool.source'))+': '+esc(poolSrc)+'</span>'+ (at?'<span class="pool-status">· '+esc(t('egress.pool.updated'))+' '+esc(at)+'</span>':'')+'</div>';
 const sorted=[...pool].sort(function(a,b){const pa=map.get(a.ip+':'+a.port),pb=map.get(b.ip+':'+b.port);const oa=pa?pa.latencyMs:1e9,ob=pb?pb.latencyMs:1e9;if(oa===ob)return 0;if(oa===1e9)return 1;if(ob===1e9)return -1;return oa-ob});
 box.innerHTML=head+sorted.slice(0,16).map(function(e){
 const k=e.ip+':'+e.port;const pr=map.get(k);
-const status=pr?(pr.status==='ok'?('<span class="glyph-ok">✓</span> '+pr.latencyMs+'ms'):'<span class="glyph-bad">✗</span>'):'<span class="pool-status">'+esc(t('egress.pool.untested'))+'</span>';
-return '<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc(k)+'</span><span class="pool-status">'+status+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="pool-add" data-addr="'+esc(k)+'" aria-label="'+esc(t('common.add'))+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>'}).join('')}
-function renderAddrDots(){
-const map=new Map();
-(S.addrHealth||[]).forEach(r=>{const ip=String(r.ip||'').replace(/^\[|\]$/g,'').toLowerCase();map.set(ip+':'+String(r.port||''),r)});
-document.querySelectorAll('#sp-addresses [data-addr-dot]').forEach(function(dot){
-const card=dot.closest('.addr-card');if(!card)return;
-const addr=(card.querySelector('[data-addr-field="address"]').value||'').trim();
-let host=addr;let portFromAddr='';
-const br=addr.match(/^\[([^\]]+)\](?::(\d+))?$/);if(br){host=br[1];if(br[2])portFromAddr=br[2]}
-else{const c=addr.lastIndexOf(':');if(c>0&&!addr.includes('::')){host=addr.slice(0,c);portFromAddr=addr.slice(c+1)}}
-const port=portFromAddr||(card.querySelector('[data-addr-field="port"]').value||'').trim()||String(S.set.defaultPort||443);
-const r=map.get(host.replace(/^\[|\]$/g,'').toLowerCase()+':'+port);
-if(r){dot.hidden=false;dot.className='addr-dot '+(r.status==='ok'?'dot--ok':'dot--bad');dot.title=r.latencyMs!=null?(r.latencyMs+'ms'):t('egress.pool.untested')}
-else dot.hidden=true});
-}
+const latency=pr&&pr.latencyMs!=null?esc(String(pr.latencyMs))+'ms':'';
+const status=pr?(pr.status==='ok'?('<span class="glyph-ok">✓ '+latency+'</span>'):'<span class="glyph-bad">✗</span>'):'<span class="pool-status">'+esc(t('egress.pool.untested'))+'</span>';
+return '<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc(k)+'</span><span class="pool-status">'+status+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="pool-add" data-addr="'+esc(k)+'" aria-label="'+esc(t('common.add')+': '+k)+'"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>'}).join('')}
 function warpErrorHtml(id){
 return errorCard({title:'warp.error.title',msg:'warp.error.msg',retryAction:'data-warp-retry="'+esc(id||'')+'"'})}
 function warpCardHtml(card){
 if(card.warpAccounts)return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('warp.accounts'))+'</div></div><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button><button type="button" class="btn btn--primary btn--sm" data-action="warp-generate-open">'+esc(t('warp.generate'))+'</button></div></div><div id="warp-accounts" class="warp-grid"></div></section>';
+if(card.warpEndpoints)return '<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('warp.endpoints.title'))+'</div><div class="field__hint">'+esc(t('warp.endpoints.desc'))+'</div></div></div><div id="warp-endpoints"></div></section>';
 if(card.warpPresets)return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.presets.title'))+'</div><button type="button" class="btn btn--primary btn--sm" data-action="warp-preset-add">'+esc(t('warp.presets.add'))+'</button></div><div id="warp-presets"></div></section>';
-if(card.warpAmnezia)return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.amnezia.title'))+'</div></div><p class="field__hint" style="margin-block-end:12px">'+esc(t('warp.amnezia.desc'))+'</p><div class="amz-grid" id="warp-amnezia"></div><button type="button" class="btn btn--primary" data-action="warp-amnezia-save">'+esc(t('warp.amnezia.save'))+'</button></section>';
+if(card.warpAmnezia)return '<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.amnezia.title'))+'</div></div><p class="field__hint" style="margin-block-end:12px">'+esc(t('warp.amnezia.desc'))+'</p><div style="margin-block-end:12px"><label class="switch"><input type="checkbox" id="warp-amnezia-toggle"><span class="switch__track"><span class="switch__thumb"></span></span><span class="switch__label">'+esc(t('warp.amnezia.toggle'))+'</span></label><p class="field__hint" style="margin-block:8px 0">'+esc(t('warp.amnezia.toggle_hint'))+'</p></div><div class="amz-grid" id="warp-amnezia"></div><button type="button" class="btn btn--primary" data-action="warp-amnezia-save">'+esc(t('warp.amnezia.save'))+'</button></section>';
 return ''}
+function globalWarpEndpoints(){
+const set=S.set||{};
+const ids=new Set(Array.isArray(set.warpPresets)?set.warpPresets:[]);
+const out=[];
+const presets=(S.warp&&S.warp.presets)||[];
+for(const p of presets){if(!ids.has(p.id))continue;for(const e of p.endpoints||[])out.push(e.ip+':'+e.port)}
+for(const line of Array.isArray(set.warpCustomEndpoints)?set.warpCustomEndpoints:[]){
+const t=String(line).trim();if(t.length>0)out.push(t)}
+return out}
+function globalWarpEndpointCount(){
+return new Set(globalWarpEndpoints().map(function(e){return e.toLowerCase()})).size}
+function renderWarpEndpoints(){
+const box=$('warp-endpoints');if(!box||!S.warp)return;
+const set=S.set||{};
+const ticked=new Set(Array.isArray(set.warpPresets)?set.warpPresets:[]);
+const custom=Array.isArray(set.warpCustomEndpoints)?set.warpCustomEndpoints.filter(function(l){return String(l).trim().length>0}):[];
+let h='<div class="field"><span class="field__label">'+esc(t('warp.endpoints.presets'))+'</span><div class="check-list" role="group" id="warp-eps-presets" aria-label="'+esc(t('warp.endpoints.presets'))+'">';
+for(const p of S.warp.presets||[]){
+h+='<label class="check"><input type="checkbox" data-warp-preset="'+esc(p.id)+'"'+(ticked.has(p.id)?' checked':'')+'><span>'+esc(p.name)+'</span><span class="acct-date" dir="ltr">'+esc((p.endpoints||[]).slice(0,2).map(function(e){return e.ip+':'+e.port}).join(', '))+'</span></label>'}
+h+='</div></div><div class="field"><div style="display:flex;align-items:center;gap:8px"><label class="field__label" style="margin:0" for="warp-eps-custom">'+esc(t('warp.endpoints.custom'))+'</label><span class="stat-chip">'+esc(t('warp.endpoints.count',{n:custom.length}))+'</span></div><textarea class="input textarea textarea--mono" id="warp-eps-custom" rows="4" dir="ltr" spellcheck="false" placeholder="162.159.192.1:2408">'+esc(custom.join('\n'))+'</textarea><p class="field__error"></p></div><div class="btn-row"><button type="button" class="btn btn--primary btn--sm" data-action="warp-endpoints-save">'+esc(t('warp.endpoints.save'))+'</button></div>';
+box.innerHTML=h}
 function renderWarpSection(){
 const panel=$('warp-body');if(!panel)return;
 if(!S.warp){if(warpLoadError)panel.innerHTML='<section class="card">'+warpErrorHtml('')+'</section>';return}
-if(!$('warp-accounts'))panel.innerHTML=warpCardHtml({warpAccounts:true})+warpCardHtml({warpPresets:true})+warpCardHtml({warpAmnezia:true});
+if(!$('warp-accounts'))panel.innerHTML=warpCardHtml({warpAccounts:true})+warpCardHtml({warpEndpoints:true})+warpCardHtml({warpPresets:true})+warpCardHtml({warpAmnezia:true});
 const W=S.warp;
+renderWarpEndpoints();
 const ac=$('warp-accounts');
 if(ac){
 ac.innerHTML='<div class="chips-row" style="grid-column:1/-1;margin-block-end:4px"><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('warp.chips.accounts',{n:W.accounts.length}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('warp.chips.presets',{n:W.presets.length}))+'</span><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('home.chips.formats',{n:WARP_W.length}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('warp.chips.direct'))+'</span></div>';
 if(!W.accounts.length){ac.insertAdjacentHTML('beforeend',emptyCard({icon:'i-download',title:'warp.empty_title',msg:'warp.empty_msg',cta:'warp.generate',attrs:'data-action="warp-generate-open"',style:'grid-column:1/-1',extraActions:'<button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button>'}))}
-else W.accounts.forEach(function(a,i){const eps=a.endpoint_list&&a.endpoint_list.type==='custom'?t('warp.detail.custom_eps',{n:a.endpoint_list.custom_endpoints.length}):(W.presets.find(function(p){return p.id===(a.endpoint_list&&a.endpoint_list.preset_id)})||{name:a.endpoint_list&&a.endpoint_list.preset_id||''}).name;ac.insertAdjacentHTML('beforeend','<a class="acct-card" href="#/warp/'+esc(a.id)+'"><span class="avatar-tile grad-'+((i%6)+1)+'">'+esc((a.name[0]||'W').toUpperCase())+'</span><span class="acct-info"><span class="acct-name">'+esc(a.name)+'</span><span class="acct-date">'+esc((a.created_at||'').slice(0,10))+' · '+esc(eps)+'</span></span>'+(a.amnezia_overrides?'<span class="amz-tag">AMZ</span>':'')+'</a>')})}
+else W.accounts.forEach(function(a,i){ac.insertAdjacentHTML('beforeend','<a class="acct-card" href="#/warp/'+esc(a.id)+'"><span class="avatar-tile grad-'+((i%6)+1)+'">'+esc((a.name[0]||'W').toUpperCase())+'</span><span class="acct-info"><span class="acct-name">'+esc(a.name)+'</span><span class="acct-date">'+esc((a.created_at||'').slice(0,10))+' · '+esc(t('warp.endpoints.count',{n:fmtInt(globalWarpEndpointCount())}))+'</span></span></a>')})}
 const pr=$('warp-presets');
-if(pr){let ph='';W.presets.forEach(function(p){const preview=p.endpoints.slice(0,3).map(function(e){return e.ip+':'+e.port}).join(', ')+(p.endpoints.length>3?' +'+(p.endpoints.length-3):'');ph+='<div class="row"><div style="min-width:0"><div class="acct-name">'+esc(p.name)+'</div><div class="acct-date" dir="ltr">'+esc(preview)+'</div></div><div class="btn-row"><span class="stat-chip">'+esc(t('warp.presets.count',{n:p.endpoints.length}))+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="warp-preset-edit" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.edit'))+'"><svg aria-hidden="true"><use href="#i-edit"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="warp-preset-del" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>'});pr.innerHTML=ph}
+if(pr){let ph='';W.presets.forEach(function(p){const preview=p.endpoints.slice(0,3).map(function(e){return e.ip+':'+e.port}).join(', ')+(p.endpoints.length>3?' +'+fmtInt(p.endpoints.length-3):'');ph+='<div class="row"><div style="min-width:0"><div class="acct-name">'+esc(p.name)+'</div><div class="acct-date" dir="ltr">'+esc(preview)+'</div></div><div class="btn-row"><span class="stat-chip">'+esc(t('warp.presets.count',{n:fmtInt(p.endpoints.length)}))+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="warp-preset-edit" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.edit'))+'"><svg aria-hidden="true"><use href="#i-edit"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="warp-preset-del" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>'});pr.innerHTML=ph}
 const am=$('warp-amnezia');
-if(am){const AMZ=[['Jc','Jc (0-128)'],['Jmin','Jmin (0-1280)'],['Jmax','Jmax (0-1280)'],['S1','S1 (0-65535)'],['S2','S2 (0-65535)'],['S3','S3 (0-65535)'],['S4','S4 (0-65535)'],['H1','H1'],['H2','H2'],['H3','H3'],['H4','H4']];let ah='';AMZ.forEach(function(kv){const key=kv[0],lbl=kv[1];const v=W.amnezia&&W.amnezia[key]!==undefined&&W.amnezia[key]!==null?W.amnezia[key]:'';ah+='<div class="field"><label class="field__label" for="amz-'+key+'">'+esc(lbl)+'</label><input class="input" type="text" id="amz-'+key+'" dir="ltr" value="'+esc(String(v))+'"></div>'});ah+='<div class="field" style="grid-column:1/-1"><label class="field__label" for="amz-I1">'+esc(t('warp.amnezia.i1'))+'</label><input class="input" type="text" id="amz-I1" dir="ltr" value="'+esc(String(W.amnezia&&W.amnezia.I1||''))+'"></div>';am.innerHTML=ah}
+if(am){const AMZ=[['Jc','warp.amnezia.jc'],['Jmin','warp.amnezia.jmin'],['Jmax','warp.amnezia.jmax'],['S1','warp.amnezia.s1'],['S2','warp.amnezia.s2'],['S3','warp.amnezia.s3'],['S4','warp.amnezia.s4'],['H1','warp.amnezia.h1'],['H2','warp.amnezia.h2'],['H3','warp.amnezia.h3'],['H4','warp.amnezia.h4']];let ah='';AMZ.forEach(function(kv){const key=kv[0],lbl=kv[1];const v=W.amnezia&&W.amnezia[key]!==undefined&&W.amnezia[key]!==null?W.amnezia[key]:'';ah+='<div class="field"><label class="field__label" for="amz-'+key+'">'+esc(t(lbl))+'</label><input class="input" type="text" id="amz-'+key+'" dir="ltr" value="'+esc(String(v))+'"></div>'});ah+='<div class="field" style="grid-column:1/-1"><label class="field__label" for="amz-I1">'+esc(t('warp.amnezia.i1'))+'</label><input class="input" type="text" id="amz-I1" dir="ltr" value="'+esc(String(W.amnezia&&W.amnezia.I1||''))+'"></div>';am.innerHTML=ah;const amzTg=$('warp-amnezia-toggle');if(amzTg)amzTg.checked=W.amneziaEnabled===true}
 }
 function renderWarpDetail(id){
 const panel=$('warp-body');if(!panel)return;
@@ -90,22 +97,10 @@ if(!S.warp){if(warpLoadError){panel.innerHTML='<div class="detail-title"><a clas
 if(!S.warp.accounts){location.hash='#/warp';return}
 const a=S.warp.accounts.find(function(x){return x.id===id});
 if(!a){location.hash='#/warp';return}
-warpAmzShow=!!a.amnezia_overrides;
-let html='<div class="detail-title"><a class="back-btn" href="#/warp" aria-label="'+esc(t('warp.back'))+'"><svg aria-hidden="true"><use href="#i-back"/></svg></a><h2 class="view-title">'+esc(a.name)+'</h2>'+(a.amnezia_overrides?'<span class="amz-tag">AMZ</span>':'')+'</div>';
+let html='<div class="detail-title"><a class="back-btn" href="#/warp" aria-label="'+esc(t('warp.back'))+'"><svg aria-hidden="true"><use href="#i-back"/></svg></a><h2 class="view-title">'+esc(a.name)+'</h2></div>';
 html+='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('warp.detail.subs'))+'</div><div class="field__hint">'+esc(t('warp.detail.subs_desc'))+'</div></div></div><div id="warp-detail-subs"></div></section>';
 html+='<details class="warp-acc token-panel" id="warp-token-details"><summary><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('warp.detail.token'))+'</span><code class="mono" dir="ltr" style="font-size:var(--fs-sm)">'+esc(String(a.token||'').slice(0,8))+'…</code></summary><div class="warp-grid-sub"><code class="mono" dir="ltr" style="word-break:break-all;font-size:var(--fs-sm);color:var(--cyan-pale)">'+esc(a.token)+'</code><div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-regen" data-id="'+esc(a.id)+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('warp.detail.regen'))+'</button></div><p class="field__hint" style="margin-block:8px 0">'+esc(t('warp.detail.token_hint'))+'</p></div></details>';
-const isCustomEps=a.endpoint_list&&a.endpoint_list.type==='custom';
-const presetSel='<select class="select" id="warp-preset">'+(isCustomEps?'<option value="__custom" disabled selected>'+esc(t('warp.presets.custom_n',{n:(a.endpoint_list.custom_endpoints||[]).length}))+'</option>':'')+S.warp.presets.map(function(p){return '<option value="'+esc(p.id)+'"'+(a.endpoint_list.type==='preset'&&a.endpoint_list.preset_id===p.id?' selected':'')+'>'+esc(p.name)+' ('+p.endpoints.length+')</option>'}).join('')+'</select>';
-html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.accounts'))+'</div></div><div class="field"><label class="field__label" for="warp-name">'+esc(t('warp.detail.name'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-name" maxlength="100" value="'+esc(a.name)+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="name">'+esc(t('common.apply'))+'</button></div></div><div class="field"><label class="field__label" for="warp-preset">'+esc(t('warp.detail.preset'))+'</label>'+presetSel+'</div><div class="field"><label class="field__label" for="warp-dns">'+esc(t('warp.detail.dns'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-dns" dir="ltr" value="'+esc(a.dns||'')+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="dns">'+esc(t('common.apply'))+'</button></div></div></section>';
-const customEps=(a.endpoint_list.type==='custom'?a.endpoint_list.custom_endpoints:[]).map(function(e){return e.ip+':'+e.port}).join('\n');
-html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.detail.custom_eps_title'))+'</div></div><p class="field__hint">'+esc(t('warp.detail.custom_eps_desc'))+'</p><div class="field"><textarea class="input textarea textarea--mono" id="warp-custom-eps" rows="5" dir="ltr" spellcheck="false" placeholder="162.159.192.1:2408">'+esc(customEps)+'</textarea></div><div class="btn-row"><button type="button" class="btn btn--primary btn--sm" data-action="warp-custom-eps-save" data-id="'+esc(a.id)+'">'+esc(t('common.save'))+'</button></div></section>';
-const ov=a.amnezia_overrides||S.warp.amnezia||{};
-const AMZK=[['Jc','Jc (0-128)'],['Jmin','Jmin (0-1280)'],['Jmax','Jmax (0-1280)'],['S1','S1 (0-65535)'],['S2','S2 (0-65535)'],['S3','S3 (0-65535)'],['S4','S4 (0-65535)'],['H1','H1'],['H2','H2'],['H3','H3'],['H4','H4']];
-let amh='<p class="field__hint" style="margin-block-end:12px">'+esc(a.amnezia_overrides?t('warp.detail.amnezia_on'):t('warp.detail.amnezia_off'))+'</p><div class="amz-grid">';
-AMZK.forEach(function(kv){const key=kv[0];const valA=ov&&ov[key]!==undefined&&ov[key]!==null?ov[key]:'';amh+='<div class="field"><label class="field__label" for="amza-'+key+'">'+esc(kv[1])+'</label><input class="input" type="text" id="amza-'+key+'" dir="ltr" value="'+esc(String(valA))+'"></div>'});
-amh+='<div class="field" style="grid-column:1/-1"><label class="field__label" for="amza-I1">'+esc(t('warp.amnezia.i1'))+'</label><input class="input" type="text" id="amza-I1" dir="ltr" value="'+esc(String((ov&&ov.I1)||''))+'"></div></div>';
-amh+='<div class="btn-row"><button type="button" class="btn btn--primary btn--sm" data-action="warp-account-amnezia-save" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.amnezia_save'))+'</button>'+(a.amnezia_overrides?'<button type="button" class="btn btn--ghost btn--sm" data-action="warp-amnezia-reset" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.amnezia_reset'))+'</button>':'')+'</div>';
-html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.amnezia.title'))+'</div></div>'+amh+'</section>';
+html+='<section class="card"><div class="card__head"><div class="card__title">'+esc(t('warp.accounts'))+'</div></div><div class="field"><label class="field__label" for="warp-name">'+esc(t('warp.detail.name'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-name" maxlength="100" value="'+esc(a.name)+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="name">'+esc(t('common.apply'))+'</button></div></div><div class="field"><label class="field__label" for="warp-dns">'+esc(t('warp.detail.dns'))+'</label><div class="secret-field"><input class="input" type="text" id="warp-dns" dir="ltr" value="'+esc(a.dns||'')+'"><button type="button" class="btn btn--ghost btn--sm" data-action="warp-save" data-id="'+esc(a.id)+'" data-field="dns">'+esc(t('common.apply'))+'</button></div></div></section>';
 html+='<section class="card card--danger"><div class="card__head"><div class="card__title">'+esc(t('warp.detail.delete'))+'</div></div><button type="button" class="btn btn--ghost-danger btn--sm" data-action="warp-delete" data-id="'+esc(a.id)+'">'+esc(t('warp.detail.delete'))+'</button></section>';
 panel.innerHTML=html;
 renderWarpSubs(a)}
@@ -124,26 +119,3 @@ $('wp-go').textContent=t(p?'common.save':'warp.presets.add')}
 else if(id==='m-warp-generate'){$('wg-name').value=''}
 else if(id==='m-warp-import'){$('wi-name').value='';$('wi-config').value='';$('wi-error').style.display='';$('wi-error').textContent=''}
 openModal(id)}
-document.addEventListener('click',function(e){
-const b=e.target&&e.target.closest?e.target.closest('[data-warp-retry]'):null;if(!b)return;
-b.disabled=true;retryWarp(b.getAttribute('data-warp-retry')||'')});
-document.addEventListener('change',function(e){
-const tg=e.target;if(!tg)return;
-if(tg.id==='warp-amz-toggle'){
-const box=$('warp-detail-subs');if(!box)return;
-box.querySelectorAll('.fmt-row[data-amz]').forEach(function(r){r.hidden=!tg.checked});
-box.querySelectorAll('.warp-group').forEach(function(g){
-const chip=g.querySelector('.stat-chip');if(!chip)return;
-chip.textContent=t('warp.groups.count',{n:g.querySelectorAll('.fmt-row:not([hidden])').length})});
-return}
-if(tg.id!=='warp-preset')return;
-if(warpPresetGuardPass)return;
-const r=parseRoute();if(r.view!=='warp'||!r.warpId)return;
-const acc=S.warp&&S.warp.accounts?S.warp.accounts.find(function(x){return x.id===r.warpId}):null;
-if(!acc||!acc.endpoint_list||acc.endpoint_list.type!=='custom')return;
-const val=tg.value;if(!val||val==='__custom')return;
-e.stopImmediatePropagation();
-const n=(acc.endpoint_list.custom_endpoints||[]).length;
-confirmDialog('warp.confirm.presetSwitch.title','warp.confirm.presetSwitch.body',true,{n:n}).then(function(yes){
-if(!yes){tg.value='__custom';return}
-warpPresetGuardPass=true;tg.dispatchEvent(new Event('change',{bubbles:true}));warpPresetGuardPass=false})});

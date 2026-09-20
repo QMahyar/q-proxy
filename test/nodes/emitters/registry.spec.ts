@@ -27,7 +27,7 @@ function vless(): ProxyNode {
 
 async function base64Body(nodes: ProxyNode[], isFragmentMode = false): Promise<string> {
   return renderSubscriptionBody({
-    settings: { ...structuredClone(DEFAULT_SETTINGS), remoteSubUrls: [] },
+    settings: structuredClone(DEFAULT_SETTINGS),
     nodes,
     format: "base64",
     isFragmentMode,
@@ -41,8 +41,8 @@ function decodeBody(body: string): string {
 }
 
 describe("EMITTERS registry", () => {
-  it("covers exactly the four sync SubFormats (base64 renders async via renderSubscriptionBody)", () => {
-    expect(Object.keys(EMITTERS).sort()).toEqual(["clash", "loon", "quantumult", "singbox", "surge"]);
+  it("covers exactly the surviving sync SubFormats (base64 renders async via renderSubscriptionBody)", () => {
+    expect(Object.keys(EMITTERS).sort()).toEqual(["clash", "singbox", "xray"]);
   });
 });
 
@@ -86,39 +86,11 @@ describe("base64 subscription body", () => {
     expect(decodeBody(await base64Body([frag], true)).startsWith("vless://")).toBe(true);
   });
 
-  it("drops ss and plain-security vless/trojan nodes for base64 clients", async () => {
-    const ss = ssNode();
+  it("drops plain-security vless nodes for base64 clients", async () => {
     const plainVless: ProxyNode = { ...vless(), name: "PV", port: 80, security: "none", sni: null, fingerprint: null, alpn: [], path: "/vl/a" };
-    const text = decodeBody(await base64Body([vless(), ss, plainVless]));
+    const text = decodeBody(await base64Body([vless(), plainVless]));
     const lines = text.split("\n");
-    expect(lines.some((l) => l.startsWith("ss://"))).toBe(false);
     expect(lines.some((l) => l.includes("security=none"))).toBe(false);
     expect(lines.some((l) => l.startsWith("vless://"))).toBe(true);
   });
-
-  it("keeps ss nodes when the scope has no other kinds (per-user ss-only subscriptions)", async () => {
-    const text = decodeBody(await base64Body([ssNode()]));
-    expect(text.startsWith("ss://")).toBe(true);
-  });
 });
-
-function ssNode(): ProxyNode {
-  return {
-    kind: "ss",
-    name: "SS",
-    address: "203.0.113.10",
-    port: 8388,
-    security: "tls",
-    sni: null,
-    host: "example.com",
-    path: "/ss/abc",
-    earlyData: 0,
-    fingerprint: null,
-    alpn: [],
-    ech: null,
-    variant: "normal",
-    tags: [],
-    method: "aes-128-gcm",
-    password: "p",
-  };
-}

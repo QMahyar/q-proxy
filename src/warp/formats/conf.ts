@@ -31,22 +31,13 @@ function confFor(ctx: WarpEmitContext, index: number, withAmnezia: boolean): { n
 export function emitWireguardConfZip(ctx: WarpEmitContext): Uint8Array {
   const files: Record<string, string> = {};
   ctx.rows.forEach((_, i) => {
-    const f = confFor(ctx, i, false);
+    const f = confFor(ctx, i, ctx.amneziaEnabled);
     files[f.name] = f.content;
   });
   return zipStore(files);
 }
 
-export function emitWireguardConfAmneziaZip(ctx: WarpEmitContext): Uint8Array {
-  const files: Record<string, string> = {};
-  ctx.rows.forEach((_, i) => {
-    const f = confFor(ctx, i, true);
-    files[f.name] = f.content;
-  });
-  return zipStore(files);
-}
-
-export function emitThrone(ctx: WarpEmitContext, withAmnezia: boolean): string {
+export function emitThrone(ctx: WarpEmitContext): string {
   const { account } = ctx;
   return (
     ctx.rows
@@ -61,7 +52,7 @@ export function emitThrone(ctx: WarpEmitContext, withAmnezia: boolean): string {
         ];
         const [r0, r1, r2] = account.config.reserved;
         if (r0 !== 0 || r1 !== 0 || r2 !== 0) parts.push(`reserved=${r0}-${r1}-${r2}`);
-        if (withAmnezia && ctx.amnezia !== null) {
+        if (ctx.amnezia !== null) {
           parts.push("enable_amnezia=true");
           for (const [key, value] of amneziaEntries(ctx.amnezia)) {
             if (key === "I1") parts.push(`i1=${encodeURIComponent(value)}`);
@@ -75,7 +66,7 @@ export function emitThrone(ctx: WarpEmitContext, withAmnezia: boolean): string {
   );
 }
 
-export function emitWireguardUri(ctx: WarpEmitContext): string {
+function emitWireguardUri(ctx: WarpEmitContext): string {
   const { account } = ctx;
   return (
     ctx.rows

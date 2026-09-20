@@ -6,7 +6,7 @@ if(entry.format==='base64')return entry.url+(entry.url.includes('?')?'&':'?')+'t
 return entry.url}
 function subsModeSeg(){
 let sh='<div class="seg" role="radiogroup" aria-label="'+esc(t('home.subs.mode.normal'))+'/'+esc(t('home.subs.mode.fragment'))+'">';
-SUBS_MODE_IDS.forEach(m=>{sh+='<button type="button" aria-checked="'+String(S.subMode===m)+'" data-mode="'+m+'">'+esc(t('home.subs.mode.'+m))+'</button>'});
+SUBS_MODE_IDS.forEach(m=>{sh+='<button type="button" role="radio" aria-checked="'+String(S.subMode===m)+'" data-mode="'+m+'">'+esc(t('home.subs.mode.'+m))+'</button>'});
 return sh+'</div>'}
 function subsEmptyHtml(){return emptyCard({icon:'i-qr',title:'home.subs.empty_title',msg:'home.subs.empty_msg',cta:'home.subs.empty_cta',href:'#/settings/protocols'})}
 function subsMainHtml(){
@@ -22,20 +22,33 @@ sh+='<details class="warp-acc subs-acc"><summary>'+esc(t('subs.main.expand'))+'<
 if(meta.hint)sh+='<p class="field__hint" style="margin-block:0 8px"><strong>'+esc(t('subs.usedby'))+':</strong> '+esc(t(meta.hint))+'</p>';
 sh+='<p class="field__hint" style="margin-block:0 8px">'+esc(t('subs.main.user_agent'))+'</p>';
 sh+='<div class="field" style="margin-block:0 10px"><span class="field__label">'+esc(t('subs.main.variant'))+'</span>'+copyFieldHtml(subVariantUrl(entry),'hub-v'+i)+'</div>';
-sh+='<p class="field__hint" style="margin-block:0 10px" dir="auto">'+esc(t('country.hint'))+'</p>';
 if(meta.ext)sh+='<p style="margin-block:0"><a class="btn btn--ghost btn--sm" href="'+esc(entry.url)+'" download><svg aria-hidden="true"><use href="#i-download"/></svg>'+esc(t('subs.main.download',{ext:meta.ext}))+'</a></p>';
 sh+='</div></details>'});
 sh+='<p class="field__hint" dir="auto" style="margin-block:12px 0">'+esc(t('home.subs.quota'))+'</p>';
 sh+='</section>';
-return sh}
-function subsUsersHtml(){
-let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.users.title'))+'</div><div class="field__hint">'+esc(t('subs.users.desc'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/users">'+esc(t('subs.users.manage'))+'</a></div><div id="subs-users">'+loadingBox({rows:2})+'</div></section>';
 return sh}
 function subsWarpHtml(){
 const n=S.warp&&Array.isArray(S.warp.accounts)?S.warp.accounts.length:null;
 let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.warp.title'))+'</div><div class="field__hint">'+esc(t('subs.warp.desc'))+'</div></div></div><div class="row" style="border:0"><a class="btn btn--primary btn--sm" href="#/warp">'+esc(t('subs.warp.cta'))+'</a>';
 if(n)sh+='<span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('warp.chips.accounts',{n:n}))+'</span>';;
 sh+='</div></section>';
+return sh}
+function subsUtilsHtml(){
+const doh=location.origin+BASE+'doh';
+const sp=String((S.set&&S.set.securePath)||'').replace(/^\/+|\/+$/g,'');
+const loginUrl=location.origin+(sp?'/'+sp+'/':BASE)+'login';
+let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.utils.title'))+'</div><div class="field__hint">'+esc(t('subs.utils.desc'))+'</div></div></div>';
+sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(t('subs.utils.doh'))+'</span>'+copyFieldHtml(doh,'hub-doh')+'</div>';
+sh+='<div class="row" style="border-block-end:0"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(t('subs.utils.panel'))+'</span>'+copyFieldHtml(loginUrl,'hub-login')+'</div>';
+sh+='</section>';
+return sh}
+function subsWarpQuickHtml(){
+if(!S.warp||!Array.isArray(S.warp.accounts)||!S.warp.accounts.length)return '';
+let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.utils.warp_quick'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/warp">'+esc(t('subs.warp.cta'))+'</a></div>';
+S.warp.accounts.slice(0,3).forEach(a=>{
+const url=warpSubUrl(a.token,'wireguard-conf');
+sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(a.name)+'</span>'+copyFieldHtml(url,'hub-warp-'+a.id.slice(0,6))+'</div>'});
+sh+='</section>';
 return sh}
 function subsInfoHtml(){
 const info=(S.subs||[]).find(isInfoEntry);
@@ -46,37 +59,42 @@ sh+='<details class="warp-acc subs-acc"><summary>'+esc(t('subs.how.title'))+'</s
 sh+='</section>';
 return sh}
 function subsBodyHtml(){
-return subsMainHtml()+subsUsersHtml()+subsWarpHtml()+subsInfoHtml()}
+return subsMainHtml()+subsPingHtml()+subsImportHtml()+subsWarpHtml()+subsWarpQuickHtml()+subsUtilsHtml()+subsInfoHtml()}
+function subsPingHtml(){
+return '<section class="card" id="subs-ping"><div class="card__head"><div><div class="card__title">'+esc(t('subs.ping.title'))+'</div><div class="field__hint">'+esc(t('subs.ping.body'))+'</div></div></div></section>'}
+let subImportEndpoints=[];
+function subsImportHtml(){
+let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.import.title'))+'</div><div class="field__hint">'+esc(t('subs.import.desc'))+'</div></div></div>';
+sh+='<div class="field"><label class="field__label" for="sub-import-text">'+esc(t('subs.import.title'))+'</label><textarea class="input textarea textarea--mono" id="sub-import-text" rows="5" dir="ltr" spellcheck="false" placeholder="'+esc(t('subs.import.placeholder'))+'"></textarea></div>';
+sh+='<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="subs-import-preview">'+esc(t('subs.import.preview'))+'</button></div>';
+sh+='<div id="sub-import-preview" style="margin-block-start:8px"></div></section>';
+return sh}
+function renderImportPreview(sources){
+const box=$('sub-import-preview');if(!box)return;
+subImportEndpoints=[];
+const seen=new Set();
+(sources||[]).forEach(s=>{(s.endpoints||[]).forEach(e=>{const k=String(e).toLowerCase();if(!seen.has(k)){seen.add(k);subImportEndpoints.push(String(e))}})});
+let sh='';
+if(!subImportEndpoints.length)sh=emptyCard({title:'subs.import.empty'})+sh;
+(sources||[]).forEach(s=>{
+const tag=t('subs.import.source',{n:(s.index||0)+1});
+sh+='<div class="warp-group"><div style="display:flex;align-items:center;gap:8px;margin-block:12px 2px"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-ghost)">'+esc(tag)+'</span><span class="stat-chip" style="padding:.125rem .5rem">'+esc(t('warp.endpoints.count',{n:(s.endpoints||[]).length}))+'</span></div>';
+(s.endpoints||[]).forEach(e=>{sh+='<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc(String(e))+'</span></div>'});
+(s.invalid||[]).forEach(iv=>{sh+='<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc('line '+iv.line)+'</span><span class="pool-status"><span class="glyph-bad">✗ '+esc(String(iv.reason))+'</span></span></div>'});
+sh+='</div>'});
+if(subImportEndpoints.length)sh+='<div class="btn-row" style="margin-block-start:8px"><button type="button" class="btn btn--primary btn--sm" data-action="subs-import-confirm">'+esc(t('subs.import.confirm',{n:subImportEndpoints.length}))+'</button></div>';
+box.innerHTML=sh}
 function renderSubsView(){
 const b=$('subs-body');if(!b)return;
-b.innerHTML=subsBodyHtml();
-renderSubsUsers()}
+b.innerHTML=subsBodyHtml()}
 function showSubsView(){
 renderSubsView();
-loadSubsUsers();
 if(!S.warp)loadWarpIfNeeded().then(()=>{if(parseRoute().view==='subs')renderSubsView()})}
-function subsUserRowHtml(u){
-const hint='<code dir="ltr" class="mono" style="font-size:var(--fs-sm)" title="'+esc(t('users.token.hint_title'))+'">'+esc(u.tokenHint||'')+'</code>';
-return '<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:30%">'+esc(u.name)+'</span><span style="flex:1;min-width:0">'+hint+'</span>'+userChip(u)+'</div>'}
-let subsUsersLoaded=false;
-function renderSubsUsers(){
-const box=$('subs-users');if(!box)return;
-const all=S.users||[];
-if(!subsUsersLoaded&&!all.length)return;
-if(!all.length){box.innerHTML=emptyCard({title:'subs.users.empty',cta:'subs.users.empty_cta',href:'#/users',style:'padding:2rem 1.5rem'});return}
-box.innerHTML=all.map(subsUserRowHtml).join('')+'<p class="field__hint" style="margin-block:10px 0">'+esc(t('subs.users.hint'))+'</p>'}
-async function loadSubsUsers(){
-const box=$('subs-users');if(!box)return;
-try{const d=await api('api/users',{fresh:true});S.users=d.users||[];subsUsersLoaded=true;renderSubsUsers()}catch(e){if(e&&e.status===401)return;if(e&&e.handled)return;subsUsersLoaded=true;box.innerHTML=errorCard({title:'users.load_failed',retryAction:'data-retry="subs-users"'})}}
 
-document.addEventListener('click',function(e){
-const b=e.target&&e.target.closest?e.target.closest('[data-retry="subs-users"]'):null;if(!b)return;
-const box=$('subs-users');if(box)box.innerHTML=loadingBox({rows:2});
-loadSubsUsers()});
 document.addEventListener('click',function(e){
 const chip=e.target&&e.target.closest?e.target.closest('#subs-body [data-mode]'):null;
 if(!chip)return;
-S.subMode=chip.dataset.mode;
+S.subMode=chip.dataset.mode;try{localStorage.setItem('qp_submode',S.subMode)}catch(err){}
 chip.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===chip)));
 const rows=mainSubEntries();
 document.querySelectorAll('#subs-body [id^="hub-u"]').forEach(code=>{

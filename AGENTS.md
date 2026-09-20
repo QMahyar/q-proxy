@@ -1,16 +1,27 @@
 # AGENTS.md — Q Proxy
 
-Context for AI agents working in this repo. Read this first, then [CONTEXT.md](CONTEXT.md) for the subsystem map and conventions cheat-sheet. Frozen contracts live in `docs/ARCHITECTURE.md` — do not rename exported types without an architecture revision. Why those contracts exist lives in `docs/decisions/` (ADRs 001–005+).
+Context for AI agents working in this repo. Read this first, then [CONTEXT.md](CONTEXT.md) for the subsystem map and conventions cheat-sheet. Frozen contracts live in `docs/ARCHITECTURE.md` — do not rename exported types without an architecture revision. Why those contracts exist lives in `docs/decisions/` (ADRs 001–010).
+
+## Start Here (Router)
+
+| You want to… | Go to |
+|---|---|
+| Understand what the system does | `CONTEXT.md` project map, then `docs/ARCHITECTURE.md` frozen contracts |
+| Know why it is shaped this way | `docs/decisions/ADR-*.md` (001–010) |
+| Add/change a setting, emitter, route, or panel view | Patterns below, then `docs/DEVELOPER_GUIDE.md` §4/§6/§10 |
+| Change a wire format or golden bytes | Ask first (Boundaries) — goldens break on purpose |
+| Fix a red loop or wedged dev | Verification Loop below + the `wrangler dev` gotcha under Commands |
+| Deploy or manage infrastructure | `docs/DEPLOYMENT.md` + `deploy.py` |
 
 ## What This Is
 
-Self-hosted Cloudflare Worker or Pages Function under one admin: terminates VLESS, VMess, Trojan and Shadowsocks over WebSocket and serves UA-negotiated subscriptions, plus scoped per-user subscription links (`src/users/`), WARP/WireGuard config serving (`src/warp/`) and an optional Telegram bot. Zero runtime npm dependencies. One KV namespace + one D1 database. Single-file build `dist/q-proxy.js` (Workers) and `dist/_worker.js` (Pages Advanced Mode) for dashboard paste or `wrangler deploy` / `wrangler pages deploy`. Bilingual EN/FA panel assembled at build time from `src/ui/panel/` parts. A standalone deploy manager (`deploy.py`, Python stdlib only) provisions Workers/Pages targets interactively or via flags. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for all deployment paths. Current release: **v1.5.0**.
+Single-admin Cloudflare Worker or Pages Function: terminates VLESS over WebSocket (CDN-fronted), serves UA-negotiated subscriptions (`base64`/`singbox`/`clash`/`xray`), serves per-account WARP/WireGuard configs in 4 families with one global Amnezia switch (`src/warp/`), and runs an optional Telegram bot (status/sub/kill only). Zero runtime npm dependencies. One KV namespace + one D1 database. Single-file build `dist/q-proxy.js` (Workers) and `dist/_worker.js` (Pages Advanced Mode) for dashboard paste or `wrangler deploy` / `wrangler pages deploy`. Bilingual EN/FA panel assembled at build time from `src/ui/panel/` parts. A standalone deploy manager (`deploy.py`, Python stdlib only) provisions Workers/Pages targets interactively or via flags. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for all deployment paths. Current release: **v1.6.0**.
 
 ## Tech Stack
 
 - TypeScript 7.0.2 (native), strict, ES2023 target
 - Cloudflare Workers runtime (`cloudflare:sockets` for TCP egress), compatibility date `2026-08-01`
-- KV (`QPROXY_KV`) + D1 (`QPROXY_DB`) bindings; write-hot state lives in D1 (users, totals, usage, activity, counters, audit), settings/WARP/auth state in KV
+- KV (`QPROXY_KV`) + D1 (`QPROXY_DB`) bindings; write-hot state lives in D1 (counters, audit log), settings/WARP/auth state in KV
 - esbuild 0.28 bundler — single file output, `.html` loaded as text (panel minified at bundle time), rejects bare imports except `cloudflare:*`
 - vitest 4 with two projects: `unit` (node) + `workers` (`@cloudflare/vitest-pool-workers`, miniflare, includes D1)
 - wrangler 4.125 for dev/deploy; `deploy.py` (Python 3, stdlib only) as an alternative panel/infra manager
@@ -56,24 +67,23 @@ Deploy auth: Cloudflare **Global API Key** env vars — `$env:CLOUDFLARE_API_KEY
 
 ## UI Architecture (src/ui/panel/ — read src/ui/panel/README.md first)
 
-The panel is **not** a single HTML file anymore. Build-time sources live in `src/ui/panel/` (22 parts); `scripts/build-single-file.mjs` splices them into `src/ui/panel.html` (git-kept generated output — **edit the parts, never the generated file**). Assembly is plain concatenation sharing ONE IIFE scope: parts reference each other's top-level functions directly, no imports — **hoisting order in `PANEL_JS_ORDER` matters**, and function names must never be renamed.
+The panel is **not** a single HTML file anymore. Build-time sources live in `src/ui/panel/` (19 JS parts in `PANEL_JS_ORDER`); `scripts/build-single-file.mjs` splices them into `src/ui/panel.html` (git-kept generated output — **edit the parts, never the generated file**). Assembly is plain concatenation sharing ONE IIFE scope: parts reference each other's top-level functions directly, no imports — **hoisting order in `PANEL_JS_ORDER` matters**, and function names must never be renamed.
 
 | Part | Owns |
 |---|---|
-| `dict.js` | EN/FA dictionaries (620→547 keys, parity enforced), language/theme controllers; heap drops the inactive language when `qp_lang` cookie is pinned |
+| `dict.js` | EN/FA dictionaries (key parity enforced — count pinned by the tests, not here), language/theme controllers; heap drops the inactive language when `qp_lang` cookie is pinned |
 | `format-labels.js` | Client format registry + `FORMAT_ORDER`, drift-guarded 1:1 against server `SUB_FORMATS`/`EXTENSIONS` |
 | `lib.js` | dom/api/toast/modal/confirm helpers; `copyText` returns real booleans |
 | `a11y.js` | radiogroup keyboard controller (RTL-aware), `announce()` live region, `nextId()` |
 | `qr.js`, `states.js` | QR encoder; `emptyCard`/`loadingBox`/`errorCard` builders (every loader: loading→content→errorCard(retry)) |
-| `home.js` | state, hash router (5 views + back-compat redirects), home view |
+| `home.js` | state, hash router (4 views + back-compat redirects), home view |
 | `subs.js` | Subscriptions hub (`#/subs`) — every URL the worker serves |
-| `warp.js` | WARP views (7 format families, amnezia toggle, preset honesty) |
-| `users.js` | user table (expiry countdown, quota, scope chips, search, capacity) |
-| `users-modal.js`, `share.js` | create/edit modal; unified ShareSheet |
-| `chrome.js`, `sections*.js`, `fields-*.js`, `cards.js`, `totp.js`, `section-io.js`, `settings.js` | chart/banner/shortcuts/undo-redo; settings split across 8 modules (registry, render, validate, cards, totp, modal, IO, 4-line glue) |
+| `warp.js` | WARP views (4 format families + global Amnezia switch, preset honesty) |
+| `share.js` | unified ShareSheet |
+| `chrome.js`, `sections*.js`, `fields-*.js`, `cards.js`, `section-io.js`, `settings.js` | chart/banner/shortcuts/undo-redo; settings split across dedicated modules (registry, render, validate, cards, IO, glue) |
 | `actions.js` | action dispatch table + boot; closes the IIFE |
 
-UI drift guards (all in `test/ui/`, run with unit project): `dict-usage.spec.ts` (computed unused-key guard — every dict key must be referenced or it fails CI), `dict-split.spec.ts` (heap split), `contrast.spec.ts` (WCAG ≥4.5:1 both themes), `format-labels.spec.ts` (server↔client format registries + WARP groups), `assets.spec.ts` (assembly, sizes, resurrection guards for ~34 deleted symbols). If a refactor orphans a dict key or resurrects dead code, these tests catch it — fix forward, don't weaken.
+UI drift guards (all in `test/ui/`, run with unit project): `dict-usage.spec.ts` (computed unused-key guard — every dict key must be referenced or it fails CI), `dict-split.spec.ts` (heap split), `contrast.spec.ts` (WCAG ≥4.5:1 both themes), `format-labels.spec.ts` (server↔client format registries + WARP groups), `assets.spec.ts` (assembly, sizes, resurrection guards for deleted symbols). If a refactor orphans a dict key or resurrects dead code, these tests catch it — fix forward, don't weaken.
 
 Visual regression: `npm run test:ui` (needs `wrangler dev` on :8799 + creds in `.pi/ui-audit/local-*.txt`, gitignored). 12 steps, zero-console-error contract, JSON verdict. UI strings are EN+FA only via `dict.js` (`t()`); server validation messages are English prose (known gap, documented).
 
@@ -84,20 +94,19 @@ src/worker.ts            fetch export, error boundary, counters hook
 src/core/routes.ts       pure path matchers: identifyTunnel, resolveSecureRoute
 src/core/router.ts       routeRequest — ordered dispatch, kill-switch before upgrade, bootstrap gate
 src/protocols/common.ts  ProtocolInbound seam: push/responseHeader/takeInitialPayload/bodyCodec
-src/protocols/*.ts       vless, vmess(+vmess-crypto), trojan(+UDP codec), shadowsocks(SIP004 LE nonce)
-src/tunnel/egress.ts     makeFailoverStrategy [chain→direct→proxyIp×8|nat64], createEgressOpener(dialImpl?)
+src/protocols/vless.ts   VLESS-only inbound (VMess/Trojan/SS/chain/NAT64 removed — see ADR-010)
+src/tunnel/egress.ts     makeFailoverStrategy [direct→proxyIp pool×8], createEgressOpener(DialImpl?)
 src/tunnel/relay.ts      WS↔TCP pump, zero-byte retry hook, header written once
-src/nodes/generate.ts    ProxyNode[] builder — port↔security pairing invariant, fragment⇒TLS∧¬CDN, SS earlyData=0
-src/nodes/emitters/*     clash-yaml, singbox-json, surge-conf, loon-conf (+registry; base64 renders in subscription/render.ts)
-src/subscription/        negotiate (?target= > UA > base64), headers (Profile-Update-Interval derived from subUpdateIntervalHours), merge (remote subs)
-src/users/store.ts       per-user directory (≤50): token subs, protocol filter, daily quota, expiry; D1-backed
+src/nodes/generate.ts    ProxyNode[] builder — port↔security pairing invariant, fragment⇒TLS∧¬CDN
+src/nodes/emitters/*     singbox-json only (+registry; base64 renders in subscription/render.ts)
+src/subscription/        negotiate (?target= > UA > base64), headers (Profile-Update-Interval derived from subUpdateIntervalHours)
 src/auth/                password tiers (PBKDF2 100k current, 15k legacy auto-upgraded on login), session (HMAC q_session {exp,iat} + revocation floor qproxy:min-iat), guard (CSRF X-Q-Panel)
-src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, fields (73 descriptors), validate
-src/handlers/            tunnel, subscribe, warp-sub, users-sub, doh, myip(requireAuth), robots, camouflage, panel-page (ETag),
+src/settings/            store (60s isolate cache + loadSettingsFresh), seed, migrate, fields (53 descriptors), validate
+src/handlers/            tunnel, subscribe, warp-sub, doh, health, robots, camouflage, panel-page (ETag),
                          api/* (auth+status, settings+bootstrap/export/import/reset, status+suburls, killswitch,
-                         warp, users, telegram setup/remove/webhook, version/check)
+                         warp, address-probe, proxy-pool, telegram setup/remove/webhook)
 src/warp/                WARP core: config parsers, api client, store (accounts/presets/amnezia),
-                         formats/registry (17 output formats), expand/cache/zip
+                         formats/registry (4 output families + global Amnezia switch), expand/cache/zip
 src/crypto/x25519.ts     hand-rolled X25519 (RFC 7748), zero-dep keypairs
 src/ui/assets.ts         panel.html (minified), login.html, camo.html as strings
 ```
@@ -105,18 +114,16 @@ src/ui/assets.ts         panel.html (minified), login.html, camo.html as strings
 ## Invariants (do not break)
 
 1. Port family must match security: tls ⇒ {443,2053,2083,2087,2096,8443}, none ⇒ {80,8080,8880,2052,2082,2086,2095}
-2. Fragment nodes are TLS-only and exclude CDN addresses; SS nodes have earlyData=0
-3. SS AEAD nonce is little-endian increment (SIP004) — test helper in `test/protocols/shadowsocks.spec.ts:38` must stay LE too
-4. First packet is consumed once: `initialPayload ?? rest` in `src/handlers/tunnel.ts` — never concatenate both
-5. Trojan UDP datagrams are framed ATYP+addr+port+len+CRLF+payload (downlink echoes the request source address) — codec strips/re-applies
-6. Kill-switch gate runs before WebSocket upgrade (`src/core/router.ts`)
-7. `mergeInto` skips `__proto__`/`constructor`/`prototype` keys and uses `Object.hasOwn`
-8. Setup endpoint re-reads KV via `loadSettingsFresh` before write (TOCTOU)
-9. Emitters are pure functions `(nodes, opts) => string` — no fetch, no KV, no `cloudflare:*`
-10. Subscription addresses come ONLY from the worker hostname + user-owned lists (`customDomains`, `cleanIps`, `cdn.*`). No IP or domain may ever be hard-coded into generation; enforced by the address-composition tests in `test/nodes/generate.spec.ts`.
-11. Panel part function names are a cross-file contract — never rename a top-level function in `src/ui/panel/*.js` without grepping all 22 parts (plain-concat scope).
-12. Never edit `src/ui/panel.html` directly — it is generated; edit `src/ui/panel/` parts and rebuild.
-13. Wire gzips of panel assets stay under budget (`test/ui/assets.spec.ts`); minification happens in `scripts/build-single-file.mjs` (`minifyHtmlAsset`), never in-place on sources.
+2. Fragment nodes are TLS-only and exclude CDN addresses
+3. First packet is consumed once: `initialPayload ?? rest` in `src/handlers/tunnel.ts` — never concatenate both
+4. Kill-switch gate runs before WebSocket upgrade (`src/core/router.ts`)
+5. `mergeInto` skips `__proto__`/`constructor`/`prototype` keys and uses `Object.hasOwn`
+6. Setup endpoint re-reads KV via `loadSettingsFresh` before write (TOCTOU)
+7. Emitters are pure functions `(nodes, opts) => string` — no fetch, no KV, no `cloudflare:*`
+8. Subscription addresses come ONLY from the worker hostname + user-owned lists (`cdnPresets`, `customEndpoints`, `warpPresets`, `warpCustomEndpoints`). No IP or domain may ever be hard-coded into generation; enforced by the address-composition tests in `test/nodes/generate.spec.ts`.
+9. Panel part function names are a cross-file contract — never rename a top-level function in `src/ui/panel/*.js` without grepping all 19 parts (plain-concat scope).
+10. Never edit `src/ui/panel.html` directly — it is generated; edit `src/ui/panel/` parts and rebuild.
+11. Wire gzips of panel assets stay under budget (`test/ui/assets.spec.ts`); minification happens in `scripts/build-single-file.mjs` (`minifyHtmlAsset`), never in-place on sources.
 
 ## Boundaries
 
@@ -125,7 +132,7 @@ src/ui/assets.ts         panel.html (minified), login.html, camo.html as strings
 - Never log password/hash/sessionSecret/UUIDs/securePath values
 - Do not edit `docs/ARCHITECTURE.md` frozen sections without recording the change in the Rev header at line 3
 - Do not widen the route table without updating both `docs/ARCHITECTURE.md` §3 and `test/workers/router.spec.ts`
-- Ask before changing wire formats (share URIs, emitter output) — golden tests will break on purpose; when the plan pre-authorizes a golden move, record old→new in the report/CHANGELOG
+- Ask before changing wire formats (share URIs, emitter output) — golden tests will break on purpose; when the plan pre-authorizes a golden move, record old→new in the report
 - UI changes: run `npm run test:ui` before declaring done; all user-visible strings via `dict.js` (EN+FA), never hardcoded
 
 ## Patterns
@@ -139,7 +146,7 @@ Adding a setting field:
 Adding an emitter:
 1. Extend `SubFormat` in `src/core/ua.ts` + sniff tokens
 2. Create `src/nodes/emitters/<name>.ts` exporting `(nodes, opts) => string`
-3. Register in `src/nodes/emitters/registry.ts`, add to `FORMATS` in `src/subscription/negotiate.ts` (see `docs/decisions/ADR-004.md`)
+3. Register in `src/nodes/emitters/registry.ts`, add to `SUB_FORMATS` in `src/subscription/negotiate.ts` (see `docs/decisions/ADR-004.md`)
 4. Golden test in `test/nodes/emitters/<name>.spec.ts` + UA case in `test/core/ua.spec.ts`
 5. Client mirror: `format-labels.js` + `test/ui/format-labels.spec.ts` (drift guard fails until the label exists)
 
@@ -149,7 +156,7 @@ Adding a UI view/tab:
 3. All strings via new `dict.js` keys ×2 — `dict-usage.spec.ts` fails on unused keys, so delete-as-you-go
 4. Extend `scripts/ui-walk.mjs` with a step; run `npm run test:ui`
 
-Protocol changes: validate against Xray-core fixtures first (`docs/research/04-protocol-formats.md`), keep parsers throwing never.
+Protocol changes: validate against Xray-core fixtures first (`docs/research/04-protocol-formats.md`); parsers must never throw.
 
 ## Verification Loop
 
@@ -158,22 +165,16 @@ After every change: `npm run typecheck && npm test`. UI-facing changes additiona
 ## Known Gaps
 
 - Post-handshake WS backpressure is platform-limited — the Workers WS API exposes no send-buffer signal; relay relies on uplink coalescing + hard caps
-- Trojan/VLESS UDP merge pipelined datagrams into one DoH query (uplink decode concatenates frames before relaying)
 - sing-box emitter uses the legacy dns schema (forward-compat note — migration rejected for now, documented in DEVELOPER_GUIDE)
-- users-sub intentionally never merges remoteSubUrls (per-user scoping: protocol filters must hold)
 - Server-side validation messages are English-only even in the FA UI
-- cleanIps entries pinning ports outside the CF port families are silently dropped (zero nodes emitted for that address) — documented behavior
+- `cdnPresets`/`customEndpoints` entries pinning ports outside the CF port families are silently dropped (zero nodes emitted for that address) — documented behavior
 - SSRF guards (`isLocalOrPrivateTarget` on dohUpstream/remoteDns/camouflage/remoteSubUrls/egress targets) are host-literal only: a DNS name resolving to a private address is not pre-resolved (Workers egress does not route RFC1918/link-local, and DoH pre-resolution would introduce a TOCTOU window)
 - Login throttle is KV-backed (`qproxy:login-fail:<sha256-ip>:<minute>`, 120s TTL, fail-open on KV error) with an isolate-memory fast path
 - Counters are estimates (`download = requestsTotal × 1 MiB`)
-- SS salt-replay registry bounded to 2048 entries/isolate; VMess replay registry bounded to 1024 (`src/utils/bounded.ts`)
 - `settings.language` seeds the `qp_lang` cookie on first load when the cookie is absent
 - Stale-cache read-modify-write: `handleKillSwitch`/`handleSaveSettings` merge from the 60s cached settings — concurrent edits in another isolate can be reverted within the TTL window; panel navs re-fetch after saves (`ensureFreshSubs`) to mask this
 - KV colo edge cache (60s, not bypassable via `cacheTtl`) means `loadSettingsFresh` setup-race re-check and the session revocation floor can lag up to ~60s; a losing concurrent setup may briefly retain a valid session
 - Telegram webhook authenticates on the 16-hex URL secret OR the `X-Telegram-Bot-Api-Secret-Token` header (setWebhook now registers `secret_token`); chat identity for `@username` chatIds is still client-asserted
 - `readJsonObject` caps bodies at 64 KiB while streaming (chunked bodies rejected mid-read, not fully buffered)
-- Pure-JS ChaCha20-Poly1305 (BigInt Poly1305, ~2-6 ms/MB) is reachable only when a VMess client negotiates `security=4` or the admin sets SS `chacha20-ietf-poly1305`; the default config never hits it (VMess nodes emit `cipher: auto` → AES-128-GCM, SS default `aes-128-gcm`). Replacing Poly1305 with 32-bit limbs is the remaining fix if chacha traffic becomes a CPU-budget concern
 - WARP token rotation responds toast+refresh, not ShareSheet (regen API returns only the token; per-format URL construction lives in warp.js) — deliberate Task-11 follow-up
 - Open `.help-pop` tooltip can clip at the right viewport edge at 375px (hidden-state layout overflow fixed; the visible-state anchor is cosmetic-only)
-- `user_activity` D1 tables on pre-1.5 deployments keep unused `bytes_up`/`bytes_down` columns (inert; fresh installs match `migrations/0001_init.sql`)
-- `USERS_MAX` (50) is mirrored client-side in `users.js` as a constant (panel parts cannot import); drift is covered by API tests, not a shared source

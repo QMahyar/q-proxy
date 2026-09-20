@@ -8,8 +8,8 @@ p.id='sp-'+s.key;p.role='tabpanel';p.setAttribute('aria-labelledby','st-'+s.key)
 p.hidden=true;
 let h='';
 if(s.key==='protocols'){
-const protoCards=s.cards.slice(0,4);
-const commonCards=s.cards.slice(4);
+const protoCards=s.cards.slice(0,1);
+const commonCards=s.cards.slice(1);
 h+='<div class="grid2">';protoCards.forEach(c=>{h+=cardHtml(c)});h+='</div>';
 commonCards.forEach(c=>{h+=cardHtml(c)});
  } else {
@@ -33,9 +33,11 @@ document.querySelectorAll('[data-proto-card]').forEach(card=>{
 const key=card.dataset.protoCard;
 const on=getPath(S.set,key)!==false;
 card.classList.toggle('card--dim',!on);
-card.querySelectorAll('[data-bind]').forEach(el=>{
+card.querySelectorAll('[data-bind],[data-chip],[data-preset],button').forEach(el=>{
 if(el.closest('.row'))return;
-el.disabled=!on})})}
+if('disabled' in el)el.disabled=!on;
+if(!on)el.setAttribute('aria-disabled','true');else el.removeAttribute('aria-disabled')});
+card.querySelectorAll('[data-type="chips"]').forEach(c=>{if(!on)c.setAttribute('inert','');else c.removeAttribute('inert')})})}
 function applyFragmentPresetUi(mode){
 const panel=$('sp-tunnel');
 if(!panel)return;

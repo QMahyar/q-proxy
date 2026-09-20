@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { classifyUA } from "../../src/core/ua";
 
 describe("classifyUA", () => {
-  it("clash family wins over everything", () => {
+  it("maps clash-family UAs to the clash emitter", () => {
     expect(classifyUA("clash-verge/v2.1.3")).toBe("clash");
     expect(classifyUA("ClashMetaForAndroid/2.11.5")).toBe("clash");
     expect(classifyUA("mihomo/1.18 linux")).toBe("clash");
@@ -26,20 +26,20 @@ describe("classifyUA", () => {
     expect(classifyUA("nekoray/3.26")).toBe("singbox");
   });
 
-  it("sing-box wins over a browser token in a composite UA", () => {
+  it("sing-box wins over clash tokens in a composite UA", () => {
     expect(classifyUA("Mozilla/5.0 (Throne/1.2.4)")).toBe("singbox");
-    expect(classifyUA("sing-box 1.13.0; ClashMeta; mihomo/1.19.16")).toBe("clash");
+    expect(classifyUA("sing-box 1.13.0; ClashMeta; mihomo/1.19.16")).toBe("singbox");
   });
 
-  it("surge then loon", () => {
-    expect(classifyUA("Surge iOS/2406")).toBe("surge");
-    expect(classifyUA("Loon/3.2.4")).toBe("loon");
+  it("maps former surge/loon UAs to base64 (formats removed)", () => {
+    expect(classifyUA("Surge iOS/2406")).toBe("base64");
+    expect(classifyUA("Loon/3.2.4")).toBe("base64");
   });
 
-  it("quantumult x family", () => {
-    expect(classifyUA("Quantumult X/1.5.4 (iPhone; iOS 17.0.3; Scale/3.00)")).toBe("quantumult");
-    expect(classifyUA("quantumult/2.0")).toBe("quantumult");
-    expect(classifyUA("QuanX/1.0")).toBe("quantumult");
+  it("maps former quantumult x family to base64 (format removed)", () => {
+    expect(classifyUA("Quantumult X/1.5.4 (iPhone; iOS 17.0.3; Scale/3.00)")).toBe("base64");
+    expect(classifyUA("quantumult/2.0")).toBe("base64");
+    expect(classifyUA("QuanX/1.0")).toBe("base64");
   });
 
   it("base64 clients", () => {
@@ -72,12 +72,16 @@ describe("classifyUA", () => {
     expect(classifyUA("singbox/1.9 dalvik")).toBe("singbox");
   });
 
+  it("maps xray-core to the xray emitter without stealing foxray", () => {
+    expect(classifyUA("Xray-core/1.8")).toBe("xray");
+    expect(classifyUA("Foxray/2.1")).toBe("base64");
+  });
+
   it("base64 client token variants", () => {
     expect(classifyUA("Streisand/1.0")).toBe("base64");
     expect(classifyUA("V2Box/3.0")).toBe("base64");
     expect(classifyUA("Foxray/2.1")).toBe("base64");
     expect(classifyUA("Husi/1.0")).toBe("base64");
-    expect(classifyUA("Xray-core/1.8")).toBe("base64");
     expect(classifyUA("NapsternetV/1.0")).toBe("base64");
   });
 });

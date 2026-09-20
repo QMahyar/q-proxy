@@ -1,6 +1,6 @@
 import type { Settings } from "../types/settings";
 import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
-import { dialTcp } from "./chain";
+import { dialTcp } from "./egress";
 import { expandProxyIps, hashSeed, shuffleDeterministic } from "./proxyip";
 import { createResolver } from "./resolver";
 import type { DohResolver } from "./resolver";
@@ -149,12 +149,36 @@ export async function fetchPoolUrl(url: string): Promise<RelayEndpoint[]> {
       signal: AbortSignal.timeout(POOL_FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return [];
-    text = await res.text();
+    text = await readCappedText(res, MAX_POOL_TEXT_BYTES);
   } catch {
     return [];
   }
-  if (text.length > MAX_POOL_TEXT_BYTES) text = text.slice(0, MAX_POOL_TEXT_BYTES);
   return parsePoolEndpoints(text);
+}
+
+async function readCappedText(res: Response, cap: number): Promise<string> {
+  const reader = res.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done || value === undefined) break;
+    total += value.byteLength;
+    if (total > cap) {
+      void reader.cancel().catch(() => {});
+      throw new Error(`pool response exceeds the ${Math.floor(cap / 1024)} KiB cap`);
+    }
+    chunks.push(value);
+  }
+  if (chunks.length === 1) return new TextDecoder().decode(chunks[0]);
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return new TextDecoder().decode(out);
 }
 
 export async function tcpProbe(host: string, port: number): Promise<number | null> {

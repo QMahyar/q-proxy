@@ -4,10 +4,28 @@ import { ValidationError } from "../../core/errors";
 import { audit } from "../../core/log";
 import { jsonOk, readJsonObject } from "../../core/respond";
 import { resolveHostname } from "../../core/routes";
-import { readUsage } from "../../core/counters";
+import { readUsage, type UsageWithBytes } from "../../core/counters";
 import { assertCsrf, clientIp } from "../../auth/guard";
 import { appVersion, loadSettingsFresh, saveSettings } from "../../settings/store";
 import { validateSettings } from "../../settings/validate";
+
+export interface UsageView {
+  requestsToday: number;
+  requestsTotal: number;
+  bytesUpTotal: number;
+  bytesDownTotal: number;
+  estimated: true;
+}
+
+export function usageView(usage: UsageWithBytes): UsageView {
+  return {
+    requestsToday: usage.requestsToday,
+    requestsTotal: usage.requestsTotal,
+    bytesUpTotal: usage.bytesUpTotal,
+    bytesDownTotal: usage.bytesDownTotal,
+    estimated: true,
+  };
+}
 
 export const handleStatus: RouteHandler = async (req, env, s) => {
   const usage = await readUsage(env);
@@ -18,11 +36,11 @@ export const handleStatus: RouteHandler = async (req, env, s) => {
     colo: colo ?? null,
     language: s.language,
     hasPassword: s.passwordHash !== null,
-    usage: { requestsToday: usage.requestsToday, requestsTotal: usage.requestsTotal },
+    usage: usageView(usage),
   });
 };
 
-export const handleKillSwitch: RouteHandler = async (req, env, _s) => {
+export const handleKillSwitch: RouteHandler = async (req, env, _s, ctx) => {
   assertCsrf(req);
   const body = await readJsonObject(req);
   if (typeof body.enabled !== "boolean") {
@@ -31,7 +49,7 @@ export const handleKillSwitch: RouteHandler = async (req, env, _s) => {
   const fresh = await loadSettingsFresh(env);
   const v = validateSettings({ ...fresh, killSwitch: body.enabled });
   if (!v.ok) throw new ValidationError(v.fields);
-  audit("killswitch", { ip: clientIp(req), enabled: body.enabled }, env);
+  audit("killswitch", { ip: clientIp(req), enabled: body.enabled }, env, ctx);
   const rev = await saveSettings(env, v.value);
   return jsonOk({ killSwitch: body.enabled, rev });
 };
@@ -46,11 +64,9 @@ export function buildSubUrls(hostname: string, securePath: string): SubUrlEntry[
   const base = `https://${hostname}/${securePath}/sub`;
   return [
     { format: "base64", label: "Base64/Mixed", url: base },
-    { format: "clash", label: "Clash / mihomo", url: `${base}?target=clash` },
     { format: "singbox", label: "sing-box", url: `${base}?target=singbox` },
-    { format: "surge", label: "Surge", url: `${base}?target=surge` },
-    { format: "loon", label: "Loon", url: `${base}?target=loon` },
-    { format: "quantumult", label: "Quantumult X", url: `${base}?target=quantumult` },
+    { format: "clash", label: "Clash/Mihomo", url: `${base}?target=clash` },
+    { format: "xray", label: "Xray JSON", url: `${base}?target=xray` },
     { format: "base64", label: "Panel info", url: `${base}?view=html` },
   ];
 }

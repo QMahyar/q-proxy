@@ -1,7 +1,6 @@
 import type { Settings } from "../types/settings";
-import { isIpLiteral, parseHostPort } from "../utils/net";
 
-export type TunnelKind = "vless" | "vmess" | "trojan" | "ss";
+export type TunnelKind = "vless";
 
 const TUNNEL_SUFFIX_RE = /^[A-Za-z0-9]{8,32}$/;
 
@@ -17,9 +16,6 @@ export function identifyTunnel(pathname: string, s: Settings): TunnelKind | null
   const [prefix, suffix] = segs as [string, string];
   if (!TUNNEL_SUFFIX_RE.test(suffix)) return null;
   if (prefix === s.vlessPath) return "vless";
-  if (prefix === s.vmessPath) return "vmess";
-  if (prefix === s.trojanPath) return "trojan";
-  if (prefix === s.ssPath) return "ss";
   return null;
 }
 
@@ -35,12 +31,11 @@ export type ApiRouteName =
   | "settings-reset"
   | "settings-export"
   | "settings-import"
-  | "version-check"
   | "status"
   | "killswitch"
   | "suburls"
+  | "sub-import"
   | "warp"
-  | "users"
   | "proxy-pool"
   | "address-probe"
   | "telegram-webhook"
@@ -52,9 +47,7 @@ export type SecureRoute =
   | { kind: "page"; page: "panel" | "login" }
   | { kind: "sub" }
   | { kind: "warp-sub" }
-  | { kind: "user-sub" }
   | { kind: "doh" }
-  | { kind: "myip" }
   | { kind: "api"; api: ApiRouteName };
 
 export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
@@ -73,14 +66,9 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
       if (rest.length === 4 && rest[1] === "wg" && /^[0-9a-f-]{36}$/i.test(rest[2]!)) {
         return { kind: "warp-sub" };
       }
-      if ((rest.length === 3 || rest.length === 4) && rest[1] === "u" && /^[0-9a-f-]{36}$/i.test(rest[2]!)) {
-        return { kind: "user-sub" };
-      }
       return null;
     case "doh":
       return rest.length === 1 ? { kind: "doh" } : null;
-    case "my-ip":
-      return rest.length === 1 ? { kind: "myip" } : null;
     case "telegram": {
       if (rest.length === 2 && rest[1] === "setup") return { kind: "api", api: "telegram-setup" };
       if (rest.length === 2 && rest[1] === "remove") return { kind: "api", api: "telegram-remove" };
@@ -108,11 +96,10 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
       if (sub === "bootstrap" && rest.length === 2) return { kind: "api", api: "bootstrap" };
       if (sub === "killswitch" && rest.length === 2) return { kind: "api", api: "killswitch" };
       if (sub === "suburls" && rest.length === 2) return { kind: "api", api: "suburls" };
+      if (sub === "sub-import" && rest.length === 2) return { kind: "api", api: "sub-import" };
       if (sub === "warp" && rest.length >= 2) return { kind: "api", api: "warp" };
-      if (sub === "users" && rest.length >= 2) return { kind: "api", api: "users" };
       if (sub === "proxy-pool" && rest.length === 2) return { kind: "api", api: "proxy-pool" };
       if (sub === "address-probe" && rest.length === 2) return { kind: "api", api: "address-probe" };
-      if (sub === "version" && rest.length === 3 && rest[2] === "check") return { kind: "api", api: "version-check" };
       if (sub === "settings") {
         if (rest.length === 2) return { kind: "api", api: "settings-get" };
         if (rest.length === 3 && rest[2] === "save") return { kind: "api", api: "settings-save" };
@@ -141,17 +128,6 @@ export function resolveHostname(s: Settings, url: URL): string {
     for (const d of legacy.customDomains) {
       if (typeof d === "string" && d.trim().length > 0) return d.trim();
     }
-  }
-  const list = Array.isArray(s.addresses) ? s.addresses : [];
-  for (const a of list) {
-    if (typeof a !== "object" || a === null) continue;
-    if (a.enabled === false) continue;
-    const raw = typeof a.address === "string" ? a.address.trim() : "";
-    if (raw.length === 0) continue;
-    const hp = parseHostPort(raw, typeof a.port === "number" && a.port > 0 ? a.port : s.defaultPort);
-    if (hp === null || hp.host.length === 0) continue;
-    if (isIpLiteral(hp.host)) continue;
-    return hp.host.toLowerCase();
   }
   return url.hostname;
 }

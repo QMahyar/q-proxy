@@ -23,6 +23,7 @@ const a=document.createElement('a');
 a.href=canvas.toDataURL('image/png');
 a.download='q-proxy-qr.png';
 document.body.appendChild(a);a.click();a.remove()}
+const qrCache=new Map();
 function openShareSheet(o){
 o=o||{};
 const url=String(o.url||'');
@@ -42,7 +43,14 @@ nat.hidden=!(navigator.share);
 const warn=$('share-warning');
 warn.textContent=t('share.warning');
 warn.hidden=o.note!=='once';
-if(!QR.render($('share-canvas'),url)){toast(t('toast.tooLong'),'err');return}
+const canvas=$('share-canvas');
+if(qrCache.has(url)){
+const cached=qrCache.get(url);
+if(cached){canvas.width=cached.width;canvas.height=cached.height;const ctx=canvas.getContext('2d');ctx.putImageData(cached.data,0,0)}else if(!QR.render(canvas,url)){toast(t('toast.tooLong'),'err');return}
+}else{
+if(!QR.render(canvas,url)){toast(t('toast.tooLong'),'err');return}
+try{const ctx=canvas.getContext('2d');qrCache.set(url,{width:canvas.width,height:canvas.height,data:ctx.getImageData(0,0,canvas.width,canvas.height)});if(qrCache.size>20)qrCache.delete(qrCache.keys().next().value)}catch(e){}
+}
 openModal('m-share');
 setTimeout(()=>{inp.focus();inp.select()},0)}
 (function(){

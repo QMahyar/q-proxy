@@ -19,9 +19,13 @@ Usage:
     python deploy.py token                 # print the prefilled API-token URL
     python deploy.py --help
 
-Env (optional): CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID. A token from the
-prefilled URL is always preferred; if neither a token nor the env var is present
-the script opens your browser to create one.
+Env (optional): CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, QPROXY_PASSWORD.
+Secrets are never taken from echoing prompts and never printed: the panel
+password comes from --password-stdin (piped, non-interactive), QPROXY_PASSWORD,
+or a hidden getpass prompt; the API token from CLOUDFLARE_API_TOKEN or a hidden
+paste prompt. --password / --token still work but print a process-list warning.
+A token from the prefilled URL is always preferred; if neither a token nor the
+env var is present the script opens your browser to create one.
 """
 
 import argparse
@@ -620,6 +624,19 @@ def ask(prompt, default=None):
     return v or (default or "")
 
 
+def ask_secret(prompt):
+    """Prompt without echoing (getpass); secrets must never use echoing input()."""
+    import getpass
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            return getpass.getpass(prompt + ": ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return ""
+
+
 def normalize_token(raw):
     tok = (raw or "").strip()
     if tok.lower().startswith("bearer "):
@@ -789,6 +806,40 @@ def ask_password():
         return pw
 
 
+def resolve_password(args, interactive):
+    """Credential intake that never exposes the secret.
+
+    Precedence: --password-stdin (piped, first line) > QPROXY_PASSWORD env >
+    --password flag (deprecated: visible in the process list and shell history) >
+    interactive getpass prompt. Returns None when non-interactive with no secret.
+    """
+    if getattr(args, "password_stdin", False):
+        try:
+            piped = sys.stdin.read().splitlines()
+        except (EOFError, KeyboardInterrupt):
+            piped = []
+        pw = piped[0].strip() if piped else ""
+        problems = password_problems(pw) if pw else ["a password on stdin"]
+        if problems:
+            raise SystemExit("Weak password on stdin. Needs: " + ", ".join(problems) + ".")
+        return pw
+    env_pw = os.environ.get("QPROXY_PASSWORD", "").strip()
+    if env_pw:
+        problems = password_problems(env_pw)
+        if problems:
+            raise SystemExit("Weak QPROXY_PASSWORD. Needs: " + ", ".join(problems) + ".")
+        return env_pw
+    if getattr(args, "password", None):
+        print("(!) --password is visible in the process list and shell history; prefer --password-stdin or QPROXY_PASSWORD.", file=sys.stderr)
+        problems = password_problems(args.password)
+        if problems:
+            raise SystemExit("Weak --password. Needs: " + ", ".join(problems) + ".")
+        return args.password
+    if interactive:
+        return ask_password()
+    return None
+
+
 def confirm_type(name):
     """Type-the-name confirmation for destructive actions."""
     v = safe_input(f"Type '{name}' to confirm deletion: ").strip()
@@ -835,21 +886,24 @@ def pause():
 
 def acquire_token(args):
     # Precedence: --token flag > CLOUDFLARE_API_TOKEN env > interactive paste > fail fast.
+    from_argv = bool(getattr(args, "token", None))
     tok = normalize_token(getattr(args, "token", None))
+    if from_argv:
+        print("(!) --token is visible in the process list; prefer CLOUDFLARE_API_TOKEN.", file=sys.stderr)
     if not tok:
         tok = normalize_token(os.environ.get("CLOUDFLARE_API_TOKEN"))
     interactive = is_tty()
     if not tok:
         if not interactive:
-            raise SystemExit("No token: set CLOUDFLARE_API_TOKEN, pass --token, or run interactively (`python deploy.py token` prints the creation link).")
+            raise SystemExit("No token: set CLOUDFLARE_API_TOKEN or run interactively (`python deploy.py token` prints the creation link).")
         url = build_token_url(args.account or env_account() or "*")
         print("First, create a Cloudflare API token with the exact permissions")
         print("Q Proxy needs (they are pre-filled on the page). Open this URL:\n")
         print(url + "\n")
-        print("Create the token, then paste it below.")
-        tok = normalize_token(ask("Paste your Cloudflare API token", ""))
+        print("Create the token, then paste it below (input is hidden).")
+        tok = normalize_token(ask_secret("Paste your Cloudflare API token"))
     if not tok:
-        raise SystemExit("No token provided. Set CLOUDFLARE_API_TOKEN, pass --token, or run interactively.")
+        raise SystemExit("No token provided. Set CLOUDFLARE_API_TOKEN or run interactively.")
     if _SESSION["verified"] and _SESSION["token"] == tok:
         return tok
     try:
@@ -996,9 +1050,9 @@ def do_deploy(args):
         print(f"  Pages project deployed: {base_url}")
 
     print("\n-- Panel password (you choose it; no default gating)")
-    password = args.password or (ask_password() if interactive else None)
+    password = resolve_password(args, interactive)
     if not password:
-        raise SystemExit("No --password given and not interactive. Password is required (>=8, letter+digit).")
+        raise SystemExit("No password given and not interactive. Use --password-stdin, QPROXY_PASSWORD, or run interactively.")
 
     print("\n-- Waiting for first seed (up to 4 min; Ctrl+C aborts — you can also set")
     print("   the password later via the login page's setup card)")
@@ -1026,7 +1080,7 @@ def do_deploy(args):
     print(f"{base_url}/{secure_path}/sub")
     print(f"{base_url}/{secure_path}/panel")
     print(f"securePath: {secure_path}")
-    print(f"Password: {password}")
+    print("Password: (the one you chose — never shown here)")
     print("=" * 60 + "\n")
     if interactive:
         deploy_next_steps(base_url, secure_path, panel_name)
@@ -1061,7 +1115,10 @@ def test_panel_health(base_url, login_url):
         req = urllib.request.Request(base_url + "/healthz", headers={"User-Agent": PANEL_UA})
         with urllib.request.urlopen(req, timeout=30) as r:
             info = json.loads(r.read().decode("utf-8"))
-        print(f"Health OK — version {info.get('version')} at {info.get('colo')}")
+        if info.get("ok") is not True:
+            print("Health FAIL: unexpected /healthz body")
+            return
+        print("Health OK")
     except Exception as e:
         print(f"Health FAIL: {e} — code is up but the check failed; try Update panel from the menu.")
         return
@@ -1339,7 +1396,11 @@ def cmd_update(args):
         req = urllib.request.Request(base + "/healthz", headers={"User-Agent": PANEL_UA})
         with urllib.request.urlopen(req, timeout=30) as r:
             info = json.loads(r.read().decode("utf-8"))
-        print(f"  OK — version {info.get('version')} at {info.get('colo')}")
+        if info.get("ok") is not True:
+            raise SystemExit("Update uploaded but healthz returned an unexpected body.")
+        print("  OK — healthz answers {ok:true}")
+    except SystemExit:
+        raise
     except Exception as e:
         raise SystemExit(f"Update uploaded but healthz failed: {e}")
     print(f"\n'{panel}' updated. Password and settings untouched.\n")
@@ -1394,7 +1455,7 @@ def cmd_status(args):
     print("\n=== Q Proxy live status ===\n")
     for p in cf_request("GET", f"/accounts/{account}/pages/projects", tok) or []:
         print(f"  Pages: {p.get('url','')}")
-    print("  (Tip: open any panel URL + /healthz to check version.)")
+    print("  (Tip: open any panel URL + /healthz to check liveness.)")
 
 
 def env_subdomain():
@@ -1414,8 +1475,9 @@ def main():
     d.add_argument("--name", help="panel/worker/project name (slugified)")
     d.add_argument("--kv", help="KV namespace title")
     d.add_argument("--d1", help="D1 database name")
-    d.add_argument("--password", help="panel password (>=8, letter+digit)")
-    d.add_argument("--token", help="Cloudflare API token (or CLOUDFLARE_API_TOKEN)")
+    d.add_argument("--password", help="panel password (>=8, letter+digit; visible in process list — prefer --password-stdin or QPROXY_PASSWORD)")
+    d.add_argument("--password-stdin", action="store_true", help="read the panel password from stdin (first line; for piped non-interactive deploys)")
+    d.add_argument("--token", help="Cloudflare API token (visible in process list — prefer CLOUDFLARE_API_TOKEN)")
     d.add_argument("--account", help="32-hex account id")
     d.add_argument("--subdomain", help="workers.dev subdomain when workers target")
     d.add_argument("--force", action="store_true", help="allow deploying over an existing worker/project name")

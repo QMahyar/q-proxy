@@ -8,10 +8,10 @@
 |-------------|-------|-------|
 | Cloudflare account | Free tier works; one KV namespace + one D1 database required | `npx wrangler whoami` |
 | Node 20+ + npm | Only for wrangler path; dashboard paste needs no local toolchain | `node -v` |
-| Domain (optional) | Custom domains via Settings → routing; TLS/plain ports auto-paired | — |
-| Clients | v2rayNG / sing-box / Clash Meta / Surge / Loon / Shadowrocket | — |
+| Domain (optional) | Extra endpoints via Settings → Endpoints (CDN presets + custom box); TLS/plain ports auto-paired | — |
+| Clients | v2rayNG / sing-box / Shadowrocket / Happ / Streisand | — |
 
-No runtime `dependencies` — `package.json:13` is `devDependencies` only. No Durable Objects. D1 holds write-hot state (users, quotas, counters, audit log); settings and the WARP store stay in KV.
+No runtime `dependencies` — `package.json:13` is `devDependencies` only. No Durable Objects. D1 holds write-hot state (counters, audit log); settings and the WARP store stay in KV.
 
 ## 2. Deploy
 
@@ -24,7 +24,7 @@ Full deployment guide with all seven paths — including Workers and Pages, dash
 | 1 | `npm run build` → verify `dist/q-proxy.js` exists (`scripts/build-single-file.mjs:15`) |
 | 2 | Cloudflare Dashboard → Workers & Pages → Create Worker → Edit Code → paste entire `dist/q-proxy.js` → Save |
 | 3 | Settings → Bindings → Add KV Namespace → variable `QPROXY_KV` → create + bind `qproxy` namespace |
-| 3b | Settings → Bindings → Add D1 → variable `QPROXY_DB` → create + bind database `q-proxy`, then apply `migrations/0001_init.sql` (database SQL console or `npx wrangler d1 migrations apply q-proxy --remote`) |
+| 3b | Settings → Bindings → Add D1 → variable `QPROXY_DB` → create + bind database `q-proxy`, then apply the migrations in `migrations/` (database SQL console or `npx wrangler d1 migrations apply q-proxy --remote`) |
 | 4 | Deploy. Visit any worker URL once — this seeds settings into KV |
 | 5 | Read your secret path from KV key `qproxy:settings`, field `data.securePath` (dashboard binding viewer or `npx wrangler kv key get "qproxy:settings" --binding=QPROXY_KV`) |
 | 6 | Open `https://<worker>.workers.dev/<securePath>/panel` → first-run setup card (24 h window — see §3.2) |
@@ -39,6 +39,10 @@ For the one-click Deploy Button, Wrangler CLI, `npm run deploy` (direct API), an
 name = "q-proxy"
 main = "dist/q-proxy.js"
 compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+[observability]
+enabled = true
+head_sampling_rate = 1
 [[kv_namespaces]]
 binding = "QPROXY_KV"
 id = "REPLACE_WITH_YOUR_KV_ID"
@@ -89,6 +93,8 @@ How you get your first admin password depends on the deploy path:
 | One-liner scripts (`deploy.sh` / `deploy.ps1`) | The script prompts for a password (or takes `--password`) and sets it the same way. |
 | Dashboard paste / Pages / wrangler | Nothing is set at deploy time — the login page shows the **Create passphrase** setup card on first visit (§3.2). |
 
+Login is password-only. There is no second factor: one passphrase signs in, and changing it signs out every other device.
+
 ### 3.1 Bootstrap password and the forced change
 
 The deploy-script password is marked as a *bootstrap* password: it protects the panel, but it is not meant to stay. Logging in with it succeeds (the login response carries `mustChangePassword: true`), and until you pick a personal password the panel blocks everything else — every other authenticated API answers `403 PASSWORD_CHANGE_REQUIRED`. While the flag is on you can only change the password, view settings (read-only), or log out.
@@ -99,13 +105,13 @@ Fix it in one step: Settings → General → Security card → Change passphrase
 
 On first load with empty `qproxy:settings`, every panel route renders the setup form (`src/handlers/api/auth.ts:handleSetup`), and the first visit seeds settings with a `seededAt` timestamp. The setup card accepts a passphrase only for **24 hours** after that seed — a submission after the window returns `409 SETUP_WINDOW_EXPIRED` and the panel can no longer be claimed from the web.
 
-Missed the window? Delete the `qproxy:settings` key (Cloudflare dashboard → KV → `qproxy` namespace → delete `qproxy:settings`) and revisit the worker URL: settings re-seed with a fresh 24 h window (same recovery path as the IP allowlist, §4.5).
+Missed the window? Delete the `qproxy:settings` key (Cloudflare dashboard → KV → `qproxy` namespace → delete `qproxy:settings`) and revisit the worker URL: settings re-seed with a fresh 24 h window (same recovery path as the IP allowlist, §4.4).
 
 | Step | Screen | Action |
 |------|--------|--------|
 | 1 | `/{securePath}/panel` redirects to `/{securePath}/login` | Shown automatically when `passwordHash === null` (`src/types/settings.ts:43`) |
 | 2 | Set Password | Enter ≥8 chars with letter+digit; stored as PBKDF2-SHA256 (`src/auth/password.ts`). Race-guarded: only accepted while unset, and only inside the 24 h window (§3.2) |
-| 3 | Secure Path noted | Generated `randomHex(12)` (`src/settings/seed.ts`). Gating: panel, APIs, subscriptions, DoH, and all `/{vl|vm|tr|ss}/` tunnels live under it (`src/core/routes.ts:53`) |
+| 3 | Secure Path noted | Generated `randomHex(12)` (`src/settings/seed.ts`). Gating: panel, APIs, subscriptions, DoH, and the VLESS tunnel live under it (`src/core/routes.ts:53`) |
 | 4 | Login | Sets `q_session` cookie (`HttpOnly; Secure; SameSite=Lax`, 7-day, `src/handlers/api/auth.ts` flow) + CSRF header `X-Q-Panel: 1` for mutating calls. With a deploy-script bootstrap password you land on the forced change first (§3.1) |
 
 Screenshot: *Setup form (EN/FA toggle) → Login → forced password change → Panel Home*
@@ -116,41 +122,39 @@ Keep the full `https://<worker>/ <securePath>` URL — rotating the path invalid
 
 ### 4.1 Home
 
-- **Status card** — `GET /{sp}/api/status` (`src/handlers/api/status.ts`): version (`__APP_VERSION__`), colo, `killSwitch`, usage counters.
+- **Status card** — `GET /{sp}/api/status` (`src/handlers/api/status.ts`): version (`__APP_VERSION__`), colo, `killSwitch`, usage counters. Every usage figure is an estimate (`estimated: true`): the worker has no byte meter, so tunnel bytes are counted where visible and anything uncounted falls back to `requestsTotal × 1 MiB`. The same estimate feeds `Subscription-Userinfo`, the Telegram `/status` line, and the panel card — they always agree because they share one source (`readUsage`).
 - **Subscription URLs** — `GET /{sp}/api/suburls`: one URL per format with QR (client-side JS, no `/qrcode` endpoint). Copy/QR per format.
-- **Quick toggles** — Kill Switch, Speedtest Intercept without opening Settings.
+- **Quick toggle** — Kill Switch without opening Settings.
+
+Bookmarks to deleted views land on Home (single unknown-view redirect rule, documented once here).
 
 ### 4.2 Settings
 
-All fields from `src/types/settings.ts:41` grouped below. Saving is `PUT /{sp}/api/settings` with per-field validation (`src/settings/validate.ts`), 256 KB cap, `SENSITIVE_SETTING_PATHS` stripped from GET view.
+All fields from `src/types/settings.ts:53` grouped below. Saving is `PUT /{sp}/api/settings` with per-field validation (`src/settings/validate.ts`), 256 KB cap, `SENSITIVE_SETTING_PATHS` stripped from GET view.
 
 | Group | Fields (`src/types/settings.ts`) | What it does |
 |-------|----------------------------------|--------------|
 | General | `language` (`en`/`fa`, RTL), `debugLogging`, `profileTitle`, `subUpdateIntervalHours`, `maxNodesPerFormat` | UI + subscription headers |
-| Protocols | `vlessEnabled`/`vmessEnabled`/`trojanEnabled`/`ssEnabled`, `vlessUuid`/`vmessUuid`/`trojanPassword`/`ssPassword`, `ssMethod` (`aes-128-gcm`/`aes-256-gcm`), `vlessFlow` (off / `xtls-rprx-vision`, TLS nodes only), `ssDirect` (plain `ss://` without v2ray-plugin), `vlessPath`/`vmessPath`/`trojanPath`/`ssPath` (`vl`/`vm`/`tr`/`ss` defaults) | Per-protocol enable + creds + WS path suffix; flow/direct details in §4.8 |
-| Egress | `earlyDataEnabled`+`earlyDataMaxBytes` (2048), `proxyIpMode` (`proxyip`/`nat64`), `proxyIps[]`, `nat64Prefixes[]`, `chainProxy {enabled, uri}` (`socks5://`/`http://`/`https://`), `enableUdp53` | Tunnel egress chain |
-| Routing | `hostnameOverride`, `customDomains[]`, `cleanIps[]`, `tlsPorts[]` (443,2053,2083,2087,2096,8443), `plainPorts[]` (80,8080,...), `plainPortPolicy` (`always`/`workers-dev`/`never`), `cdn {enabled, addresses[], host, sni}` | Address pool + port matrix |
+| VLESS | `vlessEnabled`, `vlessUuid`, `vlessFlow` (empty / `xtls-rprx-vision`, TLS nodes only), `vlessPath` (`vl` default) | Single inbound enable + credential + WS path suffix; flow details in §4.7 |
+| Endpoints | `cdnPresets[]` (default empty, all opt-in), `customEndpoints[]` (default empty), `cdnHost`/`cdnSni` (default empty, front override for non-worker addresses), `warpPresets[]` (default `["default"]`), `warpCustomEndpoints[]` (default empty), `defaultPort` (443), `nameTemplate` | Preset ticks + custom paste + remark naming; details in §7.1 (VLESS) and §5.4 (WARP) |
 | TLS | `echEnabled`, `echAuto` (derive ECH name from node SNI), `echServerName` (manual override, always wins), `fingerprint` (chrome/firefox/safari/ios/android/edge/360/qq/random/randomized), `randomizeSniCase`, `alpn` (`["http/1.1"]`) | Emitted node TLS hygiene + ECH |
-| Fragment | `fragment {mode (off/low/medium/high/severe/custom), packets (tlshello/1-1…1-5), lengthMin/Max, delayMin/Max, maxSplitMin/Max}` | Xray fragment subs |
-| DNS | `dohUpstream` (`https://cloudflare-dns.com/dns-query`), `remoteDns` (`https://8.8.8.8/dns-query`) | DoH + resolver |
-| Privacy | `camouflage {mode (off/static/proxy), url}`, `killSwitch`, `speedtestIntercept`, `remoteSubUrls[]`, `urlTestIntervalSec` (300) | Camouflage + merging |
-| Routing rules | `routingRules {bypassLan, blockAds, blockMalware, blockQuic, customBypass[], customBlock[]}` | Clash/sing-box rule-section injection |
+| Fragment | `fragment {mode (off/low/medium/high/severe/custom), packets (tlshello/1-1…1-5), lengthMin/Max, delayMin/Max, maxSplitMin/Max}` | Fragment subs |
+| Egress | `earlyDataEnabled`+`earlyDataMaxBytes` (2048), `proxyIps[]`, `proxyIpPoolUrl`, `enableUdp53` | Tunnel egress: direct first, then the proxyIP pool |
+| DNS | `dohUpstream` (`https://cloudflare-dns.com/dns-query`) | Private DoH endpoint upstream |
+| Privacy | `camouflage {mode (off/static)}`, `killSwitch` | Camouflage + containment |
+| Routing rules | `routingRules {bypassLan, blockAds, blockMalware, blockQuic, customBypass[], customBlock[]}` | sing-box rule-section injection |
 | Telegram | `telegram {enabled, chatId}` (`botToken` write-only, never returned) | Bot management |
-| Security | `allowedIps[]` (default empty = allow all) | Panel IP allowlist: one IP or CIDR per line, v4/v6; non-listed client IPs get 403 after login (see §4.5) |
+| Security | `allowedIps[]` (default empty = allow all) | Panel IP allowlist: one IP or CIDR per line, v4/v6; non-listed client IPs get 403 after login (see §4.4) |
 
 Per-field validation errors return `422 { fields: { "proxyIps[0]": "…" } }`. Reset is `POST /{sp}/api/settings/reset` (keeps identity fields).
 
 Screenshot: *Settings form with grouped tabs + validation toast + dirty-guard*
 
-### 4.3 IP Checker (`GET /{sp}/my-ip`)
+### 4.3 Kill Switch
 
-Authenticated page (`src/handlers/myip.ts`, `src/core/router.ts:164`). JSON when `Accept: application/json`. Shows CF vs non-CF egress IPs, colo flag via static map (no `ip-api.com`), no third-party geo.
+`POST /{sp}/api/killswitch {enabled}` (`src/handlers/api/status.ts`). When `killSwitch: true`, every VLESS WebSocket upgrade returns `503` before upgrade (`src/core/router.ts:191`); panel/sub/DoH stay live. Operational containment — flip without redeploy.
 
-### 4.4 Kill Switch
-
-`POST /{sp}/api/killswitch {enabled}` (`src/handlers/api/status.ts`). When `killSwitch: true`, every WS upgrade returns `503` before upgrade (`src/core/router.ts:202`); panel/sub/DoH stay live. Operational containment — flip without redeploy.
-
-### 4.5 Panel IP Allowlist
+### 4.4 Panel IP Allowlist
 
 Settings → General → Panel IP allowlist (`allowedIps`, one entry per line). Empty means everyone can log in; any entry restricts the whole panel (APIs included) to those client IPs as seen in `CF-Connecting-IP`:
 
@@ -158,7 +162,7 @@ Settings → General → Panel IP allowlist (`allowedIps`, one entry per line). 
 - Order of checks: bad/missing session → 401 first, then non-listed IP → 403. Login and first-setup stay reachable without a session, so a bad list can never lock you out permanently.
 - **Recovery:** if you lock yourself out, delete the `qproxy:settings` key in the Cloudflare dashboard (KV → `qproxy` namespace → delete `qproxy:settings`) and revisit the worker URL — settings re-seed with an empty allowlist. Reconfigure the panel afterwards.
 
-### 4.6 Admin Audit Log
+### 4.5 Admin Audit Log
 
 Settings saves/resets/imports, kill-switch toggles, and WARP account/preset/Amnezia writes append one JSON line to the Worker log (`wrangler tail` or Cloudflare Dashboard → Workers → Logs). Each line has `"scope":"audit"` with the action as message:
 
@@ -168,52 +172,39 @@ Settings saves/resets/imports, kill-switch toggles, and WARP account/preset/Amne
 
 - `settings.save|reset|import` log `{ip, keys}` — sorted changed top-level key **names** only, never values.
 - `killswitch` logs `{ip, enabled}`; `warp.account.*` / `warp.preset.*` log `{ip, id}`; `warp.amnezia.update` logs `{ip}`.
-- Filter with `"scope":"audit"`. Secrets (passwords, UUIDs, tokens, `securePath`) never appear — only key names, account ids, and booleans.
+- Filter with `"scope":"audit"`. Secrets (passwords, hashes, UUIDs, `securePath`) never appear — only key names, account ids, and booleans.
 
-### 4.7 Panel Productivity (Shortcuts, Undo/Redo, Traffic, Backup)
+### 4.6 Panel Productivity (Shortcuts, Undo/Redo, Traffic, Backup)
 
 - **Keyboard shortcuts** — press `?` in the top bar for the cheatsheet: `Ctrl/Cmd+S` applies unsaved settings, `Ctrl/Cmd+K` focuses search (or goes home), `g` then `h` goes home, `Ctrl/Cmd+Z` undoes and `Shift+Ctrl/Cmd+Z` redoes the last change.
 - **Undo/redo** — per settings section, kept in memory while the panel is open (up to 20 steps); switching sections keeps each section's own history.
 - **Traffic chart** — the Home status card renders an SVG sparkline from the `qp_traffic` browser-local history (accumulated from the bootstrap usage counters on each visit); it shows an empty state until enough visits have built history. History never leaves the browser.
-- **Backup nudge** — if no settings export has happened in over 30 days, a banner offers a one-click export (dismissable). Export via Settings → Backup regularly regardless.
+- **Backup nudge** — if no settings export has happened in over 30 days, a banner offers a one-click export (dismissable). Export via Settings → Backup regularly regardless. Imports of backups exported by a pre-cut release are rejected whole with a localized message (see §10).
 - **Mobile** — below 500 px the layout stacks (tables collapse to labeled rows, modals go near-full-width); on touch devices help triggers are 44 px targets.
 
-### 4.8 VLESS Vision Flow + Direct Shadowsocks
+### 4.7 VLESS Vision Flow
 
-Settings → Protocols → VLESS / Shadowsocks (`vlessFlow`, `ssDirect` in `src/types/settings.ts`; both off by default, legacy output byte-identical when off).
+Settings → VLESS (`vlessFlow` in `src/types/settings.ts`; off by default, legacy output byte-identical when off).
 
-- **Vision flow (`vlessFlow: xtls-rprx-vision`)** — set it when your clients configure `flow=xtls-rprx-vision` on the VLESS node. The worker detects the flow from the handshake and decodes the length-prefixed body framing; the response header stays `[version, 0x00]` and non-vision clients keep working unchanged. `generateNodes` stamps the flow onto TLS VLESS nodes only — plain-port (`security: none`) nodes never carry it, so enabling the setting cannot break plain-port subs. Emitted share URIs gain `flow=xtls-rprx-vision` after the transport params; Clash adds `flow: xtls-rprx-vision` and sing-box adds `"flow": "xtls-rprx-vision"` on the VLESS entry. Surge/Loon output is unchanged. If a client enables vision locally but the setting is off here, only the URI advertisement is missing — the inbound still negotiates vision from the handshake.
-- **Direct Shadowsocks (`ssDirect: true`)** — emits plain `ss://` links (no `plugin=v2ray-plugin;…` segment) plus Clash entries without `plugin`/`plugin-opts` and sing-box outbounds without `plugin`/`plugin_opts`, for clients that speak raw Shadowsocks. Default (`false`) keeps the v2ray-plugin WebSocket wrapping, which is what carries SS over the worker's WebSocket tunnels — switch to direct only if your client handles raw SS itself.
-
-### 4.9 Two-Factor Authentication (TOTP)
-
-Settings → General → Security card. Enabling TOTP is a one-sitting operation — plan a few minutes:
-
-- **Fresh QR in one sitting.** Click *Set up authenticator* once and finish: scan the QR (or paste the secret), enter the current 6-digit code, enable. If you click setup again while an attempt is in progress (or after a previous, unfinished one), the panel asks for confirmation and warns that a restart generates a **new** secret — previously shown QRs become invalid, so delete the stale Q Proxy entry from your authenticator before re-adding.
-- **Save the recovery codes when they appear.** The 10 one-time recovery codes are shown exactly once, during setup (never after enable). Copy them all, or download them as a plain-text file (`q-proxy-recovery-codes.txt`). The *Verify and enable* button stays locked until you acknowledge "I saved my recovery codes" — if you lose both your authenticator and the codes, the only way back in is resetting the panel from KV.
-- **Clock skew note.** TOTP tolerates one 30-second time step in each direction. If codes get rejected at login, check the device clock of the phone running the authenticator — the login screen's error hint says the same — and remove duplicate Q Proxy entries from the app before trying again.
-
-Disabling 2FA later (Settings → Security → *Disable two-factor*) requires a confirmation click and returns login to password-only.
+Set `vlessFlow: xtls-rprx-vision` when your clients configure `flow=xtls-rprx-vision` on the VLESS node. The worker detects the flow from the handshake and decodes the length-prefixed body framing; the response header stays `[version, 0x00]` and non-vision clients keep working unchanged. `generateNodes` stamps the flow onto TLS VLESS nodes only — plain-port (`security: none`) nodes never carry it, so enabling the setting cannot break plain-port subs. Emitted share URIs gain `flow=xtls-rprx-vision` after the transport params; the sing-box emitter adds `"flow": "xtls-rprx-vision"` on the VLESS entry. If a client enables vision locally but the setting is off here, only the URI advertisement is missing — the inbound still negotiates vision from the handshake.
 
 ## 5. Subscriptions
 
 ### 5.1 Matrix
 
-Base path: `GET /{sp}/sub` (`src/handlers/subscribe.ts`, `src/core/router.ts:154`). Content negotiation in `src/subscription/negotiate.ts:6` and `src/core/ua.ts:19`:
+Base path: `GET /{sp}/sub` (`src/handlers/subscribe.ts`, `src/core/router.ts:160`). Content negotiation in `src/subscription/negotiate.ts:7` and `src/core/ua.ts:19`:
 
 | `?target=` | UA sniff token | Format | Content-Type | Body |
 |------------|----------------|--------|--------------|------|
-| `base64` | `v2rayng`/`shadowrocket`/`happ`/`streisand`… | Base64 | `text/plain` | Std padded base64 of `\n`-joined `vless://`/`vmess://`/`trojan://`/`ss://` |
-| `clash` | `clash`/`mihomo`/`stash` | Clash YAML | `text/yaml` | Real YAML via `yaml-writer` (not JSON), `servername` vs `sni`, ws-opts `max-early-data: 2048` |
+| `base64` | `v2rayng`/`v2rayn`/`shadowrocket`/`happ`/`streisand`… | Base64 | `text/plain` | Std padded base64 of `\n`-joined `vless://` links |
 | `singbox` | `sing-box`/`singbox`/`sfa`/`hiddify`/`nekobox`/`karing` | sing-box JSON | `application/json` | Full profile: tun+mixed inbounds, DNS detour, `urltest` best-ping |
-| `surge` | `surge` | Surge INI | `text/plain` | `[Proxy]` + select/url-test groups; SS omitted (no v2ray-plugin) |
-| `loon` | `loon` | Loon | `text/plain` | `[Proxy]` lines; SS omitted |
-| `quantumult` | `quantumult`/`quanx` | Quantumult X | `text/plain` | `.conf`: `[server_local]` nodes + single static PROXY group; VLESS/Trojan TLS-only, plain VMess/SS included |
-| *(none, browser UA)* | `mozilla/`/`chrome/`/`safari`/`firefox` | Info page | `text/html` | Bilingual EN/FA landing with per-format copy/QR |
+| `clash` | `clash`/`mihomo`/`stash` | Clash YAML | `text/yaml` | Mihomo-compatible profile: vless+ws proxies, `urltest` group, REJECT/DIRECT rules |
+| `xray` | `xray-core` | Xray JSON | `application/json` | Full profile: socks inbound with sniffing, DNS, routing plus a least-ping balancer |
+| *(none, browser UA)* | `mozilla/`/`chrome/`/`safari/`/`firefox` | Info page | `text/html` | Bilingual EN/FA landing with per-format copy/QR |
 
-Priority: `?target=` param > UA tokens > `base64` fallback; browsers get the info page. Non-browser UAs get `Content-Disposition: attachment` + `Subscription-Userinfo` / `Profile-Title` headers (`src/subscription/headers.ts`).
+Those four targets are the whole list. Priority: `?target=` param > UA tokens > `base64` fallback; browsers get the info page. Any other `?target=` value is rejected with `400 invalid target` — never remapped, never substituted. Non-browser UAs get `Content-Disposition: attachment` + `Subscription-Userinfo` / `Profile-Title` headers (`src/subscription/headers.ts`).
 
-Fragment variant: `?mode=fragment` filters nodes to the fragment family (Xray JSON chains through a `fragment` outbound; presets in `src/nodes/fragments.ts`). Shadowrocket/Happ UAs on mixed subs get `fragment=` URI params automatically.
+Fragment variant: `?mode=fragment` filters nodes to the fragment family (presets in `src/nodes/fragments.ts`). Shadowrocket/Happ UAs on mixed subs get `fragment=` URI params automatically.
 
 ### 5.2 Per-Client Import
 
@@ -221,65 +212,48 @@ Fragment variant: `?mode=fragment` filters nodes to the fragment family (Xray JS
 |--------|-------|
 | **v2rayNG** (Android) | Copy `/{sp}/sub?target=base64` → v2rayNG → `+` → Import from clipboard; or scan QR from panel Home |
 | **sing-box / SFA** | Use `?target=singbox` URL → SFA → Add profile from URL → enable tun `auto_route` |
-| **Clash Meta / Mihomo** | Use `?target=clash` URL → import as remote profile; `url-test` group auto-selects best ping every `urlTestIntervalSec` |
+| **Clash Verge / Mihomo** | Use `/{sp}/sub?target=clash` URL → Profiles → New profile from URL; select the `PROXY` group |
+| **Xray-core desktop** (v2rayN / NekoRay) | Use `/{sp}/sub?target=xray` URL → import as Xray JSON config; traffic balances across nodes via least-ping |
 | **Shadowrocket** (iOS) | Use base64 sub; fragment param auto-appended when UA is Shadowrocket — verify `fragment=` appears in URI preview |
-| **Surge** | Use `?target=surge` → Surge → Add config from URL; `#!MANAGED-CONFIG` interval auto-updates |
-| **Loon** | Use `?target=loon` → Loon → Add from URL → `[Proxy]` section populated |
-| **Quantumult X** | Use `?target=quantumult` → Quantumult X → download/import the `.conf`; nodes land in `[server_local]` under one static PROXY policy |
+
+Automatic fastest-node selection lives in the sing-box and Clash profiles (their `PROXY` url-test group re-tests every few minutes); a Base64 list cannot auto-select — run your client's own speed test or switch to a profile URL. The hub repeats this guidance above the format rows.
 
 Screenshot placeholders: *QR modal + "Copy URL" toast + per-format tabs on info page*
 
-### 5.3 Per-User Links (User Center)
+### 5.3 Retired token links
 
-Admin panel → Users tab. Create a user (name, protocol filter, optional daily request limit and expiry date) and copy its subscription URL `/{sp}/sub/u/{token}`.
-
-| Behavior | Response |
-|----------|----------|
-| User disabled or expired | HTTP 410 |
-| Daily request quota exhausted | HTTP 429 with `Retry-After` |
-| Protocol filter set | Only those protocols appear in the emitted sub |
-
-Each user link supports the same `?target=` formats as the main subscription. Up to 50 users; usage counters reset daily. Worker-subscription traffic from user links consumes the same Workers request quota as your own links.
-
-**Activity:** `GET /{sp}/api/users/{id}/activity?days=N` returns `{activity: [{day, requests}, …]}` — one row per day, chronological, zeros for days with no fetches. Defaults to 7 days, clamped to 1–31 (`?days=abc` behaves as omitted). Unknown or malformed user ids return 404; the response never contains the user token or its hash.
-
-**Rate limiting:** the per-user limiter is a token bucket (30 connections/min refill, burst of 10, keyed by token hash, 120 s KV entries, fail-open so a KV outage never blocks users); a denied relay admission closes with 1008.
-
-**Bulk operations:** the Users tab has a multiselect bulk bar (checkbox column + select-all) — Enable, Disable, Set expiry (pick a date first), Delete — with a confirm dialog and a `{updated} · deleted {deleted}` toast (unknown ids reported inline). Same operations are available as `POST /{sp}/api/users/bulk` with `{ids (1–50), patch: {enabled?, expiresAt?} | {delete: true}}` → `{updated, deleted, unknown}`; unknown ids are skipped and tokens are never returned.
-
-**Token rotation:** regenerating a user token opens a show-once modal with the new subscription URL (copy + QR) — copy it immediately, as it is never shown again; the old links stop working at once.
-
-Per-user links accept the same `?country=` filter as the main subscription (see §7.1).
+There is only one subscription class: yours. Old token links from before the cut no longer exist as a feature — requesting one serves the static camouflage page, byte-identical to any random unknown URL, with no hint that anything was ever there.
 
 ### 5.4 WARP Subscriptions
 
-Panel → WARP section: register a real Cloudflare WARP device (or import a config), optionally save endpoint presets or Amnezia parameters, then copy a config URL `/{sp}/sub/wg/{token}/{format}`. All 17 format slugs live in `src/warp/formats/registry.ts`; the two zip variants are `wireguard-conf` and `wireguard-conf-amnezia`.
+Panel → WARP section: register a real Cloudflare WARP device (or import a config), pick the ONE global endpoint source — tick `warpPresets` (default `["default"]`) plus an optional `warpCustomEndpoints` paste box (one `endpoint:port` per line, any port 1–65535, e.g. WireGuard ports 2408/500) — optionally save Amnezia parameters and flip the global Amnezia switch, then copy a config URL `/{sp}/sub/wg/{token}/{format}`. Four format slugs are served from `src/warp/formats/registry.ts`: `wireguard-conf` (ZIP for the official app), `singbox` (JSON), `v2rayn` (base64 links, never Amnezia), `throne` (links, always Amnezia). Every other name serves camouflage like an unknown URL.
+
+That single global selection governs every account and all four output families, with one global Amnezia switch (default off): on, the WireGuard and sing-box outputs carry the Amnezia values; Throne always does; v2rayn never does. Flipping the switch purges served copies, so clients must re-download — previously shared files are snapshots. Per-account endpoint selection and per-account Amnezia overrides are retired: any stored `endpoint_list` or `amnezia_overrides` is ignored, not migrated. An empty global selection (nothing ticked, custom box empty) falls back to the `default` preset, so configs are never empty for this reason. The custom box follows the same paste discipline as VLESS (§7.1): bad lines reject the whole save naming each line, valid lines are kept verbatim, max 64 lines.
 
 These configs connect straight to Cloudflare's WARP network — their tunnel traffic never passes through your Worker and does not consume the Workers request budget.
+
+**Offline rescue:** a downloaded WARP config keeps working even if the Worker is down, deleted, or out of budget — the client talks directly to Cloudflare's edge. Keep one current `.conf` (or Throne link) somewhere off-panel as your rescue path. There is no separate rescue generator; the ordinary WARP download *is* the rescue.
 
 ### 5.5 Telegram Bot
 
 1. Create a bot with @BotFather, copy the token.
 2. Panel → Settings → Advanced → Telegram: enable, paste token, set your chat ID.
-3. Click Set webhook. The webhook URL embeds an HMAC-derived secret; commands `/status`, `/sub`, `/kill on|off`, `/usage`, `/expiry` get EN/FA replies per `settings.language`.
+3. Click Set webhook. The webhook URL embeds an HMAC-derived secret; commands `/status`, `/sub`, `/kill on|off` get EN/FA replies per `settings.language`. Anything else gets the help reply listing exactly those three commands.
 
-**Menu buttons:** `/start` and `/menu` reply with the help text plus an inline keyboard — Status · Usage on row one, Subscription · Expiry on row two, Kill ON · Kill OFF on row three. Tapping a button runs the matching command and edits the same message in place (no chat spam); other commands reply as plain text without buttons. Kill buttons flip the kill switch immediately, so guard chat access accordingly.
+**Menu buttons:** `/start` and `/menu` reply with the help text plus an inline keyboard — Status · Subscription on the first rows, Kill ON · Kill OFF on the last row. Tapping a button runs the matching command and edits the same message in place (no chat spam); other commands reply as plain text without buttons. Kill buttons flip the kill switch immediately, so guard chat access accordingly.
 
 Removing the webhook deletes it from BotFather. The bot token is write-only: it is stripped from settings responses and exports.
 
 ### 5.6 Transport Support Matrix
 
-All worker-terminated proxy traffic runs over WebSocket tunnels (`/{vl|vm|tr|ss}/` under the secure path). There is deliberately no other inbound transport today:
+All worker-terminated proxy traffic is VLESS over WebSocket tunnels (under the secure path). There is no other inbound transport:
 
 | Transport | Status | What it means for you |
 |-----------|--------|------------------------|
 | WebSocket (`type=ws`) | ✅ Works | Every emitted node uses it; the only transport clients need to configure |
-| VLESS `xtls-rprx-vision` flow over WS | ✅ Works | Opt-in via `vlessFlow` (see §4.8); framing only, still inside the WS tunnel |
-| gRPC (`type=grpc`) | ❌ Not supported | The worker cannot send gRPC trailers, so native gRPC clients would fail every call — deferred until the platform exposes trailer/h2-stream APIs (ADR-006) |
-| XHTTP | ❌ Not supported (nearest-term candidate) | Needs proof that the edge streams request/response bodies concurrently plus an Xray source pin before any build (ADR-007) |
-| REALITY (`security=reality`, `type=tcp`) | ❌ Never on the worker | REALITY needs raw inbound TCP and handshake control the Cloudflare edge does not grant; a subscription-side remote-reference model (list your own VPS REALITY nodes in admin subs) is specified but parked pending a product decision (ADR-008). The worker will never hold REALITY private keys |
+| VLESS `xtls-rprx-vision` flow over WS | ✅ Works | Opt-in via `vlessFlow` (see §4.7); framing only, still inside the WS tunnel |
 
-Do not set `type=grpc`, `type=xhttp`, or `security=reality` on worker nodes — no client will connect. Remote-subscription lines using other transports pass through untouched in the base64 merge (§7.4) but are never generated or converted by this worker.
+Do not set any other `type=` or `security=` on worker nodes — no client will connect. Requests to former tunnel paths are not upgraded: they serve the camouflage page exactly like an unknown path.
 
 ## 6. Troubleshooting
 
@@ -288,172 +262,188 @@ Do not set `type=grpc`, `type=xhttp`, or `security=reality` on worker nodes — 
 | 1 | **Bad password / 401 on panel** — login fails, no hint which field | PBKDF2 constant-time check (`src/auth/password.ts`); login throttle 5 fails/15 min → 403 | Wait 15 min or clear KV `rl:*`; verify password has letter+digit; check cookie `q_session` not blocked; `X-Q-Panel: 1` header present on PUTs |
 | 1b | **403 PASSWORD_CHANGE_REQUIRED on panel APIs** | The deploy-script bootstrap password is still in force — the panel is locked until a personal password is set | Settings → Security → change the passphrase (§3.1); the flag clears on success |
 | 1c | **409 SETUP_WINDOW_EXPIRED on the setup card** | The panel was seeded but never claimed, more than 24 h ago | Delete KV `qproxy:settings` and revisit the worker URL to re-seed with a fresh window (§3.2) |
-| 2 | **Early data rejected / WS 1008** | `Sec-WebSocket-Protocol` payload >8 KB or not base64url, or SS path with early data (early data disabled for SS, `src/types/node.ts` invariant) | Cap at `earlyDataMaxBytes: 2048` (`src/types/settings.ts:195`), ensure `ed=2048` in URI (`?ed=2048`), use dedicated `/ss/<suffix>` path (`src/core/routes.ts:11`) |
-| 3 | **Fragment sub empty / plain ports in fragment** | `fragment.mode: "off"` disables fragment family; fragment forces TLS only, excludes CDN hosts (`src/types/node.ts:358`) | Set `fragment.mode` to `low`/`medium`/`high`/`severe`; check `tlsPorts` includes 443; disable `cdn.enabled` for fragment |
-| 4 | **Camouflage shows 500 on valid path** | Wrong `securePath` segment (case-sensitive), unmatched route, or internal error all return identical fake 1101 HTML (`src/handlers/camouflage.ts`) | Copy exact `/{securePath}/panel` URL from KV `qproxy:settings`; check `GET /robots.txt` returns `Disallow: /`; never guess — rotate path via Settings if leaked |
-| 5 | **DNS / UDP53 fails, only TCP works** | `enableUdp53: false` or upstream `dohUpstream` unreachable; non-53 UDP always rejected (`src/protocols/vless.ts` cmd 2 guard) | Enable `enableUdp53: true`, set `dohUpstream` to `https://cloudflare-dns.com/dns-query`, test `GET /{sp}/doh?dns=...`; expected: only port-53 UDP relayed via `DnsPacketRelay` (`src/types/tunnel.ts:525`) |
-| 6 | **Subscription counters always 0 / `total` missing** | `qproxy:counters` not yet flushed (isolate buffer, 60 s / 32 conns), or `total`/`expire` unset by design | Generate traffic then wait 60 s; `download = requestsTotal × 1 MiB` is an estimate — set `total`/`expire` in Settings if you want explicit quota display |
-| 7 | **403 on panel after setting the IP allowlist** | Your current IP is not in `allowedIps` (session is valid, hence 403 not 401) | Add your IP/CIDR from another allowed network, or recover by deleting KV `qproxy:settings` and re-seeding (see §4.5) |
+| 2 | **Early data rejected / WS 1008** | `Sec-WebSocket-Protocol` payload >8 KB or not base64url | Cap at `earlyDataMaxBytes: 2048` (`src/types/settings.ts:68`), ensure `ed=2048` in URI (`?ed=2048`), use the dedicated `/<vlessPath>/<suffix>` path (`src/core/routes.ts:14`) |
+| 3 | **Fragment sub empty / plain ports in fragment** | `fragment.mode: "off"` disables fragment family; fragment forces TLS only (`src/nodes/generate.ts:157`) | Set `fragment.mode` to `low`/`medium`/`high`/`severe`; check the endpoint port is in the TLS family |
+| 4 | **Camouflage on a valid-looking path** | Wrong `securePath` segment (case-sensitive), unmatched route, removed URL shape, or internal error all return the identical static page (`src/handlers/camouflage.ts`) | Copy exact `/{securePath}/panel` URL from KV `qproxy:settings`; check `GET /robots.txt` returns `Disallow: /`; never guess — rotate path via Settings if leaked |
+| 5 | **DNS / UDP53 fails, only TCP works** | `enableUdp53: false` or upstream `dohUpstream` unreachable; non-53 UDP always rejected (VLESS cmd 2 guard) | Enable `enableUdp53: true`, set `dohUpstream` to `https://cloudflare-dns.com/dns-query`, test `GET /{sp}/doh?dns=...`; expected: only port-53 UDP relayed via `DnsPacketRelay` (`src/types/tunnel.ts:525`) |
+| 6 | **Subscription counters always 0** | `qproxy:counters` not yet flushed (isolate buffer, 60 s / 32 conns) | Generate traffic then wait 60 s; `download = requestsTotal × 1 MiB` is an estimate |
+| 7 | **403 on panel after setting the IP allowlist** | Your current IP is not in `allowedIps` (session is valid, hence 403 not 401) | Add your IP/CIDR from another allowed network, or recover by deleting KV `qproxy:settings` and re-seeding (see §4.4) |
+| 8 | **400 invalid target on a subscription URL** | `?target=` names a format that does not exist (only `base64` and `singbox` are served) | Use `?target=base64` or `?target=singbox`, or drop the param for UA negotiation |
 
-Still stuck? Enable `debugLogging: true` (`src/types/settings.ts:48` → `src/core/log.ts`) and check `wrangler tail`, or open an issue with the sanitized `GET /{sp}/api/status` output.
+Still stuck? Enable `debugLogging: true` (`src/types/settings.ts:62` → `src/core/log.ts`) and check `wrangler tail`, or open an issue with the sanitized `GET /{sp}/api/status` output.
 
 ## 7. Advanced Settings Examples
 
-### 7.1 Custom Domains and Clean IPs
+### 7.1 Preset + Custom Endpoints
 
-| Field | Example | Effect |
-|-------|---------|--------|
-| hostnameOverride | proxy.example.com | Overrides worker hostname for all emitted nodes |
-| customDomains[] | cdn.example.com | Extra SNI/host entries; plain-port nodes hidden unless plainPortPolicy=always |
-| cleanIps[] | 104.21.12.34, [2606:4700::1]:8443, ip:port | Direct addresses in the pool. An entry with `:port` emits only that port (TLS family decides security); bare entries follow the TLS/plain port selection below. Invalid lines are dropped on save. |
+Set in Panel → Settings → Endpoints. VLESS address sources are exactly three, in this order:
 
-Address composition guarantee: subscriptions contain **only** your worker hostname plus entries from these user-owned lists — no built-in or hard-coded IPs/domains are ever added.
+1. **Ticked CDN presets** — 8 curated `ip:port` entries shipped in `src/nodes/cdn-presets.ts`, all opt-in (`cdnPresets[]`, default empty). Ticking an entry adds its `ip:port` to generation; unticked entries contribute nothing. Unknown ids are ignored, never errors.
+2. **Custom paste box** — `customEndpoints[]` (default empty), one `ip-or-host[:port]` per line (IPv6 in brackets, e.g. `[2606:4700::1]:443`). Lines are stored verbatim (trimmed); blank lines are ignored, not errors.
+3. **Worker-hostname fallback** — when no preset is ticked and the custom box is empty, nodes use the request hostname, so subscriptions are never empty.
 
-Each clean-IP/custom-domain entry can carry an optional `country` (2-letter code, stored uppercase) tag, set in the address editor. Appending `?country=XX` to any subscription URL (`/{sp}/sub` or a per-user link, comma-separated for several, case-insensitive) keeps only nodes whose tagged address matches, plus every untagged address and the worker-hostname fallback — e.g. `/{sp}/sub?target=clash&country=DE,NL`. Missing, empty, or fully-invalid values disable filtering. The panel Home page shows the same hint under the subscription list.
+**CDN fronting (optional triple):** below the custom box, `cdnHost` / `cdnSni` override the Host header and TLS server name on every non-worker address (preset + custom lines; the worker hostname itself is never overridden). Leave both empty for auto derivation. Example: connect to a CDN edge IP while presenting your own front domain. Both fields accept a domain name or empty.
 
-Set in Panel -> Settings -> Routing. DNS for custom domains must be proxied (orange cloud) in CF dashboard — no auto DNS changes.
+Paste discipline — the whole save is rejected when any line is bad; stored state is untouched and the panel keeps your text for correction:
 
-Screenshot: *Routing tab with custom domain + clean IP list + validation icons*
+- Each non-blank line must parse as `ip:port`. Unparsable lines are rejected with `line N "…"` (content truncated to 64 chars).
+- Explicit ports must be in the Cloudflare families {443,2053,2083,2087,2096,8443} ∪ {80,8080,8880,2052,2082,2086,2095}. Out-of-family ports reject the save naming the bad lines — never silently converted or dropped.
+- Bare hosts (no port) use `defaultPort` (443 default; TLS-only values allowed).
+- Max 64 stored lines; longer boxes are rejected with a count message.
+- Dedupe happens at generation by lowercased `host:port` across presets+custom — ticking a preset and pasting the same endpoint yields one node.
 
-### 7.2 Chain Proxy
+Address composition guarantee: subscriptions contain **only** the worker hostname plus enabled presets plus valid custom lines — no other built-in or hard-coded IPs/domains are ever added (the 8 shipped presets are the single blessed exception, and only when ticked).
 
-chainProxy { enabled: true, uri: "socks5://user:pass@1.2.3.4:1080" } (src/types/settings.ts:78) or http:// / https:// .
+Removed: the old `addresses[]` list is gone — per-address host/SNI overrides, labels, country tags, enabled toggles, and the `?country=` subscription filter no longer exist. Pre-cut `addresses` data is dropped on upgrade, not migrated: after upgrade re-tick presets or re-paste lines; until then subscriptions serve the worker-hostname fallback. Settings version stays 3.
 
-- All tunneled TCP routes through the chain when enabled — no silent fallback on failure (src/tunnel/egress.ts).
-- SOCKS5 per RFC 1928 with optional auth (src/tunnel/chain/socks5.ts); HTTP CONNECT via src/tunnel/chain/http-connect.ts; HTTPS uses native TLS socket (secureTransport:on).
-- Chain failure closes the session. Disable to restore direct-first flow.
+Fragment variants apply to preset endpoints like any TLS address: when fragment mode is on, every TLS endpoint (preset, custom, or hostname) gains a fragment variant — no per-variant endpoint splitting.
 
-### 7.3 ProxyIP and NAT64
+DNS for extra domains must be proxied (orange cloud) in CF dashboard — no auto DNS changes.
 
-- ProxyIP mode (proxyIpMode: proxyip): proxyIps[] accepts ipv4, [ipv6], host, host:port; hosts resolve A/AAAA via DoH at use time with 10-min isolate cache (src/tunnel/proxyip.ts). Empty default — no author hosts.
-- NAT64 mode (proxyIpMode: nat64): nat64Prefixes[] validated as IPv6 literals (defaults src/types/settings.ts:138: [2a02:898:146:64::] etc.); target IPv4 resolved then synthesized as [prefix + hex(v4)] (src/tunnel/nat64.ts).
+Screenshot: *Endpoints card with preset checklist + custom textarea + validation icons*
 
-Failover keeps top 8 candidates, shuffled deterministically by target host via hashSeed (src/tunnel/egress.ts:64). Generation counters prevent stale writes across redials.
+### 7.2 ProxyIP Pool
 
-### 7.4 Remote Subscriptions
+- `proxyIps[]` accepts ipv4, [ipv6], host, host:port; hosts resolve A/AAAA via DoH at use time with 10-min isolate cache (`src/tunnel/proxyip.ts`). Empty default — no extra hosts.
+- `proxyIpPoolUrl` points at a pool file the worker merges into the same candidate set (probed via the pool API in the panel).
 
-remoteSubUrls[] must point to share-link lists — raw `vless://`/`vmess://`/`trojan://`/`ss://`/`hysteria://`/`hysteria2://` lines or base64 of such a list; any other line format is dropped (src/subscription/merge.ts). Fetch rules: 5 s timeout per URL, redirects followed, 1 MiB total cap shared across all URLs, exact-line dedupe. Unreachable or malformed sources degrade silently — own nodes still served. Results are cached per-isolate for `subUpdateIntervalHours` (default 12 h).
+Egress tries direct first, then the pool. Failover keeps the top 8 candidates, shuffled deterministically by target host via hashSeed (`src/tunnel/egress.ts:60`). Generation counters prevent stale writes across redials.
 
-Merging happens ONLY in the base64 subscription (`?target=base64`, including UA-negotiated base64): remote lines are appended after your generated share URIs and the combined list is base64-encoded (src/handlers/subscribe.ts). They are never parsed or converted — Clash YAML, sing-box JSON, Surge and Loon outputs are generated from your own nodes exclusively. Per-user links (`/sub/u/{token}`) likewise never include remote lines.
+### 7.3 Fragment Settings
 
-### 7.5 Fragment Settings
-
-Fragment presets (src/nodes/fragments.ts) map panel modes to length/delay/maxSplit:
+Fragment presets (`src/nodes/fragments.ts`) map panel modes to length/delay/maxSplit:
 
 | Mode | length | delay | maxSplit | Notes |
 |------|--------|-------|----------|-------|
 | off | — | — | — | Fragment family disabled |
-| low | 100-200 | 1-1 | 2-4 | Default from src/types/settings.ts:126 |
+| low | 100-200 | 1-1 | 2-4 | Default from `src/types/settings.ts:118` |
 | medium | 50-100 | 1-5 | — | |
 | high | 10-20 | 10-20 | — | |
 | severe | 1-5 | 1-5 | — | |
-| custom | lengthMin/Max | delayMin/Max | maxSplitMin/Max | User fields src/types/settings.ts:152 |
+| custom | lengthMin/Max | delayMin/Max | maxSplitMin/Max | User fields `src/types/settings.ts:118` |
 
-Fragment forces TLS ports and excludes CDN hosts (src/types/node.ts). Use ?mode=fragment on sub or enable in panel.
+Fragment forces TLS ports. Use `?mode=fragment` on sub or enable in panel.
 
 ## 8. Port Matrix and TLS Notes
 
-- TLS ports tlsPorts: [443,2053,2083,2087,2096,8443] -> security=tls; plain plainPorts: [80,8080,8880,2052,2082,2086,2095] -> security=none (src/types/settings.ts:119). Mismatch never emitted — property test over generator.
-- plainPortPolicy: workers-dev (default) = plain nodes only when hostname is *.workers.dev; always / never override. Enable always if using custom domain with HTTP allowed.
+- Port families (`src/types/settings.ts:3`): TLS [443,2053,2083,2087,2096,8443] → `security=tls`; plain [80,8080,8880,2052,2082,2086,2095] → `security=none`. Mismatch never emitted — property test over generator.
+- `defaultPort` (443) applies to pasted lines without an explicit port. Plain-port nodes appear whenever the resolved port is in the plain family.
 - Emitted nodes: sni = randomized-uppercase hostname per remark seed, alpn=http/1.1, fingerprint selectable (chrome default, 10 values + random/randomized), allowInsecure=false always.
 - ECH (Encrypted ClientHello): enable `echEnabled`, then either set a manual `echServerName` (always wins) or turn on `echAuto` to derive the query name per node from its SNI — the panel previews the effective name live. Nodes whose SNI is not a usable domain name emit without ECH rather than failing.
-- Remarks encode protocol + port + address class + flags (F= fragment, D= custom domain, chain indicator) — unique and stable per src/nodes/naming.ts.
+- Remarks encode port + address class + flags (F = fragment, D = custom domain) — unique and stable per `src/nodes/naming.ts`.
 
 ## 9. Security Checklist
 
-- Rotate securePath after sharing configs — rotation invalidates every client URI by design (src/handlers/api/auth.ts).
-- Store trojanPassword / ssPassword / UUIDs only in KV — never commit wrangler.toml with secrets. Mask in any diagnostic output.
-- Enable camouflage.mode: static (default) so probes get fake 1101 HTML 500, not 404 fingerprints (src/handlers/camouflage.ts). /robots.txt always Disallow.
-- killSwitch is instant containment — no redeploy needed (src/core/router.ts). Panel stays live.
+- Rotate securePath after sharing configs — rotation invalidates every client URI by design (`src/handlers/api/auth.ts`).
+- Store the VLESS UUID only in KV — never commit wrangler.toml with secrets. Mask in any diagnostic output.
+- Login is password-only. Pick a strong passphrase; changing it signs out all other devices.
+- Enable camouflage.mode: static (default) so probes get the static page, not fingerprints (`src/handlers/camouflage.ts`). `off` serves a bare refusal instead. /robots.txt always Disallow.
+- killSwitch is instant containment — no redeploy needed (`src/core/router.ts`). Panel stays live.
 - Replace the deploy-script bootstrap password (`qproxy-XXXXXXXX`) with a personal one immediately after first login — the panel refuses every other API until you do (§3.1).
 - Password stored PBKDF2-SHA256 >=100k iterations + 16-byte salt; setup race-guarded.
 
 ## 10. Updating
 
-Dashboard: npm run build -> paste new dist/q-proxy.js -> Save. Wrangler: npm run deploy (package.json:11 does build+deploy). KV qproxy:settings migrates automatically (src/settings/migrate.ts); version stamped at SETTINGS_VERSION = 1. Check GET /{sp}/api/status -> version after deploy. Downgrade keeps unknown keys opaque.
+Dashboard: npm run build -> paste new dist/q-proxy.js -> Save. Wrangler: npm run deploy (package.json:11 does build+deploy). KV `qproxy:settings` migrates automatically (`src/settings/migrate.ts`); version stamped at SETTINGS_VERSION = 3. Check `GET /{sp}/api/status` -> version after deploy. Downgrade keeps unknown keys opaque.
+
+Pre-cut backups (version below 3) are not migrated: importing one is rejected whole with a clear message telling you to reconfigure on the current version, and nothing is applied. On first boot over a pre-cut store, leftover data from the retired scope is purged with a single log note, then the store is stamped to version 3; counters and the audit log survive untouched.
 
 Screenshot: *Status card showing version bump + KV migration log*
 
 ## 11. DoH Private Endpoint
 
-GET /{sp}/doh — blind DoH reverse proxy to dohUpstream (src/handlers/doh.ts). GET ?dns= and POST both forwarded verbatim, cookies stripped, correct content-type returned. POST bodies size-capped at 64 KiB. Lives under securePath — knowledge of path is capability. Test: curl https://<worker>/<sp>/doh?dns=<b64url(dns packet)> -H "accept: application/dns-message".
+`GET /{sp}/doh` — blind DoH reverse proxy to dohUpstream (`src/handlers/doh.ts`). GET ?dns= and POST both forwarded verbatim, cookies stripped, correct content-type returned. POST bodies size-capped at 64 KiB. Lives under securePath — knowledge of path is capability. Test: curl https://<worker>/<sp>/doh?dns=<b64url(dns packet)> -H "accept: application/dns-message".
 
-## 12. Speedtest Interception
+## 12. Language and i18n
 
-speedtestIntercept: true (default) (src/types/settings.ts:149, src/tunnel/speedtest.ts). Tunneled requests with Host speed.cloudflare.com or cp.cloudflare.com receive locally synthesized HTTP/1.1 204 without dialing upstream. Saves egress. Toggle in Settings. Unit-tested classifier — wire capture shows no upstream dial for matched hosts.
+Panel and info page bilingual EN/FA via embedded dictionary. FA renders dir=rtl with mirrored layout. Language switch persists per session; `src/types/settings.ts` language: en | fa, default fa. Zero hardcoded English strings in templates (lint-checked).
 
-## 13. Language and i18n
-
-Panel and info page bilingual EN/FA via embedded dictionary. FA renders dir=rtl with mirrored layout. Language switch persists per session; src/types/settings.ts language: en | fa, default fa. Zero hardcoded English strings in templates (lint-checked).
-
-## 14. QR Codes
+## 13. QR Codes
 
 Client-side embedded JS generator compiled into panel asset. Panel shows QR per sub/config link. No /qrcode GET endpoint exists server-side. Scan with any camera app or client QR import. Verify QR payload matches copied URL.
 
-Screenshot: *Panel QR modal with per-format tabs (base64/clash/singbox/surge/loon) + language toggle EN/FA*
+Screenshot: *Panel QR modal with per-format tabs (base64/singbox) + language toggle EN/FA*
 
-## 15. Backup and Restore
+## 14. Backup and Restore
 
-Settings live in KV `qproxy:settings`. To backup: authenticated `GET /{sp}/api/settings` → save redacted JSON (passwordHash omitted). To restore: `PUT /{sp}/api/settings` with saved data. For full migration, copy wrangler.toml KV id and redeploy.
+Settings live in KV `qproxy:settings`. To backup: panel → Settings → Backup → Export, or authenticated `GET /{sp}/api/settings/export` → save the JSON file (secrets and `securePath` stripped). To restore: `POST /{sp}/api/settings/import` with the saved file. For full migration, copy wrangler.toml KV id and redeploy.
 
-Users, per-user quotas/activity, global counters, and the audit trail live in D1 (`q-proxy` database), not in that export. Back them up separately — dashboard D1 console or `npx wrangler d1 export q-proxy --remote --output backup.sql` — and point the new deploy at the same database (copy the `[[d1_databases]] database_id`, or restore the export into the new database). A settings-only restore on a fresh database starts with an empty user directory and zeroed counters.
+A backup exported by a pre-cut release cannot be imported: the import answers `422` with a message telling you the file came from a pre-cut release and to reconfigure on the current version, and applies nothing — never a half-applied state. The panel surfaces the same incompatibility as a localized message.
 
-## 16. Common Gotchas
+Global counters and the audit trail live in D1 (`q-proxy` database), not in that export. Back them up separately — dashboard D1 console or `npx wrangler d1 export q-proxy --remote --output backup.sql` — and point the new deploy at the same database (copy the `[[d1_databases]] database_id`, or restore the export into the new database). A settings-only restore on a fresh database starts with zeroed counters.
+
+## 15. Common Gotchas
 
 - Custom domain without TLS cert -> nodes still emit security=tls but client may fail verify if domain not proxied. Ensure orange cloud + valid cert.
-- Plain-port nodes only appear for *.workers.dev or when plainPortPolicy=always — otherwise base64 sub will be TLS-only even though plainPorts are configured.
-- Mixing proxyIpMode toggle without clearing the other list is fine — only the active mode''s list is used.
+- Plain-port nodes appear only when the resolved port is in the plain family — otherwise the sub will be TLS-only even though endpoints are configured.
+- A custom line with a port outside both port families rejects the whole save naming the bad lines — fix or remove them; nothing is silently dropped. Keep pasted ports inside the TLS/plain families.
+- `?target=` with any name other than `base64`/`singbox` answers `400 invalid target` — it is never remapped.
+- Old token links serve the camouflage page, exactly like an unknown URL.
 
-## 17. Example Settings JSON (redacted GET view)
+## 16. Example Settings JSON (redacted GET view)
 
-GET /{sp}/api/settings returns PublicSettings (src/types/settings.ts:156 omits passwordHash/passwordSalt/sessionSecret):
+`GET /{sp}/api/settings` returns PublicSettings (`src/types/settings.ts:144` omits `passwordHash`/`passwordSalt`/`sessionSecret`):
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "securePath": "a1b2c3d4e5f6",
   "language": "fa",
   "vlessEnabled": true,
-  "vmessEnabled": true,
-  "trojanEnabled": true,
-  "ssEnabled": true,
-  "ssMethod": "aes-128-gcm",
+  "vlessUuid": "…",
+  "vlessFlow": "",
   "vlessPath": "vl",
-  "tlsPorts": [443,2053,2083,2087,2096,8443],
-  "plainPorts": [80,8080,8880,2052,2082,2086,2095],
-  "plainPortPolicy": "workers-dev",
+  "defaultPort": 443,
+  "cdnPresets": [],
+  "customEndpoints": [],
+  "warpPresets": ["default"],
+  "warpCustomEndpoints": [],
   "fingerprint": "chrome",
-  "proxyIpMode": "proxyip",
   "proxyIps": [],
-  "chainProxy": { "enabled": false, "uri": "" },
+  "proxyIpPoolUrl": "",
   "dohUpstream": "https://cloudflare-dns.com/dns-query",
-  "camouflage": { "mode": "static", "url": "" },
-  "killSwitch": false
+  "camouflage": { "mode": "static" },
+  "killSwitch": false,
+  "rev": 7
 }
 ```
 
-Full field list: src/types/settings.ts:41 Settings interface (26 top-level keys plus nested cd n/fragment/chainProxy/camouflage).
+Full field list: `src/types/settings.ts:53` Settings interface.
 
-## 18. IP Checker Details
-
-GET /{sp}/my-ip (src/handlers/myip.ts) performs two server-side fetches: CF-fronted echo + non-CF echo (both configurable, no ip-api). Renders two-column exit-IP table plus colo code with country flag from embedded static colo->flag map. Third-party geo APIs never called. When Accept: application/json, returns {ip, colo, country, city, asn, cfEgressIp}.
-
-## 19. Kill Switch vs Camouflage vs Debug
+## 17. Kill Switch vs Camouflage vs Debug
 
 | Toggle | Field | Scope | Panel stays live? |
 |--------|-------|-------|-------------------|
-| Kill Switch | killSwitch (src/types/settings.ts:88) | WS upgrades only -> 503 (src/core/router.ts:202) | Yes |
-| Camouflage | camouflage.mode off/static/proxy | Unmatched routes + wrong securePath | Yes (mode controls fallback) |
-| Debug Logging | debugLogging | Structured log verbosity (src/core/log.ts) | Yes — enable for wrangler tail |
+| Kill Switch | killSwitch (`src/types/settings.ts:86`) | VLESS WS upgrades only -> 503 (`src/core/router.ts:191`) | Yes |
+| Camouflage | camouflage.mode off/static | Unmatched routes + wrong securePath + retired URL shapes | Yes (mode controls fallback) |
+| Debug Logging | debugLogging | Structured log verbosity (`src/core/log.ts`) | Yes — enable for wrangler tail |
 
-## 20. End-to-End Smoke Test
+## 18. End-to-End Smoke Test
 
 1. Deploy (path A or B) -> open /{sp}/panel -> complete setup (§3) -> login (and clear the bootstrap flag if the deploy script set the password, §3.1).
-2. Settings -> verify hostnameOverride empty, tlsPorts defaults present.
-3. Home -> copy ?target=base64 URL -> import in v2rayNG -> verify 4 protocol lines decoded.
-4. Open ?target=clash URL in browser with clash UA -> verify YAML parses in mihomo strict.
+2. Settings -> verify no presets ticked and custom box empty (worker hostname fallback), defaultPort 443.
+3. Home -> copy ?target=base64 URL -> import in v2rayNG -> verify VLESS lines decoded.
+4. Open ?target=singbox URL with a sing-box UA -> verify JSON parses in the client.
 5. Tunnel test: client -> curl https://example.com via proxy -> expect 200.
 6. Kill switch on -> client WS should get 503 -> toggle off -> recovers.
-7. Check /{sp}/my-ip shows two egress IPs.
+7. Check `GET /{sp}/doh?dns=...` answers via your upstream.
 
 Screenshot: *Smoke test checklist with green pass icons*
+
+## 19. What q-proxy deliberately does not do
+
+Each absence below is a recorded decision, not a gap. Pointers lead to the rationale.
+
+| Absent | Why | Rationale |
+|---|---|---|
+| Trojan / Shadowsocks / VMess inbounds, chained egress, NAT64, gRPC / XHTTP transports | Deliberate slim-down to the VLESS+WARP surface | `docs/decisions/ADR-010.md`, ARCHITECTURE Rev spec-001 |
+| Multi-admin / multi-tenant, hosted SaaS | Single-admin self-hosted product by constitution | Wayfinder map Out of scope |
+| Per-user subscription links, quotas, Users view | Cut with the user store (dead token URLs serve camouflage) | ARCHITECTURE Rev spec-001 |
+| Surge / Loon / Egern / Surfboard emitters | Cut with the emitter slim-down; Clash returned as the one YAML profile | ARCHITECTURE Revs spec-001, glowup-07 |
+| Full-profile Xray JSON, custom-CDN host/SNI triple | Shipped: `?target=xray` full profile; optional `cdnHost`/`cdnSni` front override | Ticket 06 verdicts → ticket 18 |
+| Deeper Telegram bot (remote admin, QR delivery, usage alerts) | Widens the bot's blast radius; duplicates the ShareSheet; alerts need the removed cron | Ticket 06 verdict (bot stays status/sub/kill) |
+| Workerless config generator | Downloaded WARP configs already work offline — packaged as docs, not code | Ticket 06 verdict |
+| Real Cloudflare usage (GraphQL) in displays | Would need a server-side API token; all usage is labeled estimates from one source instead | ARCHITECTURE Rev glowup-08 |
+| Self-update / panel-stored deploy tokens | Full-power tokens in KV repeat competitors' worst finding | ARCHITECTURE Rev glowup-05 (secret hygiene) |
+| `@username` Telegram identity | Squattable — numeric chat IDs only | glowup-03 Rev |
+| Exact version on `/healthz` | Unauthenticated version disclosure — static `{ok:true}` | glowup-05 Rev |

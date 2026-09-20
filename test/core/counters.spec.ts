@@ -63,37 +63,39 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("counter execution context", () => {
-  it("binds, reads back, and unbinds the context", async () => {
-    const { bindCounterContext, getCounterContext } = await loadCounters();
-    expect(getCounterContext()).toBeNull();
-    const ctx = { waitUntil: (_p: Promise<unknown>): void => {} } as unknown as ExecutionContext;
-    bindCounterContext(ctx);
-    expect(getCounterContext()).toBe(ctx);
-    bindCounterContext(null as unknown as ExecutionContext);
-    expect(getCounterContext()).toBeNull();
-  });
-
-  it("afterResponse forwards settlement to waitUntil when bound", async () => {
-    const { afterResponse, bindCounterContext } = await loadCounters();
+describe("explicit request context", () => {
+  function fakeCtx(): { ctx: ExecutionContext; seen: Promise<unknown>[] } {
     const seen: Promise<unknown>[] = [];
     const ctx = {
       waitUntil: (p: Promise<unknown>): void => {
         seen.push(p);
       },
     } as unknown as ExecutionContext;
-    bindCounterContext(ctx);
-    afterResponse(Promise.resolve("ok"));
-    afterResponse(Promise.reject(new Error("ignored")));
-    await Promise.allSettled(seen);
-    expect(seen.length).toBe(2);
+    return { ctx, seen };
+  }
+
+  it("exposes no module-global context binders", async () => {
+    const mod = await loadCounters();
+    expect((mod as Record<string, unknown>).bindCounterContext).toBeUndefined();
+    expect((mod as Record<string, unknown>).getCounterContext).toBeUndefined();
   });
 
-  it("afterResponse is a no-op without a bound context", async () => {
-    const { afterResponse, getCounterContext } = await loadCounters();
-    afterResponse(Promise.resolve("ok"));
+  it("afterResponse forwards settlement to the passed context only", async () => {
+    const { afterResponse } = await loadCounters();
+    const a = fakeCtx();
+    const b = fakeCtx();
+    afterResponse(a.ctx, Promise.resolve("ok"));
+    afterResponse(b.ctx, Promise.reject(new Error("ignored")));
+    await Promise.allSettled([...a.seen, ...b.seen]);
+    expect(a.seen.length).toBe(1);
+    expect(b.seen.length).toBe(1);
+  });
+
+  it("afterResponse is a no-op without a context", async () => {
+    const { afterResponse } = await loadCounters();
+    afterResponse(undefined, Promise.resolve("ok"));
+    afterResponse(null, Promise.resolve("ok"));
     await Promise.resolve();
-    expect(getCounterContext()).toBeNull();
   });
 });
 
@@ -223,6 +225,25 @@ describe("KV failure resilience", () => {
     kv.getFails = true;
     await expect(readUsage(env)).rejects.toThrow("kv down");
     kv.getFails = false;
+  });
+
+  it("surfaces a failed background flush in logs instead of vanishing", async () => {
+    const { recordConnection } = await loadCounters();
+    const kv = new MockKV();
+    const env = kv.asEnv() as never;
+    const errors: unknown[][] = [];
+    const orig = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args);
+    };
+    try {
+      kv.putFails = true;
+      for (let i = 0; i < 32; i++) await recordConnection(env);
+    } finally {
+      console.error = orig;
+      kv.putFails = false;
+    }
+    expect(errors.some((args) => JSON.stringify(args).includes("flush failed"))).toBe(true);
   });
 });
 

@@ -22,7 +22,7 @@ const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(
 const area=line+' L'+(w-4)+' '+(ht-6)+' L4 '+(ht-6)+' Z';
 let bars='';
 vals.forEach((v,i)=>{const x=n===1?w/2-6:i/(n-1)*(w-12)+2;const bh=(v/max)*(ht-20);bars+='<rect x="'+x.toFixed(1)+'" y="'+(ht-6-bh).toFixed(1)+'" width="5" height="'+bh.toFixed(1)+'" rx="1.5" style="fill:rgba(var(--accent-rgb),.45)"/>'});
-box.innerHTML='<div class="field__label-row"><span class="field__label">'+esc(t('graph.title'))+'</span></div><svg viewBox="0 0 '+w+' '+ht+'" role="img" aria-label="'+esc(t('graph.title'))+'">'+bars+'<path d="'+area+'" style="fill:rgba(var(--accent-rgb),.12)"/><path d="'+line+'" fill="none" style="stroke:var(--cyan)" stroke-width="2" stroke-linecap="round"/></svg>'}
+box.innerHTML='<div class="field__label-row"><span class="field__label">'+esc(t('graph.title'))+'</span></div><svg viewBox="0 0 '+w+' '+ht+'" role="img" aria-label="'+esc(t('graph.title'))+'"><title>'+esc(t('graph.title'))+'</title><desc>'+esc(t('graph.desc'))+'</desc>'+bars+'<path d="'+area+'" style="fill:rgba(var(--accent-rgb),.12)"/><path d="'+line+'" fill="none" style="stroke:var(--cyan)" stroke-width="2" stroke-linecap="round"/></svg>'}
 const EXPORT_KEY='qp_last_export',BACKUP_DISMISS='qp_backup_dismiss';
 function maybeBackupBanner(){
 const box=$('backup-banner');if(!box)return;
@@ -38,7 +38,7 @@ function renderShortcuts(){
 $('keys-title').textContent=t('shortcuts.title');
 $('keys-close').textContent=t('common.close');
 const rows=[['Ctrl / \u2318 + S','shortcuts.save'],['g h','shortcuts.home'],['Ctrl / \u2318 + Z','shortcuts.undo'],['Shift + Ctrl / \u2318 + Z','shortcuts.redo']];
-$('keys-body').innerHTML='<table class="tbl"><tbody>'+rows.map(r=>'<tr><td style="white-space:nowrap"><code dir="ltr" class="mono">'+esc(r[0])+'</code></td><td data-l="'+esc(r[0])+'">'+esc(t(r[1]))+'</td></tr>').join('')+'</tbody></table><div class="btn-row" style="margin-block-start:14px"><button type="button" class="btn btn--ghost btn--sm" data-action="wizard-replay" aria-label="'+esc(t('wizard.title'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('wizard.title'))+'</button></div>'}
+$('keys-body').innerHTML='<table class="tbl"><tbody>'+rows.map(r=>'<tr><td style="white-space:nowrap"><code dir="ltr" class="mono">'+esc(r[0])+'</code></td><td data-l="'+esc(r[0])+'">'+esc(t(r[1]))+'</td></tr>').join('')+'</tbody></table><p class="field__hint" style="margin-block:8px 0">'+esc(t('shortcuts.hint'))+'</p><div class="btn-row" style="margin-block-start:14px"><button type="button" class="btn btn--ghost btn--sm" data-action="wizard-replay" aria-label="'+esc(t('wizard.title'))+'"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('wizard.title'))+'</button></div>'}
 let lastG=0;
 function isEditable(el){return el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable)}
 function globalKeys(e){

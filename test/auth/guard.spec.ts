@@ -15,7 +15,6 @@ import {
   recordLoginFailure,
   requireAuth,
 } from "../../src/auth/guard";
-import type { Env } from "../../src/types/env";
 import { ForbiddenError, RateLimitedError, UnauthorizedError } from "../../src/core/errors";
 import { clearSessionFloorCache, issueSession } from "../../src/auth/session";
 

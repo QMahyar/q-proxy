@@ -58,6 +58,7 @@ export interface WarpPreset {
 
 export interface WarpGlobalSettings {
   amnezia: AmneziaParams;
+  amneziaEnabled: boolean;
 }
 
 export interface SanitizedWarpAccount {

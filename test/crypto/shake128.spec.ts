@@ -43,7 +43,7 @@ describe("Shake128", () => {
     expect(Array.from(concatBytes(a, b))).toEqual(Array.from(oneShot));
   });
 
-  it("interleaves equal-length draws the way the vmess size parser consumes masks", () => {
+  it("interleaves equal-length draws the way a masked size parser consumes masks", () => {
     const seed = new Uint8Array(16).map((_, i) => (i * 41 + 9) & 0xff);
     const shaker = new Shake128(seed);
     const full = new Shake128(seed).squeeze(16);

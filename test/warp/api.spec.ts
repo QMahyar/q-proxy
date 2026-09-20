@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WarpApiError, registerWarpDevice } from "../../src/warp/api";
 import { handleWarpApi } from "../../src/handlers/api/warp";
+import { WARP_FORMATS } from "../../src/warp/formats/registry";
+import { WARP_ACCOUNT_PREFIX, getAccount, storeAccount } from "../../src/warp/store";
 import { RateLimitedError, ValidationError } from "../../src/core/errors";
 
 const PRIV = "eCtXvJp6Nv6gMdQDj8Sj9ABXQKwmLlTAmT7wvFjZB1I=";
@@ -158,13 +160,12 @@ describe("handleWarpApi generate", () => {
     expect(err.fields.warp_api).toBe("warp api returned an unreadable registration");
   });
 
-  it("validates the body before contacting the warp api", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    await expect(
-      handleWarpApi(generateRequest({ endpoint_list: { type: "custom" } }), fakeEnv() as never, settings),
-    ).rejects.toMatchObject({ status: 422 });
-    expect(fetchMock).not.toHaveBeenCalled();
+  it("ignores an explicit endpoint_list (retired per-account selection)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => okResponse(registrationBody())));
+    const res = await handleWarpApi(generateRequest({ endpoint_list: { type: "custom" } }), fakeEnv() as never, settings);
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { data: { account: { endpoint_list: unknown } } };
+    expect(data.data.account.endpoint_list).toEqual({ type: "preset", preset_id: "default" });
   });
 
   it("registers, then stores the account with the real config", async () => {
@@ -210,21 +211,21 @@ describe("handleWarpApi import", () => {
     return data.data.account.endpoint_list;
   }
 
-  it("stores a JSON config object's endpoint as custom_endpoints", async () => {
+  it("stores the inert default endpoint list regardless of parsed config endpoints", async () => {
     expect(await importedEndpointList({ name: "Json", config: IMPORT_JSON })).toEqual({
-      type: "custom",
-      custom_endpoints: [{ ip: "162.159.192.1", port: 2408 }],
+      type: "preset",
+      preset_id: "default",
     });
   });
 
-  it("stores a JSON config string's endpoint as custom_endpoints", async () => {
+  it("ignores config-string endpoints for the retired per-account list", async () => {
     expect(await importedEndpointList({ config: JSON.stringify(IMPORT_JSON) })).toEqual({
-      type: "custom",
-      custom_endpoints: [{ ip: "162.159.192.1", port: 2408 }],
+      type: "preset",
+      preset_id: "default",
     });
   });
 
-  it("stores a .conf Peer Endpoint as custom_endpoints", async () => {
+  it("ignores .conf Peer endpoints for the retired per-account list", async () => {
     const confText = [
       "[Interface]",
       `PrivateKey = ${PRIV}`,
@@ -235,20 +236,17 @@ describe("handleWarpApi import", () => {
       "Endpoint = engage.cloudflareclient.com:2408",
     ].join("\n");
     expect(await importedEndpointList({ config: confText })).toEqual({
-      type: "custom",
-      custom_endpoints: [{ ip: "engage.cloudflareclient.com", port: 2408 }],
+      type: "preset",
+      preset_id: "default",
     });
   });
 
-  it("keeps an explicit endpoint_list over parsed endpoints", async () => {
+  it("ignores an explicit endpoint_list over parsed endpoints", async () => {
     const endpointList = await importedEndpointList({
       config: JSON.stringify(IMPORT_JSON),
       endpoint_list: { type: "custom", custom_endpoints: ["[2606:4700:d0::a29f:c001]:500"] },
     });
-    expect(endpointList).toEqual({
-      type: "custom",
-      custom_endpoints: [{ ip: "2606:4700:d0::a29f:c001", port: 500 }],
-    });
+    expect(endpointList).toEqual({ type: "preset", preset_id: "default" });
   });
 
   it("rejects an unreadable config with the parser reason", async () => {
@@ -329,5 +327,169 @@ describe("handleWarpApi presets", () => {
     const stored = list.data.presets.find((p) => p.id === after.data.preset.id);
     expect(stored?.dns).toBe("1.1.1.1");
     expect(stored?.name).toBe("P2 renamed");
+  });
+});
+
+describe("handleWarpApi amnezia toggle", () => {
+  const settings = {} as Parameters<typeof handleWarpApi>[2];
+
+  function fakeEnv() {
+    const store = new Map<string, string>();
+    return {
+      store,
+      QPROXY_KV: {
+        get: async (key: string) => (store.has(key) ? JSON.parse(store.get(key)!) : null),
+        put: async (key: string, value: string) => void store.set(key, value),
+        delete: async (key: string) => void store.delete(key),
+        list: async (options: { prefix: string }) => ({
+          keys: [...store.keys()].filter((k) => k.startsWith(options.prefix)).map((name) => ({ name })),
+        }),
+      },
+    };
+  }
+
+  function amneziaRequest(method: string, body?: unknown): Request {
+    return new Request("http://panel.test/api/warp/settings/amnezia", {
+      method,
+      headers: { "Content-Type": "application/json", "X-Q-Panel": "1" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  }
+
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
+  }
+
+  it("accepts the toggle alongside values and exposes it on GET", async () => {
+    const env = fakeEnv();
+    const putRes = await handleWarpApi(amneziaRequest("PUT", { amnezia: { Jc: 4 }, amneziaEnabled: true }), env as never, settings);
+    expect(putRes.status).toBe(200);
+    const put = (await putRes.json()) as { data: { amnezia: { Jc: number }; amneziaEnabled: boolean } };
+    expect(put.data.amnezia.Jc).toBe(4);
+    expect(put.data.amneziaEnabled).toBe(true);
+    expect(WARP_FORMATS.length).toBeGreaterThan(0);
+
+    const getRes = await handleWarpApi(amneziaRequest("GET"), env as never, settings);
+    const got = (await getRes.json()) as { data: { amneziaEnabled: boolean } };
+    expect(got.data.amneziaEnabled).toBe(true);
+  });
+
+  it("keeps the current toggle when PUT omits it and rejects non-booleans", async () => {
+    const env = fakeEnv();
+    await handleWarpApi(amneziaRequest("PUT", { amnezia: {}, amneziaEnabled: true }), env as never, settings);
+    const keepRes = await handleWarpApi(amneziaRequest("PUT", { amnezia: {} }), env as never, settings);
+    const kept = (await keepRes.json()) as { data: { amneziaEnabled: boolean } };
+    expect(kept.data.amneziaEnabled).toBe(true);
+    await expect(handleWarpApi(amneziaRequest("PUT", { amnezia: {}, amneziaEnabled: "yes" }), env as never, settings)).rejects.toMatchObject({
+      status: 422,
+    });
+  });
+
+  it("purges served WARP copies when the toggle flips", async () => {    const env = fakeEnv();
+    env.store.set(`${WARP_ACCOUNT_PREFIX}acct-1`, JSON.stringify({ token: "tok-flip-1" }));
+    const deleted: string[] = [];
+    let widened = 0;
+    vi.stubGlobal("caches", {
+      default: {
+        delete: async (req: Request, opts?: { ignoreSearch?: boolean }) => {
+          deleted.push(req.url);
+          if (opts?.ignoreSearch === true) widened += 1;
+          return true;
+        },
+      },
+    });
+    const res = await handleWarpApi(amneziaRequest("PUT", { amnezia: {}, amneziaEnabled: true }), env as never, settings);
+    expect(res.status).toBe(200);
+    await flush();
+    expect(deleted.length).toBe(WARP_FORMATS.length);
+    expect(widened).toBe(WARP_FORMATS.length);
+    for (const url of deleted) {
+      expect(url).toContain("/sub/wg/tok-flip-1/");
+    }
+  });
+});
+
+describe("handleWarpApi per-account overrides retired", () => {
+  const settings = {} as Parameters<typeof handleWarpApi>[2];
+
+  function fakeEnv() {
+    const store = new Map<string, string>();
+    return {
+      store,
+      QPROXY_KV: {
+        get: async (key: string) => (store.has(key) ? JSON.parse(store.get(key)!) : null),
+        put: async (key: string, value: string) => void store.set(key, value),
+        delete: async (key: string) => void store.delete(key),
+        list: async () => ({ keys: [] as Array<{ name: string }> }),
+      },
+    };
+  }
+
+  function accountRequest(id: string, body: unknown): Request {
+    return new Request(`http://panel.test/api/warp/account/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Q-Panel": "1" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  const PRIV = "eCtXvJp6Nv6gMdQDj8Sj9ABXQKwmLlTAmT7wvFjZB1I=";
+
+  function mkStored() {
+    return {
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "Home ISP",
+      token: "22222222-2222-4222-8222-222222222222",
+      created_at: "2026-08-24T00:00:00.000Z",
+      warp_id: null,
+      warp_token: null,
+      config: {
+        private_key: PRIV,
+        public_key: "P1vJ68IAegYlxHHEpzUlkYQ9Ae7vwgG989pSoFU+lG4=",
+        addresses: { ipv4: "10.2.0.2/32", ipv6: "2606:4700:110:8d4a::/128" },
+        peer_public_key: "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+        mtu: 1280,
+        reserved: [5, 6, 7],
+      },
+      endpoint_list: { type: "preset", preset_id: "default" },
+      amnezia_overrides: null,
+      dns: null,
+    };
+  }
+
+  it("ignores amnezia_overrides on update without error and keeps stored null", async () => {
+    const env = fakeEnv();
+    const stored = mkStored();
+    await storeAccount(env as never, stored as never);
+    const res = await handleWarpApi(accountRequest(stored.id, { amnezia_overrides: { Jc: 4 } }), env as never, settings);
+    expect(res.status).toBe(200);
+    expect((await getAccount(env as never, stored.id))?.amnezia_overrides).toBeNull();
+    const invalid = await handleWarpApi(accountRequest(stored.id, { amnezia_overrides: "pwn" }), env as never, settings);
+    expect(invalid.status).toBe(200);
+    expect((await getAccount(env as never, stored.id))?.amnezia_overrides).toBeNull();
+  });
+
+  it("drops parsed amnezia params on import", async () => {
+    const env = fakeEnv();
+    const res = await handleWarpApi(
+      new Request("http://panel.test/api/warp/account/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Q-Panel": "1" },
+        body: JSON.stringify({
+          name: "Json",
+          config: {
+            private_key: PRIV,
+            addresses: { ipv4: "10.2.0.2/32" },
+            amnezia: { Jc: 4, Jmin: 40, Jmax: 70 },
+          },
+        }),
+      }),
+      env as never,
+      settings,
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { data: { account: { id: string; amnezia_overrides: unknown } } };
+    expect(data.data.account.amnezia_overrides).toBeNull();
+    expect((await getAccount(env as never, data.data.account.id))?.amnezia_overrides).toBeNull();
   });
 });

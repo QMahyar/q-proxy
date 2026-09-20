@@ -7,17 +7,16 @@ Read order: [AGENTS.md](AGENTS.md) (rules) → [docs/ARCHITECTURE.md](docs/ARCHI
 | Subsystem | Owns | Key files | Pattern to follow |
 |-----------|------|-----------|-------------------|
 | `src/core/` | Routing, errors, UA classification, counters, logging | `routes.ts` (pure matchers), `router.ts` (`routeRequest` ordered dispatch), `errors.ts`, `respond.ts` (`jsonOk`/`jsonError`/`readJsonObject` body guard) | Pure functions in `routes.ts`; dispatch table in `router.ts` |
-| `src/protocols/` | VLESS/VMess/Trojan/SS inbound parsers over WS | `common.ts` (`ProtocolInbound` seam), `shadowsocks.ts`, `vmess-crypto.ts` | `common.ts` contract: `push()` returns need-more/ready/reject — parsers never throw |
-| `src/nodes/` | ProxyNode generation + subscription emitters | `generate.ts` (invariants), `share-uri.ts`, `emitters/registry.ts`, `emitters/surge-conf.ts` (simplest emitter), `yaml-writer.ts` | Emitters are pure `(nodes, opts) => string`; copy `surge-conf.ts` shape |
-| `src/subscription/` | Format negotiation, headers, remote-sub merging | `negotiate.ts` (`?target=` > UA > base64), `headers.ts`, `merge.ts` | `negotiate.ts` priority chain |
-| `src/tunnel/` | WS↔TCP relay, egress failover, chain/proxyIP/NAT64 | `egress.ts` (`makeFailoverStrategy`, injectable `dialImpl`), `relay.ts` (pump + zero-byte retry) | Strategy built as candidate list; opener walks it sequentially |
-| `src/warp/` | WARP device registration, config parsing, 17 output formats | `api.ts` (retry/backoff client), `store.ts` (two-key write + rollback), `formats/registry.ts`, `x25519` via `src/crypto/x25519.ts` | Register a format once in `formats/registry.ts` maps |
-| `src/users/` | Per-user scoped sub links (≤50): token, quota, expiry | `store.ts` | Single JSON-array key `qproxy:users` + per-hash daily usage keys `qproxy:user-usage:{day}:{hash}` |
-| `src/handlers/` | HTTP endpoints gluing everything | `tunnel.ts` (first-packet invariant), `subscribe.ts`, `api/settings.ts` (validate→save), `api/bootstrap.ts` | Handlers orchestrate; logic lives in the owning subsystem |
+| `src/protocols/` | VLESS-only inbound parser over WS | `common.ts` (`ProtocolInbound` seam), `vless.ts` | `common.ts` contract: `push()` returns need-more/ready/reject — parsers never throw |
+| `src/nodes/` | ProxyNode generation + subscription emitters | `generate.ts` (invariants), `share-uri.ts`, `emitters/registry.ts`, `emitters/singbox-json.ts` (only emitter), base64 in `subscription/render.ts` | Emitters are pure `(nodes, opts) => string` |
+| `src/subscription/` | Format negotiation (`base64`/`singbox`), headers | `negotiate.ts` (`?target=` > UA > base64), `headers.ts` | No remote-sub merging, no per-user subs — one admin surface |
+| `src/tunnel/` | WS↔TCP relay, egress failover (direct → proxyIP pool) | `egress.ts` (`makeFailoverStrategy`, `createEgressOpener`, injectable `DialImpl`), `relay.ts` (pump + zero-byte retry), `ratelimit.ts`, `proxyip-pool.ts` | Strategy built as candidate list; opener walks it sequentially |
+| `src/warp/` | WARP device registration, config parsing, 4 output families + global Amnezia switch | `api.ts` (retry/backoff client), `store.ts` (two-key write + rollback), `formats/registry.ts`, `x25519` via `src/crypto/x25519.ts` | Register a format once in `formats/registry.ts` maps |
+| `src/handlers/` | HTTP endpoints gluing everything | `tunnel.ts` (first-packet invariant), `subscribe.ts`, `warp-sub.ts`, `api/settings.ts` (validate→save), `api/bootstrap.ts` | Handlers orchestrate; logic lives in the owning subsystem |
 | `src/settings/` | KV-backed settings: cache, seed, migrate, validate | `store.ts` (60 s isolate cache + `loadSettingsFresh`), `validate.ts`, `migrate.ts` | Writes always `validateSettings` then `saveSettings` |
 | `src/auth/` | Password hashing, sessions, CSRF | `password.ts` (PBKDF2 ≥100k), `session.ts` (HMAC `q_session`), `guard.ts` (`X-Q-Panel: 1`) | Constant-time compares everywhere |
 | `src/crypto/` | Primitives WebCrypto lacks + X25519 | `md5.ts`, `sha224.ts`, `aes.ts`, `kdf.ts`, `x25519.ts`, `chacha20.ts` | RFC test vectors prove each primitive |
-| `src/ui/` | Bilingual EN/FA SPA assembled from parts | `assets.ts` exports `panel.html`/`login.html`/`camo.html`; sources in `panel/` (22 parts, plain-concat IIFE, `PANEL_JS_ORDER`) | Edit parts, never generated `panel.html`; strings via `dict.js` en/fa; drift guards in `test/ui/` |
+| `src/ui/` | Bilingual EN/FA SPA assembled from parts | `assets.ts` exports `panel.html`/`login.html`/`camo.html`; sources in `panel/` (19 JS parts, plain-concat IIFE, `PANEL_JS_ORDER`) | Edit parts, never generated `panel.html`; strings via `dict.js` en/fa; drift guards in `test/ui/` |
 | `src/utils/`, `src/types/` | Shared helpers and frozen types | `utils/random.ts`, `utils/net.ts`; `types/settings.ts`, `types/node.ts`, `types/tunnel.ts` | Types here are the frozen contract surface |
 
 ## Conventions Cheat-Sheet
@@ -49,9 +48,7 @@ npm run typecheck && npm test
 - `src/ui/panel.html` is generated output — edit the parts in `src/ui/panel/` and rebuild (see `src/ui/panel/README.md` for part order and ownership). Never rename top-level functions in parts: they are a cross-file contract under plain-concat concatenation.
 - KV is eventually consistent; the isolate settings cache adds a 60 s window. Setup and kill-switch writes re-read via `loadSettingsFresh` to avoid TOCTOU.
 - First packet is consumed exactly once: `initialPayload ?? rest` in `src/handlers/tunnel.ts` — never concatenate both.
-- Trojan UDP datagrams are framed ATYP+addr+port+len+CRLF+payload; the downlink re-wraps each chunk with the request's source address (last seen uplink source).
-- SS AEAD nonce increments little-endian (SIP004); the test helper at `test/protocols/shadowsocks.spec.ts` must stay LE too.
-- Port family must match security: TLS ports {443,2053,2083,2087,2096,8443}, plain {80,8080,8880,2052,2082,2086,2095}. Fragment ⇒ TLS ∧ ¬CDN; SS earlyData = 0.
+- Port family must match security: TLS ports {443,2053,2083,2087,2096,8443}, plain {80,8080,8880,2052,2082,2086,2095}. Fragment ⇒ TLS ∧ ¬CDN.
 - Subscription addresses come only from the worker hostname + user-owned lists — never hard-code an IP or domain.
 - Git LF/CRLF warnings on Windows are harmless.
 
@@ -59,8 +56,8 @@ npm run typecheck && npm test
 
 | Task | Touch these, in order |
 |------|----------------------|
-| Setting field | `src/types/settings.ts` → descriptor row in `src/settings/fields.ts` (consumed by `src/settings/validate.ts`) → field registry + en/fa dicts in `src/ui/panel.html` → `test/settings/validate.spec.ts` + drift test `test/settings/fields.spec.ts` |
+| Setting field | `src/types/settings.ts` → descriptor row in `src/settings/fields.ts` (consumed by `src/settings/validate.ts`) → bind in the relevant `src/ui/panel/` part + en/fa dicts in `src/ui/panel/dict.js` → `test/settings/validate.spec.ts` + drift test `test/settings/fields.spec.ts` |
 | API route | `SecureRoute`/`ApiRouteName` in `src/core/routes.ts` → `dispatchApi` in `src/core/router.ts` → handler in `src/handlers/api/` → ARCHITECTURE §3 row → `test/workers/router.spec.ts` |
-| Sub emitter | `SubFormat` in `src/core/ua.ts` → `src/nodes/emitters/<name>.ts` → `registry.ts` → `SUB_FORMATS` in `src/subscription/negotiate.ts` (single source — subscribe + users-sub both consume it; see DEVELOPER_GUIDE §6) |
+| Sub emitter | `SubFormat` in `src/core/ua.ts` → `src/nodes/emitters/<name>.ts` → `registry.ts` → `SUB_FORMATS` in `src/subscription/negotiate.ts` (see DEVELOPER_GUIDE §6) |
 | WARP format | `WARP_FORMATS` + `WARP_EMITTERS` + type/extension maps in `src/warp/formats/registry.ts` |
 | User-facing string | en/fa dictionaries in `src/ui/panel/dict.js` (guard: `test/ui/dict-usage.spec.ts` fails on unused/missing keys) |

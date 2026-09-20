@@ -42,90 +42,78 @@ beforeEach(() => {
 });
 
 describe("handleAddressProbeApi", () => {
-  it("marks every address failed when all probes return null", async () => {
+  it("marks every endpoint failed when all probes return null", async () => {
     tcpProbeMock.mockResolvedValue(null);
     const s = makeTestSettings({
-      addresses: [
-        { address: "203.0.113.1", port: 443 },
-        { address: "203.0.113.2", port: 8443 },
-      ],
+      customEndpoints: ["203.0.113.1:443", "203.0.113.2:8443"],
     });
     const res = await handleAddressProbeApi(await authedGet("https://panel.example/x", s.sessionSecret), stubEnv() as never, s);
     expect(await probeData(res)).toEqual([
-      { ip: "203.0.113.1", port: 443, label: "203.0.113.1", status: "fail", latencyMs: null },
-      { ip: "203.0.113.2", port: 8443, label: "203.0.113.2", status: "fail", latencyMs: null },
+      { ip: "203.0.113.1", port: 443, label: "203.0.113.1:443", status: "fail", latencyMs: null },
+      { ip: "203.0.113.2", port: 8443, label: "203.0.113.2:8443", status: "fail", latencyMs: null },
     ]);
     expect(tcpProbeMock).toHaveBeenCalledTimes(2);
     expect(tcpProbeMock).toHaveBeenNthCalledWith(1, "203.0.113.1", 443);
     expect(tcpProbeMock).toHaveBeenNthCalledWith(2, "203.0.113.2", 8443);
   });
 
-  it("mixes ok and fail rows by probe outcome and keeps labels", async () => {
+  it("mixes ok and fail rows by probe outcome", async () => {
     tcpProbeMock.mockResolvedValueOnce(12).mockResolvedValueOnce(null);
     const s = makeTestSettings({
-      addresses: [
-        { address: "203.0.113.1", port: 443, label: "primary" },
-        { address: "203.0.113.2", port: 443, label: "backup" },
-      ],
+      customEndpoints: ["203.0.113.1:443", "203.0.113.2:443"],
     });
     const res = await handleAddressProbeApi(await authedGet("https://panel.example/x", s.sessionSecret), stubEnv() as never, s);
     expect(await probeData(res)).toEqual([
-      { ip: "203.0.113.1", port: 443, label: "primary", status: "ok", latencyMs: 12 },
-      { ip: "203.0.113.2", port: 443, label: "backup", status: "fail", latencyMs: null },
+      { ip: "203.0.113.1", port: 443, label: "203.0.113.1:443", status: "ok", latencyMs: 12 },
+      { ip: "203.0.113.2", port: 443, label: "203.0.113.2:443", status: "fail", latencyMs: null },
     ]);
   });
 
-  it("skips disabled addresses without probing them", async () => {
+  it("probes ticked presets alongside custom lines", async () => {
     tcpProbeMock.mockResolvedValue(7);
     const s = makeTestSettings({
-      addresses: [
-        { address: "203.0.113.1", port: 443, enabled: false },
-        { address: "203.0.113.2", port: 443 },
-      ],
+      cdnPresets: ["cf-443-a"],
+      customEndpoints: ["203.0.113.2:443"],
     });
     const res = await handleAddressProbeApi(await authedGet("https://panel.example/x", s.sessionSecret), stubEnv() as never, s);
     expect(await probeData(res)).toEqual([
-      { ip: "203.0.113.2", port: 443, label: "203.0.113.2", status: "ok", latencyMs: 7 },
+      { ip: "104.17.0.0", port: 443, label: "104.17.0.0:443", status: "ok", latencyMs: 7 },
+      { ip: "203.0.113.2", port: 443, label: "203.0.113.2:443", status: "ok", latencyMs: 7 },
     ]);
-    expect(tcpProbeMock).toHaveBeenCalledTimes(1);
-    expect(tcpProbeMock).toHaveBeenCalledWith("203.0.113.2", 443);
+    expect(tcpProbeMock).toHaveBeenCalledTimes(2);
+    expect(tcpProbeMock).toHaveBeenCalledWith("104.17.0.0", 443);
   });
 
-  it("caps probing at eight addresses", async () => {
+  it("caps probing at eight endpoints", async () => {
     tcpProbeMock.mockResolvedValue(3);
-    const addresses = Array.from({ length: 10 }, (_, i) => ({ address: `203.0.113.${i + 1}`, port: 443 }));
-    const s = makeTestSettings({ addresses });
+    const customEndpoints = Array.from({ length: 10 }, (_, i) => `203.0.113.${i + 1}:443`);
+    const s = makeTestSettings({ customEndpoints });
     const res = await handleAddressProbeApi(await authedGet("https://panel.example/x", s.sessionSecret), stubEnv() as never, s);
     const results = await probeData(res);
     expect(results).toHaveLength(8);
-    expect(results.map((r) => r.ip)).toEqual(addresses.slice(0, 8).map((a) => a.address));
+    expect(results.map((r) => r.ip)).toEqual(customEndpoints.slice(0, 8).map((l) => l.split(":")[0]));
     expect(tcpProbeMock).toHaveBeenCalledTimes(8);
   });
 
   it("rejects private addresses through the ssrf guard without probing", async () => {
     tcpProbeMock.mockResolvedValue(5);
     const s = makeTestSettings({
-      addresses: [
-        { address: "127.0.0.1", port: 443 },
-        { address: "10.0.0.9", port: 443 },
-        { address: "localhost", port: 443 },
-        { address: "203.0.113.1", port: 443 },
-      ],
+      customEndpoints: ["127.0.0.1:443", "10.0.0.9:443", "localhost:443", "203.0.113.1:443"],
     });
     const res = await handleAddressProbeApi(await authedGet("https://panel.example/x", s.sessionSecret), stubEnv() as never, s);
     expect(await probeData(res)).toEqual([
-      { ip: "127.0.0.1", port: 443, label: "127.0.0.1", status: "fail", latencyMs: null },
-      { ip: "10.0.0.9", port: 443, label: "10.0.0.9", status: "fail", latencyMs: null },
-      { ip: "localhost", port: 443, label: "localhost", status: "fail", latencyMs: null },
-      { ip: "203.0.113.1", port: 443, label: "203.0.113.1", status: "ok", latencyMs: 5 },
+      { ip: "127.0.0.1", port: 443, label: "127.0.0.1:443", status: "fail", latencyMs: null },
+      { ip: "10.0.0.9", port: 443, label: "10.0.0.9:443", status: "fail", latencyMs: null },
+      { ip: "localhost", port: 443, label: "localhost:443", status: "fail", latencyMs: null },
+      { ip: "203.0.113.1", port: 443, label: "203.0.113.1:443", status: "ok", latencyMs: 5 },
     ]);
     expect(tcpProbeMock).toHaveBeenCalledTimes(1);
     expect(tcpProbeMock).toHaveBeenCalledWith("203.0.113.1", 443);
   });
 
-  it("falls back to the request hostname when no addresses are configured", async () => {
+  it("falls back to the request hostname when nothing is selected", async () => {
     tcpProbeMock.mockResolvedValue(9);
-    const s = makeTestSettings({ addresses: [] });
+    const s = makeTestSettings({});
     const res = await handleAddressProbeApi(await authedGet("https://203.0.113.7/x", s.sessionSecret), stubEnv() as never, s);
     expect(await probeData(res)).toEqual([
       { ip: "203.0.113.7", port: 443, label: "203.0.113.7", status: "ok", latencyMs: 9 },

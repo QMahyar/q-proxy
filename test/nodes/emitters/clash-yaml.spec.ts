@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { emitClashYaml } from "../../../src/nodes/emitters/clash-yaml";
 import type { EmitOptions } from "../../../src/nodes/emitters/registry";
-import type { Hy2Node, ProxyNode, RealityNode, SSNode, TrojanNode, VlessNode, VMessNode } from "../../../src/types/node";
+import type { ProxyNode, VlessNode } from "../../../src/types/node";
 
 const OPTS: EmitOptions = {
-  remoteDns: "https://8.8.8.8/dns-query",
-  urlTestIntervalSec: 300,
   isFragment: false,
 };
 
@@ -29,372 +27,74 @@ function vless(): VlessNode {
   };
 }
 
-function trojan(): TrojanNode {
-  return {
-    kind: "trojan",
-    name: "TROJAN example.com 443",
-    address: "example.com",
-    port: 443,
-    security: "tls",
-    sni: "example.com",
-    host: "example.com",
-    path: "/tr/abcd1234?ed=2048",
-    earlyData: 2048,
-    fingerprint: "chrome",
-    alpn: [],
-    ech: null,
-    variant: "normal",
-    tags: [],
-    password: "secretpass123",
-  };
-}
-
-function ss(): SSNode {
-  return {
-    kind: "ss",
-    name: "SS example.com 443",
-    address: "example.com",
-    port: 443,
-    security: "tls",
-    sni: null,
-    host: "example.com",
-    path: "/ss/abcd1234",
-    earlyData: 0,
-    fingerprint: null,
-    alpn: [],
-    ech: null,
-    variant: "normal",
-    tags: [],
-    method: "aes-128-gcm",
-    password: "sspass12345",
-  };
-}
-
 describe("emitClashYaml golden", () => {
-  it("emits exact mihomo YAML for a fixed three-node set", () => {
-    const nodes: ProxyNode[] = [vless(), trojan(), ss()];
-    const expected = [
-      "mixed-port: 7890",
-      "allow-lan: false",
-      "mode: rule",
-      "log-level: info",
-      "proxies:",
-      '  - name: "VLESS example.com 443"',
-      "    type: vless",
-      "    server: example.com",
-      "    port: 443",
-      "    udp: true",
-      "    uuid: d342d11e-d424-4583-b36e-524ab1f0afa4",
-      "    tls: true",
-      "    servername: example.com",
-      "    skip-cert-verify: true",
-      "    client-fingerprint: chrome",
-      "    alpn: [http/1.1]",
-      "    network: ws",
-      "    ws-opts:",
-      '      path: "/vl/abcd1234?ed=2048"',
-      "      headers:",
-      "        Host: example.com",
-      "      max-early-data: 2048",
-      "      early-data-header-name: Sec-WebSocket-Protocol",
-      '  - name: "TROJAN example.com 443"',
-      "    type: trojan",
-      "    server: example.com",
-      "    port: 443",
-      "    udp: true",
-      "    password: secretpass123",
-      "    sni: example.com",
-      "    skip-cert-verify: true",
-      "    client-fingerprint: chrome",
-      "    network: ws",
-      "    ws-opts:",
-      '      path: "/tr/abcd1234?ed=2048"',
-      "      headers:",
-      "        Host: example.com",
-      "      max-early-data: 2048",
-      "      early-data-header-name: Sec-WebSocket-Protocol",
-      '  - name: "SS example.com 443"',
-      "    type: ss",
-      "    server: example.com",
-      "    port: 443",
-      "    udp: true",
-      "    cipher: aes-128-gcm",
-      "    password: sspass12345",
-      "    plugin: v2ray-plugin",
-      "    plugin-opts:",
-      "      mode: websocket",
-      "      tls: true",
-      "      host: example.com",
-      '      path: "/ss/abcd1234"',
-      "    skip-cert-verify: true",
-      "proxy-groups:",
-      "  - name: PROXY",
-      "    type: url-test",
-      '    url: "https://www.gstatic.com/generate_204"',
-      "    interval: 300",
-      "    tolerance: 50",
-      '    proxies: ["VLESS example.com 443", "TROJAN example.com 443", "SS example.com 443"]',
-      'rules: ["MATCH,PROXY"]',
-      "",
-    ].join("\n");
-    expect(emitClashYaml(nodes, OPTS)).toBe(expected);
+  it("emits the exact Mihomo-compatible profile for a fixed single vless node", () => {
+    const expected = `port: 7890
+socks-port: 7891
+allow-lan: false
+mode: rule
+log-level: info
+dns:
+  enable: true
+  ipv6: false
+  nameserver:
+    - https://8.8.8.8/dns-query
+proxies:
+  - name: VLESS example.com 443
+    type: vless
+    server: example.com
+    port: 443
+    uuid: d342d11e-d424-4583-b36e-524ab1f0afa4
+    udp: true
+    tls: true
+    servername: example.com
+    skip-cert-verify: true
+    alpn: [http/1.1]
+    fingerprint: chrome
+    network: ws
+    ws-opts: {path: "/vl/abcd1234?ed=2048", headers: {Host: example.com}, max-early-data: 2048}
+proxy-groups:
+  - {name: PROXY, type: select, proxies: [VLESS example.com 443]}
+rules:
+  - IP-CIDR,127.0.0.0/8,DIRECT
+  - IP-CIDR,10.0.0.0/8,DIRECT
+  - IP-CIDR,172.16.0.0/12,DIRECT
+  - IP-CIDR,192.168.0.0/16,DIRECT
+  - MATCH,PROXY
+`;
+    expect(emitClashYaml([vless()], OPTS)).toBe(expected);
   });
 
-  it("uses vmess servername and alterId 0 plus plain-port tls:false", () => {
-    const vmessTls: VMessNode = {
-      kind: "vmess",
-      name: "VM1",
-      address: "example.com",
-      port: 443,
-      security: "tls",
-      sni: "sni.example.com",
-      host: "example.com",
-      path: "/vm",
-      earlyData: 0,
-      fingerprint: "firefox",
-      alpn: [],
-      ech: null,
-      variant: "normal",
-      tags: [],
-      uuid: "1386f85e-657b-4d6e-9d56-78badb75e1fd",
-      cipher: "auto",
-      alterId: 0,
-    };
-    const out = emitClashYaml([vmessTls], OPTS);
-    expect(out).toContain("    alterId: 0\n    cipher: auto");
-    expect(out).toContain("    servername: sni.example.com");
-    expect(out).toContain("    skip-cert-verify: true");
-    const plain: VMessNode = {
-      ...vmessTls,
-      port: 80,
-      security: "none",
-      sni: null,
-      fingerprint: null,
-      name: "VM0",
-    };
-    const outPlain = emitClashYaml([plain], OPTS);
-    expect(outPlain).toContain("    tls: false\n");
-    expect(outPlain).not.toContain("servername:");
-    expect(outPlain).not.toContain("client-fingerprint:");
-    expect(outPlain).not.toContain("max-early-data");
-    expect(outPlain).not.toContain("skip-cert-verify");
-  });
-
-  it("select group for a single node and DIRECT rule when empty", () => {
-    const one = emitClashYaml([vless()], OPTS);
-    expect(one).toContain("proxy-groups:\n  - name: PROXY\n    type: select");
-    expect(one).toContain('proxies: ["VLESS example.com 443"]');
-    const none = emitClashYaml([], OPTS);
-    expect(none).toContain('proxies: []\nproxy-groups: []\nrules: ["MATCH,DIRECT"]');
-  });
-
-  it("excludes fragment nodes unless opts.isFragment", () => {
-    const frag: VlessNode = { ...vless(), name: "F", variant: "fragment", tags: ["fragment"] };
-    expect(emitClashYaml([frag], OPTS)).not.toContain("- F\n");
-    expect(emitClashYaml([frag], { ...OPTS, isFragment: true })).toContain("- name: F");
-  });
-
-  it("excludes plain-security trojan nodes because mihomo trojan is always-TLS", () => {
-    const plainTrojan: TrojanNode = {
-      ...trojan(),
-      name: "TROJAN example.com 80 Plain Workers-Dev",
-      port: 80,
-      security: "none",
-      sni: null,
-      fingerprint: null,
-    };
-    const out = emitClashYaml([vless(), plainTrojan], OPTS);
-    expect(out).toContain("type: vless");
-    expect(out).not.toContain("type: trojan");
-    expect(out).toContain('proxies: ["VLESS example.com 443"]');
-    expect(out).toContain('rules: ["MATCH,PROXY"]');
-  });
-
-  it("adds ech-opts to the trojan branch and sets udp true on ss plugin entries", () => {
-    const echTrojan: TrojanNode = { ...trojan(), name: "TROJAN ECH", ech: "crypto.example.com" };
-    const out = emitClashYaml([echTrojan, ss()], OPTS);
-    expect(out).toContain("    password: secretpass123\n    sni: example.com\n    ech-opts:\n      enable: true\n      query-server-name: crypto.example.com");
-    expect(out).toContain("    type: ss\n    server: example.com\n    port: 443\n    udp: true");
-  });
-
-  it("excludes plain-security vless nodes because mihomo vless requires tls", () => {    const plainVless: VlessNode = {
-      ...vless(),
-      name: "VLESS plain",
-      port: 80,
-      security: "none",
-      sni: null,
-      fingerprint: null,
-      alpn: [],
-      ech: null,
-    };
-    const out = emitClashYaml([vless(), plainVless], OPTS);
-    expect(out).toContain("type: vless");
-    expect(out).toContain("server: example.com\n    port: 443");
-    expect(out).toContain('proxies: ["VLESS example.com 443"]');
-    expect(out).not.toContain("VLESS plain");
-  });
-
-  it("omits ech-opts, fingerprint, and alpn when the node carries none", () => {
-    const out = emitClashYaml([trojan()], OPTS);
-    expect(out).not.toContain("ech-opts");
-    expect(out).toContain("    client-fingerprint: chrome");
-    const bare: TrojanNode = { ...trojan(), fingerprint: null, alpn: [] };
-    const outBare = emitClashYaml([bare], OPTS);
-    expect(outBare).not.toContain("client-fingerprint");
-    expect(outBare).not.toContain("alpn:");
-  });
-});
-
-describe("emitClashYaml routing rules", () => {
-  it("emits reject/bypass/LAN/QUIC rules before MATCH when rules provided", () => {
-    const nodes = [vless()];
-    const out = emitClashYaml(nodes, {
-      remoteDns: "https://1.1.1.1/dns-query",
-      urlTestIntervalSec: 300,
+  it("renders block/allow domain rules ahead of the private DIRECT rails", () => {
+    const out = emitClashYaml([vless()], {
       isFragment: false,
-      rules: {
-        bypassLan: true,
-        bypassDomains: ["example.ir"],
-        blockDomains: ["ads.example.com"],
-        blockQuic: true,
-      },
+      rules: { bypassLan: true, bypassDomains: ["local.corp"], blockDomains: ["ads.example"], blockQuic: true },
     });
-    expect(out).toContain("DOMAIN-SUFFIX,ads.example.com,REJECT");
-    expect(out).toContain("AND,((NETWORK,udp),(DST-PORT,443)),REJECT");
-    expect(out).toContain("IP-CIDR,192.168.0.0/16,DIRECT,no-resolve");
-    expect(out).toContain("DOMAIN-SUFFIX,example.ir,DIRECT");
-    const rulesIdx = out.indexOf("rules:");
-    const matchIdx = out.indexOf("MATCH,PROXY");
-    expect(matchIdx).toBeGreaterThan(rulesIdx);
-    expect(out.indexOf("MATCH,PROXY")).toBeGreaterThan(out.indexOf("DOMAIN-SUFFIX,example.ir,DIRECT"));
+    const lines = out.split("\n");
+    expect(lines).toContain("  - DOMAIN-SUFFIX,ads.example,REJECT");
+    expect(lines).toContain("  - DOMAIN-SUFFIX,local.corp,DIRECT");
+    expect(lines.indexOf("  - DOMAIN-SUFFIX,ads.example,REJECT")).toBeLessThan(lines.indexOf("  - IP-CIDR,127.0.0.0/8,DIRECT"));
+    expect(lines[lines.length - 2]).toBe("  - MATCH,PROXY");
   });
 
-  it("keeps output unchanged when rules are omitted", () => {
-    const nodes = [vless()];
-    const out = emitClashYaml(nodes, { remoteDns: "https://1.1.1.1/dns-query", urlTestIntervalSec: 300, isFragment: false });
-    expect(out).toContain(`rules: ["MATCH,PROXY"]`);
-    expect(out).not.toContain("REJECT");
-  });
-});
-
-describe("emitClashYaml vision flow and direct-ss", () => {
-  it("emits flow on vless proxies when set", () => {
-    const out = emitClashYaml([{ ...vless(), flow: "xtls-rprx-vision" }], OPTS);
-    expect(out).toContain("    uuid: d342d11e-d424-4583-b36e-524ab1f0afa4\n    flow: xtls-rprx-vision\n    tls: true");
+  it("uses a url-test group for several nodes and quotes yaml-hostile names", () => {
+    const tricky: ProxyNode = { ...vless(), name: 'weird: "name" #1' };
+    const out = emitClashYaml([vless(), tricky], OPTS);
+    expect(out).toContain("  - {name: PROXY, type: url-test,");
+    expect(out).toContain("proxies: [VLESS example.com 443, \"weird: \\\"name\\\" #1\"]");
+    expect(out).toContain('- name: "weird: \\"name\\" #1"');
   });
 
-  it("emits byte-identical legacy output when flow is null", () => {
-    expect(emitClashYaml([{ ...vless(), flow: null }], OPTS)).toBe(emitClashYaml([vless()], OPTS));
+  it("drops plain-security nodes like the sing-box emitter", () => {
+    const plain: ProxyNode = { ...vless(), name: "PV", port: 80, security: "none", sni: null };
+    const out = emitClashYaml([vless(), plain], OPTS);
+    expect(out).not.toContain("PV");
+    expect(out).toContain("VLESS example.com 443");
   });
 
-  it("emits a direct ss proxy without plugin keys", () => {
-    const out = emitClashYaml([{ ...ss(), direct: true }], OPTS);
-    expect(out).toContain('  - name: "SS example.com 443"\n    type: ss\n    server: example.com\n    port: 443\n    udp: true\n    cipher: aes-128-gcm\n    password: sspass12345\n');
-    expect(out).not.toContain("plugin");
-    expect(out).not.toContain("skip-cert-verify");
-  });
-
-  it("emits byte-identical legacy output when direct is false", () => {
-    expect(emitClashYaml([{ ...ss(), direct: false }], OPTS)).toBe(emitClashYaml([ss()], OPTS));
-  });
-});
-describe("emitClashYaml remote nodes", () => {
-  const PBK = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
-
-  function reality(): RealityNode {
-    return {
-      kind: "reality",
-      name: "VPS Reality",
-      address: "203.0.113.10",
-      port: 443,
-      security: "tls",
-      sni: "www.microsoft.com",
-      host: "www.microsoft.com",
-      path: "",
-      earlyData: 0,
-      fingerprint: "chrome",
-      alpn: [],
-      ech: null,
-      variant: "normal",
-      tags: [],
-      uuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
-      pbk: PBK,
-      sid: "6ba85179",
-      flow: "xtls-rprx-vision",
-      spx: "/",
-    };
-  }
-
-  function hy2(): Hy2Node {
-    return {
-      kind: "hy2",
-      name: "VPS Hy2",
-      address: "203.0.113.11",
-      port: 4443,
-      security: "tls",
-      sni: "example.com",
-      host: "example.com",
-      path: "",
-      earlyData: 0,
-      fingerprint: null,
-      alpn: [],
-      ech: null,
-      variant: "normal",
-      tags: [],
-      password: "hy2secret",
-      obfs: "",
-      obfsPassword: "",
-    };
-  }
-
-  it("emits a vless tcp reality-opts proxy for reality nodes", () => {
-    const out = emitClashYaml([reality()], OPTS);
-    for (const line of [
-      '  - name: "VPS Reality"',
-      "    type: vless",
-      "    server: 203.0.113.10",
-      "    port: 443",
-      "    uuid: d342d11e-d424-4583-b36e-524ab1f0afa4",
-      "    tls: true",
-      "    servername: www.microsoft.com",
-      "    client-fingerprint: chrome",
-      "    flow: xtls-rprx-vision",
-      "    network: tcp",
-      "    reality-opts:",
-      `      public-key: ${PBK}`,
-      "      short-id: 6ba85179",
-    ]) {
-      expect(out).toContain(line);
-    }
-    expect(out).not.toContain("ws-opts");
-  });
-
-  it("omits short-id when the sid is empty", () => {
-    const out = emitClashYaml([{ ...reality(), sid: "" }], OPTS);
-    expect(out).toContain("reality-opts:");
-    expect(out).not.toContain("short-id");
-  });
-
-  it("emits a hysteria2 outbound with sni and skip-cert-verify", () => {
-    const out = emitClashYaml([hy2()], OPTS);
-    for (const line of [
-      '  - name: "VPS Hy2"',
-      "    type: hysteria2",
-      "    server: 203.0.113.11",
-      "    port: 4443",
-      "    password: hy2secret",
-      "    sni: example.com",
-      "    skip-cert-verify: true",
-    ]) {
-      expect(out).toContain(line);
-    }
-    expect(out).not.toContain("obfs");
-    expect(out).not.toContain("ws-opts");
-  });
-
-  it("emits obfs keys only when obfs is set", () => {
-    const out = emitClashYaml([{ ...hy2(), obfs: "salamander", obfsPassword: "obf" }], OPTS);
-    expect(out).toContain("    obfs: salamander");
-    expect(out).toContain("    obfs-password: obf");
+  it("emits a valid empty profile with DIRECT fallback", () => {
+    const out = emitClashYaml([], OPTS);
+    expect(out).toContain("proxies:\n  []");
+    expect(out).toContain("  - {name: PROXY, type: select, proxies: [DIRECT]}");
   });
 });

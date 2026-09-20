@@ -1,13 +1,13 @@
 import type { RouteHandler } from "../../types/context";
 import type { PublicSettings, Settings } from "../../types/settings";
 import { DEFAULT_SETTINGS, SENSITIVE_SETTING_PATHS, SETTINGS_VERSION } from "../../types/settings";
-import { ValidationError } from "../../core/errors";
+import { ConflictError, ValidationError } from "../../core/errors";
 import { audit } from "../../core/log";
 import { jsonOk, readJsonObject } from "../../core/respond";
 import { clientIp } from "../../auth/guard";
 import { deepMergeDefaults } from "../../settings/migrate";
 import { validateSettings } from "../../settings/validate";
-import { loadSettingsFresh, saveSettings, settingsEtag } from "../../settings/store";
+import { loadSettingsFresh, readSettingsRev, saveSettings, settingsEtag, settingsRev } from "../../settings/store";
 
 const PRESERVED_FIELDS = [
   "securePath",
@@ -16,13 +16,7 @@ const PRESERVED_FIELDS = [
   "sessionSecret",
   "language",
   "vlessUuid",
-  "vmessUuid",
-  "trojanPassword",
-  "ssPassword",
   "vlessPath",
-  "vmessPath",
-  "trojanPath",
-  "ssPath",
   "passwordIsBootstrap",
   "seededAt",
 ] as const satisfies readonly (keyof Settings)[];
@@ -44,7 +38,7 @@ export const handleGetSettings: RouteHandler = async (req, _env, s) => {
   }
   const headers: Record<string, string> = {};
   if (etag !== null) headers["ETag"] = etag;
-  return jsonOk(publicSettingsView(s), headers);
+  return jsonOk({ ...publicSettingsView(s), rev: settingsRev() }, headers);
 };
 
 function changedTopLevelKeys(before: Settings, after: Settings): string[] {
@@ -58,20 +52,27 @@ function changedTopLevelKeys(before: Settings, after: Settings): string[] {
   return out.sort();
 }
 
-export const handleSaveSettings: RouteHandler = async (req, _env, s) => {
+export const handleSaveSettings: RouteHandler = async (req, _env, s, ctx) => {
   const body = await readJsonObject(req);
   for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "passwordIsBootstrap", "seededAt"]) delete (body as Record<string, unknown>)[k];
+  const baseRev = (body as Record<string, unknown>).baseRev;
   const fresh = await loadSettingsFresh(_env);
+  if (typeof baseRev === "number" && Number.isInteger(baseRev)) {
+    const currentRev = await readSettingsRev(_env);
+    if (currentRev !== baseRev) {
+      throw new ConflictError("settings changed elsewhere — reload and re-apply your change");
+    }
+  }
   const merged = deepMergeDefaults(fresh, body);
   void s;
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);
-  audit("settings.save", { ip: clientIp(req), keys: changedTopLevelKeys(fresh, result.value) });
+  audit("settings.save", { ip: clientIp(req), keys: changedTopLevelKeys(fresh, result.value) }, undefined, ctx);
   const rev = await saveSettings(_env, result.value);
   return jsonOk({ saved: true, rev });
 };
 
-export const handleResetSettings: RouteHandler = async (req, env, _s) => {
+export const handleResetSettings: RouteHandler = async (req, env, _s, ctx) => {
   const freshSrc = await loadSettingsFresh(env);
   void _s;
   const fresh = structuredClone(DEFAULT_SETTINGS);
@@ -80,7 +81,7 @@ export const handleResetSettings: RouteHandler = async (req, env, _s) => {
   }
   const result = validateSettings(fresh);
   if (!result.ok) throw new ValidationError(result.fields);
-  audit("settings.reset", { ip: clientIp(req), keys: changedTopLevelKeys(freshSrc, result.value) });
+  audit("settings.reset", { ip: clientIp(req), keys: changedTopLevelKeys(freshSrc, result.value) }, undefined, ctx);
   const rev = await saveSettings(env, result.value);
   return jsonOk({ saved: true, rev });
 };
@@ -102,7 +103,7 @@ export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
   });
 };
 
-export const handleImportSettings: RouteHandler = async (req, env, s) => {
+export const handleImportSettings: RouteHandler = async (req, env, s, ctx) => {
   const body = await readJsonObject(req);
   const incoming = (body as Record<string, unknown>).settings;
   if (incoming === null || typeof incoming !== "object" || Array.isArray(incoming)) {
@@ -111,6 +112,11 @@ export const handleImportSettings: RouteHandler = async (req, env, s) => {
   const blob = incoming as Record<string, unknown>;
   if (typeof blob.version === "number" && blob.version > SETTINGS_VERSION) {
     throw new ValidationError({ settings: `exported by a newer version (${blob.version} > ${SETTINGS_VERSION})` });
+  }
+  if (typeof blob.version === "number" && blob.version < SETTINGS_VERSION) {
+    throw new ValidationError({
+      settings: "this backup was exported by a pre-cut release and cannot be imported; please reconfigure on the current version",
+    });
   }
   for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "version", "updatedAt"]) delete blob[k];
   const merged = deepMergeDefaults(structuredClone(DEFAULT_SETTINGS), blob);
@@ -121,7 +127,7 @@ export const handleImportSettings: RouteHandler = async (req, env, s) => {
   }
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);
-  audit("settings.import", { ip: clientIp(req), keys: changedTopLevelKeys(fresh, result.value) });
+  audit("settings.import", { ip: clientIp(req), keys: changedTopLevelKeys(fresh, result.value) }, undefined, ctx);
   const rev = await saveSettings(env, result.value);
   return jsonOk({ saved: true, rev, imported: publicSettingsView(result.value) });
 };

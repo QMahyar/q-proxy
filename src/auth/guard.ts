@@ -1,4 +1,3 @@
-import type { Env } from "../types/env";
 import type { RouteHandler } from "../types/context";
 import { ForbiddenError, RateLimitedError, UnauthorizedError } from "../core/errors";
 import { getSessionFloor, verifySession } from "./session";
@@ -51,7 +50,7 @@ export function isIpAllowlisted(ip: string, allowlist: readonly string[]): boole
 }
 
 export function requireAuth(handler: RouteHandler): RouteHandler {
-  return async (req, env, s) => {
+  return async (req, env, s, ctx) => {
     const raw = getSession(req);
     let floor = 0;
     try {
@@ -63,7 +62,7 @@ export function requireAuth(handler: RouteHandler): RouteHandler {
     if (session === null) throw new UnauthorizedError();
     if (!isIpAllowlisted(clientIp(req), s.allowedIps ?? []))
       throw new ForbiddenError("client ip is not allowlisted for panel access");
-    return handler(req, env, s);
+    return handler(req, env, s, ctx);
   };
 }
 

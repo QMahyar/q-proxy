@@ -1,5 +1,7 @@
 import type { AmneziaParams, WarpAccount, WarpPreset } from "../types/warp";
+import type { Settings } from "../types/settings";
 import { getGlobalSettings, listPresets, resolveAmnezia } from "./store";
+import { parseEndpointHostPort } from "./config";
 
 export interface WarpRow {
   ip: string;
@@ -18,6 +20,7 @@ export interface WarpEmitContext {
   account: WarpAccount;
   rows: WarpRow[];
   amnezia: AmneziaParams | null;
+  amneziaEnabled: boolean;
 }
 
 function withCidr(addr: string, family: "4" | "6"): string {
@@ -30,18 +33,29 @@ function bareHost(addr: string): string {
   return slash >= 0 ? addr.slice(0, slash) : addr;
 }
 
-export async function expandAccount(env: unknown, account: WarpAccount): Promise<WarpEmitContext> {
+export async function expandAccount(env: unknown, account: WarpAccount, s: Settings): Promise<WarpEmitContext> {
   const e = env as Parameters<typeof listPresets>[0];
-  const list = account.endpoint_list;
+  const presets: WarpPreset[] = await listPresets(e);
+  const enabled = new Set(s.warpPresets);
   let endpoints: Array<{ ip: string; port: number }> = [];
   let dns: string | null = null;
-  if (list.type === "custom") {
-    endpoints = list.custom_endpoints;
-  } else {
-    const presets: WarpPreset[] = await listPresets(e);
-    const preset = presets.find((p) => p.id === list.preset_id);
-    endpoints = preset ? preset.endpoints : [];
-    dns = preset?.dns ?? null;
+  for (const preset of presets) {
+    if (!enabled.has(preset.id)) continue;
+    endpoints.push(...preset.endpoints);
+    if (dns === null) dns = preset.dns;
+  }
+  for (const line of s.warpCustomEndpoints) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) continue;
+    const ep = parseEndpointHostPort(trimmed);
+    if (ep !== null) endpoints.push(ep);
+  }
+  if (endpoints.length === 0) {
+    const fallback = presets.find((p) => p.id === "default") ?? presets[0];
+    if (fallback !== undefined) {
+      endpoints = fallback.endpoints;
+      dns = dns ?? fallback.dns;
+    }
   }
   const seen = new Set<string>();
   const unique = endpoints.filter((e) => {
@@ -70,11 +84,8 @@ export async function expandAccount(env: unknown, account: WarpAccount): Promise
     };
   });
   const global = await getGlobalSettings(e);
-  const amnezia =
-    account.amnezia_overrides !== null || hasParams(global.amnezia)
-      ? resolveAmnezia(global.amnezia, account.amnezia_overrides)
-      : null;
-  return { account, rows, amnezia };
+  const amnezia = hasParams(global.amnezia) ? resolveAmnezia(global.amnezia, null) : null;
+  return { account, rows, amnezia, amneziaEnabled: global.amneziaEnabled };
 }
 
 function hasParams(params: AmneziaParams): boolean {

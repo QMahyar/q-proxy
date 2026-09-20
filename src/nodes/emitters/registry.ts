@@ -1,10 +1,8 @@
 import type { SubFormat } from "../../core/ua";
 import type { ProxyNode } from "../../types/node";
 import { emitClashYaml } from "./clash-yaml";
-import { emitLoonConf } from "./loon-conf";
-import { emitQuantumultConf } from "./quantumult-conf";
 import { emitSingBoxJson } from "./singbox-json";
-import { emitSurgeConf } from "./surge-conf";
+import { emitXrayJson } from "./xray-json";
 
 export interface EmitRules {
   bypassLan: boolean;
@@ -14,8 +12,6 @@ export interface EmitRules {
 }
 
 export interface EmitOptions {
-  remoteDns: string;
-  urlTestIntervalSec: number;
   isFragment: boolean;
   subscriptionUrl?: string;
   updateIntervalHours?: number;
@@ -23,6 +19,8 @@ export interface EmitOptions {
 }
 
 export const TEST_URL = "https://www.gstatic.com/generate_204";
+
+export const DEFAULT_PROXY_DNS = "https://8.8.8.8/dns-query";
 
 export function bareServer(address: string): string {
   return address.replace(/^\[/, "").replace(/\]$/, "");
@@ -33,9 +31,7 @@ export function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): 
 }
 
 export function tlsRequiredNodes(nodes: readonly ProxyNode[], isFragment: boolean): ProxyNode[] {
-  return visibleNodes(nodes, isFragment).filter(
-    (n) => !((n.kind === "vless" || n.kind === "trojan") && n.security === "none"),
-  );
+  return visibleNodes(nodes, isFragment).filter((n) => !(n.kind === "vless" && n.security === "none"));
 }
 
 export function nodeHasTls(node: ProxyNode): boolean {
@@ -63,9 +59,7 @@ export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => st
 export type SyncSubFormat = Exclude<SubFormat, "base64">;
 
 export const EMITTERS: Record<SyncSubFormat, NodeEmitter> = {
-  clash: emitClashYaml,
   singbox: emitSingBoxJson,
-  surge: emitSurgeConf,
-  loon: emitLoonConf,
-  quantumult: emitQuantumultConf,
+  clash: emitClashYaml,
+  xray: emitXrayJson,
 };

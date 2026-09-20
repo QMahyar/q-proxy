@@ -1,25 +1,20 @@
 let debugEnabled = false;
-let auditCtx: ExecutionContext | null = null;
 
 export function setDebugEnabled(enabled: boolean): void {
   debugEnabled = enabled;
 }
 
-export function bindAuditContext(ctx: ExecutionContext): void {
-  auditCtx = ctx;
-}
-
-function track(p: Promise<unknown>): void {
+function track(ctx: ExecutionContext | null | undefined, p: Promise<unknown>): void {
   const tracked = p.then(
     () => undefined,
     () => undefined,
   );
-  if (auditCtx === null) {
+  if (ctx === null || ctx === undefined) {
     void tracked;
     return;
   }
   try {
-    auditCtx.waitUntil(tracked);
+    ctx.waitUntil(tracked);
   } catch {
     void tracked;
   }
@@ -60,6 +55,7 @@ export function audit(
   action: string,
   detail: Record<string, unknown>,
   env?: { QPROXY_DB?: D1Database | null },
+  ctx?: ExecutionContext | null,
 ): void {
   log.info("audit", action, detail);
   const db = env?.QPROXY_DB;
@@ -73,5 +69,5 @@ export function audit(
       () => undefined,
       () => undefined,
     );
-  track(run);
+  track(ctx, run);
 }

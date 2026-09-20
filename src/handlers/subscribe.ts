@@ -21,11 +21,9 @@ import { escapeHtml } from "../utils/html";
 
 const FORMAT_LABELS: Record<SubFormat, string> = {
   base64: "Base64 / v2rayNG",
-  clash: "Clash / mihomo",
   singbox: "sing-box",
-  surge: "Surge",
-  loon: "Loon",
-  quantumult: "Quantumult X",
+  clash: "Clash / Mihomo",
+  xray: "Xray JSON",
 };
 
 function settingsCacheStamp(s: Settings): string {
@@ -81,7 +79,7 @@ ${rows}
 </html>`;
 }
 
-export const handleSubscribe: RouteHandler = async (req, env, s) => {
+export const handleSubscribe: RouteHandler = async (req, env, s, reqCtx) => {
   const url = new URL(req.url);
   const route = resolveSecureRoute(url, s);
   if (route === null || route.kind !== "sub") throw new NotFoundError();
@@ -120,6 +118,6 @@ export const handleSubscribe: RouteHandler = async (req, env, s) => {
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
   Object.assign(headers, attachmentHeaders(format, s.profileTitle));
   const res = new Response(body, { status: 200, headers });
-  if (typeof caches !== "undefined") afterResponse(caches.default.put(cacheKey, res.clone()));
+  if (typeof caches !== "undefined") afterResponse(reqCtx, caches.default.put(cacheKey, res.clone()));
   return res;
 };
