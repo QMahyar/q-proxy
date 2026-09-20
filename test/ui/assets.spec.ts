@@ -698,6 +698,14 @@ describe("panel ui p16 states", () => {
     expect(html).toContain("emptyCard({title:'egress.pool.empty',cta:'common.retry'");
   });
 
+  it("renders the fastest-node guidance block with per-format honest copy", () => {
+    for (const key of ["subs.ping.title", "subs.ping.body"]) {
+      expect(html.match(new RegExp(`'${key.replace(/\./g, "\\.")}':'`, "g"))?.length).toBe(2);
+    }
+    expect(html).toContain('id="subs-ping"');
+    expect(html).toContain("function subsPingHtml()");
+  });
+
   it("renders the foreign-import card with preview-then-confirm actions", () => {
     for (const key of ["subs.import.title", "subs.import.desc", "subs.import.placeholder", "subs.import.preview", "subs.import.confirm", "subs.import.source", "subs.import.empty"]) {
       expect(html.match(new RegExp(`'${key.replace(/\./g, "\\.")}':'`, "g"))?.length).toBe(2);

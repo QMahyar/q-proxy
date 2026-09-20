@@ -59,7 +59,9 @@ sh+='<details class="warp-acc subs-acc"><summary>'+esc(t('subs.how.title'))+'</s
 sh+='</section>';
 return sh}
 function subsBodyHtml(){
-return subsMainHtml()+subsImportHtml()+subsWarpHtml()+subsWarpQuickHtml()+subsUtilsHtml()+subsInfoHtml()}
+return subsMainHtml()+subsPingHtml()+subsImportHtml()+subsWarpHtml()+subsWarpQuickHtml()+subsUtilsHtml()+subsInfoHtml()}
+function subsPingHtml(){
+return '<section class="card" id="subs-ping"><div class="card__head"><div><div class="card__title">'+esc(t('subs.ping.title'))+'</div><div class="field__hint">'+esc(t('subs.ping.body'))+'</div></div></div></section>'}
 let subImportEndpoints=[];
 function subsImportHtml(){
 let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.import.title'))+'</div><div class="field__hint">'+esc(t('subs.import.desc'))+'</div></div></div>';

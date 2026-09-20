@@ -214,6 +214,8 @@ Fragment variant: `?mode=fragment` filters nodes to the fragment family (presets
 | **Clash Verge / Mihomo** | Use `/{sp}/sub?target=clash` URL → Profiles → New profile from URL; select the `PROXY` group |
 | **Shadowrocket** (iOS) | Use base64 sub; fragment param auto-appended when UA is Shadowrocket — verify `fragment=` appears in URI preview |
 
+Automatic fastest-node selection lives in the sing-box and Clash profiles (their `PROXY` url-test group re-tests every few minutes); a Base64 list cannot auto-select — run your client's own speed test or switch to a profile URL. The hub repeats this guidance above the format rows.
+
 Screenshot placeholders: *QR modal + "Copy URL" toast + per-format tabs on info page*
 
 ### 5.3 Retired token links

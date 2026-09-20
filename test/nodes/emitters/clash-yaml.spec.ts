@@ -81,6 +81,7 @@ rules:
     const tricky: ProxyNode = { ...vless(), name: 'weird: "name" #1' };
     const out = emitClashYaml([vless(), tricky], OPTS);
     expect(out).toContain("  - {name: PROXY, type: url-test,");
+    expect(out).toContain("proxies: [VLESS example.com 443, \"weird: \\\"name\\\" #1\"]");
     expect(out).toContain('- name: "weird: \\"name\\" #1"');
   });
 

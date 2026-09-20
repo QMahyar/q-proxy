@@ -247,6 +247,10 @@ async function step4_subs(page, context) {
     return row ? row.querySelectorAll('[data-action="qr"]').length : -1;
   });
   assert(infoQr === 0, 'info footer row has QR button(s): ' + infoQr);
+  // fastest-node guidance names the auto-selecting profiles
+  const pingBody = await page.evaluate(() => (document.getElementById('subs-ping') || {}).textContent || '');
+  assert(pingBody.includes('PROXY') && pingBody.length > 40, 'subs-ping guidance missing (got ' + JSON.stringify(pingBody.slice(0, 40)) + ')');
+  ok('subs-ping', 'guidance block names the PROXY auto-select profiles');
   // foreign import: paste two sources -> per-source preview tags, nothing stored
   const importText = 'vless://d342d11e-d424-4583-b36e-524ab1f0afa4@203.0.113.60:443?security=tls&type=ws#w1\n\nvless://d342d11e-d424-4583-b36e-524ab1f0afa4@203.0.113.61:8443?security=tls&type=ws#w2';
   await page.fill('#sub-import-text', importText);
