@@ -247,7 +247,49 @@ async function step4_subs(page, context) {
     return row ? row.querySelectorAll('[data-action="qr"]').length : -1;
   });
   assert(infoQr === 0, 'info footer row has QR button(s): ' + infoQr);
-  ok('subs-hub', mainRows + ' formats (base64+singbox), ?target= variant, mode=fragment toggle, clipboard byte-match, no per-user section, warp link-out, info footer QR-free');
+  // foreign import: paste two sources -> per-source preview tags, nothing stored
+  const importText = 'vless://d342d11e-d424-4583-b36e-524ab1f0afa4@203.0.113.60:443?security=tls&type=ws#w1\n\nvless://d342d11e-d424-4583-b36e-524ab1f0afa4@203.0.113.61:8443?security=tls&type=ws#w2';
+  await page.fill('#sub-import-text', importText);
+  const ceBefore = await page.evaluate(async (sp) => {
+    const r = await fetch(location.origin + '/' + sp + '/api/settings', { headers: { 'X-Q-Panel': '1' } });
+    return (await r.json()).data.customEndpoints;
+  }, SP);
+  await page.click('[data-action="subs-import-preview"]');
+  await page.waitForFunction(() => {
+    const b = document.getElementById('sub-import-preview');
+    return b && (b.querySelectorAll('.warp-group').length >= 2 || b.querySelector('.empty-card--error'));
+  }, null, { timeout: 15000 });
+  const importTags = await page.evaluate(() => [...document.querySelectorAll('#sub-import-preview .warp-group')].map(g => g.textContent.slice(0, 60)));
+  assert(importTags.length === 2, 'expected 2 import source groups, got ' + importTags.length);
+  assert(importTags[0].includes('203.0.113.60:443') && importTags[1].includes('203.0.113.61:8443'), 'preview endpoints wrong: ' + JSON.stringify(importTags));
+  const ceAfterPreview = await page.evaluate(async (sp) => {
+    const r = await fetch(location.origin + '/' + sp + '/api/settings', { headers: { 'X-Q-Panel': '1' } });
+    return (await r.json()).data.customEndpoints;
+  }, SP);
+  assert(JSON.stringify(ceAfterPreview) === JSON.stringify(ceBefore), 'preview stored endpoints');
+  // confirm -> saved, served in subs, then reverted (state-safe)
+  await page.click('[data-action="subs-import-confirm"]');
+  await page.waitForFunction(async (sp) => {
+    const r = await fetch(location.origin + '/' + sp + '/api/settings', { headers: { 'X-Q-Panel': '1' } });
+    const ce = (await r.json()).data.customEndpoints || [];
+    return ce.some(e => String(e).includes('203.0.113.60'));
+  }, SP, { timeout: 15000 });
+  const subHasImport = await page.evaluate(async (sp) => {
+    const r = await fetch(location.origin + '/' + sp + '/sub?target=base64');
+    const b64 = await r.text();
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }, SP).catch(() => null);
+  assert(subHasImport && subHasImport.includes('203.0.113.60:443'), 'merged sub missing imported endpoint');
+  const revNow = await page.evaluate(async (sp) => {
+    const r = await fetch(location.origin + '/' + sp + '/api/settings', { headers: { 'X-Q-Panel': '1' } });
+    return (await r.json()).data.rev;
+  }, SP);
+  await page.evaluate(async (sp, args) => {
+    await fetch(location.origin + '/' + sp + '/api/settings/save', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Q-Panel': '1' }, body: JSON.stringify({ customEndpoints: args.before, baseRev: args.rev }) });
+  }, SP, { before: ceBefore, rev: revNow });
+  ok('subs-import', '2-source preview with per-source tags, nothing stored until confirm, merged endpoint served, reverted');
+  ok('subs-hub', mainRows + ' formats (base64+singbox+clash), ?target= variant, mode=fragment toggle, clipboard byte-match, no per-user section, warp link-out, info footer QR-free');
 }
 
 async function step5_users(page) {

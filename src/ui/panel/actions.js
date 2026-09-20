@@ -162,6 +162,22 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
   'pool-fetch'(el){loadPool(false)},
   'pool-test'(el){loadPool(true)},
   'home-pool-refresh'(el){loadHomePool()},
+  'subs-import-preview'(el){
+  const ta=$('sub-import-text');const box=$('sub-import-preview');if(!ta||!box)return;
+  box.innerHTML=loadingBox({rows:2});
+  withBusy(el,()=>api('api/sub-import',{method:'POST',body:{text:ta.value}})
+  .then(d=>{renderImportPreview(d&&d.sources||[])})
+  .catch(()=>{box.innerHTML=errorCard({title:'common.error',retryAction:'data-action="subs-import-preview"'})}))},
+  'subs-import-confirm'(el){
+  if(!subImportEndpoints.length)return;
+  const cur=Array.isArray(S.set&&S.set.customEndpoints)?S.set.customEndpoints.map(l=>String(l).trim()).filter(l=>l.length>0):[];
+  const merged=cur.slice();const have=new Set(cur.map(l=>l.toLowerCase()));
+  subImportEndpoints.forEach(e=>{if(!have.has(e.toLowerCase())){have.add(e.toLowerCase());merged.push(e)}});
+  const body={customEndpoints:merged};
+  if(typeof S.rev==='number')body.baseRev=S.rev;
+  withBusy(el,()=>api('api/settings/save',{method:'PUT',body:body})
+  .then(d=>{if(d&&typeof d.rev==='number')S.rev=d.rev;Object.assign(S.set,{customEndpoints:merged});const ta=$('sub-import-text');if(ta)ta.value='';subImportEndpoints=[];renderSubsView();toast(t('common.saved'),'ok')})
+  .catch(err=>{if(err&&err.code==='CONFLICT'){toast(t('settings.conflict'),'err');rebaseSettings().then(()=>renderSubsView());return}if(err&&err.fields&&err.fields.customEndpoints)toast(String(err.fields.customEndpoints),'err');else toastErr(err)}))},
   'pool-add'(el){
    const addr=el.dataset.addr||'';
    const ta=document.querySelector('#sp-egress [data-bind="proxyIps"]');

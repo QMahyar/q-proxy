@@ -59,7 +59,29 @@ sh+='<details class="warp-acc subs-acc"><summary>'+esc(t('subs.how.title'))+'</s
 sh+='</section>';
 return sh}
 function subsBodyHtml(){
-return subsMainHtml()+subsWarpHtml()+subsWarpQuickHtml()+subsUtilsHtml()+subsInfoHtml()}
+return subsMainHtml()+subsImportHtml()+subsWarpHtml()+subsWarpQuickHtml()+subsUtilsHtml()+subsInfoHtml()}
+let subImportEndpoints=[];
+function subsImportHtml(){
+let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.import.title'))+'</div><div class="field__hint">'+esc(t('subs.import.desc'))+'</div></div></div>';
+sh+='<div class="field"><label class="field__label" for="sub-import-text">'+esc(t('subs.import.title'))+'</label><textarea class="input textarea textarea--mono" id="sub-import-text" rows="5" dir="ltr" spellcheck="false" placeholder="'+esc(t('subs.import.placeholder'))+'"></textarea></div>';
+sh+='<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="subs-import-preview">'+esc(t('subs.import.preview'))+'</button></div>';
+sh+='<div id="sub-import-preview" style="margin-block-start:8px"></div></section>';
+return sh}
+function renderImportPreview(sources){
+const box=$('sub-import-preview');if(!box)return;
+subImportEndpoints=[];
+const seen=new Set();
+(sources||[]).forEach(s=>{(s.endpoints||[]).forEach(e=>{const k=String(e).toLowerCase();if(!seen.has(k)){seen.add(k);subImportEndpoints.push(String(e))}})});
+let sh='';
+if(!subImportEndpoints.length)sh=emptyCard({title:'subs.import.empty'})+sh;
+(sources||[]).forEach(s=>{
+const tag=t('subs.import.source',{n:(s.index||0)+1});
+sh+='<div class="warp-group"><div style="display:flex;align-items:center;gap:8px;margin-block:12px 2px"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-ghost)">'+esc(tag)+'</span><span class="stat-chip" style="padding:.125rem .5rem">'+esc(t('warp.endpoints.count',{n:(s.endpoints||[]).length}))+'</span></div>';
+(s.endpoints||[]).forEach(e=>{sh+='<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc(String(e))+'</span></div>'});
+(s.invalid||[]).forEach(iv=>{sh+='<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc('line '+iv.line)+'</span><span class="pool-status"><span class="glyph-bad">✗ '+esc(String(iv.reason))+'</span></span></div>'});
+sh+='</div>'});
+if(subImportEndpoints.length)sh+='<div class="btn-row" style="margin-block-start:8px"><button type="button" class="btn btn--primary btn--sm" data-action="subs-import-confirm">'+esc(t('subs.import.confirm',{n:subImportEndpoints.length}))+'</button></div>';
+box.innerHTML=sh}
 function renderSubsView(){
 const b=$('subs-body');if(!b)return;
 b.innerHTML=subsBodyHtml()}

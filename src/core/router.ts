@@ -32,6 +32,7 @@ import {
   handleImportSettings,
 } from "../handlers/api/settings";
 import { handleKillSwitch, handleStatus, handleSubUrls } from "../handlers/api/status";
+import { handleSubImport } from "../handlers/api/sub-import";
 import { handleBootstrap } from "../handlers/api/bootstrap";
 import { handleWarpApi } from "../handlers/api/warp";
 import { handleProxyPoolApi } from "../handlers/api/proxy-pool";
@@ -118,6 +119,7 @@ const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
   status: { methods: ["GET"], auth: "read", handler: handleStatus },
   killswitch: { methods: ["POST"], auth: "write", handler: handleKillSwitch },
   suburls: { methods: ["GET"], auth: "read", handler: handleSubUrls },
+  "sub-import": { methods: ["POST"], auth: "write", handler: handleSubImport },
   warp: { methods: [], auth: "write", handler: handleWarpApi },
   "proxy-pool": { methods: [], auth: "write", handler: handleProxyPoolApi },
   "address-probe": { methods: [], auth: "write", handler: handleAddressProbeApi },
