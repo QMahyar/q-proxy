@@ -73,7 +73,7 @@ pushUndo(sec,S.snap[sec]||'{}');
 S.snap[sec]=JSON.stringify(cur);
 markDirty(sec);
  toast(t('toast.settingsSaved'),'ok');
-  if(sec==='general'||sec==='addresses')await refreshSubUrls()}
+  if(sec==='general'||sec==='addresses'||sec==='protocols')await refreshSubUrls()}
 catch(e){
 if(e&&e.code==='CONFLICT'){toast(t('settings.conflict'),'err');await rebaseSettings();return}
 if(e&&e.fields&&Object.keys(e.fields).length){

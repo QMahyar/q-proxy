@@ -196,7 +196,9 @@ async function step4_subs(page, context) {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
   await gotoPanel(page, '#/subs');
   const mainRows = await page.$$eval('#subs-body [id^="hub-u"]', els => els.length);
-  assert(mainRows === 2, 'expected 2 main format rows (base64+singbox), got ' + mainRows);
+  assert(mainRows === 3, 'expected 3 main format rows (base64+singbox+clash), got ' + mainRows);
+  const clashRow = await page.evaluate(() => [...document.querySelectorAll('#subs-body .row .field__label')].map(e => e.textContent).find(t => /clash/i.test(t || '')));
+  assert(clashRow, 'no Clash row in the subs hub');
   // expander opens with ?target= variant
   const det = page.locator('#subs-body details.subs-acc').first();
   await det.locator('summary').click();

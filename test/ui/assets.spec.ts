@@ -367,9 +367,9 @@ describe("panel ui p08", () => {
     expect(html).not.toContain("location.replace(nb+'/panel')");
   });
 
-  it("refreshes subscriptions after a general or addresses save", () => {
+  it("refreshes subscriptions after a general, addresses, or protocols save", () => {
     expect(html).toContain("async function refreshSubUrls()");
-    expect(html).toMatch(/sec==='general'\|\|sec==='addresses'/);
+    expect(html).toMatch(/sec==='general'\|\|sec==='addresses'\|\|sec==='protocols'/);
   });
 
   it("keeps language toggle labels present in both dictionaries", () => {
