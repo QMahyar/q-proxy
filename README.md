@@ -1,6 +1,8 @@
 # Q Proxy
 
-Self-hosted Cloudflare Worker proxy panel. VLESS, VMess, Trojan, Shadowsocks over WebSocket. Subscriptions for every major client, WARP/WireGuard configs, per-user links, optional Telegram bot. One file, zero runtime deps, bilingual EN/FA panel.
+Self-hosted Cloudflare Worker proxy panel. VLESS over WebSocket with base64 / sing-box / Clash subscriptions, WARP/WireGuard configs, optional Telegram bot. One file, zero runtime deps, bilingual EN/FA panel.
+
+New here? Start with the [five-minute quickstart](docs/QUICKSTART.md) — one-click deploy to first connected client.
 
 > **فارسی:** پنل کاملاً دوزبانه است (EN/FA با RTL).
 
@@ -40,10 +42,10 @@ The script prints a pre-filled token link, waits for paste, creates KV, uploads 
 
 | Command | What |
 |---------|------|
-| `npm run build` | `dist/q-proxy.js` + `dist/_worker.js` (~470 KB) |
+| `npm run build` | `dist/q-proxy.js` + `dist/_worker.js` |
 | `npm run deploy` | Direct API deploy (no wrangler needed) |
 | `npm run dev` | Local dev at `http://127.0.0.1:8787` |
-| `npm test` | 957 tests |
+| `npm test` | Unit + workers test projects |
 | `npm run typecheck` | Type check |
 
 ## Docs

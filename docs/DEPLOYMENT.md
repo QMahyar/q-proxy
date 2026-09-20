@@ -133,6 +133,18 @@ powershell -File scripts/deploy.ps1 -Action update
 
 Same flow as `deploy.sh` / `deploy-direct.mjs`: auto-detect default branch, create KV, download worker, upload, seed with 2s KV consistency wait, print Panel URL. Also supports `-Title` for multi-project KV titles.
 
+## Deployment matrix
+
+| Path | Needs CLI | Cloudflare signup | KV + D1 | Password handoff | Best for |
+|---|---|---|---|---|---|
+| Deploy Button (Way B) | No | Inside the flow | Dashboard clicks after deploy | Setup card + wizard | First-timers, no terminal |
+| `deploy.py` (Way 0) | Python only | Token paste in flow | Automatic | Your choice, set by script | Guided or flag-driven deploys |
+| Dashboard paste (Way 1) | No | Beforehand | Dashboard clicks | Setup card (24 h) | Click-by-click control |
+| One-liner (Way 2) | Shell only | Token paste in flow | KV automatic, D1 dashboard | Your choice, set by script | Fastest terminal path |
+| `npm run deploy` (Way 3) | Node | Token env beforehand | Automatic | Generated once or your choice | Developers, repeat deploys |
+| Pages (Way 3) | Wrangler | Beforehand | Dashboard/CLI | Setup card (24 h) | Pages hosting |
+| `wrangler deploy` (Way 3) | Wrangler | `wrangler login` beforehand | CLI | Setup card (24 h) | Wrangler-native repeat deploys |
+
 ## D1 database
 
 Write-hot state (users directory, per-user quota/activity/totals, global counters, audit log) lives in D1 (`QPROXY_DB`); settings, WARP store, and throttle/session/ratelimit keys stay on KV. Every deploy path needs the database plus the schema in `migrations/0001_init.sql` — only `npm run deploy` does both automatically.

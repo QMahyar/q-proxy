@@ -39,6 +39,10 @@ For the one-click Deploy Button, Wrangler CLI, `npm run deploy` (direct API), an
 name = "q-proxy"
 main = "dist/q-proxy.js"
 compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+[observability]
+enabled = true
+head_sampling_rate = 1
 [[kv_namespaces]]
 binding = "QPROXY_KV"
 id = "REPLACE_WITH_YOUR_KV_ID"
@@ -391,7 +395,8 @@ Global counters and the audit trail live in D1 (`q-proxy` database), not in that
   "proxyIpPoolUrl": "",
   "dohUpstream": "https://cloudflare-dns.com/dns-query",
   "camouflage": { "mode": "static" },
-  "killSwitch": false
+  "killSwitch": false,
+  "rev": 7
 }
 ```
 
@@ -416,3 +421,21 @@ Full field list: `src/types/settings.ts:53` Settings interface.
 7. Check `GET /{sp}/doh?dns=...` answers via your upstream.
 
 Screenshot: *Smoke test checklist with green pass icons*
+
+## 19. What q-proxy deliberately does not do
+
+Each absence below is a recorded decision, not a gap. Pointers lead to the rationale.
+
+| Absent | Why | Rationale |
+|---|---|---|
+| Trojan / Shadowsocks / VMess inbounds, chained egress, NAT64, gRPC / XHTTP transports | Deliberate slim-down to the VLESS+WARP surface | `docs/decisions/ADR-010.md`, ARCHITECTURE Rev spec-001 |
+| Multi-admin / multi-tenant, hosted SaaS | Single-admin self-hosted product by constitution | Wayfinder map Out of scope |
+| Per-user subscription links, quotas, Users view | Cut with the user store (dead token URLs serve camouflage) | ARCHITECTURE Rev spec-001 |
+| Surge / Loon / Egern / Surfboard emitters | Cut with the emitter slim-down; Clash returned as the one YAML profile | ARCHITECTURE Revs spec-001, glowup-07 |
+| Full-profile Xray JSON, custom-CDN host/SNI triple | Approved for build, pending — not rejected | Ticket 06 verdicts → ticket 18 |
+| Deeper Telegram bot (remote admin, QR delivery, usage alerts) | Widens the bot's blast radius; duplicates the ShareSheet; alerts need the removed cron | Ticket 06 verdict (bot stays status/sub/kill) |
+| Workerless config generator | Downloaded WARP configs already work offline — packaged as docs, not code | Ticket 06 verdict |
+| Real Cloudflare usage (GraphQL) in displays | Would need a server-side API token; all usage is labeled estimates from one source instead | ARCHITECTURE Rev glowup-08 |
+| Self-update / panel-stored deploy tokens | Full-power tokens in KV repeat competitors' worst finding | ARCHITECTURE Rev glowup-05 (secret hygiene) |
+| `@username` Telegram identity | Squattable — numeric chat IDs only | glowup-03 Rev |
+| Exact version on `/healthz` | Unauthenticated version disclosure — static `{ok:true}` | glowup-05 Rev |
