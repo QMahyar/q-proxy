@@ -125,9 +125,9 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  const curIds=new Set(Array.isArray(S.set&&S.set.warpPresets)?S.set.warpPresets:[]);
  const curCustom=Array.isArray(S.set&&S.set.warpCustomEndpoints)?S.set.warpCustomEndpoints.map(l=>String(l).trim()).filter(l=>l.length>0):[];
  const same=ids.length===curIds.size&&ids.every(id=>curIds.has(id))&&custom.length===curCustom.length&&custom.every((l,i)=>l===curCustom[i]);
- const doSave=()=>withBusy(el,()=>api('api/settings/save',{method:'PUT',body:{warpPresets:ids,warpCustomEndpoints:custom}})
- .then(()=>{Object.assign(S.set,{warpPresets:ids,warpCustomEndpoints:custom});toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(renderWarpSection)})
- .catch(err=>{if(err&&err.fields&&(err.fields.warpPresets||err.fields.warpCustomEndpoints))showErr(err.fields.warpCustomEndpoints||err.fields.warpPresets);else toastErr(err)}));
+ const doSave=()=>withBusy(el,()=>api('api/settings/save',{method:'PUT',body:Object.assign({warpPresets:ids,warpCustomEndpoints:custom},typeof S.rev==='number'?{baseRev:S.rev}:{})})
+ .then((d)=>{if(d&&typeof d.rev==='number')S.rev=d.rev;Object.assign(S.set,{warpPresets:ids,warpCustomEndpoints:custom});toast(t('common.saved'),'ok');invalidateWarp();return loadWarpIfNeeded().then(renderWarpSection)})
+ .catch(err=>{if(err&&err.code==='CONFLICT'){toast(t('settings.conflict'),'err');rebaseSettings().then(()=>renderWarpSection());return}if(err&&err.fields&&(err.fields.warpPresets||err.fields.warpCustomEndpoints))showErr(err.fields.warpCustomEndpoints||err.fields.warpPresets);else toastErr(err)}));
  const accounts=S.warp&&S.warp.accounts?S.warp.accounts.length:0;
  if(accounts>0&&!same){confirmDialog('warp.confirm.endpoints_title','warp.confirm.endpoints_body',true,{n:accounts}).then(yes=>{if(yes)doSave()});return}
  doSave()},
@@ -373,6 +373,7 @@ renderBootSkeleton();
 try{
 const d=await api('api/bootstrap');
 S.set=d.settings||{};
+S.rev=typeof S.set.rev==='number'?S.set.rev:null;
 S.status=d.status||null;
 S.subs=(d.subUrls&&d.subUrls.urls)||[]}
 catch(e){

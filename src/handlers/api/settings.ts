@@ -1,13 +1,13 @@
 import type { RouteHandler } from "../../types/context";
 import type { PublicSettings, Settings } from "../../types/settings";
 import { DEFAULT_SETTINGS, SENSITIVE_SETTING_PATHS, SETTINGS_VERSION } from "../../types/settings";
-import { ValidationError } from "../../core/errors";
+import { ConflictError, ValidationError } from "../../core/errors";
 import { audit } from "../../core/log";
 import { jsonOk, readJsonObject } from "../../core/respond";
 import { clientIp } from "../../auth/guard";
 import { deepMergeDefaults } from "../../settings/migrate";
 import { validateSettings } from "../../settings/validate";
-import { loadSettingsFresh, saveSettings, settingsEtag } from "../../settings/store";
+import { loadSettingsFresh, readSettingsRev, saveSettings, settingsEtag, settingsRev } from "../../settings/store";
 
 const PRESERVED_FIELDS = [
   "securePath",
@@ -38,7 +38,7 @@ export const handleGetSettings: RouteHandler = async (req, _env, s) => {
   }
   const headers: Record<string, string> = {};
   if (etag !== null) headers["ETag"] = etag;
-  return jsonOk(publicSettingsView(s), headers);
+  return jsonOk({ ...publicSettingsView(s), rev: settingsRev() }, headers);
 };
 
 function changedTopLevelKeys(before: Settings, after: Settings): string[] {
@@ -55,7 +55,14 @@ function changedTopLevelKeys(before: Settings, after: Settings): string[] {
 export const handleSaveSettings: RouteHandler = async (req, _env, s, ctx) => {
   const body = await readJsonObject(req);
   for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "passwordIsBootstrap", "seededAt"]) delete (body as Record<string, unknown>)[k];
+  const baseRev = (body as Record<string, unknown>).baseRev;
   const fresh = await loadSettingsFresh(_env);
+  if (typeof baseRev === "number" && Number.isInteger(baseRev)) {
+    const currentRev = await readSettingsRev(_env);
+    if (currentRev !== baseRev) {
+      throw new ConflictError("settings changed elsewhere — reload and re-apply your change");
+    }
+  }
   const merged = deepMergeDefaults(fresh, body);
   void s;
   const result = validateSettings(merged);

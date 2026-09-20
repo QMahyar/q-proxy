@@ -35,6 +35,12 @@ export class NotFoundError extends AppError {
   }
 }
 
+export class ConflictError extends AppError {
+  constructor(message = "conflict") {
+    super(message, 409, "CONFLICT");
+  }
+}
+
 export class ValidationError extends AppError {
   readonly fields: Record<string, string>;
   constructor(fields: Record<string, string>, message = "validation failed") {

@@ -20,4 +20,11 @@ describe("config/wrangler", () => {
     expect(ageDays).toBeGreaterThanOrEqual(0);
     expect(ageDays).toBeLessThan(180);
   });
+
+  it("enables dashboard observability with full head sampling", () => {
+    const table = toml.match(/\[observability\]([\s\S]*?)(?:\n\[|\n*$)/);
+    expect(table, "[observability] missing from wrangler.toml").not.toBeNull();
+    expect(table![1]).toMatch(/enabled\s*=\s*true/);
+    expect(table![1]).toMatch(/head_sampling_rate\s*=\s*1/);
+  });
 });

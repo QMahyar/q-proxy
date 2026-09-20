@@ -3,7 +3,7 @@ const FPS=['chrome','firefox','safari','ios','android','edge','360','qq','random
 const PACKETS=['tlshello','1-1','1-2','1-3','1-5'];
 const PRESETS={low:[100,200,1,1],medium:[50,100,1,5],high:[10,20,10,20],severe:[1,5,1,5]};
 const CDN_PRESETS=[{id:'cf-443-a',ip:'104.17.0.0',port:443},{id:'cf-443-b',ip:'104.18.0.0',port:443},{id:'cf-443-c',ip:'104.19.0.0',port:443},{id:'cf-2053-a',ip:'104.21.0.0',port:2053},{id:'cf-2083-a',ip:'172.64.32.1',port:2083},{id:'cf-2096-a',ip:'188.114.96.1',port:2096},{id:'cf-80-a',ip:'104.17.0.0',port:80},{id:'cf-8080-a',ip:'172.64.32.1',port:8080}];
-const S={set:{},status:null,subs:[],snap:{},dirty:new Set(),subMode:(function(){try{return localStorage.getItem('qp_submode')||'normal'}catch(e){return 'normal'}})(),warp:null,pool:null};
+const S={set:{},rev:null,status:null,subs:[],snap:{},dirty:new Set(),subMode:(function(){try{return localStorage.getItem('qp_submode')||'normal'}catch(e){return 'normal'}})(),warp:null,pool:null};
 let UID=0;
 function getPath(o,p){return p.split('.').reduce((a,k)=>a==null?undefined:a[k],o)}
 function setPath(o,p,v){const ks=p.split('.');let c=o;for(let i=0;i<ks.length-1;i++){if(typeof c[ks[i]]!=='object'||c[ks[i]]===null)c[ks[i]]={};c=c[ks[i]]}c[ks[ks.length-1]]=v}

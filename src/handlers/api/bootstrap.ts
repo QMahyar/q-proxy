@@ -2,7 +2,7 @@ import type { RouteHandler } from "../../types/context";
 import { jsonOk } from "../../core/respond";
 import { resolveHostname } from "../../core/routes";
 import { readUsage } from "../../core/counters";
-import { appVersion, settingsEtag } from "../../settings/store";
+import { appVersion, settingsEtag, settingsRev } from "../../settings/store";
 import { publicSettingsView } from "./settings";
 import { buildSubUrls, usageView } from "./status";
 
@@ -19,7 +19,7 @@ export const handleBootstrap: RouteHandler = async (req, env, s) => {
   if (etag !== null) headers["ETag"] = etag;
   return jsonOk(
     {
-      settings: publicSettingsView(s),
+      settings: { ...publicSettingsView(s), rev: settingsRev() },
       status: {
         version: appVersion(),
         killSwitch: s.killSwitch,

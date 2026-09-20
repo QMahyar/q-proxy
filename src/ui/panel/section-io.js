@@ -64,7 +64,10 @@ clearFieldErrors(sec);
 try{
 const{cur,patch}=diffSection(sec);
 if(Object.keys(patch).length===0){markDirty(sec);return}
-await api('api/settings/save',{method:'PUT',body:patch});
+const body=JSON.parse(JSON.stringify(patch));
+if(typeof S.rev==='number')body.baseRev=S.rev;
+const saved=await api('api/settings/save',{method:'PUT',body:body});
+if(saved&&typeof saved.rev==='number')S.rev=saved.rev;
 Object.assign(S.set,JSON.parse(JSON.stringify(cur)));
 pushUndo(sec,S.snap[sec]||'{}');
 S.snap[sec]=JSON.stringify(cur);
@@ -72,6 +75,7 @@ markDirty(sec);
  toast(t('toast.settingsSaved'),'ok');
   if(sec==='general'||sec==='addresses')await refreshSubUrls()}
 catch(e){
+if(e&&e.code==='CONFLICT'){toast(t('settings.conflict'),'err');await rebaseSettings();return}
 if(e&&e.fields&&Object.keys(e.fields).length){
 let n=0;
 for(const path in e.fields){
@@ -80,6 +84,17 @@ n++}
 toast(t('common.fixErrors',{count:n}),'err')}
 else toastErr(e)}
 finally{updateApplyBar()}}
+async function rebaseSettings(){
+try{
+const fresh=await api('api/settings',{fresh:true});
+if(!fresh||typeof fresh!=='object')return;
+S.set=fresh;
+if(typeof fresh.rev==='number')S.rev=fresh.rev;
+renderSettings();
+SECTIONS.forEach(s=>{try{S.snap[s.key]=JSON.stringify(collectSection(s.key))}catch(err){}});
+markDirty();
+if(typeof refreshShowIf==='function')refreshShowIf();
+await refreshSubUrls()}catch(err){toastErr(err)}}
 function discardSection(sec){
 let snap={};
 try{snap=JSON.parse(S.snap[sec]||'{}')}catch(e){}

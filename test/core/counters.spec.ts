@@ -226,6 +226,25 @@ describe("KV failure resilience", () => {
     await expect(readUsage(env)).rejects.toThrow("kv down");
     kv.getFails = false;
   });
+
+  it("surfaces a failed background flush in logs instead of vanishing", async () => {
+    const { recordConnection } = await loadCounters();
+    const kv = new MockKV();
+    const env = kv.asEnv() as never;
+    const errors: unknown[][] = [];
+    const orig = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args);
+    };
+    try {
+      kv.putFails = true;
+      for (let i = 0; i < 32; i++) await recordConnection(env);
+    } finally {
+      console.error = orig;
+      kv.putFails = false;
+    }
+    expect(errors.some((args) => JSON.stringify(args).includes("flush failed"))).toBe(true);
+  });
 });
 
 describe("byte accounting", () => {

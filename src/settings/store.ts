@@ -107,6 +107,14 @@ export function settingsEtag(): string | null {
   return `W/"${cache.updatedAt}-${SETTINGS_VERSION}"`;
 }
 
+export function settingsRev(): number | null {
+  return cache === null ? null : cache.rev;
+}
+
+export async function readSettingsRev(env: Env): Promise<number> {
+  return blobRev(await readRawBlob(env));
+}
+
 async function persist(env: Env, value: Settings, updatedAt: number, rev: number): Promise<void> {
   const blob: StoredBlob = {
     version: SETTINGS_VERSION,
