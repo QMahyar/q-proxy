@@ -77,6 +77,10 @@ function collectAddresses(s: Settings, hostname: string): AddressEntry[] {
       sni = connectHost;
       tags = ["custom-domain"];
     }
+    if (!isBase) {
+      if (s.cdnHost.trim().length > 0) host = s.cdnHost.trim().toLowerCase();
+      if (s.cdnSni.trim().length > 0) sni = s.cdnSni.trim().toLowerCase();
+    }
     out.push({ address: bracketIpv6(connectHost), host, sni, tags, port, label: undefined, country: null });
   }
   return out;

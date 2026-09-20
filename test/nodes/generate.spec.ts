@@ -336,3 +336,27 @@ describe("generateNodes vlessFlow stamping", () => {
   });
 });
 
+describe("custom CDN front host/SNI triple", () => {
+  it("leaves host and SNI on auto derivation when unset", () => {
+    const s = settings();
+    s.customEndpoints = ["203.0.113.9:443"];
+    const nodes = generateNodes(ctx(s));
+    const custom = nodes.filter((n) => n.address === "203.0.113.9");
+    expect(custom.length).toBeGreaterThan(0);
+    expect(custom.every((n) => n.host === HOST && n.sni === HOST)).toBe(true);
+  });
+
+  it("overrides host and SNI on non-base addresses only", () => {
+    const s = settings();
+    s.customEndpoints = ["203.0.113.9:443", `${HOST}:443`];
+    s.cdnHost = "front.example.com";
+    s.cdnSni = "sni.example.com";
+    const nodes = generateNodes(ctx(s));
+    const custom = nodes.filter((n) => n.address === "203.0.113.9");
+    expect(custom.length).toBeGreaterThan(0);
+    expect(custom.every((n) => n.host === "front.example.com" && n.sni === "sni.example.com")).toBe(true);
+    const base = nodes.filter((n) => n.address === HOST);
+    expect(base.length).toBeGreaterThan(0);
+    expect(base.every((n) => n.host === HOST && n.sni === HOST)).toBe(true);
+  });
+});

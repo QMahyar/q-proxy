@@ -29,6 +29,8 @@ FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
   {title:'endpoints.card.title',fields:[
   FL('cdnPresets','presetChecks','endpoints.presets.label','endpoints.presets.hint',{presetKind:'cdn'}),
   FL('customEndpoints','list','endpoints.custom.label','endpoints.custom.hint',{validate:'host_port'}),
+  FL('cdnHost','str','endpoints.front.host','endpoints.front.host_hint',{maxLen:253,vtype:'domain'}),
+  FL('cdnSni','str','endpoints.front.sni','endpoints.front.sni_hint',{maxLen:253,vtype:'domain'}),
   FL('defaultPort','select','addresses.defaultPort.label','addresses.defaultPort.hint',{opts:[[443,'443'],[2053,'2053'],[2083,'2083'],[2087,'2087'],[2096,'2096'],[8443,'8443']]}),
   FL('nameTemplate','str','addresses.nameTemplate.label','addresses.nameTemplate.hint',{mono:true,maxLen:512})]},
   {title:'endpoints.probe.title',probe:true,fields:[]}]},

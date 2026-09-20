@@ -2,6 +2,7 @@ import type { SubFormat } from "../../core/ua";
 import type { ProxyNode } from "../../types/node";
 import { emitClashYaml } from "./clash-yaml";
 import { emitSingBoxJson } from "./singbox-json";
+import { emitXrayJson } from "./xray-json";
 
 export interface EmitRules {
   bypassLan: boolean;
@@ -60,4 +61,5 @@ export type SyncSubFormat = Exclude<SubFormat, "base64">;
 export const EMITTERS: Record<SyncSubFormat, NodeEmitter> = {
   singbox: emitSingBoxJson,
   clash: emitClashYaml,
+  xray: emitXrayJson,
 };

@@ -136,7 +136,7 @@ All fields from `src/types/settings.ts:53` grouped below. Saving is `PUT /{sp}/a
 |-------|----------------------------------|--------------|
 | General | `language` (`en`/`fa`, RTL), `debugLogging`, `profileTitle`, `subUpdateIntervalHours`, `maxNodesPerFormat` | UI + subscription headers |
 | VLESS | `vlessEnabled`, `vlessUuid`, `vlessFlow` (empty / `xtls-rprx-vision`, TLS nodes only), `vlessPath` (`vl` default) | Single inbound enable + credential + WS path suffix; flow details in §4.7 |
-| Endpoints | `cdnPresets[]` (default empty, all opt-in), `customEndpoints[]` (default empty), `warpPresets[]` (default `["default"]`), `warpCustomEndpoints[]` (default empty), `defaultPort` (443), `nameTemplate` | Preset ticks + custom paste + remark naming; details in §7.1 (VLESS) and §5.4 (WARP) |
+| Endpoints | `cdnPresets[]` (default empty, all opt-in), `customEndpoints[]` (default empty), `cdnHost`/`cdnSni` (default empty, front override for non-worker addresses), `warpPresets[]` (default `["default"]`), `warpCustomEndpoints[]` (default empty), `defaultPort` (443), `nameTemplate` | Preset ticks + custom paste + remark naming; details in §7.1 (VLESS) and §5.4 (WARP) |
 | TLS | `echEnabled`, `echAuto` (derive ECH name from node SNI), `echServerName` (manual override, always wins), `fingerprint` (chrome/firefox/safari/ios/android/edge/360/qq/random/randomized), `randomizeSniCase`, `alpn` (`["http/1.1"]`) | Emitted node TLS hygiene + ECH |
 | Fragment | `fragment {mode (off/low/medium/high/severe/custom), packets (tlshello/1-1…1-5), lengthMin/Max, delayMin/Max, maxSplitMin/Max}` | Fragment subs |
 | Egress | `earlyDataEnabled`+`earlyDataMaxBytes` (2048), `proxyIps[]`, `proxyIpPoolUrl`, `enableUdp53` | Tunnel egress: direct first, then the proxyIP pool |
@@ -199,9 +199,10 @@ Base path: `GET /{sp}/sub` (`src/handlers/subscribe.ts`, `src/core/router.ts:160
 | `base64` | `v2rayng`/`v2rayn`/`shadowrocket`/`happ`/`streisand`… | Base64 | `text/plain` | Std padded base64 of `\n`-joined `vless://` links |
 | `singbox` | `sing-box`/`singbox`/`sfa`/`hiddify`/`nekobox`/`karing` | sing-box JSON | `application/json` | Full profile: tun+mixed inbounds, DNS detour, `urltest` best-ping |
 | `clash` | `clash`/`mihomo`/`stash` | Clash YAML | `text/yaml` | Mihomo-compatible profile: vless+ws proxies, `urltest` group, REJECT/DIRECT rules |
+| `xray` | `xray-core` | Xray JSON | `application/json` | Full profile: socks inbound with sniffing, DNS, routing plus a least-ping balancer |
 | *(none, browser UA)* | `mozilla/`/`chrome/`/`safari/`/`firefox` | Info page | `text/html` | Bilingual EN/FA landing with per-format copy/QR |
 
-Those three targets are the whole list. Priority: `?target=` param > UA tokens > `base64` fallback; browsers get the info page. Any other `?target=` value is rejected with `400 invalid target` — never remapped, never substituted. Non-browser UAs get `Content-Disposition: attachment` + `Subscription-Userinfo` / `Profile-Title` headers (`src/subscription/headers.ts`).
+Those four targets are the whole list. Priority: `?target=` param > UA tokens > `base64` fallback; browsers get the info page. Any other `?target=` value is rejected with `400 invalid target` — never remapped, never substituted. Non-browser UAs get `Content-Disposition: attachment` + `Subscription-Userinfo` / `Profile-Title` headers (`src/subscription/headers.ts`).
 
 Fragment variant: `?mode=fragment` filters nodes to the fragment family (presets in `src/nodes/fragments.ts`). Shadowrocket/Happ UAs on mixed subs get `fragment=` URI params automatically.
 
@@ -212,6 +213,7 @@ Fragment variant: `?mode=fragment` filters nodes to the fragment family (presets
 | **v2rayNG** (Android) | Copy `/{sp}/sub?target=base64` → v2rayNG → `+` → Import from clipboard; or scan QR from panel Home |
 | **sing-box / SFA** | Use `?target=singbox` URL → SFA → Add profile from URL → enable tun `auto_route` |
 | **Clash Verge / Mihomo** | Use `/{sp}/sub?target=clash` URL → Profiles → New profile from URL; select the `PROXY` group |
+| **Xray-core desktop** (v2rayN / NekoRay) | Use `/{sp}/sub?target=xray` URL → import as Xray JSON config; traffic balances across nodes via least-ping |
 | **Shadowrocket** (iOS) | Use base64 sub; fragment param auto-appended when UA is Shadowrocket — verify `fragment=` appears in URI preview |
 
 Automatic fastest-node selection lives in the sing-box and Clash profiles (their `PROXY` url-test group re-tests every few minutes); a Base64 list cannot auto-select — run your client's own speed test or switch to a profile URL. The hub repeats this guidance above the format rows.
@@ -229,6 +231,8 @@ Panel → WARP section: register a real Cloudflare WARP device (or import a conf
 That single global selection governs every account and all four output families, with one global Amnezia switch (default off): on, the WireGuard and sing-box outputs carry the Amnezia values; Throne always does; v2rayn never does. Flipping the switch purges served copies, so clients must re-download — previously shared files are snapshots. Per-account endpoint selection and per-account Amnezia overrides are retired: any stored `endpoint_list` or `amnezia_overrides` is ignored, not migrated. An empty global selection (nothing ticked, custom box empty) falls back to the `default` preset, so configs are never empty for this reason. The custom box follows the same paste discipline as VLESS (§7.1): bad lines reject the whole save naming each line, valid lines are kept verbatim, max 64 lines.
 
 These configs connect straight to Cloudflare's WARP network — their tunnel traffic never passes through your Worker and does not consume the Workers request budget.
+
+**Offline rescue:** a downloaded WARP config keeps working even if the Worker is down, deleted, or out of budget — the client talks directly to Cloudflare's edge. Keep one current `.conf` (or Throne link) somewhere off-panel as your rescue path. There is no separate rescue generator; the ordinary WARP download *is* the rescue.
 
 ### 5.5 Telegram Bot
 
@@ -277,6 +281,8 @@ Set in Panel → Settings → Endpoints. VLESS address sources are exactly three
 1. **Ticked CDN presets** — 8 curated `ip:port` entries shipped in `src/nodes/cdn-presets.ts`, all opt-in (`cdnPresets[]`, default empty). Ticking an entry adds its `ip:port` to generation; unticked entries contribute nothing. Unknown ids are ignored, never errors.
 2. **Custom paste box** — `customEndpoints[]` (default empty), one `ip-or-host[:port]` per line (IPv6 in brackets, e.g. `[2606:4700::1]:443`). Lines are stored verbatim (trimmed); blank lines are ignored, not errors.
 3. **Worker-hostname fallback** — when no preset is ticked and the custom box is empty, nodes use the request hostname, so subscriptions are never empty.
+
+**CDN fronting (optional triple):** below the custom box, `cdnHost` / `cdnSni` override the Host header and TLS server name on every non-worker address (preset + custom lines; the worker hostname itself is never overridden). Leave both empty for auto derivation. Example: connect to a CDN edge IP while presenting your own front domain. Both fields accept a domain name or empty.
 
 Paste discipline — the whole save is rejected when any line is bad; stored state is untouched and the panel keeps your text for correction:
 
@@ -434,7 +440,7 @@ Each absence below is a recorded decision, not a gap. Pointers lead to the ratio
 | Multi-admin / multi-tenant, hosted SaaS | Single-admin self-hosted product by constitution | Wayfinder map Out of scope |
 | Per-user subscription links, quotas, Users view | Cut with the user store (dead token URLs serve camouflage) | ARCHITECTURE Rev spec-001 |
 | Surge / Loon / Egern / Surfboard emitters | Cut with the emitter slim-down; Clash returned as the one YAML profile | ARCHITECTURE Revs spec-001, glowup-07 |
-| Full-profile Xray JSON, custom-CDN host/SNI triple | Approved for build, pending — not rejected | Ticket 06 verdicts → ticket 18 |
+| Full-profile Xray JSON, custom-CDN host/SNI triple | Shipped: `?target=xray` full profile; optional `cdnHost`/`cdnSni` front override | Ticket 06 verdicts → ticket 18 |
 | Deeper Telegram bot (remote admin, QR delivery, usage alerts) | Widens the bot's blast radius; duplicates the ShareSheet; alerts need the removed cron | Ticket 06 verdict (bot stays status/sub/kill) |
 | Workerless config generator | Downloaded WARP configs already work offline — packaged as docs, not code | Ticket 06 verdict |
 | Real Cloudflare usage (GraphQL) in displays | Would need a server-side API token; all usage is labeled estimates from one source instead | ARCHITECTURE Rev glowup-08 |

@@ -389,6 +389,16 @@ function applyCustomField(
     case "customEndpoints":
       endpointLinesField(patch, out, "customEndpoints", fields, 64, true);
       return;
+    case "cdnHost":
+    case "cdnSni": {
+      const v = strField(patch, path, fields, { maxLen: 253 });
+      if (v !== undefined) {
+        const trimmed = v.trim().toLowerCase();
+        if (trimmed.length > 0 && !HOSTNAME_RE.test(trimmed)) fail(fields, path, "must be a domain name");
+        else (out as unknown as Record<string, unknown>)[path] = trimmed;
+      }
+      return;
+    }
     case "warpPresets":
       presetIdListField(patch, out, "warpPresets", fields, 64);
       return;

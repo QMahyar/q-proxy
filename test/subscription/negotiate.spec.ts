@@ -52,9 +52,14 @@ describe("pickSubFormat negotiation priority", () => {
     expect(pickSubFormat(req("https://w/sp/sub/u/x/singbox?target=base64", "Loon/3"), "singbox")).toBe("base64");
   });
 
-  it("target=clash resolves directly and via path segment", () => {
-    expect(pickSubFormat(req("https://w/sp/sub?target=clash", "Mozilla/5.0"))).toBe("clash");
-    expect(pickSubFormat(req("https://w/sp/sub/u/x/clash", "v2rayNG/1.8"), "clash")).toBe("clash");
+  it("target=xray resolves directly and via path segment", () => {
+    expect(pickSubFormat(req("https://w/sp/sub?target=xray", "Mozilla/5.0"))).toBe("xray");
+    expect(pickSubFormat(req("https://w/sp/sub/u/x/xray", "v2rayNG/1.8"), "xray")).toBe("xray");
+  });
+
+  it("classifies xray-core UAs to the xray emitter", () => {
+    expect(pickSubFormat(req("https://w/sp/sub", "Xray-core/1.8"))).toBe("xray");
+    expect(pickSubFormat(req("https://w/sp/sub", "Foxray/2.1"))).toBe("base64");
   });
 
   it("ignores an invalid path target and falls through", () => {

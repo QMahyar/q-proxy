@@ -66,6 +66,8 @@ export const SETTING_FIELD_DESCRIPTORS: readonly SettingFieldDescriptor[] = [
   { path: "defaultPort", spec: { kind: "custom" } },
   { path: "cdnPresets", spec: { kind: "custom" } },
   { path: "customEndpoints", spec: { kind: "custom" } },
+  { path: "cdnHost", spec: { kind: "custom" } },
+  { path: "cdnSni", spec: { kind: "custom" } },
   { path: "warpPresets", spec: { kind: "custom" } },
   { path: "warpCustomEndpoints", spec: { kind: "custom" } },
   { path: "nameTemplate", spec: { kind: "str", maxLen: 512 } },

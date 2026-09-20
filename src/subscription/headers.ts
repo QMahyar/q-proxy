@@ -37,6 +37,7 @@ export const EXTENSIONS: Record<SubFormat, string> = {
   base64: "txt",
   singbox: "json",
   clash: "yaml",
+  xray: "json",
 };
 
 export const SUB_THROTTLE_SECONDS = 60;

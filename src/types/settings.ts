@@ -58,6 +58,8 @@ export interface Settings {
   earlyDataMaxBytes: number;
   cdnPresets: string[];
   customEndpoints: string[];
+  cdnHost: string;
+  cdnSni: string;
   warpPresets: string[];
   warpCustomEndpoints: string[];
   defaultPort: number;
@@ -101,6 +103,8 @@ export const DEFAULT_SETTINGS: Settings = {
   earlyDataMaxBytes: 2048,
   cdnPresets: [],
   customEndpoints: [],
+  cdnHost: "",
+  cdnSni: "",
   warpPresets: ["default"],
   warpCustomEndpoints: [],
   defaultPort: 443,

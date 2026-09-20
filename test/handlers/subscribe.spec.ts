@@ -43,6 +43,7 @@ describe("handleSubscribe", () => {
     const body = await res.text();
     expect(body).toContain("https://w.test/sp12345678/sub?target=singbox");
     expect(body).toContain("https://w.test/sp12345678/sub?target=clash");
+    expect(body).toContain("https://w.test/sp12345678/sub?target=xray");
     expect(body).toContain("اندپوینت");
     expect(body.toLowerCase()).not.toContain("vless://");
   });
@@ -86,16 +87,28 @@ describe("handleSubscribe", () => {
   });
 
   it("serves target=clash as yaml with the clash filename", async () => {
-    const res = await handleSubscribe(
+    const clashRes = await handleSubscribe(
       request("https://w.test/sp12345678/sub?target=clash", BROWSER),
       envStub(),
       settings(),
     );
-    expect(res.headers.get("content-type")).toBe("text/yaml; charset=utf-8");
-    expect(res.headers.get("content-disposition")).toContain(".yaml");
-    const text = await res.text();
+    expect(clashRes.headers.get("content-type")).toBe("text/yaml; charset=utf-8");
+    expect(clashRes.headers.get("content-disposition")).toContain(".yaml");
+    const text = await clashRes.text();
     expect(text).toContain("proxies:");
     expect(text).toContain("type: vless");
+  });
+
+  it("serves target=xray as json with the xray filename", async () => {
+    const res = await handleSubscribe(
+      request("https://w.test/sp12345678/sub?target=xray", BROWSER),
+      envStub(),
+      settings(),
+    );
+    expect(res.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    expect(res.headers.get("content-disposition")).toContain(".json");
+    const doc = JSON.parse(await res.text()) as { outbounds: unknown[] };
+    expect(doc.outbounds.length).toBeGreaterThan(1);
   });
 
   it("rejects deleted targets as invalid", async () => {

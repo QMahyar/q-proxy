@@ -11,6 +11,7 @@ export const SUB_CONTENT_TYPES: Record<SubFormat, string> = {
   base64: "text/plain; charset=utf-8",
   singbox: "application/json; charset=utf-8",
   clash: "text/yaml; charset=utf-8",
+  xray: "application/json; charset=utf-8",
 };
 
 export interface RenderSubInput {

@@ -77,14 +77,24 @@ describe("subscription pipeline", () => {
 
   it("renders one clash vless proxy per generated node with all names present", async () => {
     await seedAddresses(ONE_ADDRESS);
-    const { settings } = await readSettings();
-    const res = await SELF.fetch(`${BASE}/sub?target=clash`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("yaml");
-    const body = await res.text();
-    for (const name of expectedNames(settings)) expect(body).toContain(`name: ${name}`);
+    const clashSettings = await readSettings();
+    const clashRes = await SELF.fetch(`${BASE}/sub?target=clash`);
+    expect(clashRes.status).toBe(200);
+    expect(clashRes.headers.get("Content-Type")).toContain("yaml");
+    const clashBody = await clashRes.text();
+    for (const name of expectedNames(clashSettings.settings)) expect(clashBody).toContain(`name: ${name}`);
   });
 
+  it("renders one xray vless outbound per generated node", async () => {
+    await seedAddresses(ONE_ADDRESS);
+    const { settings } = await readSettings();
+    const res = await SELF.fetch(`${BASE}/sub?target=xray`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("json");
+    const doc = JSON.parse(await res.text()) as { outbounds: Array<{ protocol: string }> };
+    const tags = expectedNames(settings);
+    expect(doc.outbounds.filter((o) => o.protocol === "vless")).toHaveLength(tags.length);
+  });
   it("rejects deleted format targets as invalid", async () => {
     await seedAddresses(ONE_ADDRESS);
     for (const dead of ["surge", "loon", "quantumult"]) {

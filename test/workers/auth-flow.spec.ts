@@ -181,16 +181,18 @@ describe("panel auth lifecycle", () => {
       label: string;
       url: string;
     }>;
-    expect(urls.length).toBe(4);
+    expect(urls.length).toBe(5);
     expect(urls.map((u) => u.format)).toEqual([
       "base64",
       "singbox",
       "clash",
+      "xray",
       "base64",
     ]);
     expect(urls[0]!.url).toBe(`https://example.com/${SP}/sub`);
     expect(urls[1]!.url).toContain("?target=singbox");
     expect(urls[2]!.url).toContain("?target=clash");
+    expect(urls[3]!.url).toContain("?target=xray");
     expect(urls.find((u) => u.label === "Panel info")!.url).toContain("?view=html");
 
     res = await SELF.fetch(`${BASE}/api/killswitch`, post({ enabled: false }, csrfHeaders));

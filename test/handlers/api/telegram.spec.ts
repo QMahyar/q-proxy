@@ -184,6 +184,7 @@ describe("handleTelegramWebhook", () => {
     const text = String(sent.body.text);
     expect(text).toContain("https://panel.example.com/testpath/sub?target=singbox");
     expect(text).toContain("https://panel.example.com/testpath/sub?target=clash");
+    expect(text).toContain("https://panel.example.com/testpath/sub?target=xray");
     expect(text).toContain("Base64/Mixed");
   });
 

@@ -85,15 +85,27 @@ describe("renderSubscriptionBody", () => {
   });
 
   it("renders clash through the emitter registry", async () => {
-    const body = await renderSubscriptionBody({
+    const clashBody = await renderSubscriptionBody({
       settings: settings(),
       nodes: [node("normal")],
       format: "clash",
       isFragmentMode: false,
       subscriptionUrl: "https://w.test/sub?target=clash",
     });
-    expect(body).toContain("type: vless");
-    expect(body).toContain("MATCH,PROXY");
+    expect(clashBody).toContain("type: vless");
+    expect(clashBody).toContain("MATCH,PROXY");
+  });
+
+  it("renders xray through the emitter registry", async () => {
+    const body = await renderSubscriptionBody({
+      settings: settings(),
+      nodes: [node("normal")],
+      format: "xray",
+      isFragmentMode: false,
+      subscriptionUrl: "https://w.test/sub?target=xray",
+    });
+    expect(body).toContain('"protocol": "vless"');
+    expect(body).toContain("leastPing");
   });
 
   it("base64 body contains own share URIs only (remote merge removed)", async () => {
@@ -116,6 +128,6 @@ describe("renderSubscriptionBody", () => {
 
 describe("SUB_CONTENT_TYPES", () => {
   it("covers every surviving subscription format", () => {
-    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual(["base64", "clash", "singbox"]);
+    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual(["base64", "clash", "singbox", "xray"]);
   });
 });

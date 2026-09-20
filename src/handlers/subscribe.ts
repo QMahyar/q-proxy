@@ -23,6 +23,7 @@ const FORMAT_LABELS: Record<SubFormat, string> = {
   base64: "Base64 / v2rayNG",
   singbox: "sing-box",
   clash: "Clash / Mihomo",
+  xray: "Xray JSON",
 };
 
 function settingsCacheStamp(s: Settings): string {

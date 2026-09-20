@@ -66,6 +66,7 @@ export function buildSubUrls(hostname: string, securePath: string): SubUrlEntry[
     { format: "base64", label: "Base64/Mixed", url: base },
     { format: "singbox", label: "sing-box", url: `${base}?target=singbox` },
     { format: "clash", label: "Clash/Mihomo", url: `${base}?target=clash` },
+    { format: "xray", label: "Xray JSON", url: `${base}?target=xray` },
     { format: "base64", label: "Panel info", url: `${base}?view=html` },
   ];
 }

@@ -43,6 +43,7 @@ Pick the row matching your client:
 | v2rayNG / v2rayN / Hiddify / Streisand / Shadowrocket | `/<securePath>/sub?target=base64` | Base64 `vless://` list |
 | sing-box / SFA / Karing / NekoBox | `/<securePath>/sub?target=singbox` | sing-box JSON profile |
 | Clash Verge / Mihomo / Stash | `/<securePath>/sub?target=clash` | Clash YAML profile |
+| Xray-core desktop (v2rayN / NekoRay) | `/<securePath>/sub?target=xray` | Xray JSON profile |
 
 No `?target=` at all in a phone browser opens an info page with the same
 links (plus QR codes in the panel's ShareSheet). Any other `?target=` value

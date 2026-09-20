@@ -72,12 +72,16 @@ describe("classifyUA", () => {
     expect(classifyUA("singbox/1.9 dalvik")).toBe("singbox");
   });
 
+  it("maps xray-core to the xray emitter without stealing foxray", () => {
+    expect(classifyUA("Xray-core/1.8")).toBe("xray");
+    expect(classifyUA("Foxray/2.1")).toBe("base64");
+  });
+
   it("base64 client token variants", () => {
     expect(classifyUA("Streisand/1.0")).toBe("base64");
     expect(classifyUA("V2Box/3.0")).toBe("base64");
     expect(classifyUA("Foxray/2.1")).toBe("base64");
     expect(classifyUA("Husi/1.0")).toBe("base64");
-    expect(classifyUA("Xray-core/1.8")).toBe("base64");
     expect(classifyUA("NapsternetV/1.0")).toBe("base64");
   });
 });

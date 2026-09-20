@@ -196,9 +196,11 @@ async function step4_subs(page, context) {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
   await gotoPanel(page, '#/subs');
   const mainRows = await page.$$eval('#subs-body [id^="hub-u"]', els => els.length);
-  assert(mainRows === 3, 'expected 3 main format rows (base64+singbox+clash), got ' + mainRows);
+  assert(mainRows === 4, 'expected 4 main format rows (base64+singbox+clash+xray), got ' + mainRows);
   const clashRow = await page.evaluate(() => [...document.querySelectorAll('#subs-body .row .field__label')].map(e => e.textContent).find(t => /clash/i.test(t || '')));
   assert(clashRow, 'no Clash row in the subs hub');
+  const xrayRow = await page.evaluate(() => [...document.querySelectorAll('#subs-body .row .field__label')].map(e => e.textContent).find(t => /xray/i.test(t || '')));
+  assert(xrayRow, 'no Xray row in the subs hub');
   // expander opens with ?target= variant
   const det = page.locator('#subs-body details.subs-acc').first();
   await det.locator('summary').click();
@@ -293,7 +295,7 @@ async function step4_subs(page, context) {
     await fetch(location.origin + '/' + sp + '/api/settings/save', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Q-Panel': '1' }, body: JSON.stringify({ customEndpoints: args.before, baseRev: args.rev }) });
   }, SP, { before: ceBefore, rev: revNow });
   ok('subs-import', '2-source preview with per-source tags, nothing stored until confirm, merged endpoint served, reverted');
-  ok('subs-hub', mainRows + ' formats (base64+singbox+clash), ?target= variant, mode=fragment toggle, clipboard byte-match, no per-user section, warp link-out, info footer QR-free');
+  ok('subs-hub', mainRows + ' formats (base64+singbox+clash+xray), ?target= variant, mode=fragment toggle, clipboard byte-match, no per-user section, warp link-out, info footer QR-free');
 }
 
 async function step5_users(page) {

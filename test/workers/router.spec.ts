@@ -348,6 +348,11 @@ describe("router dispatch", () => {
       expect(res.headers.get("Content-Type")).toContain("yaml");
       expect(await res.text()).toContain("proxies:");
 
+      res = await SELF.fetch(`${BASE}/sub?target=xray`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toContain("json");
+      expect(await res.text()).toContain("leastPing");
+
       res = await SELF.fetch(`${BASE}/sub?target=surge`);
       expect(res.status).toBe(400);
 
