@@ -54,7 +54,7 @@ if(seen.has(l.toLowerCase()))dups.push(l);
 seen.add(l.toLowerCase())});
 if(wrap){
 const cnt=wrap.querySelector('.cnt'),badEl=wrap.querySelector('.bad');
-if(cnt)cnt.textContent=allLines.length;
+if(cnt)cnt.textContent=t('common.lines',{n:allLines.length});
 if(badEl)badEl.textContent=[...bad.slice(0,2).map(l=>t('err.invalid_line',{line:l})),...(dups.length?[t('err.duplicate',{value:dups[0]})]:[])].join(' · ');
 ta.setAttribute('aria-invalid',bad.length?'true':'false')}}
 function validateAllLineEditors(){validateLineEditors(document)}

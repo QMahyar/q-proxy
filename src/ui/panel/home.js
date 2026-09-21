@@ -57,6 +57,7 @@ if(seg[0]==='warp')return{view:'warp',warpId:seg[1]||undefined};
 if(seg[0]==='subs')return{view:'subs'};
 return{view:'home'}}
 function navigate(){
+normalizeSettingsHash();
 const r=parseRoute();
 const h=location.hash;
 if(r.redirect){history.replaceState(null,'','#/warp'+(r.warpId?'/'+r.warpId:''))}

@@ -39,7 +39,7 @@ if('disabled' in el)el.disabled=!on;
 if(!on)el.setAttribute('aria-disabled','true');else el.removeAttribute('aria-disabled')});
 card.querySelectorAll('[data-type="chips"]').forEach(c=>{if(!on)c.setAttribute('inert','');else c.removeAttribute('inert')})})}
 function applyFragmentPresetUi(mode){
-const panel=$('sp-tunnel');
+const panel=$('sp-protocols');
 if(!panel)return;
 ['lengthMin','lengthMax','delayMin','delayMax'].forEach((k,idx)=>{
 const el=panel.querySelector('[data-bind="fragment.'+k+'"]');

@@ -180,7 +180,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
   .catch(err=>{if(err&&err.code==='CONFLICT'){toast(t('settings.conflict'),'err');rebaseSettings().then(()=>renderSubsView());return}if(err&&err.fields&&err.fields.customEndpoints)toast(String(err.fields.customEndpoints),'err');else toastErr(err)}))},
   'pool-add'(el){
    const addr=el.dataset.addr||'';
-   const ta=document.querySelector('#sp-egress [data-bind="proxyIps"]');
+   const ta=document.querySelector('#sp-addresses [data-bind="proxyIps"]');
    if(ta&&addr){captureUndoBase(ta);const lines=ta.value.split('\n').map(x=>x.trim()).filter(Boolean);
    if(!lines.some(x=>x.toLowerCase()===addr.toLowerCase())){lines.push(addr);}
    ta.value=lines.join('\n');markDirty(ta);validateOneEditor(ta)}
