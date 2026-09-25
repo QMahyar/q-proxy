@@ -449,9 +449,10 @@ function applyCustomField(
     case "dohUpstream": {
       const v = strField(patch, "dohUpstream", fields, { maxLen: 253 });
       if (v !== undefined) {
-        if (!isHttpUrl(v)) fail(fields, "dohUpstream", "must be a valid http(s) URL");
-        else if (isLocalOrPrivateTarget(new URL(v).hostname)) fail(fields, "dohUpstream", "must not target a local or private address");
-        else out.dohUpstream = v;
+        const trimmed = v.trim();
+        if (!isHttpUrl(trimmed)) fail(fields, "dohUpstream", "must be a valid http(s) URL");
+        else if (isLocalOrPrivateTarget(new URL(trimmed).hostname)) fail(fields, "dohUpstream", "must not target a local or private address");
+        else out.dohUpstream = trimmed;
       }
       return;
     }
@@ -573,6 +574,9 @@ export function validateSettings(input: unknown): ValidationResult {
   validateProxyIps(out, fields);
   validateFragmentOrdering(patch, out, fields);
   validateBootstrapConsistency(out, fields);
+  if (out.telegram.enabled && out.telegram.botToken.length > 0 && !TG_TOKEN_RE.test(out.telegram.botToken)) {
+    fail(fields, "telegram.botToken", "must look like 123456789:AAExample_Token35chars_1234567890");
+  }
 
   if (Object.keys(fields).length > 0) return { ok: false, fields };
   out.version = DEFAULT_SETTINGS.version;

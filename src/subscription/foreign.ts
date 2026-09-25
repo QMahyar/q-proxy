@@ -30,7 +30,8 @@ function endpointOfVless(line: string): string | null {
   if (host.length === 0) return null;
   const port = url.port === "" ? 443 : Number(url.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
-  return `${host}:${port}`;
+  const endpoint = host.includes(":") ? `[${host}]:${port}` : `${host}:${port}`;
+  return endpoint;
 }
 
 function endpointOfBare(line: string): string | null {
@@ -87,7 +88,12 @@ function parseSource(block: string, index: number): ForeignSource | null {
   if (lines.length === 0) return null;
   const source: ForeignSource = { index, tag: `Source ${index + 1}`, endpoints: [], invalid: [] };
   const capped = lines.slice(0, MAX_FOREIGN_LINES);
+  let truncated = lines.length > MAX_FOREIGN_LINES;
   for (let i = 0; i < capped.length; i++) {
+    if (source.endpoints.length >= MAX_FOREIGN_LINES) {
+      truncated = true;
+      break;
+    }
     let parsed: ReturnType<typeof parseLine>;
     try {
       parsed = parseLine(capped[i]!);
@@ -95,12 +101,18 @@ function parseSource(block: string, index: number): ForeignSource | null {
       parsed = { invalid: "unparseable line" };
     }
     if ("endpoint" in parsed) {
-      for (const ep of parsed.endpoint.split("\n")) source.endpoints.push(ep);
+      for (const ep of parsed.endpoint.split("\n")) {
+        if (source.endpoints.length >= MAX_FOREIGN_LINES) {
+          truncated = true;
+          break;
+        }
+        source.endpoints.push(ep);
+      }
     } else {
       source.invalid.push({ line: i + 1, reason: parsed.invalid });
     }
   }
-  if (lines.length > MAX_FOREIGN_LINES) {
+  if (truncated) {
     source.invalid.push({ line: MAX_FOREIGN_LINES + 1, reason: `source exceeds ${MAX_FOREIGN_LINES} lines` });
   }
   return source;

@@ -273,6 +273,12 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
       log.debug("relay", "zero-byte retry attempt failed", { reason: String(err) });
     }
     if (next === null || finished) {
+      if (next !== null) {
+        try {
+          await next.socket.close();
+        } catch {
+        }
+      }
       finish(1011);
       return false;
     }

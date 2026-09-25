@@ -104,7 +104,7 @@ function remember(value: Settings, updatedAt: number, rev: number): void {
 
 export function settingsEtag(): string | null {
   if (cache === null) return null;
-  return `W/"${cache.updatedAt}-${SETTINGS_VERSION}"`;
+  return `W/"${cache.updatedAt}-${cache.rev}"`;
 }
 
 export function settingsRev(): number | null {

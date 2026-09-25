@@ -5,6 +5,7 @@ import { jsonError } from "../core/respond";
 import { isLocalOrPrivateTarget } from "../utils/net";
 
 const MAX_DOH_BODY_BYTES = 64 * 1024;
+const MAX_DOH_RESPONSE_BYTES = 64 * 1024;
 const PASSTHROUGH_HEADERS = ["content-type", "cache-control"] as const;
 
 async function readCappedBody(req: Request, cap: number): Promise<Uint8Array> {
@@ -57,7 +58,10 @@ export const handleDoh: RouteHandler = async (req, _env, s) => {
     init = { method: "POST", headers, body, signal: AbortSignal.timeout(5000) };
   } else {
     const dns = new URL(req.url).searchParams.get("dns");
-    if (dns !== null) upstream.searchParams.set("dns", dns);
+    if (dns !== null) {
+      if (dns.length > 4096) throw new BadRequestError("dns query parameter exceeds the 4 KiB cap");
+      upstream.searchParams.set("dns", dns);
+    }
     init = { method: "GET", headers, signal: AbortSignal.timeout(5000) };
   }
   let resp: Response;
@@ -70,11 +74,30 @@ export const handleDoh: RouteHandler = async (req, _env, s) => {
   if (!resp.ok || resp.body === null) {
     throw new UpstreamError(`doh upstream returned status ${resp.status}`);
   }
+  const reader = resp.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done || value === undefined) break;
+    total += value.byteLength;
+    if (total > MAX_DOH_RESPONSE_BYTES) {
+      void reader.cancel().catch(() => {});
+      throw new UpstreamError("doh upstream response exceeds the 64 KiB cap");
+    }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    merged.set(c, off);
+    off += c.byteLength;
+  }
   const outHeaders = new Headers();
   for (const name of PASSTHROUGH_HEADERS) {
     const value = resp.headers.get(name);
     if (value !== null) outHeaders.set(name, value);
   }
   if (!outHeaders.has("Content-Type")) outHeaders.set("Content-Type", "application/dns-message");
-  return new Response(resp.body, { status: resp.status, headers: outHeaders });
+  return new Response(merged, { status: resp.status, headers: outHeaders });
 };

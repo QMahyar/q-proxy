@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const require2 = createRequire('C:/Users/qmahyar/AppData/Roaming/npm/node_modules/@playwright/mcp/node_modules/playwright/index.js');
+const require2 = createRequire(import.meta.url);
 const { chromium } = require2('playwright');
 
 // ================= config =================

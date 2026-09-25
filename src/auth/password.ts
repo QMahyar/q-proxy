@@ -7,6 +7,9 @@ export const PBKDF2_HASH = "SHA-256";
 const KEY_BITS = 256;
 
 export function passwordStrengthError(password: string): string | null {
+  if (password.length > 256) {
+    return "must be at most 256 characters";
+  }
   if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
     return "must be at least 8 characters with a letter and a digit";
   }

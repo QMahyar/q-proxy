@@ -583,12 +583,14 @@ What it does:
     console.log("\n  A password already existed; the generated one above was NOT applied.");
   } else if (passwordGenerated && (setupNote === "failed" || setupNote === "expired")) {
     console.log("\n  WARNING: password setup did not complete — see the message above.");
+    process.exitCode = 1;
   } else if (setupNote === "ok") {
     console.log("\nPassword set — open Panel and log in.");
   } else if (setupNote === "already_set") {
     console.log("\nPassword already set previously — log in with the existing passphrase.");
   } else if (setupNote === "failed" || setupNote === "expired") {
     console.log("\nWARNING: automatic password setup did not complete — see the message above.");
+    process.exitCode = 1;
   }
 }
 

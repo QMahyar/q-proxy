@@ -52,6 +52,9 @@ export const handleTunnel: RouteHandler = async (req, env, s, ctx) => {
     earlyDataEnabled: s.earlyDataEnabled,
     earlyDataMaxBytes: s.earlyDataMaxBytes,
   });
+  if (accepted.rejected) {
+    return new Response(null, { status: 101, webSocket: accepted.client });
+  }
   void driveSession(accepted.ws, kind, s, accepted.earlyData, env, ctx).catch((err: unknown) => {
     log.error("tunnel", "driveSession unhandled", String(err));
     try {
@@ -280,6 +283,7 @@ async function driveSession(
   ws.addEventListener("error", () => {
     clientGone = true;
     cleanupHandshake();
+    relayHandle?.clientClosed();
     safeClose(1011);
   });
   ws.addEventListener("close", () => {
