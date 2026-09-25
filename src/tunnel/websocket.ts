@@ -4,6 +4,7 @@ export interface AcceptedTunnelSocket {
   ws: WebSocket;
   client: WebSocket;
   earlyData: Uint8Array | null;
+  rejected: boolean;
 }
 
 export interface AcceptOptions {
@@ -47,7 +48,7 @@ export function acceptTunnelSocket(req: Request, opts: AcceptOptions): AcceptedT
   const server: WebSocket = pair[1];
   server.binaryType = "arraybuffer";
   server.accept({ allowHalfOpen: true });
-  if (!opts.earlyDataEnabled) return { ws: server, client: pair[0], earlyData: null };
+  if (!opts.earlyDataEnabled) return { ws: server, client: pair[0], earlyData: null, rejected: false };
   const parsed = parseEarlyData(
     req.headers.get("sec-websocket-protocol"),
     opts.earlyDataMaxBytes,
@@ -56,7 +57,7 @@ export function acceptTunnelSocket(req: Request, opts: AcceptOptions): AcceptedT
     try {
       server.close(1009);
     } catch {}
-    return { ws: server, client: pair[0], earlyData: null };
+    return { ws: server, client: pair[0], earlyData: null, rejected: true };
   }
-  return { ws: server, client: pair[0], earlyData: parsed.status === "ok" ? parsed.data : null };
+  return { ws: server, client: pair[0], earlyData: parsed.status === "ok" ? parsed.data : null, rejected: false };
 }

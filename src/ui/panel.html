@@ -1973,8 +1973,8 @@ const mode=e.target.closest('[data-mode]');
 if(mode){
 S.subMode=mode.dataset.mode;try{localStorage.setItem('qp_submode',S.subMode)}catch(err){}
 mode.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===mode)));
-const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
-document.querySelectorAll('#home-body [id^="sub-u"] code').forEach((code,i)=>{
+const urls=mainSubEntries();
+document.querySelectorAll('#home-body [id^="sub-u"]').forEach((code,i)=>{
 const entry=urls[i];
 if(!entry) return;
 const newUrl=subUrlWithMode(entry.url);

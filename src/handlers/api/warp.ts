@@ -6,6 +6,8 @@ import { audit } from "../../core/log";
 import { jsonOk, readJsonObject } from "../../core/respond";
 import { clientIp } from "../../auth/guard";
 import { parseWarpConfig, parseWarpJson, parseEndpointHostPort } from "../../warp/config";
+import { isIpLiteral } from "../../utils/net";
+import { randomHex } from "../../utils/random";
 import { registerWarpDevice, removeWarpDevice, WarpApiError } from "../../warp/api";
 import { purgeAllWarpSubs, purgeWarpSub } from "../../warp/cache";
 import {
@@ -86,13 +88,25 @@ function parseEndpoints(value: unknown, field: string): WarpEndpoint[] {
   return out;
 }
 
-async function buildAccount(body: Record<string, unknown>, config: WarpAccount["config"]): Promise<WarpAccount> {
-  const name = typeof body.name === "string" && body.name.trim().length > 0 ? body.name.trim().slice(0, 100) : `Account ${Date.now()}`;
-  const endpoint_list = { type: "preset", preset_id: "default" } as const;
-  let dns: string | null = null;
-  if (typeof body.dns === "string" && body.dns.trim().length > 0) {
-    dns = body.dns.trim().slice(0, 253);
+const HOSTNAME_RE = /^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/;
+
+function parseDnsField(value: unknown, field: string): string | null {
+  if (value === undefined) return undefined as unknown as string | null;
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  const trimmed = value.trim().slice(0, 253);
+  if (!isIpLiteral(trimmed) && !HOSTNAME_RE.test(trimmed)) {
+    throw new ValidationError({ [field]: "must be an IP address or hostname" });
   }
+  return trimmed;
+}
+
+async function buildAccount(body: Record<string, unknown>, config: WarpAccount["config"]): Promise<WarpAccount> {
+  const name =
+    typeof body.name === "string" && body.name.trim().length > 0
+      ? requireString(body.name, "name")
+      : `Account ${Date.now()}-${randomHex(4)}`;
+  const endpoint_list = { type: "preset", preset_id: "default" } as const;
+  const dns = parseDnsField(body.dns, "dns") ?? null;
   return {
     id: newAccountId(),
     name,
@@ -170,7 +184,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s, ctx) => {
         const body = await readJsonObject(req);
         if (body.name !== undefined) account.name = requireString(body.name, "name");
         if (body.dns !== undefined) {
-          account.dns = typeof body.dns === "string" && body.dns.trim().length > 0 ? body.dns.trim().slice(0, 253) : null;
+          account.dns = parseDnsField(body.dns, "dns");
         }
         await storeAccount(env, account);
         await purgeWarpSub(origin, s.securePath, account.token).catch(() => {});
@@ -208,7 +222,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s, ctx) => {
       const preset: WarpPreset = {
         id: newSubToken(),
         name: requireString(body.name, "name"),
-        dns: typeof body.dns === "string" && body.dns.trim().length > 0 ? body.dns.trim().slice(0, 253) : null,
+        dns: body.dns === undefined ? null : parseDnsField(body.dns, "dns"),
         endpoints: parseEndpoints(body.endpoints, "endpoints"),
       };
       presets.push(preset);
@@ -227,7 +241,7 @@ export const handleWarpApi: RouteHandler = async (req, env, s, ctx) => {
         if (body.name !== undefined) presets[index]!.name = requireString(body.name, "name");
         if (body.endpoints !== undefined) presets[index]!.endpoints = parseEndpoints(body.endpoints, "endpoints");
         if (body.dns !== undefined) {
-          presets[index]!.dns = typeof body.dns === "string" && body.dns.trim().length > 0 ? body.dns.trim().slice(0, 253) : null;
+          presets[index]!.dns = parseDnsField(body.dns, "dns");
         }
         await savePresets(env, presets);
         void purgeAll();

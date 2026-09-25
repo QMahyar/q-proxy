@@ -132,7 +132,7 @@ export function parsePoolEndpoints(text: string): RelayEndpoint[] {
 function isFetchableUrl(raw: string): boolean {
   try {
     const url = new URL(raw);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+    if (url.protocol !== "https:") return false;
     if (isLocalOrPrivateTarget(url.hostname)) return false;
     return true;
   } catch {
@@ -146,6 +146,7 @@ export async function fetchPoolUrl(url: string): Promise<RelayEndpoint[]> {
   try {
     const res = await fetch(url, {
       headers: { Accept: "application/json, text/plain;q=0.9, */*;q=0.8" },
+      redirect: "error",
       signal: AbortSignal.timeout(POOL_FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return [];

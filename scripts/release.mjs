@@ -68,7 +68,7 @@ for (const cmd of ["npm run typecheck", "npm test", "npm run build"]) {
 
 if (dry) {
   console.log("[dry] would tag " + tag);
-  if (push) console.log(`[dry] would push: git push origin ${defaultBranch()} --tags`);
+  if (push) console.log(`[dry] would push: git push origin ${defaultBranch()} ${tag}`);
   process.exit(0);
 }
 
@@ -83,7 +83,7 @@ if (dry) {
 const branch = defaultBranch();
 if (push) {
   console.log(`pushing ${tag} to origin/${branch} ...`);
-  const r = spawnSync("git", ["push", "origin", branch, "--tags"], { stdio: "inherit" });
+  const r = spawnSync("git", ["push", "origin", branch, tag], { stdio: "inherit" });
   if (r.status !== 0) {
     console.error(`git push failed (exit ${r.status ?? "unknown"})`);
     process.exit(r.status ?? 1);
@@ -91,5 +91,5 @@ if (push) {
   if (r.error) throw r.error;
   console.log(`pushed ${tag} to origin/${branch}`);
 } else {
-  console.log(`tagged ${tag} — push with: git push origin ${branch} --tags  (or re-run with --push)`);
+  console.log(`tagged ${tag} — push with: git push origin ${branch} ${tag}  (or re-run with --push)`);
 }

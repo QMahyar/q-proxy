@@ -59,10 +59,12 @@ export const handleAuthStatus: RouteHandler = async (req, env, s) => {
 };
 
 export const handleLogin: RouteHandler = async (req, env, s) => {
+  void s;
   const ip = clientIp(req);
   await assertLoginAllowed(env, ip);
   const body = await readJsonObject(req);
-  if (s.passwordHash === null || s.passwordSalt === null) {
+  const fresh = await loadSettingsFresh(env);
+  if (fresh.passwordHash === null || fresh.passwordSalt === null) {
     return jsonError(409, "SETUP_REQUIRED", "admin password is not configured yet");
   }
   const password = typeof body.password === "string" ? body.password : "";
@@ -70,17 +72,17 @@ export const handleLogin: RouteHandler = async (req, env, s) => {
     await recordLoginFailure(env, ip);
     throw new UnauthorizedError("invalid password");
   }
-  const verified = await verifyPassword(password, s.passwordHash, s.passwordSalt, s.sessionSecret);
+  const verified = await verifyPassword(password, fresh.passwordHash, fresh.passwordSalt, fresh.sessionSecret);
   if (!verified.ok) {
     await recordLoginFailure(env, ip);
     throw new UnauthorizedError("invalid password");
   }
-  if (verified.tier === "legacy") await upgradeLegacyHash(env, password, s.sessionSecret);
+  if (verified.tier === "legacy") await upgradeLegacyHash(env, password, fresh.sessionSecret);
   await clearLoginThrottle(env, ip);
   const floor = await getSessionFloor(env);
   return jsonOk(
-    loginSuccessData(s),
-    { "Set-Cookie": await issuedSessionCookieWithIat(s.sessionSecret, Math.max(unixNow(), floor + 1)) },
+    loginSuccessData(fresh),
+    { "Set-Cookie": await issuedSessionCookieWithIat(fresh.sessionSecret, Math.max(unixNow(), floor + 1)) },
   );
 };
 
