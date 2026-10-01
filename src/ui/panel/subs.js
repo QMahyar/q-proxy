@@ -13,12 +13,13 @@ function subsMainHtml(){
 const rows=mainSubEntries();
 let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.main.title'))+'</div><div class="field__hint">'+esc(t('subs.main.desc'))+'</div></div>'+subsModeSeg()+'</div>';
 if(!rows.length){sh+=subsEmptyHtml();sh+='</section>';return sh}
+if(rows.length>1)sh+='<div class="field" style="margin-block:0 8px"><label class="visually-hidden" for="subs-filter">'+esc(t('subs.main.filter'))+'</label><input class="input" type="search" id="subs-filter" placeholder="'+esc(t('subs.main.filter'))+'" autocomplete="off"></div>';
 rows.forEach((entry,i)=>{
 const meta=FORMAT_LABELS[entry.format]||{key:null,hint:null,ext:null};
 const label=meta.key?t(meta.key):entry.format;
 const url=subUrlWithMode(entry.url);
-sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(label)+'</span>'+copyFieldHtml(url,'hub-u'+i)+'</div>';
-sh+='<details class="warp-acc subs-acc"><summary>'+esc(t('subs.main.expand'))+'</summary><div style="padding-block:4px 10px">';
+sh+='<div class="row" data-subs-entry="'+i+'"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(label)+'</span>'+copyFieldHtml(url,'hub-u'+i)+'</div>';
+sh+='<details class="warp-acc subs-acc" data-subs-entry="'+i+'"'+(i===0?' open':'')+'><summary>'+esc(t('subs.main.expand'))+'</summary><div style="padding-block:4px 10px">';
 if(meta.hint)sh+='<p class="field__hint" style="margin-block:0 8px"><strong>'+esc(t('subs.usedby'))+':</strong> '+esc(t(meta.hint))+'</p>';
 sh+='<p class="field__hint" style="margin-block:0 8px">'+esc(t('subs.main.user_agent'))+'</p>';
 sh+='<div class="field" style="margin-block:0 10px"><span class="field__label">'+esc(t('subs.main.variant'))+'</span>'+copyFieldHtml(subVariantUrl(entry),'hub-v'+i)+'</div>';
@@ -84,9 +85,21 @@ sh+='<div class="warp-group"><div style="display:flex;align-items:center;gap:8px
 sh+='</div>'});
 if(subImportEndpoints.length)sh+='<div class="btn-row" style="margin-block-start:8px"><button type="button" class="btn btn--primary btn--sm" data-action="subs-import-confirm">'+esc(t('subs.import.confirm',{n:subImportEndpoints.length}))+'</button></div>';
 box.innerHTML=sh}
+function filterSubsRows(q){
+q=String(q||'').trim().toLowerCase();
+const rows=mainSubEntries();
+rows.forEach((entry,i)=>{
+const meta=FORMAT_LABELS[entry.format]||{key:null};
+const label=((meta.key?t(meta.key):entry.format)+' '+entry.format).toLowerCase();
+const show=label.includes(q);
+document.querySelectorAll('#subs-body [data-subs-entry="'+i+'"]').forEach(el=>{el.hidden=!show});
+});
+}
 function renderSubsView(){
 const b=$('subs-body');if(!b)return;
-b.innerHTML=subsBodyHtml()}
+b.innerHTML=subsBodyHtml();
+const f=$('subs-filter');
+if(f)f.addEventListener('input',()=>filterSubsRows(f.value));}
 function showSubsView(){
 renderSubsView();
 if(!S.warp)loadWarpIfNeeded().then(()=>{if(parseRoute().view==='subs')renderSubsView()})}
@@ -95,6 +108,7 @@ document.addEventListener('click',function(e){
 const chip=e.target&&e.target.closest?e.target.closest('#subs-body [data-mode]'):null;
 if(!chip)return;
 S.subMode=chip.dataset.mode;try{localStorage.setItem('qp_submode',S.subMode)}catch(err){}
+syncModeUrl();
 chip.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===chip)));
 const rows=mainSubEntries();
 document.querySelectorAll('#subs-body [id^="hub-u"]').forEach(code=>{

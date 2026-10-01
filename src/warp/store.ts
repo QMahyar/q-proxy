@@ -72,15 +72,27 @@ type KvLike = {
   list?(options: KvListOptions): Promise<KvListResult>;
 };
 
+const WARP_MEMO_TTL_MS = 30_000;
+
+let presetsMemo: { value: WarpPreset[]; expiresAt: number } | null = null;
+let globalMemo: { value: WarpGlobalSettings; expiresAt: number } | null = null;
+
+export function clearWarpMemoForTests(): void {
+  presetsMemo = null;
+  globalMemo = null;
+}
+
 export async function ensureWarpDefaults(env: { QPROXY_KV: KvLike }): Promise<void> {
   const presets = await env.QPROXY_KV.get(WARP_PRESETS_KEY, "json");
   if (presets === null) {
     await env.QPROXY_KV.put(WARP_PRESETS_KEY, JSON.stringify(DEFAULT_PRESETS));
+    presetsMemo = null;
   }
   const global = await env.QPROXY_KV.get(WARP_GLOBAL_KEY, "json");
   if (global === null) {
     const seed: WarpGlobalSettings = { amnezia: { ...DEFAULT_AMNEZIA }, amneziaEnabled: false };
     await env.QPROXY_KV.put(WARP_GLOBAL_KEY, JSON.stringify(seed));
+    globalMemo = null;
   }
 }
 
@@ -128,18 +140,27 @@ function pickAmnezia(raw: unknown): AmneziaParams | null {
 }
 
 export async function listPresets(env: { QPROXY_KV: KvLike }): Promise<WarpPreset[]> {
+  const memo = presetsMemo;
+  if (memo !== null && memo.expiresAt > Date.now()) {
+    return memo.value.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+  }
   const raw = (await env.QPROXY_KV.get(WARP_PRESETS_KEY, "json")) as unknown;
   if (Array.isArray(raw)) {
     const valid = raw.filter(isWarpPreset);
     if (valid.length > 0) {
-      return valid.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+      const out = valid.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+      presetsMemo = { value: out, expiresAt: Date.now() + WARP_MEMO_TTL_MS };
+      return out.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
     }
   }
-  return DEFAULT_PRESETS.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+  const fallback = DEFAULT_PRESETS.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+  presetsMemo = { value: fallback, expiresAt: Date.now() + WARP_MEMO_TTL_MS };
+  return fallback.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
 }
 
 export async function savePresets(env: { QPROXY_KV: KvLike }, presets: WarpPreset[]): Promise<void> {
   await env.QPROXY_KV.put(WARP_PRESETS_KEY, JSON.stringify(presets));
+  presetsMemo = null;
 }
 
 export function newAccountId(): string {
@@ -262,17 +283,27 @@ function isAccount(raw: unknown): raw is WarpAccount {
 }
 
 export async function getGlobalSettings(env: { QPROXY_KV: KvLike }): Promise<WarpGlobalSettings> {
+  if (globalMemo !== null && globalMemo.expiresAt > Date.now()) {
+    return { amnezia: { ...globalMemo.value.amnezia }, amneziaEnabled: globalMemo.value.amneziaEnabled };
+  }
   const raw = (await env.QPROXY_KV.get(WARP_GLOBAL_KEY, "json")) as unknown;
   if (raw !== null && typeof raw === "object") {
     const rec = raw as Record<string, unknown>;
     const amnezia = pickAmnezia(rec.amnezia);
-    if (amnezia !== null) return { amnezia, amneziaEnabled: rec.amneziaEnabled === true };
+    if (amnezia !== null) {
+      const out = { amnezia, amneziaEnabled: rec.amneziaEnabled === true };
+      globalMemo = { value: out, expiresAt: Date.now() + WARP_MEMO_TTL_MS };
+      return { amnezia: { ...out.amnezia }, amneziaEnabled: out.amneziaEnabled };
+    }
   }
-  return { amnezia: { ...DEFAULT_AMNEZIA }, amneziaEnabled: false };
+  const fallback = { amnezia: { ...DEFAULT_AMNEZIA }, amneziaEnabled: false };
+  globalMemo = { value: fallback, expiresAt: Date.now() + WARP_MEMO_TTL_MS };
+  return { amnezia: { ...fallback.amnezia }, amneziaEnabled: false };
 }
 
 export async function setGlobalSettings(env: { QPROXY_KV: KvLike }, settings: WarpGlobalSettings): Promise<void> {
   await env.QPROXY_KV.put(WARP_GLOBAL_KEY, JSON.stringify(settings));
+  globalMemo = null;
 }
 
 export function resolveAmnezia(global: AmneziaParams, overrides: AmneziaParams | null): AmneziaParams {

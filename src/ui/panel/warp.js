@@ -84,8 +84,17 @@ renderWarpEndpoints();
 const ac=$('warp-accounts');
 if(ac){
 ac.innerHTML='<div class="chips-row" style="grid-column:1/-1;margin-block-end:4px"><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('warp.chips.accounts',{n:W.accounts.length}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('warp.chips.presets',{n:W.presets.length}))+'</span><span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('home.chips.formats',{n:WARP_W.length}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('warp.chips.direct'))+'</span></div>';
+if(W.accounts.length>1)ac.insertAdjacentHTML('beforeend','<div class="field" style="grid-column:1/-1;margin:0"><label class="visually-hidden" for="warp-filter">'+esc(t('warp.accounts.filter'))+'</label><input class="input" type="search" id="warp-filter" placeholder="'+esc(t('warp.accounts.filter'))+'" autocomplete="off"></div>');
 if(!W.accounts.length){ac.insertAdjacentHTML('beforeend',emptyCard({icon:'i-download',title:'warp.empty_title',msg:'warp.empty_msg',cta:'warp.generate',attrs:'data-action="warp-generate-open"',style:'grid-column:1/-1',extraActions:'<button type="button" class="btn btn--ghost btn--sm" data-action="warp-import-open">'+esc(t('warp.import'))+'</button>'}))}
-else W.accounts.forEach(function(a,i){ac.insertAdjacentHTML('beforeend','<a class="acct-card" href="#/warp/'+esc(a.id)+'"><span class="avatar-tile grad-'+((i%6)+1)+'">'+esc((a.name[0]||'W').toUpperCase())+'</span><span class="acct-info"><span class="acct-name">'+esc(a.name)+'</span><span class="acct-date">'+esc((a.created_at||'').slice(0,10))+' · '+esc(t('warp.endpoints.count',{n:fmtInt(globalWarpEndpointCount())}))+'</span></span></a>')})}
+else W.accounts.forEach(function(a,i){ac.insertAdjacentHTML('beforeend','<a class="acct-card" href="#/warp/'+esc(a.id)+'"><span class="avatar-tile grad-'+((i%6)+1)+'">'+esc((a.name[0]||'W').toUpperCase())+'</span><span class="acct-info"><span class="acct-name">'+esc(a.name)+'</span><span class="acct-date">'+esc((a.created_at||'').slice(0,10))+' · '+esc(t('warp.endpoints.count',{n:fmtInt(globalWarpEndpointCount())}))+'</span></span></a>')});
+const wf=$('warp-filter');
+if(wf)wf.addEventListener('input',function(){
+const q=wf.value.trim().toLowerCase();
+document.querySelectorAll('#warp-accounts .acct-card').forEach(function(c){
+const n=c.querySelector('.acct-name');
+c.hidden=!(n&&n.textContent.toLowerCase().indexOf(q)>=0);
+});
+});}
 const pr=$('warp-presets');
 if(pr){let ph='';W.presets.forEach(function(p){const preview=p.endpoints.slice(0,3).map(function(e){return e.ip+':'+e.port}).join(', ')+(p.endpoints.length>3?' +'+fmtInt(p.endpoints.length-3):'');ph+='<div class="row"><div style="min-width:0"><div class="acct-name">'+esc(p.name)+'</div><div class="acct-date" dir="ltr">'+esc(preview)+'</div></div><div class="btn-row"><span class="stat-chip">'+esc(t('warp.presets.count',{n:fmtInt(p.endpoints.length)}))+'</span><button type="button" class="btn btn--icon btn--sm btn--ghost" data-action="warp-preset-edit" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.edit'))+'"><svg aria-hidden="true"><use href="#i-edit"/></svg></button><button type="button" class="btn btn--icon btn--sm btn--ghost-danger" data-action="warp-preset-del" data-id="'+esc(p.id)+'" aria-label="'+esc(t('common.delete'))+'"><svg aria-hidden="true"><use href="#i-x"/></svg></button></div></div>'});pr.innerHTML=ph}
 const am=$('warp-amnezia');
@@ -116,6 +125,6 @@ $('wp-dns').value=p&&p.dns?p.dns:'';
 $('wp-error').style.display='';$('wp-error').textContent='';
 $('wp-title').textContent=t(p?'warp.presets.edit':'warp.presets.add');
 $('wp-go').textContent=t(p?'common.save':'warp.presets.add')}
-else if(id==='m-warp-generate'){$('wg-name').value=''}
+else if(id==='m-warp-generate'){$('wg-name').value='';const we=$('wg-error');if(we){we.style.display='';we.textContent='';const wn=$('wg-name');if(wn)wn.removeAttribute('aria-invalid')}}
 else if(id==='m-warp-import'){$('wi-name').value='';$('wi-config').value='';$('wi-error').style.display='';$('wi-error').textContent=''}
 openModal(id)}

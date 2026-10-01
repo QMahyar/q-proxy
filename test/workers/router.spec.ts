@@ -360,6 +360,11 @@ describe("router dispatch", () => {
       res = await SELF.fetch(`${BASE}/sub`);
       expect(res.status).toBe(200);
 
+      res = await SELF.fetch(`${BASE}/sub?target=clash`, { method: "HEAD" });
+      expect(res.status).toBe(200);
+      expect(Number(res.headers.get("Content-Length"))).toBeGreaterThan(0);
+      expect(await res.text()).toBe("");
+
       res = await SELF.fetch(`${BASE}/doh?dns=q80BAAABAAAAAAAAA2NvbQdhZXJvcGlhA2NvbQAAAQAB`, {
         headers: { Accept: "application/dns-message" },
       });

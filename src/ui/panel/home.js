@@ -3,7 +3,7 @@ const FPS=['chrome','firefox','safari','ios','android','edge','360','qq','random
 const PACKETS=['tlshello','1-1','1-2','1-3','1-5'];
 const PRESETS={low:[100,200,1,1],medium:[50,100,1,5],high:[10,20,10,20],severe:[1,5,1,5]};
 const CDN_PRESETS=[{id:'cf-443-a',ip:'104.17.0.0',port:443},{id:'cf-443-b',ip:'104.18.0.0',port:443},{id:'cf-443-c',ip:'104.19.0.0',port:443},{id:'cf-2053-a',ip:'104.21.0.0',port:2053},{id:'cf-2083-a',ip:'172.64.32.1',port:2083},{id:'cf-2096-a',ip:'188.114.96.1',port:2096},{id:'cf-80-a',ip:'104.17.0.0',port:80},{id:'cf-8080-a',ip:'172.64.32.1',port:8080}];
-const S={set:{},rev:null,status:null,subs:[],snap:{},dirty:new Set(),subMode:(function(){try{return localStorage.getItem('qp_submode')||'normal'}catch(e){return 'normal'}})(),warp:null,pool:null};
+const S={set:{},rev:null,status:null,subs:[],snap:{},dirty:new Set(),subMode:(function(){try{const m=/(?:\?|&)mode=(fragment|normal)(?:&|$)/.exec(location.hash);if(m)return m[1];const s=localStorage.getItem('qp_submode');if(s==='fragment'||s==='normal')return s}catch(e){}return 'normal'})(),warp:null,pool:null};
 let UID=0;
 function getPath(o,p){return p.split('.').reduce((a,k)=>a==null?undefined:a[k],o)}
 function setPath(o,p,v){const ks=p.split('.');let c=o;for(let i=0;i<ks.length-1;i++){if(typeof c[ks[i]]!=='object'||c[ks[i]]===null)c[ks[i]]={};c=c[ks[i]]}c[ks[ks.length-1]]=v}
@@ -47,27 +47,43 @@ const seg=$('langseg');seg.setAttribute('aria-label',t('common.language'));seg.i
 function parseRoute(){
 // Unknown or deleted views redirect to home.
 const h=location.hash.replace(/^#\/?/,'');
-const seg=h.split('/');
+const qi=h.indexOf('?');
+const path=qi<0?h:h.slice(0,qi);
+const q=qi<0?'':h.slice(qi+1);
+const seg=path.split('/');
+const qm=/(?:^|&)mode=(fragment|normal)(?:&|$)/.exec(q);
+const mode=qm?qm[1]:undefined;
 if(seg[0]==='settings'){
 if(seg[1]==='users')return{view:'home'};
 if(seg[1]==='warp')return seg[2]?{view:'warp',warpId:seg[2],redirect:true}:{view:'warp',redirect:true};
 return{view:'settings',sec:SECTIONS.some(s=>s.key===seg[1])?seg[1]:'general'}}
 if(seg[0]==='users')return{view:'home'};
 if(seg[0]==='warp')return{view:'warp',warpId:seg[1]||undefined};
-if(seg[0]==='subs')return{view:'subs'};
-return{view:'home'}}
+if(seg[0]==='subs')return{view:'subs',mode};
+return{view:'home',mode}}
+function syncModeUrl(){
+try{
+const h=location.hash.replace(/^#\/?/,'');
+const qi=h.indexOf('?');
+const p=qi<0?h:h.slice(0,qi);
+if(p!=='home'&&p!=='subs'&&p!=='')return;
+history.replaceState(null,'','#/'+(p===''?'home':p)+(S.subMode==='fragment'?'?mode=fragment':''));
+}catch(e){}}
 function navigate(){
 normalizeSettingsHash();
 const r=parseRoute();
 const h=location.hash;
+let modeApplied=false;
+if((r.view==='home'||r.view==='subs')&&r.mode&&r.mode!==S.subMode){S.subMode=r.mode;try{localStorage.setItem('qp_submode',r.mode)}catch(e){}modeApplied=true;}
 if(r.redirect){history.replaceState(null,'','#/warp'+(r.warpId?'/'+r.warpId:''))}
-if(r.view==='home'&&h!==''&&h!=='#'&&h!=='#/home')history.replaceState(null,'','#/home');
+if(r.view==='home'&&h!==''&&h!=='#'&&h!=='#/home')history.replaceState(null,'','#/home'+(S.subMode==='fragment'?'?mode=fragment':''));
 if(r.view==='settings'&&SECTIONS.some(s=>s.key===r.sec))history.replaceState(null,'','#/settings/'+r.sec+(r.warpId?'/'+r.warpId:''));
 ['home','subs','settings','warp'].forEach(v=>{$('view-'+v).hidden=v!==r.view});
 document.querySelectorAll('#nav .tab').forEach(a=>{a.setAttribute('aria-selected',String(a.dataset.view===r.view));a.tabIndex=a.dataset.view===r.view?0:-1});
 if(r.view==='settings')showSection(r.sec);
 if(r.view==='subs')showSubsView();
 if(r.view==='warp')showWarpView(r.warpId);
+if(modeApplied&&r.view==='home')renderHome();
 if(r.view==='home'||r.view==='subs')ensureFreshSubs();
 window.scrollTo(0,0);
 const titleMap={home:'nav.home',subs:'tabs.subs.title',warp:'nav.warp',settings:'tabs.settings.'+(r.sec||'general')};
@@ -137,7 +153,7 @@ const st=document.createElement('section');st.className='card';
 const u=S.status.usage||{requestsToday:0,requestsTotal:0};
 const todayStr=u.requestsToday!=null?fmtInt(u.requestsToday):'—';
 const totalStr=u.requestsTotal!=null?fmtInt(u.requestsTotal):'—';
-st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><span class="field__hint">'+esc(t('home.status.estimate'))+'</span></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(todayStr)+'</span><span class="mono">'+esc(totalStr)+'</span></div><div id="traffic-chart"></div>';
+st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><span class="field__hint">'+esc(t('home.status.estimate'))+'</span></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(todayStr)+'</span><span></span><span class="lbl">'+esc(t('home.status.total'))+'</span><span class="mono">'+esc(totalStr)+'</span><span></span></div><div id="traffic-chart"></div>';
 right.appendChild(st)}
 body.appendChild(right);
 recordTraffic();

@@ -28,21 +28,10 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action);
 `;
 
 export async function ensureD1Schema(db: D1Database): Promise<void> {
-  const parts = D1_CORE_SCHEMA.split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  for (const part of parts) {
-    try {
-      await db.prepare(part).run();
-    } catch {
-      await db.exec(part);
-    }
-  }
-}
-
-async function bootstrapD1(env: Env): Promise<void> {  const db = env.QPROXY_DB;
-  if (db === undefined || db === null) return;
   try {
+    await db.exec(D1_CORE_SCHEMA);
+    return;
+  } catch {
     const parts = D1_CORE_SCHEMA.split(";")
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
@@ -53,8 +42,19 @@ async function bootstrapD1(env: Env): Promise<void> {  const db = env.QPROXY_DB;
         await db.exec(part);
       }
     }
+  }
+}
+
+async function bootstrapD1(env: Env): Promise<void> {  const db = env.QPROXY_DB;
+  if (db === undefined || db === null) return;
+  try {
+    await db.exec(D1_CORE_SCHEMA);
   } catch {
-    return;
+    try {
+      await ensureD1Schema(db);
+    } catch {
+      return;
+    }
   }
 }
 

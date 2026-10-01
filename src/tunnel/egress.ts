@@ -9,7 +9,7 @@ import type {
 } from "../types/tunnel";
 import { log } from "../core/log";
 import { isCloudflareIp, isIPv4, isLocalOrPrivateTarget } from "../utils/net";
-import { expandProxyIps, hashSeed, shuffleDeterministic } from "./proxyip";
+import { expandProxyIpsCached, hashSeed, shuffleDeterministic } from "./proxyip";
 import { createResolver } from "./resolver";
 
 export interface OpenedEgress extends EstablishedEgress {
@@ -56,7 +56,8 @@ async function buildTailCandidates(
   settings: Settings,
   target: DialTarget,
 ): Promise<EgressCandidate[]> {
-  const pool = await expandProxyIps(settings.proxyIps, { resolver: createResolver(settings.dohUpstream) });
+  const upstream = settings.dohUpstream;
+  const pool = await expandProxyIpsCached(settings.proxyIps, upstream, createResolver(upstream));
   const shuffled = shuffleDeterministic(pool, hashSeed(target.host));
   const tail: EgressCandidate[] = [];
   for (const entry of shuffled) {

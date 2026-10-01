@@ -1,5 +1,7 @@
 # Q Proxy — Architecture v1.0 (FROZEN CONTRACT) + Rev 2026-08-26
 
+> **Rev 2026-10-01 overnight perf pass:** §3 row 7 (`/{sp}/sub`) widens `GET` → `GET+HEAD` with `Content-Length` on both verbs (parity with rows 7b/7c); HEAD answers headers only. No other route changes.
+
 > **Rev 2026-10-01 overnight bug sweep:** §3 row 12 (`POST api/auth/login`) gains the `X-Q-Panel: 1` CSRF requirement (same `csrfOnly` wrapper as logout/setup) so a cross-site simple-request POST can no longer burn the victim IP's login-throttle budget; the panel login page and deploy.py already send the header. Router-spec CSRF matrix covers login. No other route changes.
 
 > **Rev 2026-09-19 glowup-19 release packaging:** v1.6.0 tagged. Route-table drift check: the only table change this release is row 20c (`POST api/sub-import`, added with its router-spec matrix entries in ticket 16); §2.2/§2.5/§3 bodies otherwise verbatim. Format inventory settled at four sub targets + four WARP families; doc-code counts corrected everywhere (guide pipeline, suburls rows, README, AGENTS). Bundle 366077 → 383702 B (+4.8%); suite 1008 → 1073 tests, typecheck clean. Deferred to the release environment (no backend/browser/clients here): 12-step visual walk green twice with zero console errors, live Deploy Button click, fresh-person quickstart trial, real-client connects (Clash/Xray import + merge result). Frozen body text left verbatim by design.
@@ -718,7 +720,7 @@ Precedence top-down; first match wins. `{sp}` = `settings.securePath`. Tunnel pr
 | 4 | GET+Upgrade | `/{trojanPath}/<suffix>` | `handlers/tunnel.ts` | protocol cred | |
 | 5 | GET+Upgrade | `/{ssPath}/<suffix>` | `handlers/tunnel.ts` | SS cred | early-data header ignored (SS rule) |
 | 6 | ANY | `/{sp}/doh` | `handlers/doh.ts` | sp is secret | blind DoH reverse proxy; POST body capped at 64 KiB (enforced in handler) |
-| 7 | GET | /{sp}/sub | handlers/subscribe.ts | sp is secret | ?target= overrides UA sniff |
+| 7 | GET+HEAD | /{sp}/sub | handlers/subscribe.ts | sp is secret | ?target= overrides UA sniff; Content-Length on both verbs, HEAD answers headers only |
 | 7b | GET+HEAD | /{sp}/sub/wg/{token}/{format} | handlers/warp-sub.ts | token is the secret | WARP subscription; 17 formats via warp/formats/registry.ts; edge-cached 60s, purged on account/preset/amnezia changes (Rev 2026-08-24: W2) |
 | 7c | GET+HEAD | /{sp}/sub/u/{token}/{target?} | handlers/users-sub.ts | token is the secret | Per-user subscription (F4); UA/?target/path-target negotiation, nodes filtered by user protocols; 410 when disabled/expired, 429 + Retry-After over daily quota; `?view=html` info page; edge-cached 60s keyed token+format+mode; unknown/bad-uuid token → camouflage (#23) |
 | 8 | GET | `/{sp}/my-ip` | `handlers/myip.ts` | session | Accept: application/json → JSON else HTML; no-store |

@@ -1,6 +1,7 @@
 import * as esbuild from "esbuild";
 import { execFileSync, execSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, writeFileSync, writeSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync, writeSync, mkdirSync, statSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -197,6 +198,14 @@ const bytes = result.metafile.outputs["dist/q-proxy.js"]?.bytes ?? "?";
 console.log(`dist/q-proxy.js written (${bytes} bytes)`);
 copyFileSync(resolve(root, "dist/q-proxy.js"), resolve(root, "dist/_worker.js"));
 console.log(`dist/_worker.js written (${bytes} bytes) — Pages Advanced Mode`);
+try {
+  const raw = statSync(resolve(root, "dist/q-proxy.js")).size;
+  const gz = gzipSync(readFileSync(resolve(root, "dist/q-proxy.js"))).byteLength;
+  const panelRaw = statSync(PANEL_HTML).size;
+  const panelGz = gzipSync(readFileSync(PANEL_HTML)).byteLength;
+  console.log(`gzip: dist/q-proxy.js ${gz} bytes (raw ${raw}); panel.html ${panelGz} bytes (raw ${panelRaw})`);
+} catch {
+}
 }
 
 const invokedDirectly = process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;

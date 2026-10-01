@@ -124,6 +124,38 @@ export async function expandProxyIps(
   return out;
 }
 
+const EXPAND_MEMO_TTL_MS = 300_000;
+const EXPAND_MEMO_MAX = 32;
+const expandMemo = new Map<string, { value: ProxyIpEntry[]; expiresAt: number }>();
+
+export function clearExpandMemoForTests(): void {
+  expandMemo.clear();
+}
+
+function copyEntries(entries: readonly ProxyIpEntry[]): ProxyIpEntry[] {
+  return entries.map((e) => ({ ...e }));
+}
+
+export async function expandProxyIpsCached(
+  entries: readonly string[],
+  upstreamKey: string,
+  resolver: DohResolver,
+): Promise<ProxyIpEntry[]> {
+  const key = `${upstreamKey}\u0001${entries.join("\u0002")}`;
+  const hit = expandMemo.get(key);
+  if (hit !== undefined) {
+    if (Date.now() <= hit.expiresAt) return copyEntries(hit.value);
+    expandMemo.delete(key);
+  }
+  const value = await expandProxyIps(entries, { resolver });
+  if (expandMemo.size >= EXPAND_MEMO_MAX) {
+    const oldest = expandMemo.keys().next();
+    if (!oldest.done) expandMemo.delete(oldest.value);
+  }
+  expandMemo.set(key, { value: copyEntries(value), expiresAt: Date.now() + EXPAND_MEMO_TTL_MS });
+  return copyEntries(value);
+}
+
 export function hashSeed(input: string): number {
   let h = 1779033703 ^ input.length;
   for (let i = 0; i < input.length; i++) {

@@ -133,4 +133,23 @@ describe("handleSubscribe", () => {
       handleSubscribe(request("https://w.test/sp12345678/other"), envStub(), settings()),
     ).rejects.toMatchObject({ status: 404 });
   });
+
+  it("answers HEAD with headers and Content-Length but no body", async () => {
+    const s = settings();
+    const get = await handleSubscribe(
+      request("https://w.test/sp12345678/sub?target=clash", BROWSER),
+      envStub(),
+      s,
+    );
+    const head = await handleSubscribe(
+      new Request("https://w.test/sp12345678/sub?target=clash", { method: "HEAD", headers: { "user-agent": BROWSER } }),
+      envStub(),
+      s,
+    );
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe(get.headers.get("content-type"));
+    expect(head.headers.get("content-length")).toBe(get.headers.get("content-length"));
+    expect(Number(head.headers.get("content-length"))).toBeGreaterThan(0);
+    expect(await head.text()).toBe("");
+  });
 });

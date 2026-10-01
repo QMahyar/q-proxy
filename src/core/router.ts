@@ -161,7 +161,7 @@ async function dispatchSecureRoute(
     case "doh":
       return handleDoh(req, env, s, ctx);
     case "sub":
-      expectMethods(req, ["GET"]);
+      expectMethods(req, ["GET", "HEAD"]);
       void recordConnection(env, undefined, ctx).catch((err: unknown) => log.error("counters", "record failed", String(err)));
       return handleSubscribe(req, env, s, ctx);
     case "warp-sub":

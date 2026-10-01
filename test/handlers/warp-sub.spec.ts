@@ -103,4 +103,20 @@ describe("handleWarpSub", () => {
     expect(res.status).toBe(404);
     expect(res.headers.get("profile-update-interval")).toBeNull();
   });
+
+  it("answers HEAD with headers and Content-Length but no body", async () => {
+    const rows = warpRows();
+    const s = settings();
+    const get = await handleWarpSub(request("throne"), kvStub(rows), s);
+    const head = await handleWarpSub(
+      new Request(`https://w.test/sp12345678/sub/wg/${TOKEN}/throne`, { method: "HEAD" }),
+      kvStub(rows),
+      s,
+    );
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe(get.headers.get("content-type"));
+    expect(head.headers.get("content-length")).toBe(get.headers.get("content-length"));
+    expect(Number(head.headers.get("content-length"))).toBeGreaterThan(0);
+    expect(await head.text()).toBe("");
+  });
 });

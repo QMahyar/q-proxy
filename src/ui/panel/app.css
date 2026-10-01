@@ -277,6 +277,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 .warp-acc summary::-webkit-details-marker{display:none}
 .warp-acc summary::before{content:'▸';transition:rotate .15s var(--ease);color:var(--text-dim);flex:none}
 .warp-acc[open]>summary::before{rotate:90deg}
+[dir="rtl"] .warp-acc summary::before{transform:scaleX(-1)}
 .warp-grid-sub{padding-block-start:4px}
 .back-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:.7rem;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-mid);cursor:pointer;text-decoration:none}
 .back-btn:hover{background:var(--surface-3);color:var(--text)}

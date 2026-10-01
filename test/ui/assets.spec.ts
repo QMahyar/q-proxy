@@ -109,7 +109,7 @@ describe("panel html", () => {
   it("adds the Subscriptions hub as a top-level tab", () => {
     expect(html).toContain('id="tab-subs"');
     expect(html).toContain('href="#/subs"');
-    expect(html).toContain("seg[0]==='subs')return{view:'subs'}");
+    expect(html).toContain("seg[0]==='subs')return{view:'subs',mode}");
     expect(html).toContain("'nav.subs':'Subs'");
     expect(html).toContain("'nav.subs':'اشتراک‌ها'");
     expect(html).toContain("'tabs.subs.title':'Subscriptions'");

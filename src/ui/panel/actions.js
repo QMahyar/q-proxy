@@ -266,6 +266,7 @@ if(chip){handleChip(chip);return}
 const mode=e.target.closest('[data-mode]');
 if(mode){
 S.subMode=mode.dataset.mode;try{localStorage.setItem('qp_submode',S.subMode)}catch(err){}
+syncModeUrl();
 mode.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===mode)));
 const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
 document.querySelectorAll('#home-body [id^="sub-u"] code').forEach((code,i)=>{
@@ -348,7 +349,7 @@ wireTabKeys($('subtabs'),'.subtab');
 $('wg-go').addEventListener('click',()=>withBusy($('wg-go'),async()=>{
 try{const d=await api('api/warp/account/generate',{method:'POST',body:{name:$('wg-name').value.trim()}});
 closeModal('m-warp-generate');toast(t('warp.toast.generated'),'ok');invalidateWarp();location.hash='#/warp/'+d.account.id}
-catch(err){toastErr(err)}}));
+catch(err){if(err&&err.fields){const first=Object.values(err.fields)[0]||t('common.error');const box=$('wg-error');if(box){box.textContent=String(first);box.style.display='block';const nm=$('wg-name');if(nm){nm.setAttribute('aria-invalid','true');nm.setAttribute('aria-describedby','wg-error')}announce(box.textContent)}else toastErr(err)}else toastErr(err)}}));
 $('wi-go').addEventListener('click',()=>withBusy($('wi-go'),async()=>{
 try{const d=await api('api/warp/account/import',{method:'POST',body:{name:$('wi-name').value.trim(),config:$('wi-config').value}});
 closeModal('m-warp-import');toast(t('warp.toast.imported'),'ok');invalidateWarp();location.hash='#/warp/'+d.account.id}
