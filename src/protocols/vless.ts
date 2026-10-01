@@ -16,9 +16,21 @@ type VlessRequest = ParsedRequest<"tcp"> | ParsedRequest<"udp">;
 const CMD_TCP = 1;
 const CMD_UDP = 2;
 const DNS_PORT = 53;
-const UDP_BUFFER_CAP = 65536;
+const UDP_BUFFER_CAP = 0xffff + 2;
 const VISION_FLOW_TAG = utf8Encode("xtls-rprx-vision");
-const VISION_BUFFER_CAP = 65536;
+const VISION_BUFFER_CAP = 0xffff + 2;
+const FRAME_MAX = 0xffff;
+
+function encodeLengthPrefixedFrames(chunk: Uint8Array): Uint8Array {
+  if (chunk.length === 0) return new Uint8Array(0);
+  if (chunk.length <= FRAME_MAX) return concatBytes(u16be(chunk.length), chunk);
+  const parts: Uint8Array[] = [];
+  for (let off = 0; off < chunk.length; off += FRAME_MAX) {
+    const piece = chunk.subarray(off, Math.min(off + FRAME_MAX, chunk.length));
+    parts.push(u16be(piece.length), piece);
+  }
+  return concatBytes(...parts);
+}
 
 export function createVlessInbound(expectedUuid: string): ProtocolInbound<VlessRequest> {
   const expectedBytes = parseUuid(expectedUuid);
@@ -117,9 +129,7 @@ export function createVlessInbound(expectedUuid: string): ProtocolInbound<VlessR
         return null;
       },
       async encode(chunk: Uint8Array): Promise<Uint8Array> {
-        if (chunk.length === 0) return new Uint8Array(0);
-        if (chunk.length > 0xffff) return new Uint8Array(0);
-        return concatBytes(u16be(chunk.length), chunk);
+        return encodeLengthPrefixedFrames(chunk);
       },
     };
     return {
@@ -186,9 +196,7 @@ export function createVlessInbound(expectedUuid: string): ProtocolInbound<VlessR
         return null;
       },
       async encode(chunk: Uint8Array): Promise<Uint8Array> {
-        if (chunk.length === 0) return new Uint8Array(0);
-        if (chunk.length > 0xffff) return new Uint8Array(0);
-        return concatBytes(u16be(chunk.length), chunk);
+        return encodeLengthPrefixedFrames(chunk);
       },
     };
     return {

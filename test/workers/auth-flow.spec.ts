@@ -38,7 +38,7 @@ describe("panel auth lifecycle", () => {
     expect(res.status).toBe(200);
     expect((await body(res)).data).toEqual({ hasSession: false });
 
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(409);
     expect((await body(res)).error.code).toBe("SETUP_REQUIRED");
 
@@ -60,7 +60,7 @@ describe("panel auth lifecycle", () => {
   it("walks setup -> login -> settings -> validation -> killswitch -> suburls -> logout -> lockout", async () => {
     await seed(kv, SP);
 
-    let res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    let res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(409);
     expect((await body(res)).error.code).toBe("SETUP_REQUIRED");
 
@@ -255,7 +255,7 @@ describe("panel auth lifecycle", () => {
 
     let saw429 = false;
     for (let i = 0; i < 9; i++) {
-      res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: `wrong-${i}` }));
+      res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: `wrong-${i}` }, { "X-Q-Panel": "1" }));
       if (res.status === 429) {
         saw429 = true;
         break;
@@ -336,10 +336,10 @@ describe("change password", () => {
     res = await SELF.fetch(`${BASE}/api/status`, { headers: { Cookie: freshCookie } });
     expect(res.status).toBe(200);
 
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(401);
 
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: NEW_PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: NEW_PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
   });
 });
@@ -357,7 +357,7 @@ describe("legacy hash upgrade", () => {
       passwordSalt: legacy.salt,
     });
 
-    let res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    let res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     expect((res.headers.get("Set-Cookie") ?? "").split(";")[0]).toContain("q_session=");
 
@@ -377,10 +377,10 @@ describe("legacy hash upgrade", () => {
       stored.passwordSalt as string,
     )).toEqual({ ok: false, tier: "current" });
 
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
 
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: "wrong-password" }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: "wrong-password" }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(401);
   });
 });
@@ -395,7 +395,7 @@ describe("password-only login (no second factor)", () => {
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD_ONLY }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     await clearBootstrapFlag();
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD_ONLY }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD_ONLY }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     expect((await body(res)).data).toEqual({ hasPassword: true });
     const setCookie = res.headers.get("Set-Cookie") ?? "";
@@ -409,7 +409,7 @@ describe("password-only login (no second factor)", () => {
     let res = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD_ONLY }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     await clearBootstrapFlag();
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD_ONLY, totp: "000000" }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD_ONLY, totp: "000000" }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     expect((await body(res)).data).toEqual({ hasPassword: true });
   });
@@ -439,14 +439,14 @@ describe("onboarding bootstrap password", () => {
   }
 
   async function loginBootstrap(): Promise<string> {
-    const res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }));
+    const res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     return (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
   }
 
   it("reports mustChangePassword on a successful bootstrap login and stays absent otherwise", async () => {
     await seedBootstrapAccount();
-    const res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }));
+    const res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     expect((await body(res)).data).toEqual({ hasPassword: true, mustChangePassword: true });
 
@@ -454,14 +454,14 @@ describe("onboarding bootstrap password", () => {
     await seed(kv, SP);
     const plain = await SELF.fetch(`${BASE}/api/auth/setup`, post({ newPassword: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(plain.status).toBe(200);
-    const normal = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    const normal = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(normal.status).toBe(200);
     expect((await body(normal)).data).toEqual({ hasPassword: true, mustChangePassword: true });
   });
 
   it("logs a bootstrap account in with password alone (no second factor)", async () => {
     await seedBootstrapAccount();
-    const res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }));
+    const res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     expect((await body(res)).data).toEqual({ hasPassword: true, mustChangePassword: true });
     expect(res.headers.get("Set-Cookie") ?? "").toContain("q_session=");
@@ -537,11 +537,11 @@ describe("onboarding bootstrap password", () => {
     res = await SELF.fetch(`${BASE}/api/status`, { headers: { Cookie: freshCookie } });
     expect(res.status).toBe(200);
 
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PERSONAL_PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PERSONAL_PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     expect((await body(res)).data).toEqual({ hasPassword: true });
 
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: BOOTSTRAP_PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(401);
   });
 });

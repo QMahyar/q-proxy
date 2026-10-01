@@ -7,7 +7,7 @@ import {
   type SettingFieldSpec,
 } from "./fields";
 import { isPlainObject } from "./migrate";
-import { isIpLiteral, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
+import { isIpLiteral, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort, HOSTNAME_RE } from "../utils/net";
 
 export type ValidationResult =
   | { ok: true; value: Settings }
@@ -136,9 +136,10 @@ interface StrArrayOpts {
   lowerCase?: boolean;
 }
 
-function sanitizeStrArray(input: unknown, opts: StrArrayOpts): string[] {
-  if (!Array.isArray(input)) return [];
+function sanitizeStrArray(input: unknown, opts: StrArrayOpts): { values: string[]; truncated: boolean } {
+  if (!Array.isArray(input)) return { values: [], truncated: false };
   const seen = new Set<string>();
+  let truncated = false;
   for (const raw of input) {
     if (typeof raw !== "string") continue;
     let item = raw.trim();
@@ -148,9 +149,12 @@ function sanitizeStrArray(input: unknown, opts: StrArrayOpts): string[] {
     if (item.length > (opts.itemMaxLen ?? 253)) continue;
     if (opts.pattern && !opts.pattern.test(item)) continue;
     seen.add(item);
-    if (seen.size >= opts.maxItems) break;
+    if (seen.size > opts.maxItems) {
+      truncated = true;
+      break;
+    }
   }
-  return [...seen];
+  return { values: [...seen].slice(0, opts.maxItems), truncated };
 }
 
 function strArrayField(
@@ -166,7 +170,33 @@ function strArrayField(
     fail(fields, key, "must be an array of strings");
     return;
   }
-  setField(target, key as keyof typeof target & string, sanitizeStrArray(v, opts));
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of v) {
+    if (typeof raw !== "string") {
+      fail(fields, key, "entries must be strings");
+      return;
+    }
+    let item = raw.trim();
+    if (item.length === 0) continue;
+    if (opts.lowerCase) item = item.toLowerCase();
+    if (seen.has(item)) continue;
+    if (item.length > (opts.itemMaxLen ?? 253)) {
+      fail(fields, key, `"${item.slice(0, 64)}" is too long`);
+      return;
+    }
+    if (opts.pattern && !opts.pattern.test(item)) {
+      fail(fields, key, `"${item.slice(0, 64)}" is not a valid entry`);
+      return;
+    }
+    seen.add(item);
+    result.push(item);
+    if (result.length > opts.maxItems) {
+      fail(fields, key, `too many entries (max ${opts.maxItems})`);
+      return;
+    }
+  }
+  setField(target, key as keyof typeof target & string, result);
 }
 
 function presetIdListField(
@@ -193,7 +223,10 @@ function presetIdListField(
     if (seen.has(id)) continue;
     seen.add(id);
     result.push(id);
-    if (result.length >= maxItems) break;
+    if (result.length > maxItems) {
+      fail(fields, key, `too many entries (max ${maxItems})`);
+      return;
+    }
   }
   setField(out, key as keyof Settings & string, result);
 }
@@ -240,11 +273,10 @@ function endpointLinesField(
       return;
     }
     result.push(line);
-    if (result.length >= maxItems) break;
-  }
-  if (result.length > maxItems) {
-    fail(fields, key, `too many entries (max ${maxItems})`);
-    return;
+    if (result.length > maxItems) {
+      fail(fields, key, `too many entries (max ${maxItems})`);
+      return;
+    }
   }
   setField(out, key as keyof Settings & string, result);
 }
@@ -268,7 +300,11 @@ function urlListField(
       return;
     }
   }
-  const cleaned = sanitizeStrArray(v, { maxItems });
+  const { values: cleaned, truncated } = sanitizeStrArray(v, { maxItems });
+  if (truncated) {
+    fail(fields, key, `too many entries (max ${maxItems})`);
+    return;
+  }
   for (const item of cleaned) {
     if (!isHttpUrl(item)) {
       fail(fields, key, `"${item}" is not a valid http(s) URL`);
@@ -277,9 +313,6 @@ function urlListField(
   }
   setField(target, key as keyof typeof target & string, cleaned);
 }
-
-const HOSTNAME_RE =
-  /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 
 import { ECH_SERVER_NAME_RE } from "../nodes/ech";
 export { ECH_SERVER_NAME_RE, resolveEchServerName, type EchResolution } from "../nodes/ech";
@@ -378,7 +411,10 @@ function applyCustomField(
         }
         seen.add(key);
         cleaned.push(item);
-        if (cleaned.length >= ALLOWLIST_MAX_ITEMS) break;
+        if (cleaned.length > ALLOWLIST_MAX_ITEMS) {
+          fail(fields, "allowedIps", `too many entries (max ${ALLOWLIST_MAX_ITEMS})`);
+          return;
+        }
       }
       out.allowedIps = cleaned;
       return;
@@ -427,10 +463,13 @@ function applyCustomField(
       if (alpnV !== undefined) {
         if (!Array.isArray(alpnV)) fail(fields, "alpn", "must be an array of strings");
         else {
-          const cleaned = sanitizeStrArray(alpnV, { maxItems: 8, itemMaxLen: 32, lowerCase: true });
-          const bad = cleaned.find((t) => !KNOWN_ALPN.includes(t));
-          if (bad !== undefined) fail(fields, "alpn", `"${bad}" is not a supported ALPN token`);
-          else out.alpn = cleaned;
+          const { values: cleaned, truncated } = sanitizeStrArray(alpnV, { maxItems: 8, itemMaxLen: 32, lowerCase: true });
+          if (truncated) fail(fields, "alpn", "too many entries (max 8)");
+          else {
+            const bad = cleaned.find((t) => !KNOWN_ALPN.includes(t));
+            if (bad !== undefined) fail(fields, "alpn", `"${bad}" is not a supported ALPN token`);
+            else out.alpn = cleaned;
+          }
         }
       }
       return;
@@ -459,7 +498,11 @@ function applyCustomField(
       const bypassV = patch["customBypass"];
       if (bypassV !== undefined) {
         if (!Array.isArray(bypassV)) fail(fields, "customBypass", "must be an array");
-        else out.routingRules.customBypass = sanitizeStrArray(bypassV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
+        else {
+          const { values, truncated } = sanitizeStrArray(bypassV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
+          if (truncated) fail(fields, "customBypass", "too many entries (max 200)");
+          else out.routingRules.customBypass = values;
+        }
       }
       return;
     }
@@ -467,7 +510,11 @@ function applyCustomField(
       const blockV = patch["customBlock"];
       if (blockV !== undefined) {
         if (!Array.isArray(blockV)) fail(fields, "customBlock", "must be an array");
-        else out.routingRules.customBlock = sanitizeStrArray(blockV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
+        else {
+          const { values, truncated } = sanitizeStrArray(blockV, { maxItems: 200, itemMaxLen: 253, lowerCase: true });
+          if (truncated) fail(fields, "customBlock", "too many entries (max 200)");
+          else out.routingRules.customBlock = values;
+        }
       }
       return;
     }

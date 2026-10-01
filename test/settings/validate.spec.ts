@@ -88,16 +88,23 @@ describe("validateSettings", () => {
     expect(fieldsOf({ customEndpoints: ["1.2.3.4:9999"] }).customEndpoints).toBeTruthy();
   });
 
-  it("sanitizes arrays: trim, drop empties, cap counts", () => {
+  it("sanitizes arrays: trim, drop empties, reject over-limit and invalid entries", () => {
     const result = validateSettings({
       customEndpoints: ["1.2.3.4:443", "  1.2.3.4:443  ", "", "5.6.7.8"],
-      proxyIps: Array.from({ length: 70 }, (_, i) => `192.0.2.${(i % 250) + 1}`),
+      proxyIps: ["203.0.113.7", " 203.0.113.8:443 "],
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.customEndpoints).toEqual(["1.2.3.4:443", "1.2.3.4:443", "5.6.7.8"]);
-      expect(result.value.proxyIps.length).toBeLessThanOrEqual(64);
+      expect(result.value.proxyIps).toEqual(["203.0.113.7", "203.0.113.8:443"]);
     }
+    const overLimit = validateSettings({
+      proxyIps: Array.from({ length: 70 }, (_, i) => `192.0.2.${(i % 250) + 1}`),
+    });
+    expect(overLimit.ok).toBe(false);
+    if (!overLimit.ok) expect(overLimit.fields.proxyIps).toContain("too many");
+    expect(fieldsOf({ proxyIps: ["has space"] }).proxyIps).toBeTruthy();
+    expect(fieldsOf({ proxyIps: [42] }).proxyIps).toBeTruthy();
   });
 
   it("rejects non-array custom-endpoint input", () => {
@@ -150,6 +157,9 @@ describe("validateSettings", () => {
     const result = validateSettings({ alpn: ["HTTP/1.1", " h2 ", "h2", ""] });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.alpn).toEqual(["http/1.1", "h2"]);
+    const over = validateSettings({ alpn: Array.from({ length: 10 }, (_, i) => `token-${i}`) });
+    expect(over.ok).toBe(false);
+    if (!over.ok) expect(over.fields.alpn).toContain("too many");
   });
 
   it("validates identity strings and paths", () => {
@@ -293,12 +303,15 @@ describe("custom endpoint lines", () => {
     }
   });
 
-  it("rejects non-string lines and caps the list at 64 entries", () => {
+  it("rejects non-string lines and over-limit lists instead of truncating", () => {
     expect(fieldsOf({ customEndpoints: [42] })["customEndpoints"]).toBeTruthy();
     const list = Array.from({ length: 80 }, (_, i) => `10.1.0.${i + 1}:443`);
     const result = validateSettings({ customEndpoints: list });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.customEndpoints.length).toBe(64);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.fields.customEndpoints).toContain("too many");
+    const presets = validateSettings({ cdnPresets: Array.from({ length: 70 }, (_, i) => `p-${i}`) });
+    expect(presets.ok).toBe(false);
+    if (!presets.ok) expect(presets.fields.cdnPresets).toContain("too many");
   });
 
   it("validates the WARP custom box with the same per-line discipline (any port allowed)", () => {
@@ -572,5 +585,17 @@ describe("allowedIps", () => {
     expect(fieldsOf({ allowedIps: ["1.2.3.4:443"] }).allowedIps).toBeTruthy();
     expect(fieldsOf({ allowedIps: "1.2.3.4" }).allowedIps).toBeTruthy();
     expect(fieldsOf({ allowedIps: [42] }).allowedIps).toBeTruthy();
+  });
+
+  it("rejects over-limit lists instead of truncating", () => {
+    const list = Array.from({ length: 70 }, (_, i) => `203.0.113.${(i % 250) + 1}`);
+    const result = validateSettings({ allowedIps: list });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.fields.allowedIps).toContain("too many");
+    const bypass = validateSettings({
+      routingRules: { customBypass: Array.from({ length: 210 }, (_, i) => `example-${i}.com`) },
+    });
+    expect(bypass.ok).toBe(false);
+    if (!bypass.ok) expect(bypass.fields["routingRules.customBypass"]).toContain("too many");
   });
 });

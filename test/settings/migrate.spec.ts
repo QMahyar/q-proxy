@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MIGRATIONS, deepMergeDefaults, migrateSettings } from "../../src/settings/migrate";
+import { validateSettings } from "../../src/settings/validate";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../../src/types/settings";
 
 const REMOVED_KEYS = [
@@ -119,6 +120,80 @@ describe("MIGRATIONS[2] vless-warp slimdown cut", () => {
     }
     expect(merged.securePath).toBe("deployed1");
     expect(merged.camouflage).toEqual({ mode: "static" });
+  });
+});
+
+describe("versionless legacy payloads", () => {
+  it("migrates a flat v0 payload instead of wiping it to defaults", () => {
+    const flat = {
+      hostnameOverride: "legacy.example.com",
+      cleanIps: ["198.51.100.7"],
+      securePath: "deployed9",
+    };
+    const out = migrateSettings(flat) as unknown as Record<string, unknown>;
+    expect(out.version).toBe(SETTINGS_VERSION);
+    expect(out.securePath).toBe("deployed9");
+    const lines = out.customEndpoints as string[];
+    expect(lines).toContain("legacy.example.com");
+    expect(lines).toContain("198.51.100.7");
+    expect(validateSettings(JSON.parse(JSON.stringify(out))).ok).toBe(true);
+  });
+
+  it("carries legacy cdn host and sni into the new globals", () => {
+    const out = migrateSettings({
+      securePath: "deployed4",
+      cdn: { enabled: true, addresses: ["198.51.100.20"], host: "Cdn-Example.COM", sni: "sni.example.com" },
+    }) as unknown as Record<string, unknown>;
+    expect(out.cdnHost).toBe("cdn-example.com");
+    expect(out.cdnSni).toBe("sni.example.com");
+    expect(out.customEndpoints).toContain("198.51.100.20");
+    expect(validateSettings(JSON.parse(JSON.stringify(out))).ok).toBe(true);
+  });
+
+  it("maps stored v2 address objects to custom endpoint lines", () => {
+    const blob = {
+      version: 2,
+      updatedAt: Date.now(),
+      data: {
+        ...structuredClone(DEFAULT_SETTINGS),
+        securePath: "deployed2",
+        vlessUuid: "d342d11e-d424-4583-b36e-524ab1f0afa4",
+        sessionSecret: "s".repeat(64),
+        addresses: [
+          { address: "198.51.100.9", port: 443 },
+          { address: "old.example.com" },
+          { address: "198.51.100.10", port: 22 },
+          { address: "198.51.100.11", enabled: false },
+          { address: "" },
+        ],
+      },
+    };
+    const out = migrateSettings(blob) as unknown as Record<string, unknown>;
+    expect(out.version).toBe(SETTINGS_VERSION);
+    expect(out).not.toHaveProperty("addresses");
+    const lines = out.customEndpoints as string[];
+    expect(lines).toContain("198.51.100.9:443");
+    expect(lines).toContain("old.example.com");
+    expect(JSON.stringify(lines)).not.toContain("198.51.100.10");
+    expect(JSON.stringify(lines)).not.toContain("198.51.100.11");
+    expect(validateSettings(JSON.parse(JSON.stringify(out))).ok).toBe(true);
+  });
+
+  it("keeps a non-proxied legacy default port off the migrated settings", () => {
+    const out = migrateSettings({ tlsPorts: [22] }) as unknown as Record<string, unknown>;
+    expect(out.defaultPort).toBe(DEFAULT_SETTINGS.defaultPort);
+    const kept = migrateSettings({ tlsPorts: [8443] }) as unknown as Record<string, unknown>;
+    expect(kept.defaultPort).toBe(8443);
+  });
+
+  it("regenerates a malformed vlessUuid and keeps a valid one", () => {
+    const identity = { securePath: "deployed3", sessionSecret: "s".repeat(64) };
+    const healed = migrateSettings({ ...identity, vlessUuid: "not-a-uuid" });
+    expect(healed.vlessUuid).not.toBe("not-a-uuid");
+    expect(healed.vlessUuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    expect(validateSettings(JSON.parse(JSON.stringify(healed))).ok).toBe(true);
+    const kept = migrateSettings({ vlessUuid: "d342d11e-d424-4583-b36e-524ab1f0afa4" });
+    expect(kept.vlessUuid).toBe("d342d11e-d424-4583-b36e-524ab1f0afa4");
   });
 });
 

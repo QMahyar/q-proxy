@@ -329,7 +329,13 @@ describe("vless xtls-rprx-vision", () => {
     expect(framed.subarray(0, 2)).toEqual(u16be(hello.length));
     expect(await codec.decodeUp(framed)).toEqual(hello);
     expect(await downlink.encode(new Uint8Array(0))).toEqual(new Uint8Array(0));
-    expect(await downlink.encode(new Uint8Array(70000))).toEqual(new Uint8Array(0));
+    const oversize = new Uint8Array(70000);
+    for (let i = 0; i < oversize.length; i++) oversize[i] = (i * 7) & 0xff;
+    const frames = await downlink.encode(oversize);
+    expect(frames.length).toBeGreaterThan(0);
+    const firstEnd = 2 + 0xffff;
+    expect(await codec.decodeUp(frames.subarray(0, firstEnd))).toEqual(oversize.subarray(0, 0xffff));
+    expect(await codec.decodeUp(frames.subarray(firstEnd))).toEqual(oversize.subarray(0xffff));
   });
 
   it("buffers split vision frames across decodeUp calls", async () => {
@@ -377,9 +383,9 @@ describe("vless xtls-rprx-vision", () => {
     const outcome = await inbound.push(visionHandshake());
     if (outcome.state !== "ready") throw new Error("expected ready");
     const codec = inbound.bodyCodec()!;
-    const hungry = concatBytes(u16be(0xffff), new Uint8Array(65534));
+    const hungry = concatBytes(u16be(0xffff), new Uint8Array(32768));
     expect(await codec.decodeUp(hungry)).toEqual(new Uint8Array(0));
-    expect(await codec.decodeUp(new Uint8Array([0x01]))).toBeNull();
+    expect(await codec.decodeUp(new Uint8Array(32768))).toBeNull();
     const payload = utf8Encode("recovered");
     expect(await codec.decodeUp(visionFrame(payload))).toEqual(payload);
   });

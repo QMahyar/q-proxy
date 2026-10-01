@@ -1,6 +1,6 @@
 import type { Settings } from "../types/settings";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../types/settings";
-import { migrateSettings } from "./migrate";
+import { migrateSettings, storedVlessUuid } from "./migrate";
 import { fillIdentity, hasIdentity } from "./seed";
 import { validateSettings } from "./validate";
 import { log } from "../core/log";
@@ -219,9 +219,12 @@ export async function loadSettings(env: Env): Promise<Settings> {
   const updatedAt = blobUpdatedAt(raw);
   const rev = blobRev(raw);
   next = await maybePurgePreCut(env, raw, next);
+  const storedUuid = v.ok ? storedVlessUuid(raw) : null;
   if (!hasIdentity(next)) {
     next = fillIdentity(next);
     await persist(env, next, updatedAt, rev);
+  } else if (storedUuid !== null && storedUuid.length > 0 && storedUuid !== next.vlessUuid) {
+    await persist(env, next, Date.now(), rev);
   }
   remember(next, updatedAt, rev);
   return next;
@@ -234,9 +237,13 @@ export async function loadSettingsFresh(env: Env): Promise<Settings> {
   if (!v2.ok) next = structuredClone(DEFAULT_SETTINGS);
   else next = v2.value;
   next = await maybePurgePreCut(env, raw, next);
+  const storedUuid = v2.ok ? storedVlessUuid(raw) : null;
   if (!hasIdentity(next)) {
     next = fillIdentity(next);
     await persist(env, next, Date.now(), blobRev(raw));
+  } else if (storedUuid !== null && storedUuid.length > 0 && storedUuid !== next.vlessUuid) {
+    await persist(env, next, Date.now(), blobRev(raw));
+    invalidateSettingsCache();
   }
   return next;
 }

@@ -173,7 +173,9 @@ export async function getAccountByToken(env: { QPROXY_KV: KvLike }, token: strin
   if (!/^[0-9a-f-]{36}$/i.test(token)) return null;
   const id = (await env.QPROXY_KV.get(WARP_TOKEN_PREFIX + token, "json")) as unknown;
   if (typeof id !== "string") return null;
-  return getAccount(env, id);
+  const account = await getAccount(env, id);
+  if (account === null || account.token !== token) return null;
+  return account;
 }
 
 export async function listAccounts(env: { QPROXY_KV: KvLike }): Promise<WarpAccount[]> {

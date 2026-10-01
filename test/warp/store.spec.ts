@@ -181,6 +181,24 @@ describe("warp store", () => {
     expect((await getAccountByToken(kv.asEnv(), next))?.id).toBe(a.id);
   });
 
+  it("rejects orphaned token mappings left behind by a crashed rotation", async () => {
+    const a = mkAccount();
+    await storeAccount(kv.asEnv(), a);
+    const old = a.token;
+    const next = await regenerateToken(kv.asEnv(), a);
+    kv.map.set(`qproxy:warp:token:${old}`, JSON.stringify(a.id));
+    expect(await getAccountByToken(kv.asEnv(), old)).toBeNull();
+    expect((await getAccountByToken(kv.asEnv(), next))?.id).toBe(a.id);
+  });
+
+  it("rejects token mappings whose account record is gone", async () => {
+    const a = mkAccount();
+    await storeAccount(kv.asEnv(), a);
+    await deleteAccount(kv.asEnv(), { ...a, token: "33333333-3333-4333-8333-333333333333" });
+    kv.map.set(`qproxy:warp:token:${a.token}`, JSON.stringify(a.id));
+    expect(await getAccountByToken(kv.asEnv(), a.token)).toBeNull();
+  });
+
   it("keeps the old token index until the new state commits when the index write fails", async () => {
     const a = mkAccount();
     await storeAccount(kv.asEnv(), a);

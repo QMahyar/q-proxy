@@ -147,7 +147,26 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
       await target.writer.write(data);
     } catch (err) {
       writeBusy = false;
-      if (!finished && generation === genBefore) fail("uplink write failed", err);
+      if (finished) return;
+      upQueue.unshift(data);
+      upQueued += data.length;
+      if (upQueued > UPLINK_HARD_CAP_BYTES) {
+        fail("uplink backlog overflow", new Error(`coalesced ${upQueued} bytes`));
+        return;
+      }
+      const retry = opts.retry;
+      if (
+        generation === genBefore &&
+        retry !== undefined && retry !== null &&
+        !retriedOnce && !halfOpen && downlinkBytes === 0
+      ) {
+        try {
+          await target.reader.cancel();
+        } catch {}
+        return;
+      }
+      if (generation !== genBefore) scheduleFlush();
+      else fail("uplink write failed", err);
       return;
     }
     writeBusy = false;
@@ -289,7 +308,7 @@ export function createRelay(sink: RelayClientSink, opts: RelayOptions = {}): Rel
       candidateIndex: next.candidateIndex,
       via: viaError ? "read-error" : "eof",
     });
-    scheduleFlush();
+    void flushUplink();
     return true;
   };
 

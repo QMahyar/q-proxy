@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Login requires the `X-Q-Panel: 1` CSRF header like logout and setup, so cross-site POSTs can no longer burn the login-throttle budget (panel and deploy scripts already send it).
+- Over-limit and invalid list entries fail validation with a field error instead of being silently truncated or dropped.
+- Legacy endpoint data migrates into `customEndpoints` (plus `cdnHost`/`cdnSni`) instead of being discarded by the v2 to v3 rename.
+- A malformed `vlessUuid` regenerates at load and persists, instead of rejecting every handshake.
+- Uplink write failures spend the zero-byte failover budget instead of killing the session outright.
+
 ## 1.6.0 - 2026-09-19
 
 ### Added

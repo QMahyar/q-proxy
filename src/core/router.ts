@@ -105,7 +105,7 @@ const settingsGetOrSave: RouteHandler = (req, env, s, ctx) =>
   req.method === "GET" ? handleGetSettings(req, env, s, ctx) : handleSaveSettings(req, env, s, ctx);
 
 const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
-  "auth-login": { methods: ["POST"], auth: "none", handler: handleLogin },
+  "auth-login": { methods: ["POST"], auth: "none", handler: csrfOnly(handleLogin) },
   "auth-logout": { methods: ["POST"], auth: "none", handler: csrfOnly(handleLogout), bootstrap: "allow" },
   "auth-setup": { methods: ["POST"], auth: "none", handler: csrfOnly(handleSetup) },
   "auth-status": { methods: ["GET"], auth: "none", handler: handleAuthStatus },

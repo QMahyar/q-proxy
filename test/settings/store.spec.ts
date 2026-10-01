@@ -4,6 +4,7 @@ import {
   ensureInitialized,
   invalidateSettingsCache,
   loadSettings,
+  loadSettingsFresh,
   saveSettings,
 } from "../../src/settings/store";
 import {
@@ -122,6 +123,37 @@ describe("settings store", () => {
     const s = await loadSettings(kv.asEnv() as never);
     expect(s.seededAt).toBe(0);
     expect(s.securePath).toBe("legacy-path");
+  });
+
+  it("persists a healed malformed vlessUuid so repeated loads stay stable", async () => {
+    invalidateSettingsCache();
+    const kv = new FakeKV();
+    kv.map.set(
+      "qproxy:settings",
+      JSON.stringify({
+        version: SETTINGS_VERSION,
+        updatedAt: Date.now(),
+        rev: 5,
+        data: {
+          ...structuredClone(DEFAULT_SETTINGS),
+          securePath: "legacy-path",
+          vlessUuid: "not-a-uuid",
+          sessionSecret: "s".repeat(64),
+        },
+      }),
+    );
+    const env = kv.asEnv() as never;
+    const first = await loadSettingsFresh(env);
+    expect(first.vlessUuid).toMatch(/^[0-9a-f-]{36}$/);
+    expect(first.vlessUuid).not.toBe("not-a-uuid");
+    expect(JSON.parse(kv.map.get("qproxy:settings")!).data.vlessUuid).toBe(first.vlessUuid);
+    invalidateSettingsCache();
+    const second = await loadSettingsFresh(env);
+    expect(second.vlessUuid).toBe(first.vlessUuid);
+    invalidateSettingsCache();
+    const third = await loadSettings(env);
+    expect(third.vlessUuid).toBe(first.vlessUuid);
+    expect(kv.putCalls.get("qproxy:settings")).toBe(1);
   });
 
   it("caches reads for the 60 second TTL", async () => {

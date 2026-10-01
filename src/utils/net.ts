@@ -62,6 +62,9 @@ export function isIpLiteral(s: string): boolean {
   return isIPv4(unbracketed) || isIPv6(unbracketed);
 }
 
+export const HOSTNAME_RE =
+  /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
 export function bracketIpv6(host: string): string {
   if (host.startsWith("[")) return host;
   return isIPv6(host) ? `[${host}]` : host;
