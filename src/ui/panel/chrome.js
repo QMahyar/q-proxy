@@ -16,13 +16,19 @@ const h=readTraffic();
 if(h.length<2){box.innerHTML='<p class="field__hint">'+esc(t('graph.empty'))+'</p>';return}
 const vals=h.map(x=>x.today);
 const max=Math.max.apply(null,vals.concat([1]));
-const w=300,ht=72,n=vals.length;
-const pts=vals.map((v,i)=>[n===1?0:i/(n-1)*(w-8)+4,ht-6-(v/max)*(ht-16)]);
+const w=560,ht=120,n=vals.length;
+const padL=8,padR=8,padT=12,padB=18;
+const X=i=>n===1?w/2:padL+i/(n-1)*(w-padL-padR);
+const Y=v=>padT+(1-v/max)*(ht-padT-padB);
+const pts=vals.map((v,i)=>[X(i),Y(v)]);
 const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
-const area=line+' L'+(w-4)+' '+(ht-6)+' L4 '+(ht-6)+' Z';
+const area=line+' L'+(w-padR)+' '+(ht-padB)+' L'+padL+' '+(ht-padB)+' Z';
+let grid='';
+[0.25,0.5,0.75].forEach(f=>{const y=padT+f*(ht-padT-padB);grid+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(w-padR)+'" y2="'+y.toFixed(1)+'" style="stroke:rgba(148,163,184,.14)" stroke-width="1" stroke-dasharray="3 4"/>'});
 let bars='';
-vals.forEach((v,i)=>{const x=n===1?w/2-6:i/(n-1)*(w-12)+2;const bh=(v/max)*(ht-20);bars+='<rect x="'+x.toFixed(1)+'" y="'+(ht-6-bh).toFixed(1)+'" width="5" height="'+bh.toFixed(1)+'" rx="1.5" style="fill:rgba(var(--accent-rgb),.45)"/>'});
-box.innerHTML='<div class="field__label-row"><span class="field__label">'+esc(t('graph.title'))+'</span></div><svg viewBox="0 0 '+w+' '+ht+'" role="img" aria-label="'+esc(t('graph.title'))+'"><title>'+esc(t('graph.title'))+'</title><desc>'+esc(t('graph.desc'))+'</desc>'+bars+'<path d="'+area+'" style="fill:rgba(var(--accent-rgb),.12)"/><path d="'+line+'" fill="none" style="stroke:var(--cyan)" stroke-width="2" stroke-linecap="round"/></svg>'}
+vals.forEach((v,i)=>{const x=X(i);const bh=(ht-padB)-Y(v);bars+='<rect x="'+(x-4).toFixed(1)+'" y="'+Y(v).toFixed(1)+'" width="8" height="'+Math.max(bh,2).toFixed(1)+'" rx="2.5" style="fill:rgba(var(--accent-rgb),.30)"/>'});
+const dots=pts.map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.6" style="fill:var(--cyan)"/>').join('');
+box.innerHTML='<div class="field__label-row"><span class="field__label">'+esc(t('graph.title'))+'</span><span class="stat-chip">'+esc(fmtInt(vals[vals.length-1]))+'</span></div><svg viewBox="0 0 '+w+' '+ht+'" role="img" aria-label="'+esc(t('graph.title'))+'" preserveAspectRatio="none"><title>'+esc(t('graph.title'))+'</title><desc>'+esc(t('graph.desc'))+'</desc>'+grid+bars+'<path d="'+area+'" style="fill:rgba(var(--accent-rgb),.12)"/><path d="'+line+'" fill="none" style="stroke:var(--cyan)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'+dots+'</svg>'}
 const EXPORT_KEY='qp_last_export',BACKUP_DISMISS='qp_backup_dismiss';
 function maybeBackupBanner(){
 const box=$('backup-banner');if(!box)return;

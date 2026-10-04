@@ -17,6 +17,11 @@ $('home-h1').textContent=t('nav.home');
 $('subs-h1').textContent=t('tabs.subs.title');
 $('warp-h1').textContent=t('nav.warp');
 $('settings-h1').textContent=t('nav.settings');
+const _hs=$('home-sub');if(_hs)_hs.textContent=t('home.subs.desc');
+const _ss=$('subs-sub');if(_ss)_ss.textContent=t('subs.main.desc');
+const _ws=$('warp-sub');if(_ws)_ws.textContent=t('subs.warp.desc');
+const _gs=$('settings-sub');if(_gs)_gs.textContent=t('settings.sections');
+const _ft=$('app-foot');if(_ft){let vv='';try{vv=typeof __APP_VERSION__!=='undefined'?__APP_VERSION__:(S.status&&S.status.version||'')}catch(e){vv=(S.status&&S.status.version||'')}if(vv)_ft.textContent='Q Proxy v'+vv};
 $('logout-btn').setAttribute('aria-label',t('nav.logout'));
 $('logout-btn').title=t('nav.logout');
 $('shortcuts-btn').setAttribute('aria-label',t('shortcuts.title'));
@@ -127,6 +132,12 @@ return '<div class="copy-field"><code id="'+idAttr+'" dir="ltr">'+esc(value)+'</
 function renderHome(){
 const body=$('home-body');
 body.innerHTML='';
+const on=!!(S.status&&S.status.killSwitch);
+const hero=document.createElement('div');
+hero.className='hero-band';
+hero.style.gridColumn='1/-1';
+hero.innerHTML='<div class="hero-band__grid"><div><span class="hero-kicker"><span class="dot '+(on?'dot--bad':'dot--ok')+' dot--pulse"></span>'+esc(t(on?'home.kill.paused':'home.kill.active'))+'</span><div class="hero-title">'+esc(t('home.status.title'))+'</div><div class="hero-desc">'+esc(t(on?'home.kill.desc_paused':'home.kill.desc_active'))+'</div><div class="hero-actions"><a class="btn btn--primary btn--sm" href="#/subs">'+esc(t('home.subs.viewall'))+'</a><a class="btn btn--ghost btn--sm" href="#/warp">'+esc(t('nav.warp'))+'</a><a class="btn btn--ghost btn--sm" href="#/settings/general">'+esc(t('nav.settings'))+'</a></div></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc((S.status&&S.status.version)||'')+'</span><span class="chip-status '+(on?'bad':'ok')+'" data-kill-chip>'+esc(t(on?'home.kill.paused':'home.kill.active'))+'</span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc((S.status&&S.status.colo)||'—')+'</span><span></span></div></div>';
+body.appendChild(hero);
 const protoCount=['vlessEnabled'].filter(k=>S.set&&S.set[k]).length;
 const chips=document.createElement('div');chips.className='chips-row';
 chips.innerHTML='<span class="stat-chip"><span class="dot dot-cyan"></span>'+esc(t('home.chips.protocols',{n:protoCount}))+'</span><span class="stat-chip"><span class="dot dot-violet"></span>'+esc(t('home.chips.formats',{n:(S.subs||[]).filter(u=>!isInfoEntry(u)).length}))+'</span>';
