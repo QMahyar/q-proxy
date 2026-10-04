@@ -7,7 +7,7 @@ let LANG=getLangCookie();
 try{if(/(?:^|;\s*)qp_lang=(en|fa)/.test(document.cookie))DICT[LANG==='en'?'fa':'en']={}}catch(e){}
 const t=(k,p)=>{let s=(DICT[LANG]&&DICT[LANG][k])||(DICT.en[k]||k);if(p)for(const n in p)s=s.split('{'+n+'}').join(String(p[n]));return s};
 const THEME_KEY='qp_theme';
-function getTheme(){try{const s=localStorage.getItem(THEME_KEY);if(s==='light'||s==='dark')return s}catch(e){}try{if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)return'light'}catch(e){}return'dark'}
+function getTheme(){try{const s=localStorage.getItem(THEME_KEY);if(s==='light'||s==='dark')return s}catch(e){}return'dark'}
 function applyTheme(th){document.documentElement.dataset.theme=th;try{document.documentElement.style.colorScheme=th}catch(e){}refreshThemeIcon(th)}
 function refreshThemeIcon(th){const b=document.getElementById('theme-toggle');if(!b)return;const lab=th==='light'?t('common.theme_dark'):t('common.theme_light');b.setAttribute('aria-label',lab||t('common.theme_toggle'));const u=b.querySelector('use');if(u)u.setAttribute('href',th==='light'?'#i-moon':'#i-sun')}
 applyTheme(getTheme());
