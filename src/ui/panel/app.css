@@ -214,8 +214,9 @@ main{max-width:1160px;margin-inline:auto;padding:20px 16px 110px}
 .conv-badge{font-family:var(--font-mono);font-size:9px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--violet);background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);border-radius:.375rem;padding:2px 6px;flex:none;white-space:nowrap}
 .proxy-badge{font-family:var(--font-mono);font-size:9px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--warning);background:var(--warning-bg);border:1px solid rgba(251,191,36,.4);border-radius:.375rem;padding:2px 6px;flex:none;white-space:nowrap}
 #converter-test-result{margin:0;align-self:center}
-#converter-test-result[data-ok="1"]{color:var(--success)}
-#converter-test-result[data-ok="0"]{color:var(--danger-strong,var(--danger))}
+#tool-check-result{margin-block:8px 0}
+#converter-test-result[data-ok="1"],#tool-check-result[data-ok="1"]{color:var(--success)}
+#converter-test-result[data-ok="0"],#tool-check-result[data-ok="0"]{color:var(--danger-strong,var(--danger))}
 .addr-preview{font-family:var(--font-mono);font-size:11px;color:var(--text-ghost);flex:none;direction:ltr}
 .addr-switch .switch__track{width:34px;height:20px}
 .addr-switch .switch__thumb{width:14px;height:14px;top:2px}

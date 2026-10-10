@@ -173,6 +173,37 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    .catch(()=>{clearTimeout(timer);say(t('advanced.converter.test_fail'),false)})})()},
   'pool-fetch'(el){loadPool(false)},
   'pool-test'(el){loadPool(true)},
+  'proxy-check'(el){
+  const proto=$('tool-check-proto'),param=$('tool-check-param'),box=$('tool-check-result');
+  if(!proto||!param||!box)return;
+  const say=(msg,ok)=>{box.textContent=msg;if(ok===true)box.dataset.ok='1';else if(ok===false)box.dataset.ok='0';else box.removeAttribute('data-ok')};
+  const raw=param.value.trim();
+  if(!raw){say(t('subs.tools.check_missing'),false);return}
+  say(t('common.loading'));
+  withBusy(el,()=>api('api/proxy-check',{method:'POST',body:{protocol:proto.value,param:raw}})
+  .then(d=>{say(t('subs.tools.check_ok',{ip:d.ip,loc:d.loc,ms:d.responseTimeMs}),true)})
+  .catch(err=>{const f=err&&err.fields?(err.fields.protocol||err.fields.param):null;say(f||(err&&err.message)||t('common.error'),false)}))},
+  'locations-load'(el){
+  const box=$('tool-locations');if(!box)return;
+  box.innerHTML=loadingBox({rows:3});
+  withBusy(el,()=>api('api/locations')
+  .then(d=>{renderLocationsTable(d&&d.locations||[])})
+  .catch(()=>{box.innerHTML=errorCard({title:'common.error',retryAction:'data-action="locations-load"'})}))},
+  'locations-map'(el){
+  const map=$('tool-map');if(!map)return;
+  if(!map.hidden){map.hidden=true;return}
+  map.hidden=false;
+  if(map.dataset.done)return;
+  // Lazy CDN on purpose: Leaflet is NOT vendored (zero runtime deps) and
+  // loads only on explicit user tap; the table above is the offline fallback.
+  const fail=()=>{map.hidden=true;toast(t('subs.tools.map_offline'),'err')};
+  try{
+  const css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css);
+  const js=document.createElement('script');js.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';js.async=true;
+  js.onload=()=>{try{renderLocationsMap()}catch(e){fail()}};
+  js.onerror=fail;
+  document.head.appendChild(js);
+  }catch(e){fail()}},
   'home-pool-refresh'(el){loadHomePool()},
   'subs-import-preview'(el){
   const ta=$('sub-import-text');const box=$('sub-import-preview');if(!ta||!box)return;

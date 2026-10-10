@@ -36,6 +36,8 @@ export type ApiRouteName =
   | "suburls"
   | "sub-import"
   | "preferred-validate"
+  | "proxy-check"
+  | "locations"
   | "warp"
   | "proxy-pool"
   | "address-probe"
@@ -102,6 +104,8 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
       if (sub === "suburls" && rest.length === 2) return { kind: "api", api: "suburls" };
       if (sub === "sub-import" && rest.length === 2) return { kind: "api", api: "sub-import" };
       if (sub === "preferred-validate" && rest.length === 2) return { kind: "api", api: "preferred-validate" };
+      if (sub === "proxy-check" && rest.length === 2) return { kind: "api", api: "proxy-check" };
+      if (sub === "locations" && rest.length === 2) return { kind: "api", api: "locations" };
       if (sub === "warp" && rest.length >= 2) return { kind: "api", api: "warp" };
       if (sub === "proxy-pool" && rest.length === 2) return { kind: "api", api: "proxy-pool" };
       if (sub === "address-probe" && rest.length === 2) return { kind: "api", api: "address-probe" };

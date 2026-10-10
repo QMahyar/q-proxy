@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Added (B3 — edgetunnel parity: proxy check + locations)
+- New authed `POST api/proxy-check` (`auth: write`): input
+  `{protocol: socks5|http|https|turn|sstp, param: user:pass@host:port}` →
+  dials the proxy via the existing egress dialer (10s total budget), tunnels
+  SOCKS5 or HTTP CONNECT to `cloudflare.com:80`, `GET /cdn-cgi/trace`, and
+  returns `{ok, ip, loc, responseTimeMs}`. Credentials are redacted from all
+  errors and logs (host-only); local/private proxy hosts are rejected.
+  `https`/`turn`/`sstp` checks answer `501` (not supported yet); note the
+  trace runs over port-80 plain HTTP because workerd sockets cannot
+  originate TLS — the egress `ip`/`loc` signal is identical.
+- New authed `GET api/locations` (`auth: read`): proxies
+  `https://speed.cloudflare.com/locations` with edge-cache 1h
+  (`public, max-age=3600`), 10s timeout, and 1MB cap; non-array payloads map
+  to 502.
+- Panel Subs utils: single-proxy check form (protocol select + address
+  input) with `aria-live` result, and a locations browser (details table up
+  to 500 rows plus an on-demand map). The map injects Leaflet from CDN only
+  on explicit user tap — the single documented runtime-CDN exception — with
+  the table as the offline fallback (en + fa).
+
 ### Added (B2 — edgetunnel parity: preferred-IP syntax + validator)
 - Preferred-list line syntax for `customEndpoints` (additive, never-throw):
   `IP:port#remark` labels, `sub://…[#remark][?proxyip=true]`,

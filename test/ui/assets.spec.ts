@@ -85,7 +85,12 @@ describe("panel html", () => {
     expect(html).toContain("#22d3ee");
     expect(html.toLowerCase()).not.toContain("<script src=");
     expect(html).not.toContain('href="http');
-    expect(html).not.toContain("src=");
+    // B3 lazy-Leaflet is the one documented runtime-CDN exception (spec B3):
+    // injected only on an explicit user tap, never a static tag — the table
+    // is the offline fallback. Strip that single assignment before asserting
+    // nothing else loads external sources.
+    const withoutLazyLeaflet = html.replace(/\.src='https:\/\/unpkg\.com\/leaflet@[^']*'/g, "");
+    expect(withoutLazyLeaflet).not.toContain("src=");
     expect(html).not.toContain("@import");
   });
 

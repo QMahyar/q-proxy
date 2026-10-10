@@ -47,9 +47,39 @@ const sp=String((S.set&&S.set.securePath)||'').replace(/^\/+|\/+$/g,'');
 const loginUrl=location.origin+(sp?'/'+sp+'/':BASE)+'login';
 let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.utils.title'))+'</div><div class="field__hint">'+esc(t('subs.utils.desc'))+'</div></div></div>';
 sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(t('subs.utils.doh'))+'</span>'+copyFieldHtml(doh,'hub-doh')+'</div>';
-sh+='<div class="row" style="border-block-end:0"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(t('subs.utils.panel'))+'</span>'+copyFieldHtml(loginUrl,'hub-login')+'</div>';
+sh+='<div class="row"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(t('subs.utils.panel'))+'</span>'+copyFieldHtml(loginUrl,'hub-login')+'</div>';
+sh+=subsToolsHtml();
 sh+='</section>';
 return sh}
+function subsToolsHtml(){
+let sh='<div class="field" style="margin-block-start:12px"><span class="field__label">'+esc(t('subs.tools.check_title'))+'</span><div class="btn-row"><select class="select" id="tool-check-proto" aria-label="'+esc(t('subs.tools.check_proto'))+'">'
++['socks5','http','https','turn','sstp'].map(p=>'<option value="'+p+'">'+esc(p)+'</option>').join('')+'</select>'
++'<input type="text" class="input input--mono" id="tool-check-param" dir="ltr" placeholder="user:pass@host:port" autocomplete="off" spellcheck="false" style="flex:1;min-width:0" aria-label="'+esc(t('subs.tools.check_param'))+'">'
++'<button type="button" class="btn btn--ghost btn--sm" data-action="proxy-check">'+esc(t('subs.tools.check'))+'</button></div>'
++'<p class="field__hint" id="tool-check-result" role="status" aria-live="polite" style="margin-block:8px 0"></p></div>';
+sh+='<details class="warp-acc subs-acc"><summary>'+esc(t('subs.tools.locations'))+'</summary><div style="padding-block:4px 10px">'
++'<p class="field__hint" style="margin-block:0 8px">'+esc(t('subs.tools.locations_desc'))+'</p>'
++'<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="locations-load">'+esc(t('subs.tools.locations_load'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="locations-map">'+esc(t('subs.tools.locations_map'))+'</button></div>'
++'<div id="tool-locations" style="margin-block-start:8px" aria-live="polite"></div><div id="tool-map" hidden style="block-size:280px;margin-block-start:8px;border-radius:.6rem;overflow:hidden"></div>'
++'</div></details>';
+return sh}
+function renderLocationsTable(list){
+const box=$('tool-locations');if(!box)return;
+if(!Array.isArray(list)||!list.length){box.innerHTML=emptyCard({title:'subs.tools.locations_empty'});return}
+const rows=list.slice(0,500).map(l=>{
+const o=(l&&typeof l==='object'?l:{});
+const cell=k=>esc(String(o[k]??'—'));
+return '<div class="pool-row"><span class="pool-cell" dir="ltr">'+cell('iata')+'</span><span class="pool-cell">'+cell('city')+'</span><span class="pool-cell">'+cell('country')+'</span></div>'});
+box.innerHTML='<div class="warp-group">'+rows.join('')+'</div>'}
+function renderLocationsMap(){
+const map=$('tool-map');if(!map||typeof L==='undefined')return;
+api('api/locations').then(d=>{
+const pts=((d&&d.locations)||[]).filter(l=>l&&isFinite(+l.lat)&&isFinite(+l.lon)).slice(0,500);
+const m=L.map(map).setView([20,0],2);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:8,attribution:'© OpenStreetMap contributors'}).addTo(m);
+pts.forEach(p=>{L.circleMarker([+p.lat,+p.lon],{radius:4}).addTo(m).bindPopup(esc(String(p.city||p.iata||'')))});
+map.dataset.done='1';
+}).catch(()=>{map.hidden=true;toast(t('subs.tools.map_offline'),'err')})}
 function subsWarpQuickHtml(){
 if(!S.warp||!Array.isArray(S.warp.accounts)||!S.warp.accounts.length)return '';
 let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.utils.warp_quick'))+'</div></div><a class="btn btn--ghost btn--sm" href="#/warp">'+esc(t('subs.warp.cta'))+'</a></div>';
