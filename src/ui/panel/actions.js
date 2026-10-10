@@ -78,7 +78,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  const a=el.dataset.accent||'cyan';
  if(a==='cyan')delete document.documentElement.dataset.accent;
  else document.documentElement.dataset.accent=a;
- try{localStorage.setItem('qp_accent',a)}catch(err){}
+ storeSet('qp_accent',a)
  document.querySelectorAll('.swatch').forEach(b=>b.setAttribute('aria-pressed',String(b===el)))},
  'warp-generate-open'(){openWarpModal('m-warp-generate')},
  'warp-import-open'(){openWarpModal('m-warp-import')},
@@ -138,10 +138,10 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  'wizard-protocols'(){wizardDone();location.hash='#/settings/protocols'},
  'wizard-replay'(){
  closeModal('m-keys');
- try{localStorage.removeItem('qp_wizard_done')}catch(e){}
+ storeDel('qp_wizard_done')
  maybeWizard()},
- 'backup-export'(){try{localStorage.setItem(EXPORT_KEY,String(Date.now()))}catch(e){}setTimeout(maybeBackupBanner,500)},
- 'backup-dismiss'(){try{localStorage.setItem(BACKUP_DISMISS,String(Date.now()))}catch(e){}$('backup-banner').hidden=true},
+ 'backup-export'(){storeSet(EXPORT_KEY,String(Date.now()));setTimeout(maybeBackupBanner,500)},
+ 'backup-dismiss'(){storeSet(BACKUP_DISMISS,String(Date.now()));$('backup-banner').hidden=true},
  'tg-setup'(el){
  withBusy(el,async()=>{
  try{const d=await api('api/telegram/setup',{method:'POST',body:{}});
@@ -154,7 +154,7 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  if(d.ok)toast(t('tg.remove_ok'),'ok');
  else toast(t('tg.remove_fail')+(d.description?' · '+d.description:''),'err')}
  catch(err){toastErr(err)}})()},
-  'theme-toggle'(){const cur=getTheme();const nxt=cur==='dark'?'light':'dark';try{localStorage.setItem(THEME_KEY,nxt)}catch(e){}applyTheme(nxt);},
+  'theme-toggle'(){const cur=getTheme();const nxt=cur==='dark'?'light':'dark';storeSet(THEME_KEY,nxt);applyTheme(nxt);},
   'addr-probe'(el){
    withBusy(el,()=>api('api/address-probe',{fresh:true})
    .then(d=>{const r=d&&d.results||[];const ok=r.filter(x=>x.status==='ok').length;toast(t('endpoints.probe.done',{ok:ok,n:r.length}),ok===r.length&&r.length>0?'ok':'err')})
@@ -200,9 +200,9 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  await api('api/auth/password',{method:'POST',body:{currentPassword:cur.value,newPassword:nw.value},keep401:true});
  toast(t('security.changed'),'ok');
  cur.value='';nw.value='';cf.value='';
- try{sessionStorage.removeItem('qproxy_force_change')}catch(e){}
- try{sessionStorage.removeItem('qpc:api/bootstrap')}catch(e){}
- try{sessionStorage.removeItem('qpe:api/bootstrap')}catch(e){}
+ sessionDel('qproxy_force_change')
+ sessionDel('qpc:api/bootstrap')
+ sessionDel('qpe:api/bootstrap')
  hideForceChange();
  boot()
  }
@@ -213,11 +213,11 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  finally{el.disabled=false}})()}};
 function forceFlagged(){
 if(S.set&&S.set.passwordIsBootstrap===true)return true;
-try{return sessionStorage.getItem('qproxy_force_change')==='1'}catch(e){return false}}
+return sessionGet('qproxy_force_change')==='1'}
 function showForceChange(){
 if(S.forceChange)return;
 S.forceChange=true;
-try{sessionStorage.setItem('qproxy_force_change','1')}catch(e){}
+sessionSet('qproxy_force_change','1')
 const tb=document.querySelector('header.topbar');
 if(tb)tb.hidden=true;
 const mn=$('main');
@@ -265,7 +265,7 @@ const chip=e.target.closest('[data-chip]');
 if(chip){handleChip(chip);return}
 const mode=e.target.closest('[data-mode]');
 if(mode){
-S.subMode=mode.dataset.mode;try{localStorage.setItem('qp_submode',S.subMode)}catch(err){}
+S.subMode=mode.dataset.mode;storeSet('qp_submode',S.subMode)
 syncModeUrl();
 mode.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===mode)));
 const urls=[...S.subs].sort((a,b)=>(a.format==='base64'?-1:0)-(b.format==='base64'?-1:0));
@@ -410,9 +410,9 @@ maybeBackupBanner();
 if(!S.forceChange)maybeWizard()}
 function wizardDone(){
 closeModal('m-wizard');
-try{localStorage.setItem('qp_wizard_done','1')}catch(e){}}
+storeSet('qp_wizard_done','1')}
 function maybeWizard(){
-try{if(localStorage.getItem('qp_wizard_done'))return}catch(e){}
+if(storeGet('qp_wizard_done'))return}
 const protoCount=['vlessEnabled'].filter(k=>S.set&&S.set[k]).length;
 let step=protoCount>0?1:0;
 const body=$('wiz-body');

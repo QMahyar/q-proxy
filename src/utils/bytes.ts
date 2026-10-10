@@ -11,7 +11,11 @@ export function utf8Decode(bytes: Uint8Array): string {
 
 export function concatBytes(...chunks: Uint8Array[]): Uint8Array {
   if (chunks.length === 0) return new Uint8Array(0);
-  if (chunks.length === 1) return chunks[0]!.slice();
+  if (chunks.length === 1) {
+    const only = chunks[0];
+    if (only === undefined) return new Uint8Array(0);
+    return only.slice();
+  }
   let len = 0;
   for (const c of chunks) len += c.length;
   const out = new Uint8Array(len);
@@ -28,7 +32,7 @@ const HEX_DIGITS = "0123456789abcdef";
 export function bytesToHex(bytes: Uint8Array): string {
   let s = "";
   for (let i = 0; i < bytes.length; i++) {
-    const b = bytes[i]!;
+    const b = bytes[i] ?? 0;
     s += HEX_DIGITS[b >> 4];
     s += HEX_DIGITS[b & 15];
   }
@@ -52,6 +56,16 @@ export function writeU16BE(buf: Uint8Array, offset: number, value: number): void
 
 export function readU16BE(buf: Uint8Array, offset: number): number {
   return ((buf[offset] ?? 0) << 8) | (buf[offset + 1] ?? 0);
+}
+
+/**
+ * Bounds-checked big-endian u16 read via DataView. Returns null instead of
+ * fabricating a value from out-of-range bytes (unlike readU16BE, which
+ * callers may only use after an explicit length check). Never throws.
+ */
+export function tryReadU16BE(buf: Uint8Array, offset: number): number | null {
+  if (!Number.isInteger(offset) || offset < 0 || offset + 2 > buf.length) return null;
+  return new DataView(buf.buffer, buf.byteOffset + offset, 2).getUint16(0, false);
 }
 
 export function u16be(value: number): Uint8Array {

@@ -179,6 +179,8 @@ export async function storeAccount(env: { QPROXY_KV: KvLike }, account: WarpAcco
     await env.QPROXY_KV.put(WARP_TOKEN_PREFIX + account.token, JSON.stringify(account.id));
   } catch (err) {
     if (isNew) {
+      // Best-effort rollback of the half-written account; the original error
+      // below is what the caller must see, so a cleanup failure is swallowed.
       await env.QPROXY_KV.delete(WARP_ACCOUNT_PREFIX + account.id).catch(() => {});
     }
     throw err;
@@ -234,15 +236,24 @@ export async function regenerateToken(env: { QPROXY_KV: KvLike }, account: WarpA
     account.token = snapshot;
     try {
       await env.QPROXY_KV.put(WARP_ACCOUNT_PREFIX + account.id, JSON.stringify({ ...account, token: snapshot }));
-    } catch {}
+    } catch {
+      // Best-effort rollback of the account record; the rotation error below
+      // is authoritative, so swallow cleanup failures here.
+    }
     try {
       await env.QPROXY_KV.delete(WARP_TOKEN_PREFIX + next);
-    } catch {}
+    } catch {
+      // Best-effort removal of the orphaned token index; the leaked index
+      // self-heals on next rotation and must not mask the original error.
+    }
     throw err;
   }
   try {
     await env.QPROXY_KV.delete(WARP_TOKEN_PREFIX + oldToken);
-  } catch {}
+  } catch {
+    // Best-effort invalidation of the superseded token; rotation already
+    // succeeded, so a stale index entry is harmless and expires via TTL use.
+  }
   return next;
 }
 

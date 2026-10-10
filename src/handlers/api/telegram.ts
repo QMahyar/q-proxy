@@ -109,7 +109,10 @@ async function sendTelegramMessage(
       ),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
-  } catch {}
+  } catch {
+    // Best-effort bot reply: a failed sendMessage must not fail the webhook
+    // (Telegram retries non-200s); the admin simply gets no message.
+  }
 }
 
 async function answerTelegramCallback(token: string, callbackId: string): Promise<void> {
@@ -120,7 +123,9 @@ async function answerTelegramCallback(token: string, callbackId: string): Promis
       body: JSON.stringify({ callback_query_id: callbackId }),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
-  } catch {}
+  } catch {
+    // Best-effort callback ack: missing it only leaves a spinner in the chat.
+  }
 }
 
 async function editTelegramMessage(
@@ -141,7 +146,9 @@ async function editTelegramMessage(
       ),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
-  } catch {}
+  } catch {
+    // Best-effort message edit: same fire-and-forget policy as sendMessage.
+  }
 }
 
 export function normalizeTelegramChatId(chatId: string): string {
@@ -259,6 +266,7 @@ export const handleTelegramWebhook: RouteHandler = async (req, env, s) => {
     const raw: unknown = await readJsonObject(req);
     update = raw as TelegramUpdate;
   } catch {
+    // Malformed webhook body: Telegram expects 200; silently ack and drop.
     return silentOk();
   }
   if (!chatMatches(update, s)) return silentOk();
@@ -270,17 +278,23 @@ export const handleTelegramWebhook: RouteHandler = async (req, env, s) => {
     const rawId = callback.id;
     const callbackId =
       typeof rawId === "string" ? rawId : rawId === undefined || rawId === null ? "" : String(rawId);
-    if (callbackId.length > 0) void answerTelegramCallback(s.telegram.botToken, callbackId).catch(() => {});
+    if (callbackId.length > 0)
+      // Best-effort ack; the edited/answered message below is the real reply.
+      void answerTelegramCallback(s.telegram.botToken, callbackId).catch(() => {});
     const rawMessageId = callback.message?.message_id;
     if (typeof rawMessageId === "number" && Number.isInteger(rawMessageId)) {
       const rawChatId = callback.message?.chat?.id;
       const chatId = rawChatId === undefined || rawChatId === null ? s.telegram.chatId : String(rawChatId);
       void editTelegramMessage(s.telegram.botToken, chatId, rawMessageId, reply.text, telegramMenuKeyboard()).catch(
-        () => {},
+        () => {
+          // Best-effort edit; webhook already validated, still ack 200 below.
+        },
       );
     } else {
       void sendTelegramMessage(s.telegram.botToken, s.telegram.chatId, reply.text, telegramMenuKeyboard()).catch(
-        () => {},
+        () => {
+          // Best-effort send; webhook already validated, still ack 200 below.
+        },
       );
     }
     return silentOk();
@@ -288,6 +302,7 @@ export const handleTelegramWebhook: RouteHandler = async (req, env, s) => {
   const rawText = update.message?.text;
   const text = typeof rawText === "string" ? rawText.trim() : "";
   const reply = await buildReply(env, s, req, text);
+  // Best-effort reply; the webhook returns silentOk regardless.
   void sendTelegramMessage(
     s.telegram.botToken,
     s.telegram.chatId,
@@ -310,12 +325,16 @@ async function tgAdminCall(token: string, method: string, payload: Record<string
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(ADMIN_TIMEOUT_MS),
     });
+    // Non-JSON error bodies (e.g. CF HTML pages) decode as null and are
+    // reported via ok:false below instead of throwing.
     const data: unknown = await res.json().catch(() => null);
     const record = data !== null && typeof data === "object" && !Array.isArray(data) ? (data as { ok?: unknown; description?: unknown }) : null;
     const description =
       typeof record?.description === "string" ? stripTokenRefs(record.description) : "";
     return { ok: record?.ok === true, description };
   } catch {
+    // Network/timeout talking to api.telegram.org: surfaced as a result, not
+    // a throw, so the admin UI gets a description instead of a 500.
     return { ok: false, description: "network error" };
   }
 }

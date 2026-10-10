@@ -1,7 +1,7 @@
 import type { RouteHandler } from "../types/context";
 import { ForbiddenError, RateLimitedError, UnauthorizedError } from "../core/errors";
 import { getSessionFloor, verifySession } from "./session";
-import { cidrContains } from "../utils/net";
+import { cidrContains, stripBrackets } from "../utils/net";
 import { bytesToHex } from "../utils/bytes";
 
 const COOKIE_RE = /(?:^|;\s*)q_session=([^;\s]+)/;
@@ -22,16 +22,18 @@ export function getSession(req: Request): string | null {
   const header = req.headers.get("Cookie") ?? "";
   const m = COOKIE_RE.exec(header);
   if (m === null) return null;
+  const raw = m[1];
+  if (raw === undefined || raw.length === 0) return null;
   try {
-    return decodeURIComponent(m[1]!);
+    return decodeURIComponent(raw);
   } catch {
-    return m[1]!;
+    return raw;
   }
 }
 
 export function isIpAllowlisted(ip: string, allowlist: readonly string[]): boolean {
   if (allowlist.length === 0) return true;
-  const candidate = ip.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  const candidate = stripBrackets(ip.trim().toLowerCase());
   if (candidate.length === 0) return false;
   for (const raw of allowlist) {
     if (typeof raw !== "string") continue;
@@ -44,7 +46,7 @@ export function isIpAllowlisted(ip: string, allowlist: readonly string[]): boole
       if (cidrContains(candidate, entry)) return true;
       continue;
     }
-    if (candidate === entry.toLowerCase().replace(/^\[|\]$/g, "")) return true;
+    if (candidate === stripBrackets(entry.toLowerCase())) return true;
   }
   return false;
 }

@@ -1,5 +1,6 @@
 import type { SubFormat } from "../../core/ua";
 import type { ProxyNode } from "../../types/node";
+import { stripBrackets } from "../../utils/net";
 import { emitClashYaml } from "./clash-yaml";
 import { emitSingBoxJson } from "./singbox-json";
 import { emitXrayJson } from "./xray-json";
@@ -23,7 +24,7 @@ export const TEST_URL = "https://www.gstatic.com/generate_204";
 export const DEFAULT_PROXY_DNS = "https://8.8.8.8/dns-query";
 
 export function bareServer(address: string): string {
-  return address.replace(/^\[/, "").replace(/\]$/, "");
+  return stripBrackets(address);
 }
 
 export function visibleNodes(nodes: readonly ProxyNode[], isFragment: boolean): ProxyNode[] {

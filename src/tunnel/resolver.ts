@@ -1,4 +1,4 @@
-import { writeU16BE } from "../utils/bytes";
+import { tryReadU16BE, writeU16BE } from "../utils/bytes";
 import type { DnsPacketRelay } from "../types/tunnel";
 
 export const DNS_TYPE_A = 1;
@@ -59,8 +59,7 @@ export function buildDnsQuery(name: string, qtype: number): Uint8Array | null {
   for (const label of labels) qlen += label.length + 1;
   const out = new Uint8Array(12 + qlen + 4);
   nextQueryId = (nextQueryId % 0xffff) + 1;
-  out[0] = (nextQueryId >>> 8) & 0xff;
-  out[1] = nextQueryId & 0xff;
+  writeU16BE(out, 0, nextQueryId);
   out[2] = 0x01;
   out[3] = 0x00;
   out[5] = 1;
@@ -85,14 +84,17 @@ function readName(
   let jumps = 0;
   for (;;) {
     if (ptr >= buf.length) return null;
-    const len = buf[ptr]!;
+    const len = buf[ptr];
+    if (len === undefined) return null;
     if (len === 0) {
       if (next === -1) next = ptr + 1;
       break;
     }
     if ((len & 0xc0) === 0xc0) {
       if (ptr + 1 >= buf.length) return null;
-      const target = ((len & 0x3f) << 8) | buf[ptr + 1]!;
+      const lo = buf[ptr + 1];
+      if (lo === undefined) return null;
+      const target = ((len & 0x3f) << 8) | lo;
       if (next === -1) next = ptr + 2;
       ptr = target;
       jumps++;
@@ -109,12 +111,16 @@ function readName(
 
 function decodeRdata(rtype: number, rdata: Uint8Array): string | null {
   if (rtype === DNS_TYPE_A && rdata.length === 4) {
-    return `${rdata[0]}.${rdata[1]}.${rdata[2]}.${rdata[3]}`;
+    const a = rdata[0] ?? 0;
+    const b = rdata[1] ?? 0;
+    const c = rdata[2] ?? 0;
+    const d = rdata[3] ?? 0;
+    return `${a}.${b}.${c}.${d}`;
   }
   if (rtype === DNS_TYPE_AAAA && rdata.length === 16) {
     const groups: string[] = [];
     for (let i = 0; i < 16; i += 2) {
-      groups.push(((rdata[i]! << 8) | rdata[i + 1]!).toString(16));
+      groups.push((((rdata[i] ?? 0) << 8) | (rdata[i + 1] ?? 0)).toString(16));
     }
     return groups.join(":");
   }
@@ -122,7 +128,7 @@ function decodeRdata(rtype: number, rdata: Uint8Array): string | null {
     let text = "";
     let p = 0;
     while (p < rdata.length) {
-      const l = rdata[p]!;
+      const l = rdata[p] ?? 0;
       p += 1;
       if (p + l > rdata.length) break;
       text += String.fromCharCode(...rdata.subarray(p, p + l));
@@ -135,11 +141,12 @@ function decodeRdata(rtype: number, rdata: Uint8Array): string | null {
 
 export function parseDnsAnswers(msg: Uint8Array, wantType: number): string[] {
   if (msg.length < 12) return [];
-  const flags = (msg[2]! << 8) | msg[3]!;
+  const flags = tryReadU16BE(msg, 2);
+  const qdcount = tryReadU16BE(msg, 4);
+  const ancount = tryReadU16BE(msg, 6);
+  if (flags === null || qdcount === null || ancount === null) return [];
   if ((flags & 0x8000) === 0) return [];
   if ((flags & 0x000f) !== 0) return [];
-  const qdcount = (msg[4]! << 8) | msg[5]!;
-  const ancount = (msg[6]! << 8) | msg[7]!;
   let off = 12;
   for (let i = 0; i < qdcount; i++) {
     const qn = readName(msg, off);
@@ -153,8 +160,9 @@ export function parseDnsAnswers(msg: Uint8Array, wantType: number): string[] {
     if (rn === null) break;
     off = rn.next;
     if (off + 10 > msg.length) break;
-    const rtype = (msg[off]! << 8) | msg[off + 1]!;
-    const rdlength = (msg[off + 8]! << 8) | msg[off + 9]!;
+    const rtype = tryReadU16BE(msg, off);
+    const rdlength = tryReadU16BE(msg, off + 8);
+    if (rtype === null || rdlength === null) break;
     off += 10;
     if (off + rdlength > msg.length) break;
     if (rtype === wantType) {

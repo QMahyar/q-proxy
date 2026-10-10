@@ -1,3 +1,5 @@
+import { parseBoundedInt, parseDecimalInt } from "./numbers";
+
 const IPV4_RE =
   /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
@@ -22,12 +24,22 @@ function expandIpv6Groups(s: string): number[] | null {
   const parseGroups = (parts: string[], quadAllowed: boolean): number[] | null => {
     const out: number[] = [];
     for (let i = 0; i < parts.length; i++) {
-      const part = parts[i]!;
+      const part = parts[i];
+      if (part === undefined) return null;
       if (part.includes(".")) {
         if (!quadAllowed || i !== parts.length - 1 || !isIPv4(part)) return null;
-        const octets = part.split(".").map(Number);
-        out.push((octets[0]! << 8) | octets[1]!);
-        out.push((octets[2]! << 8) | octets[3]!);
+        const octets = part.split(".");
+        if (octets.length !== 4) return null;
+        const nums: number[] = [];
+        for (const octet of octets) {
+          const n = parseDecimalInt(octet);
+          if (n === null || n > 255) return null;
+          nums.push(n);
+        }
+        const [a, b, c, d] = nums;
+        if (a === undefined || b === undefined || c === undefined || d === undefined) return null;
+        out.push((a << 8) | b);
+        out.push((c << 8) | d);
         continue;
       }
       if (/^[0-9a-fA-F]{1,4}$/.test(part)) {
@@ -58,12 +70,20 @@ export function isIPv6(s: string): boolean {
 }
 
 export function isIpLiteral(s: string): boolean {
-  const unbracketed = s.startsWith("[") && s.endsWith("]") ? s.slice(1, -1) : s;
+  const unbracketed = stripBrackets(s);
   return isIPv4(unbracketed) || isIPv6(unbracketed);
 }
 
 export const HOSTNAME_RE =
   /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+export function stripBrackets(s: string): string {
+  return s.replace(/^\[|\]$/g, "");
+}
+
+export function normalizeToken(raw: string): string {
+  return raw.trim().replace(/^["']+|["']+$/g, "").toLowerCase();
+}
 
 export function bracketIpv6(host: string): string {
   if (host.startsWith("[")) return host;
@@ -85,8 +105,8 @@ export function parseHostPort(input: string, defaultPort = 80): HostPort | null 
     const rest = trimmed.slice(closeIdx + 1);
     if (rest === "") return { host, port: defaultPort };
     if (!rest.startsWith(":")) return null;
-    const port = Number(rest.slice(1));
-    if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+    const port = parseBoundedInt(rest.slice(1), 1, 65535);
+    if (port === null) return null;
     return { host, port };
   }
   const colonCount = (trimmed.match(/:/g) ?? []).length;
@@ -100,8 +120,8 @@ export function parseHostPort(input: string, defaultPort = 80): HostPort | null 
     const portStr = trimmed.slice(idx + 1);
     if (host.length === 0) return null;
     if (portStr === "") return { host, port: defaultPort };
-    const port = Number(portStr);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+    const port = parseBoundedInt(portStr, 1, 65535);
+    if (port === null) return null;
     if (isIPv4(host)) return { host, port };
     if (/^[0-9a-fA-F:]+$/.test(trimmed)) return { host: trimmed, port: defaultPort };
     return { host, port };
@@ -112,25 +132,30 @@ export function parseHostPort(input: string, defaultPort = 80): HostPort | null 
 
 function ipv4ToBigInt(ip: string): bigint | null {
   if (!isIPv4(ip)) return null;
-  const octets = ip.split(".").map(Number);
-  return (
-    ((BigInt(octets[0]!) << 24n) |
-      (BigInt(octets[1]!) << 16n) |
-      (BigInt(octets[2]!) << 8n) |
-      BigInt(octets[3]!))
-  );
+  const nums: number[] = [];
+  for (const octet of ip.split(".")) {
+    const n = parseDecimalInt(octet);
+    if (n === null || n > 255) return null;
+    nums.push(n);
+  }
+  const [a, b, c, d] = nums;
+  if (a === undefined || b === undefined || c === undefined || d === undefined) return null;
+  return (BigInt(a) << 24n) | (BigInt(b) << 16n) | (BigInt(c) << 8n) | BigInt(d);
 }
 
 function ipv6ToBigInt(ip: string): bigint | null {
   const groups = expandIpv6Groups(ip);
   if (groups === null) return null;
   let v = 0n;
-  for (let i = 0; i < 8; i++) v = (v << 16n) | BigInt(groups[i]!);
+  for (let i = 0; i < 8; i++) v = (v << 16n) | BigInt(groups[i] ?? 0);
   return v;
 }
 
 function ipToBigInt(ip: string): { value: bigint; bits: number } | null {
-  if (isIPv4(ip)) return { value: ipv4ToBigInt(ip)!, bits: 32 };
+  if (isIPv4(ip)) {
+    const v4 = ipv4ToBigInt(ip);
+    return v4 === null ? null : { value: v4, bits: 32 };
+  }
   const v6 = ipv6ToBigInt(ip);
   return v6 === null ? null : { value: v6, bits: 128 };
 }
@@ -143,8 +168,8 @@ export function cidrContains(ip: string, cidr: string): boolean {
   const parsed = ipToBigInt(ip);
   const range = ipToBigInt(rangeIp);
   if (parsed === null || range === null || parsed.bits !== range.bits) return false;
-  const prefixLen = Number(lenStr);
-  if (!Number.isInteger(prefixLen) || prefixLen < 0 || prefixLen > parsed.bits) return false;
+  const prefixLen = parseBoundedInt(lenStr, 0, parsed.bits);
+  if (prefixLen === null) return false;
   const shift = BigInt(parsed.bits - prefixLen);
   return parsed.value >> shift === range.value >> shift;
 }
@@ -179,11 +204,12 @@ const CF_IPV6_RANGES = [
 
 type CfBound = { low: bigint; high: bigint };
 
-function cfCidrToBound(cidr: string): CfBound {
+function cfCidrToBound(cidr: string): CfBound | null {
   const slash = cidr.indexOf("/");
-  const ipPart = cidr.slice(0, slash);
-  const len = Number(cidr.slice(slash + 1));
-  const parsed = ipToBigInt(ipPart)!;
+  if (slash < 0) return null;
+  const parsed = ipToBigInt(cidr.slice(0, slash));
+  const len = parsed === null ? null : parseBoundedInt(cidr.slice(slash + 1), 0, parsed.bits);
+  if (parsed === null || len === null) return null;
   const shift = BigInt(parsed.bits - len);
   const low = (parsed.value >> shift) << shift;
   const high = shift === 0n ? low : low | ((1n << shift) - 1n);
@@ -193,15 +219,24 @@ function cfCidrToBound(cidr: string): CfBound {
 let cfV4Bounds: CfBound[] | null = null;
 let cfV6Bounds: CfBound[] | null = null;
 
+function buildCfBounds(ranges: readonly string[]): CfBound[] {
+  const out: CfBound[] = [];
+  for (const cidr of ranges) {
+    const bound = cfCidrToBound(cidr);
+    if (bound !== null) out.push(bound);
+  }
+  return out;
+}
+
 function getCfV4Bounds(): CfBound[] {
   if (cfV4Bounds) return cfV4Bounds;
-  cfV4Bounds = CF_IPV4_RANGES.map(cfCidrToBound);
+  cfV4Bounds = buildCfBounds(CF_IPV4_RANGES);
   return cfV4Bounds;
 }
 
 function getCfV6Bounds(): CfBound[] {
   if (cfV6Bounds) return cfV6Bounds;
-  cfV6Bounds = CF_IPV6_RANGES.map(cfCidrToBound);
+  cfV6Bounds = buildCfBounds(CF_IPV6_RANGES);
   return cfV6Bounds;
 }
 
@@ -230,7 +265,11 @@ let metadataV6Values: bigint[] | null = null;
 
 function getMetadataV6Values(): bigint[] {
   if (metadataV6Values) return metadataV6Values;
-  metadataV6Values = METADATA_IPV6.map((ip) => ipv6ToBigInt(ip)!);
+  metadataV6Values = [];
+  for (const ip of METADATA_IPV6) {
+    const value = ipv6ToBigInt(ip);
+    if (value !== null) metadataV6Values.push(value);
+  }
   return metadataV6Values;
 }
 
@@ -261,7 +300,7 @@ const PRIVATE_V4 = ["0.0.0.0/8", "10.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16", 
 const PRIVATE_V6 = ["::1/128", "::/128", "fc00::/7", "fe80::/10", "::ffff:0:0/96", "64:ff9b::/96"];
 
 export function isLocalOrPrivateTarget(host: string): boolean {
-  const h = host.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  const h = stripBrackets(host.trim().toLowerCase());
   if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local")) return true;
   if (isMetadataIp(h) || isMetadataHostname(h)) return true;
   if (isIPv4(h)) return PRIVATE_V4.some((r) => cidrContains(h, r));
@@ -273,7 +312,7 @@ export function isLocalOrPrivateTarget(host: string): boolean {
 }
 
 export function isBlockedEgressHost(host: string): boolean {
-  const bare = host.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  const bare = stripBrackets(host.trim().toLowerCase());
   if (isLocalOrPrivateTarget(bare)) return true;
   if (isIPv4(bare) && isCloudflareIp(bare)) return true;
   if (bare.includes(":") && isCloudflareIp(bare)) return true;

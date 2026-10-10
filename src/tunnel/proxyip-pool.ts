@@ -1,5 +1,5 @@
 import type { Settings } from "../types/settings";
-import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
+import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, normalizeToken, parseHostPort } from "../utils/net";
 import { dialTcp } from "./egress";
 import { expandProxyIps, expandProxyIpsCached, hashSeed, shuffleDeterministic } from "./proxyip";
 import { createResolver } from "./resolver";
@@ -105,7 +105,7 @@ function extractPoolTokens(text: string): string[] {
 }
 
 function parsePoolToken(token: string): RelayEndpoint | null {
-  const t = token.trim().replace(/^["']+|["']+$/g, "").toLowerCase();
+  const t = normalizeToken(token);
   if (t.length === 0 || /\s/.test(t)) return null;
   const hp = parseHostPort(t, DEFAULT_RELAY_PORT);
   if (hp === null || hp.host.length === 0) return null;

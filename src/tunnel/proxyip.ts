@@ -1,4 +1,4 @@
-import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
+import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, normalizeToken, parseHostPort, stripBrackets } from "../utils/net";
 import { createResolver } from "./resolver";
 import type { DohResolver } from "./resolver";
 
@@ -20,7 +20,7 @@ type Classified =
   | { kind: "domain"; host: string; port: number };
 
 function classifyToken(token: string): Classified | null {
-  let t = token.trim().replace(/^["']+|["']+$/g, "").toLowerCase();
+  let t = normalizeToken(token);
   if (t.length === 0) return null;
   let portOverride: number | null = null;
   const tp = TP_PORT_RE.exec(t);
@@ -51,7 +51,7 @@ function splitTxtList(txt: string): string[] {
   return txt
     .replace(/\\010/gi, "\n")
     .split(/[\n\r\x08,;]+/)
-    .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
+    .map((t) => normalizeToken(t))
     .filter((t) => t.length > 0);
 }
 
@@ -101,7 +101,7 @@ export async function expandProxyIps(
   const out: ProxyIpEntry[] = [];
   const seen = new Set<string>();
   const push = (host: string, port: number, label: string): void => {
-    const bare = host.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+    const bare = stripBrackets(host.trim().toLowerCase());
     if (isLocalOrPrivateTarget(bare) || isCloudflareIp(bare)) return;
     const key = `${host}:${port}`;
     if (seen.has(key)) return;

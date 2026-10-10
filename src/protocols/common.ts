@@ -1,4 +1,4 @@
-import { concatBytes, utf8Decode } from "../utils/bytes";
+import { concatBytes, tryReadU16BE, utf8Decode } from "../utils/bytes";
 
 export interface DialTargetLite {
   host: string;
@@ -58,7 +58,8 @@ export function peekFlat(buffer: Uint8Array[], length: number): Uint8Array | nul
 export function dropChunks(buffer: Uint8Array[], length: number): void {
   let remaining = length;
   while (remaining > 0 && buffer.length > 0) {
-    const c = buffer[0]!;
+    const c = buffer[0];
+    if (c === undefined) break;
     if (c.length <= remaining) {
       remaining -= c.length;
       buffer.shift();
@@ -99,13 +100,20 @@ export class ByteAccumulator {
 const ATYPE_IPV4 = 1;
 
 function ipv4ToString(buf: Uint8Array, offset: number): string {
-  return `${buf[offset]}.${buf[offset + 1]}.${buf[offset + 2]}.${buf[offset + 3]}`;
+  // Callers guarantee offset + 4 <= buf.length; ?? 0 only satisfies the checker.
+  const a = buf[offset] ?? 0;
+  const b = buf[offset + 1] ?? 0;
+  const c = buf[offset + 2] ?? 0;
+  const d = buf[offset + 3] ?? 0;
+  return `${a}.${b}.${c}.${d}`;
 }
 
 function ipv6ToString(buf: Uint8Array, offset: number): string {
   const groups: string[] = [];
   for (let i = 0; i < 8; i++) {
-    groups.push(((buf[offset + i * 2]! << 8) | buf[offset + i * 2 + 1]!).toString(16));
+    const hi = buf[offset + i * 2] ?? 0;
+    const lo = buf[offset + i * 2 + 1] ?? 0;
+    groups.push(((hi << 8) | lo).toString(16));
   }
   return groups.join(":");
 }
@@ -126,7 +134,8 @@ export function parseAddressValue(
   }
   if (atype === domainType) {
     if (buf.length - offset < 1) return { ok: false, reason: "truncated domain length" };
-    const len = buf[offset]!;
+    const len = buf[offset];
+    if (len === undefined) return { ok: false, reason: "truncated domain length" };
     if (len === 0) return { ok: false, reason: "empty domain" };
     if (buf.length - offset - 1 < len) return { ok: false, reason: "truncated domain" };
     const raw = buf.subarray(offset + 1, offset + 1 + len);
@@ -154,7 +163,8 @@ export function parseAddress(
   if (!addr.ok) return addr;
   const portOffset = addr.value.nextOffset;
   if (buf.length - portOffset < 2) return { ok: false, reason: "truncated port" };
-  const port = (buf[portOffset]! << 8) | buf[portOffset + 1]!;
+  const port = tryReadU16BE(buf, portOffset);
+  if (port === null) return { ok: false, reason: "truncated port" };
   if (port === 0) return { ok: false, reason: "invalid port 0" };
   return { ok: true, value: { ...addr.value, port, nextOffset: portOffset + 2 } };
 }

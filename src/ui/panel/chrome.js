@@ -1,5 +1,5 @@
 const TRAFFIC_KEY='qp_traffic';
-function readTraffic(){try{const a=JSON.parse(localStorage.getItem(TRAFFIC_KEY)||'[]');return Array.isArray(a)?a.filter(x=>x&&typeof x.today==='number'):[]}catch(e){return[]}}
+function readTraffic(){const a=storeGetJson(TRAFFIC_KEY,[]);return Array.isArray(a)?a.filter(x=>x&&typeof x.today==='number'):[]}
 function recordTraffic(){
 if(!S.status||!S.status.usage)return;
 const today=S.status.usage.requestsToday||0,total=S.status.usage.requestsTotal||0;
@@ -9,7 +9,7 @@ const last=h[h.length-1];
 if(last&&last.day===day){last.today=today;last.total=total}
 else h.push({day:day,today:today,total:total});
 h=h.slice(-30);
-try{localStorage.setItem(TRAFFIC_KEY,JSON.stringify(h))}catch(e){}}
+storeSet(TRAFFIC_KEY,JSON.stringify(h))}
 function renderTraffic(){
 const box=$('traffic-chart');if(!box)return;
 const h=readTraffic();
@@ -33,8 +33,8 @@ const EXPORT_KEY='qp_last_export',BACKUP_DISMISS='qp_backup_dismiss';
 function maybeBackupBanner(){
 const box=$('backup-banner');if(!box)return;
 let last=0,dis=0;
-try{last=Number(localStorage.getItem(EXPORT_KEY)||'0')}catch(e){}
-try{dis=Number(localStorage.getItem(BACKUP_DISMISS)||'0')}catch(e){}
+last=Number(storeGet(EXPORT_KEY)||'0');
+dis=Number(storeGet(BACKUP_DISMISS)||'0');
 const now=Date.now();
 if(last&&now-last<30*864e5){box.hidden=true;return}
 if(dis&&now-dis<7*864e5){box.hidden=true;return}

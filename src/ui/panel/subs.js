@@ -107,7 +107,7 @@ if(!S.warp)loadWarpIfNeeded().then(()=>{if(parseRoute().view==='subs')renderSubs
 document.addEventListener('click',function(e){
 const chip=e.target&&e.target.closest?e.target.closest('#subs-body [data-mode]'):null;
 if(!chip)return;
-S.subMode=chip.dataset.mode;try{localStorage.setItem('qp_submode',S.subMode)}catch(err){}
+S.subMode=chip.dataset.mode;storeSet('qp_submode',S.subMode)
 syncModeUrl();
 chip.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b===chip)));
 const rows=mainSubEntries();
