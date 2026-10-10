@@ -8,7 +8,7 @@ import type {
 export const LANGUAGES: readonly Language[] = ["en", "fa"];
 export const FRAGMENT_MODES: readonly FragmentMode[] = ["off", "low", "medium", "high", "severe", "custom"];
 export const FRAGMENT_PACKETS = ["tlshello", "1-1", "1-2", "1-3", "1-5"] as const;
-export const CAMOUFLAGE_MODES: readonly CamouflageMode[] = ["off", "static"];
+export const CAMOUFLAGE_MODES: readonly CamouflageMode[] = ["off", "static", "nginx", "reverse", "minimal"];
 export const VLESS_FLOWS = ["", "xtls-rprx-vision"] as const;
 export const FINGERPRINTS: readonly Fingerprint[] = [
   "chrome",
@@ -111,6 +111,7 @@ export const SETTING_FIELD_DESCRIPTORS: readonly SettingFieldDescriptor[] = [
   { path: "killSwitch", spec: { kind: "bool" } },
   { path: "allowedIps", spec: { kind: "custom" } },
   { path: "camouflage.mode", spec: { kind: "enum", allowed: CAMOUFLAGE_MODES } },
+  { path: "camouflage.reverseUrl", spec: { kind: "custom" } },
   { path: "routingRules.bypassLan", spec: { kind: "bool" } },
   { path: "routingRules.blockAds", spec: { kind: "bool" } },
   { path: "routingRules.blockMalware", spec: { kind: "bool" } },

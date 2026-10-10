@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Added (B5b — edgetunnel parity: camouflage modes)
+- `camouflage.mode` gains `nginx` (serves the default static page),
+  `minimal` (tiny `1101`-style page, `no-store`), and `reverse` (mirrors an
+  `https://` origin: upstream origin+request path, text-only host rewrite to
+  this worker, `Cache-Control: no-store`, 8s timeout, 2MB cap, non-text
+  passthrough). `off` still 404s.
+- New `camouflage.reverseUrl` setting: `reverse` mode requires an `https://`
+  URL at save time (plain `http` rejected, local/private rejected); the
+  handler additionally upgrades a legacy `http` store instead of failing,
+  and refuses local targets without fetching. Invalid stored configs
+  self-heal to the static page on load.
+- Panel Advanced: mode select with all five options + a reverse-URL field
+  shown only for `reverse` (existing `showIf` machinery, `url` validation)
+  (en + fa).
+
 ### Added (B4 — edgetunnel parity: CF usage + access log + TG events)
 - New settings `cf { email, globalApiKey, accountId, apiToken, usageApiUrl }`
   (keys masked on read like `botToken`) and server-written `cfUsage

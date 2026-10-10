@@ -131,6 +131,19 @@ describe("validateSettings", () => {
     expect(validateSettings({ language: "fa", fingerprint: "randomized" }).ok).toBe(true);
     expect(validateSettings({ camouflage: { mode: "static" } }).ok).toBe(true);
     expect(validateSettings({ camouflage: { mode: "off" } }).ok).toBe(true);
+    for (const mode of ["nginx", "minimal"] as const) {
+      expect(validateSettings({ camouflage: { mode } }).ok, mode).toBe(true);
+    }
+    expect(validateSettings({ camouflage: { mode: "reverse", reverseUrl: "https://origin.example" } }).ok).toBe(true);
+  });
+
+  it("requires an https reverse URL for reverse mode (B5b)", () => {
+    expect(fieldsOf({ camouflage: { mode: "reverse" } })["camouflage.reverseUrl"]).toMatch(/https/);
+    expect(fieldsOf({ camouflage: { mode: "reverse", reverseUrl: "http://example.com" } })["camouflage.reverseUrl"]).toBeTruthy();
+    expect(fieldsOf({ camouflage: { mode: "reverse", reverseUrl: "not-a-url" } })["camouflage.reverseUrl"]).toBeTruthy();
+    expect(fieldsOf({ camouflage: { mode: "reverse", reverseUrl: "https://127.0.0.1/x" } })["camouflage.reverseUrl"]).toBeTruthy();
+    expect(validateSettings({ camouflage: { mode: "reverse", reverseUrl: "https://origin.example/blog" } }).ok).toBe(true);
+    expect(validateSettings({ camouflage: { mode: "static", reverseUrl: "" } }).ok).toBe(true);
   });
 
   it("requires exact boolean types", () => {

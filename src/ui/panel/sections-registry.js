@@ -84,7 +84,8 @@ FL('subConverter.appendType','bool','advanced.converter.appendType',null),
 FL('subConverter.sort','bool','advanced.converter.sort',null),
 FL('subConverter.expand','bool','advanced.converter.expand',null)]},
 {title:'advanced.camouflage.label',fields:[
-FL('camouflage.mode','select','advanced.camouflage.label',null,{opts:[['off','advanced.camouflage.none'],['static','advanced.camouflage.static']]})]},
+FL('camouflage.mode','select','advanced.camouflage.label',null,{opts:[['off','advanced.camouflage.none'],['static','advanced.camouflage.static'],['nginx','advanced.camouflage.nginx'],['reverse','advanced.camouflage.reverse'],['minimal','advanced.camouflage.minimal']]}),
+FL('camouflage.reverseUrl','str','advanced.camouflage.reverseUrl','advanced.camouflage.reverseUrl_hint',{mono:true,maxLen:2048,vtype:'url',showIf:(sec)=>!!(sec.camouflage&&sec.camouflage.mode==='reverse')})]},
 {title:'routing.title',fields:[
 FL('routingRules.bypassLan','bool','routing.bypassLan.label','routing.bypassLan.hint'),
 FL('routingRules.blockQuic','bool','routing.blockQuic.label','routing.blockQuic.hint'),

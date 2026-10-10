@@ -356,9 +356,9 @@ if(bind){
 if(bind.tagName==='TEXTAREA')validateOneEditor(bind);
 markDirty(bind);
 if(/^vlessEnabled$/.test(bind.dataset.bind))applyProtoDim()
-if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()}}
-let dirtyTimer=null;
-function onInput(e){
+if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()
+if(bind.dataset.bind==='camouflage.mode')refreshShowIf()}}
+let dirtyTimer=null;function onInput(e){
 const bind=e.target.closest('[data-bind]');
 if(!bind)return;
 if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250);clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(bind),120);return}

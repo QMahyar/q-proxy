@@ -119,7 +119,7 @@ describe("MIGRATIONS[2] vless-warp slimdown cut", () => {
       expect(merged).not.toHaveProperty(key);
     }
     expect(merged.securePath).toBe("deployed1");
-    expect(merged.camouflage).toEqual({ mode: "static" });
+    expect(merged.camouflage).toEqual({ mode: "static", reverseUrl: "" });
   });
 });
 

@@ -14,7 +14,9 @@ switch(f.type){
 case 'str':{
 const val=String(getPath(S.set,paths[0])??'');
 const extra=f.preview==='ech'?'<p class="field__hint" data-ech-preview dir="auto"></p>':'';
-return fieldWrap(id,f.label,f.hint,f.help,f.maxLen||0).replace('{B}','<input type="text" class="input'+(f.mono?' input--mono':'')+'" id="'+id+'" data-bind="'+paths[0]+'" autocomplete="off" spellcheck="false" dir="'+(f.mono?'ltr':'auto')+'" value="'+esc(val)+'">'+extra)}
+let out=fieldWrap(id,f.label,f.hint,f.help,f.maxLen||0).replace('{B}','<input type="text" class="input'+(f.mono?' input--mono':'')+'" id="'+id+'" data-bind="'+paths[0]+'" autocomplete="off" spellcheck="false" dir="'+(f.mono?'ltr':'auto')+'" value="'+esc(val)+'">'+extra);
+if(f.showIf)out=out.replace('<div class="field"','<div class="field" data-fpath="'+paths[0]+'"');
+return out}
 case 'num':{
 const val=getPath(S.set,paths[0]);
 return fieldWrap(id,f.label,f.hint,f.help).replace('{B}','<input type="number" step="1" class="input" id="'+id+'" data-bind="'+paths[0]+'" value="'+esc(val==null?'':String(val))+'">')}

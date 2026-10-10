@@ -16,7 +16,7 @@ export type Fingerprint =
   | "random"
   | "randomized";
 export type PlainPortPolicy = "always" | "workers-dev" | "never";
-export type CamouflageMode = "off" | "static";
+export type CamouflageMode = "off" | "static" | "nginx" | "reverse" | "minimal";
 export type FragmentMode = "off" | "low" | "medium" | "high" | "severe" | "custom";
 
 export interface FragmentSettings {
@@ -32,6 +32,7 @@ export interface FragmentSettings {
 
 export interface CamouflageSettings {
   mode: CamouflageMode;
+  reverseUrl: string;
 }
 
 export interface TelegramSettings {
@@ -195,7 +196,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxNodesPerFormat: 500,
   killSwitch: false,
   allowedIps: [],
-  camouflage: { mode: "static" },
+  camouflage: { mode: "static", reverseUrl: "" },
   routingRules: { bypassLan: false, blockAds: false, blockMalware: false, blockQuic: false, customBypass: [], customBlock: [] },
   telegram: { enabled: false, botToken: "", chatId: "", onSubscribe: true, onSaveConfig: true, onAdminLogin: true, silent: false },
   cf: { email: "", globalApiKey: "", accountId: "", apiToken: "", usageApiUrl: "" },

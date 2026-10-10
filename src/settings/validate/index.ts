@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS } from "../../types/settings";
 import { SETTING_FIELD_DESCRIPTORS } from "../fields";
 import { isPlainObject } from "../migrate";
 import { applyAccessCustom, validateProxyIps } from "./access";
+import { applyCamouflageCustom } from "./camouflage";
 import { applyCfCustom } from "./cf";
 import { applyEndpointsCustom } from "./endpoints";
 import { applyIntegrationsCustom, validateBootstrapConsistency } from "./integrations";
@@ -20,6 +21,7 @@ function applyCustomField(
   fields: Record<string, string>,
 ): void {
   if (applyAccessCustom(path, patch, out, fields)) return;
+  if (applyCamouflageCustom(path, patch, out, fields)) return;
   if (applyCfCustom(path, patch, out, fields)) return;
   if (applyEndpointsCustom(path, patch, out, fields)) return;
   if (applyTransportCustom(path, patch, out, fields)) return;
