@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Added (B2 — edgetunnel parity: preferred-IP syntax + validator)
+- Preferred-list line syntax for `customEndpoints` (additive, never-throw):
+  `IP:port#remark` labels, `sub://…[#remark][?proxyip=true]`,
+  `https://…` remote lists, `*` wildcard segments, `$socks5|http|https|
+  turn|sstp://…` chain suffixes, and `?proxyip=true` flags. Invalid lines
+  are reported with reasons; explicit ports must still be Cloudflare-proxied.
+- New settings `preferredLocal` (default true), `preferredCount` 1–2000
+  (default 16, caps consumed entries), `preferredPort` (-1 = random
+  Cloudflare TLS port for port-less new-syntax lines, else explicit;
+  bare `host` lines still use `defaultPort`), and `preferredRemoteUrl`
+  (SUB-generator hostname override, empty = worker hostname).
+- `proxyip=true` entries are tagged `proxy-ip` on nodes and feed the egress
+  relay pool as candidates.
+- New authed `GET/POST api/preferred-validate` (`{url?, text?}`): validates
+  posted text, a fetched remote list (8s timeout, 256KB cap, local/private
+  targets rejected, URL never logged), or the stored list; answers
+  `{source, valid[], invalid[{line, reason}]}` with no secrets.
+- Panel: preferred count/port/remote controls in the endpoints card,
+  `preferred_line` live validation, a preferred-list validator button with
+  valid/invalid grouping and `proxyip` badges in the Subs import card
+  (en + fa).
 ### Added (B1 — edgetunnel parity: subscription targets + converter)
 - Additive `?target=` values `surge`, `quanx`, `loon` alongside
   `base64/singbox/clash/xray` (plus `mixed` alias, `?b64`/`?clash`/`?sb`/

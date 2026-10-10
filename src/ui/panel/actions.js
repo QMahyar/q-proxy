@@ -180,8 +180,14 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
   withBusy(el,()=>api('api/sub-import',{method:'POST',body:{text:ta.value}})
   .then(d=>{renderImportPreview(d&&d.sources||[])})
   .catch(()=>{box.innerHTML=errorCard({title:'common.error',retryAction:'data-action="subs-import-preview"'})}))},
-  'subs-import-confirm'(el){
-  if(!subImportEndpoints.length)return;
+  'subs-preferred-validate'(el){
+  const ta=$('sub-import-text');const box=$('sub-import-preview');if(!ta||!box)return;
+  box.innerHTML=loadingBox({rows:2});
+  const text=ta.value;
+  withBusy(el,()=>api('api/preferred-validate',{method:'POST',body:text.trim().length>0?{text:text}:{}})
+  .then(d=>{renderPreferredPreview((d&&d.valid)||[],(d&&d.invalid)||[])})
+  .catch(()=>{box.innerHTML=errorCard({title:'common.error',retryAction:'data-action="subs-preferred-validate"'})}))},
+  'subs-import-confirm'(el){  if(!subImportEndpoints.length)return;
   const cur=Array.isArray(S.set&&S.set.customEndpoints)?S.set.customEndpoints.map(l=>String(l).trim()).filter(l=>l.length>0):[];
   const merged=cur.slice();const have=new Set(cur.map(l=>l.toLowerCase()));
   subImportEndpoints.forEach(e=>{if(!have.has(e.toLowerCase())){have.add(e.toLowerCase());merged.push(e)}});

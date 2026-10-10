@@ -35,6 +35,7 @@ export type ApiRouteName =
   | "killswitch"
   | "suburls"
   | "sub-import"
+  | "preferred-validate"
   | "warp"
   | "proxy-pool"
   | "address-probe"
@@ -100,6 +101,7 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
       if (sub === "killswitch" && rest.length === 2) return { kind: "api", api: "killswitch" };
       if (sub === "suburls" && rest.length === 2) return { kind: "api", api: "suburls" };
       if (sub === "sub-import" && rest.length === 2) return { kind: "api", api: "sub-import" };
+      if (sub === "preferred-validate" && rest.length === 2) return { kind: "api", api: "preferred-validate" };
       if (sub === "warp" && rest.length >= 2) return { kind: "api", api: "warp" };
       if (sub === "proxy-pool" && rest.length === 2) return { kind: "api", api: "proxy-pool" };
       if (sub === "address-probe" && rest.length === 2) return { kind: "api", api: "address-probe" };

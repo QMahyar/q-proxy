@@ -8,6 +8,7 @@ export type NodeTag =
   | "clean-ip"
   | "cdn"
   | "fragment"
+  | "proxy-ip"
   | "no-tls";
 
 export interface NodeBase {

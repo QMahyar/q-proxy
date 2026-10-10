@@ -34,7 +34,11 @@ FL(['fragment.maxSplitMin','fragment.maxSplitMax'],'range','fragment.split',null
   {key:'addresses',cards:[
   {title:'endpoints.card.title',fields:[
   FL('cdnPresets','presetChecks','endpoints.presets.label','endpoints.presets.hint',{presetKind:'cdn'}),
-  FL('customEndpoints','list','endpoints.custom.label','endpoints.custom.hint',{validate:'host_port'}),
+  FL('customEndpoints','list','endpoints.custom.label','endpoints.custom.hint',{validate:'preferred_line'}),
+  FL('preferredLocal','bool','endpoints.preferred.local','endpoints.preferred.local_hint'),
+  FL('preferredCount','num','endpoints.preferred.count',null,{min:1,max:2000}),
+  FL('preferredPort','num','endpoints.preferred.port','endpoints.preferred.port_hint',{min:-1,max:65535}),
+  FL('preferredRemoteUrl','str','endpoints.preferred.remoteUrl','endpoints.preferred.remoteUrl_hint',{mono:true,maxLen:253}),
   FL('cdnHost','str','endpoints.front.host','endpoints.front.host_hint',{maxLen:253,vtype:'domain'}),
   FL('cdnSni','str','endpoints.front.sni','endpoints.front.sni_hint',{maxLen:253,vtype:'domain'}),
   FL('defaultPort','select','addresses.defaultPort.label','addresses.defaultPort.hint',{opts:[[443,'443'],[2053,'2053'],[2083,'2083'],[2087,'2087'],[2096,'2096'],[8443,'8443']]}),

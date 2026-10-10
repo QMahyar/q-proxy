@@ -37,7 +37,18 @@ switch(kind){
 case 'domain':return RE_DOMAIN.test(line);
 case 'ip_or_host':return validIpOrHost(line);
 case 'host_port':return validIpOrHost(stripPort(line));
+case 'preferred_line':return validPreferredLine(line);
 default:return true}}
+function validPreferredLine(line){
+if(!line||/\s/.test(line))return false;
+if(/^https:\/\/\S+$/i.test(line))return true;
+let core=line;
+const sub=core.match(/^sub:\/\/(.+)$/i);
+if(sub)core=sub[1];
+else if(/^[a-z][a-z0-9+.-]*:\/\//i.test(core))return false;
+core=core.split('?')[0].split('#')[0].split('$')[0];
+if(!core)return false;
+return validIpOrHost(stripPort(core))||core.includes('*')}
 let leTimer=null;
 function validateLineEditors(scope){
 clearTimeout(leTimer);

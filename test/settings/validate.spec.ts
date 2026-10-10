@@ -336,6 +336,87 @@ describe("custom endpoint lines", () => {
   });
 });
 
+describe("preferred settings block (B2)", () => {
+  it("defaults preferredLocal/count/port/remoteUrl", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.preferredLocal).toBe(true);
+      expect(result.value.preferredCount).toBe(16);
+      expect(result.value.preferredPort).toBe(-1);
+      expect(result.value.preferredRemoteUrl).toBe("");
+    }
+  });
+
+  it("accepts a full valid preferred patch", () => {
+    const result = validateSettings({
+      preferredLocal: false,
+      preferredCount: 200,
+      preferredPort: 8443,
+      preferredRemoteUrl: "sub.example.com",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.preferredLocal).toBe(false);
+      expect(result.value.preferredCount).toBe(200);
+      expect(result.value.preferredPort).toBe(8443);
+      expect(result.value.preferredRemoteUrl).toBe("sub.example.com");
+    }
+  });
+
+  it("ranges preferredCount 1-2000 and preferredPort -1 or 1-65535", () => {
+    expect(fieldsOf({ preferredCount: 0 }).preferredCount).toBeTruthy();
+    expect(fieldsOf({ preferredCount: 2001 }).preferredCount).toBeTruthy();
+    expect(fieldsOf({ preferredCount: 1.5 }).preferredCount).toBeTruthy();
+    expect(fieldsOf({ preferredPort: -2 }).preferredPort).toBeTruthy();
+    expect(fieldsOf({ preferredPort: 0 }).preferredPort).toBeTruthy();
+    expect(fieldsOf({ preferredPort: 65536 }).preferredPort).toBeTruthy();
+    expect(validateSettings({ preferredCount: 1, preferredPort: -1 }).ok).toBe(true);
+    expect(validateSettings({ preferredCount: 2000, preferredPort: 65535 }).ok).toBe(true);
+  });
+
+  it("requires exact booleans for preferredLocal", () => {
+    expect(fieldsOf({ preferredLocal: "yes" }).preferredLocal).toBeTruthy();
+    expect(validateSettings({ preferredLocal: false }).ok).toBe(true);
+  });
+
+  it("allows an empty remote url but requires a hostname or IP otherwise", () => {
+    expect(validateSettings({ preferredRemoteUrl: "" }).ok).toBe(true);
+    expect(validateSettings({ preferredRemoteUrl: "203.0.113.9" }).ok).toBe(true);
+    expect(fieldsOf({ preferredRemoteUrl: "not a host!!" }).preferredRemoteUrl).toBeTruthy();
+    expect(fieldsOf({ preferredRemoteUrl: "https://example.com/x" }).preferredRemoteUrl).toBeTruthy();
+  });
+});
+
+describe("preferred endpoint line syntax (B2)", () => {
+  it("accepts remark, sub://, https-list, wildcard, chain, and proxyip lines verbatim", () => {
+    const lines = [
+      "1.2.3.4:443#Tehran",
+      "sub://5.6.7.8:8443#home?proxyip=true",
+      "https://example.com/add.txt",
+      "192.168.*.*:443",
+      "9.9.9.9:2053#via$socks5://u:p@9.9.9.9:1080",
+      "10.0.0.1:443?proxyip=true",
+    ];
+    const result = validateSettings({ customEndpoints: lines });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.customEndpoints).toEqual(lines);
+  });
+
+  it("keeps rejecting bad ports, bad hosts, and over-limit lists", () => {
+    expect(fieldsOf({ customEndpoints: ["9.9.9.9:22"] }).customEndpoints).toContain("line 1");
+    expect(fieldsOf({ customEndpoints: ["1.2.3.4:443#r$wireguard://x"] }).customEndpoints).toContain("line 1");
+    expect(fieldsOf({ customEndpoints: ["http://example.com/a.txt"] }).customEndpoints).toBeTruthy();
+    const list = Array.from({ length: 65 }, (_, i) => `10.2.0.${(i % 250) + 1}:443`);
+    expect(fieldsOf({ customEndpoints: list }).customEndpoints).toContain("too many");
+  });
+
+  it("keeps WARP custom lines on the strict host:port syntax", () => {
+    expect(fieldsOf({ warpCustomEndpoints: ["sub://1.2.3.4:443"] }).warpCustomEndpoints).toBeTruthy();
+    expect(fieldsOf({ warpCustomEndpoints: ["1.2.3.4:443#r"] }).warpCustomEndpoints).toBeTruthy();
+  });
+});
+
 describe("telegram settings block", () => {
   const VALID_TOKEN = `123456789:${"A".repeat(35)}`;
 

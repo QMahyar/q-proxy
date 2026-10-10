@@ -71,6 +71,10 @@ export interface Settings {
   earlyDataMaxBytes: number;
   cdnPresets: string[];
   customEndpoints: string[];
+  preferredLocal: boolean;
+  preferredCount: number;
+  preferredPort: number;
+  preferredRemoteUrl: string;
   cdnHost: string;
   cdnSni: string;
   warpPresets: string[];
@@ -119,6 +123,10 @@ export const DEFAULT_SETTINGS: Settings = {
   earlyDataMaxBytes: 2048,
   cdnPresets: [],
   customEndpoints: [],
+  preferredLocal: true,
+  preferredCount: 16,
+  preferredPort: -1,
+  preferredRemoteUrl: "",
   cdnHost: "",
   cdnSni: "",
   warpPresets: ["default"],

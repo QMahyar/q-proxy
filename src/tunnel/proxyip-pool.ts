@@ -1,5 +1,6 @@
 import type { Settings } from "../types/settings";
 import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, normalizeToken, parseHostPort } from "../utils/net";
+import { preferredProxyIpCandidates } from "../nodes/preferred";
 import { dialTcp } from "./egress";
 import { expandProxyIps, expandProxyIpsCached, hashSeed, shuffleDeterministic } from "./proxyip";
 import { createResolver } from "./resolver";
@@ -216,6 +217,15 @@ export async function collectProxyPoolDetailed(settings: Settings, colo: string)
     }
   };
   pushAll(listEntries.map((e) => ({ ip: e.host, port: e.port })));
+  // B2: `proxyip=true` preferred-list entries are egress-pool candidates.
+  // Only new-syntax lines can carry the flag, so lists without them are
+  // unaffected.
+  const preferredDefault = settings.defaultPort > 0 ? settings.defaultPort : DEFAULT_RELAY_PORT;
+  for (const candidate of preferredProxyIpCandidates(settings.customEndpoints, preferredDefault)) {
+    const hp = parseHostPort(candidate, DEFAULT_RELAY_PORT);
+    if (hp === null || hp.host.length === 0 || isLocalOrPrivateTarget(hp.host)) continue;
+    pushAll([{ ip: hp.host, port: hp.port }]);
+  }
   const poolUrl = settings.proxyIpPoolUrl.trim();
   if (poolUrl.length > 0) pushAll(await fetchPoolUrl(poolUrl));
   let source: PoolSource = "list";

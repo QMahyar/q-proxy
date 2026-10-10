@@ -360,3 +360,67 @@ describe("custom CDN front host/SNI triple", () => {
     expect(base.every((n) => n.host === HOST && n.sni === HOST)).toBe(true);
   });
 });
+
+describe("generateNodes preferred-list consumption (B2)", () => {
+  it("uses remarks as node labels and keeps explicit ports", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4:443#Tehran", "sub://5.6.7.8:8443#home"];
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.filter((n) => n.address === "1.2.3.4").map((n) => n.port)).toEqual([443]);
+    expect(nodes.some((n) => n.name.includes("Tehran"))).toBe(true);
+    expect(nodes.some((n) => n.name.includes("home"))).toBe(true);
+  });
+
+  it("tags proxyip=true entries without changing other nodes", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4:443?proxyip=true", "5.6.7.8:443"];
+    const nodes = generateNodes(ctx(s));
+    const flagged = nodes.filter((n) => n.address === "1.2.3.4");
+    const plain = nodes.filter((n) => n.address === "5.6.7.8");
+    expect(flagged.length).toBeGreaterThan(0);
+    expect(flagged.every((n) => n.tags.includes("proxy-ip"))).toBe(true);
+    expect(plain.every((n) => !n.tags.includes("proxy-ip"))).toBe(true);
+  });
+
+  it("caps consumed entries at preferredCount", () => {
+    const s = settings();
+    s.customEndpoints = ["1.0.0.1:443", "1.0.0.2:443", "1.0.0.3:443"];
+    s.preferredCount = 2;
+    const nodes = generateNodes(ctx(s));
+    expect(new Set(nodes.map((n) => n.address))).toEqual(new Set(["1.0.0.1", "1.0.0.2"]));
+  });
+
+  it("skips local custom lines when preferredLocal is off", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4:443"];
+    s.preferredLocal = false;
+    const nodes = generateNodes(ctx(s));
+    expect(new Set(nodes.map((n) => n.address))).toEqual(new Set([HOST]));
+  });
+
+  it("resolves port-less new-syntax lines from preferredPort", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4#tag"];
+    s.preferredPort = 8443;
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.filter((n) => n.address === "1.2.3.4").map((n) => n.port)).toEqual([8443]);
+  });
+
+  it("uses preferredRemoteUrl as the generation hostname when set", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4:443"];
+    s.preferredRemoteUrl = "sub.example.com";
+    const nodes = generateNodes(ctx(s));
+    const custom = nodes.filter((n) => n.address === "1.2.3.4");
+    expect(custom.length).toBeGreaterThan(0);
+    expect(custom.every((n) => n.host === "sub.example.com" && n.sni === "sub.example.com")).toBe(true);
+  });
+
+  it("skips https remote-list lines during generation", () => {
+    const s = settings();
+    s.customEndpoints = ["https://example.com/add.txt", "1.2.3.4:443"];
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.some((n) => n.address === "1.2.3.4")).toBe(true);
+    expect(nodes.every((n) => n.address !== "https://example.com/add.txt")).toBe(true);
+  });
+});
