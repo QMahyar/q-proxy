@@ -3,12 +3,22 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const require2 = createRequire('C:/Users/qmahyar/AppData/Roaming/npm/node_modules/@playwright/mcp/node_modules/playwright/index.js');
-const { chromium } = require2('playwright');
-
 // ================= config =================
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const BASE = 'http://127.0.0.1:8799';
+const projectRequire = createRequire(join(ROOT, 'package.json'));
+let chromium;
+try {
+  ({ chromium } = projectRequire('playwright'));
+} catch {
+  try {
+    ({ chromium } = projectRequire('playwright-core'));
+  } catch {
+    throw new Error('playwright not found: install it (npm i -D playwright-core) to run scripts/ui-walk.mjs');
+  }
+}
+const BASE = (process.env.UI_WALK_BASE ?? process.env.BASE_URL ?? 'http://127.0.0.1:8799').replace(/\/+$/, '');
+const BROWSER_CHANNEL = process.env.UI_WALK_CHANNEL ?? process.env.PLAYWRIGHT_CHANNEL ?? 'chrome';
+const HEADLESS = process.env.UI_WALK_HEADLESS !== '0';
 const SP_FILE = join(ROOT, '.pi/ui-audit/local-sp.txt');
 const PW_FILE = join(ROOT, '.pi/ui-audit/local-pw.txt');
 const SP = existsSync(SP_FILE) ? readFileSync(SP_FILE, 'utf8').trim() : '';
@@ -794,7 +804,7 @@ const started = new Date().toISOString();
 let browser = null;
 try {
   assert(SP.length === 24, 'securePath missing from .pi/ui-audit/local-sp.txt');
-  browser = await chromium.launch({ channel: 'chrome', headless: true });
+  browser = await chromium.launch(BROWSER_CHANNEL ? { channel: BROWSER_CHANNEL, headless: HEADLESS } : { headless: HEADLESS });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addCookies([{ name: 'qp_lang', value: 'en', url: BASE }]);
   await context.addInitScript(() => { try { localStorage.setItem('qp_wizard_done', '1'); } catch (e) {} });

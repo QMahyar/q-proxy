@@ -1,6 +1,6 @@
 import * as esbuild from "esbuild";
 import { execFileSync, execSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, writeFileSync, writeSync, mkdirSync, statSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, writeSync, mkdirSync, statSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -14,7 +14,7 @@ const PANEL_HTML = resolve(root, "src/ui/panel.html");
 const PANEL_HEAD_MARKER = "<!--panel:head-js-->";
 const PANEL_CSS_MARKER = "<!--panel:css-->";
 const PANEL_JS_MARKER = "<!--panel:js-->";
-const PANEL_JS_ORDER = ["dict.js", "format-labels.js", "lib.js", "a11y.js", "qr.js", "states.js", "home.js", "warp.js", "subs.js", "share.js", "chrome.js", "settings.js", "sections-registry.js", "fields-render.js", "cards.js", "fields-validate.js", "section-io.js", "sections.js", "actions.js"];
+const PANEL_JS_ORDER = ["dict.js", "format-labels.js", "lib.js", "storage.js", "a11y.js", "qr.js", "states.js", "home.js", "warp.js", "subs.js", "share.js", "chrome.js", "settings.js", "sections-registry.js", "fields-render.js", "cards.js", "fields-validate.js", "section-io.js", "sections.js", "actions.js"];
 
 function panelPart(name) {
   const text = readFileSync(join(PANEL_DIR, name), "utf8");
@@ -24,17 +24,74 @@ function panelPart(name) {
 }
 
 function panelSplice(shell, marker, content) {
-  const at = shell.indexOf(marker);
-  if (at < 0 || shell.indexOf(marker, at + marker.length) >= 0) throw new Error(`panel marker unresolved: ${marker}`);
-  return shell.slice(0, at) + content + shell.slice(at + marker.length);
+  const first = shell.indexOf(marker);
+  const second = first >= 0 ? shell.indexOf(marker, first + marker.length) : -1;
+  if (first < 0 || second >= 0) {
+    const count = shell.split(marker).length - 1;
+    throw new Error(
+      `panel marker ${marker} found ${count} time(s) in src/ui/panel/shell.html (expected exactly 1); ` +
+      `shell must contain ${PANEL_HEAD_MARKER}, ${PANEL_CSS_MARKER}, ${PANEL_JS_MARKER} exactly once each`,
+    );
+  }
+  return shell.slice(0, first) + content + shell.slice(first + marker.length);
+}
+
+// Fail when a src/ui/panel/*.js file is not listed in PANEL_JS_ORDER.
+// head.js is excluded: it is spliced via PANEL_HEAD_MARKER, not PANEL_JS_MARKER.
+// Plain concat shares one IIFE scope, so order is load order — orphans would
+// silently never ship in the bundle.
+function checkPanelJsOrder() {
+  const onDisk = readdirSync(PANEL_DIR).filter((f) => f.endsWith(".js") && f !== "head.js").sort();
+  const dupes = PANEL_JS_ORDER.filter((f, i) => PANEL_JS_ORDER.indexOf(f) !== i);
+  if (dupes.length > 0) throw new Error(`PANEL_JS_ORDER has duplicate(s) in scripts/build-single-file.mjs: ${[...new Set(dupes)].join(", ")}`);
+  const onDiskSet = new Set(onDisk);
+  const missing = PANEL_JS_ORDER.filter((f) => !onDiskSet.has(f));
+  if (missing.length > 0) throw new Error(`PANEL_JS_ORDER lists file(s) missing from src/ui/panel/: ${missing.join(", ")}`);
+  const orderSet = new Set(PANEL_JS_ORDER);
+  const orphans = onDisk.filter((f) => !orderSet.has(f));
+  if (orphans.length > 0) {
+    throw new Error(
+      `panel JS orphan(s) on disk but missing from PANEL_JS_ORDER in scripts/build-single-file.mjs: ${orphans.join(", ")} ` +
+      `(add to PANEL_JS_ORDER in concat order, or delete the file)`,
+    );
+  }
+}
+
+// src/nodes/cdn-presets.ts is the canonical CDN preset source: the panel
+// must not hard-code its own copy. home.js declares
+// `const CDN_PRESETS=__CDN_PRESETS__;` and the build injects the canonical
+// {id,ip,port} literal here, failing loudly on drift or parse errors.
+const CDN_PRESETS_PLACEHOLDER = "__CDN_PRESETS__";
+
+function loadCdnPresetsLiteral() {
+  const src = readFileSync(resolve(root, "src/nodes/cdn-presets.ts"), "utf8");
+  const entries = [];
+  const re = /\{\s*id:\s*"([^"]+)"\s*,\s*label:\s*"[^"]*"\s*,\s*ip:\s*"([^"]+)"\s*,\s*port:\s*(\d+)\s*\}/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    entries.push({ id: m[1], ip: m[2], port: Number(m[3]) });
+  }
+  if (entries.length === 0) throw new Error("cdn presets: no entries parsed from src/nodes/cdn-presets.ts");
+  const ids = entries.map((e) => e.id);
+  if (new Set(ids).size !== ids.length) throw new Error("cdn presets: duplicate ids in src/nodes/cdn-presets.ts");
+  return JSON.stringify(entries);
+}
+
+function injectCdnPresets(js) {
+  if (!js.includes(CDN_PRESETS_PLACEHOLDER)) {
+    throw new Error("cdn presets: placeholder __CDN_PRESETS__ missing from panel JS (expected `const CDN_PRESETS=__CDN_PRESETS__;` in src/ui/panel/home.js)");
+  }
+  return js.split(CDN_PRESETS_PLACEHOLDER).join(loadCdnPresetsLiteral());
 }
 
 function assemblePanel() {
+  checkPanelJsOrder();
   const shell = readFileSync(join(PANEL_DIR, "shell.html"), "utf8");
   const eol = shell.includes("\r\n") ? "\r\n" : "\n";
-  const js = PANEL_JS_ORDER.map((name) => panelPart(name)).join(eol);
+  const js = injectCdnPresets(PANEL_JS_ORDER.map((name) => panelPart(name)).join(eol));
   const html = panelSplice(panelSplice(panelSplice(shell, PANEL_HEAD_MARKER, panelPart("head.js")), PANEL_CSS_MARKER, panelPart("app.css")), PANEL_JS_MARKER, js);
-  if (html.includes("<!--panel:")) throw new Error("panel marker left in output");
+  const leftover = html.match(/<!--panel:[^>]*-->/);
+  if (leftover) throw new Error(`panel marker left in output: ${leftover[0]} (shell.html marker has no matching splice content)`);
   return html;
 }
 

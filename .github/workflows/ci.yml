@@ -20,5 +20,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      - run: git diff --exit-code -- src/ui/panel.html
+      - run: node scripts/check-config.mjs
       - run: npx wrangler types src/env.d.ts && git diff --exit-code -- src/env.d.ts
       - run: npm test
