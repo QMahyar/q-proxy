@@ -9,6 +9,12 @@ let sh='<div class="seg" role="radiogroup" aria-label="'+esc(t('home.subs.mode.n
 SUBS_MODE_IDS.forEach(m=>{sh+='<button type="button" role="radio" aria-checked="'+String(S.subMode===m)+'" data-mode="'+m+'">'+esc(t('home.subs.mode.'+m))+'</button>'});
 return sh+'</div>'}
 function subsEmptyHtml(){return emptyCard({icon:'i-qr',title:'home.subs.empty_title',msg:'home.subs.empty_msg',cta:'home.subs.empty_cta',href:'#/settings/protocols'})}
+function converterStatusHtml(){
+const hasConverter=mainSubEntries().some(e=>{const m=FORMAT_LABELS[e.format];return !!(m&&m.via)});
+if(!hasConverter)return '';
+const api=String(getPath(S.set,'subConverter.api')||'').trim();
+if(api.length>0)return '';
+return '<p class="field__hint" dir="auto" style="margin-block:12px 0">'+esc(t('subs.main.converter_missing'))+' <a href="#/settings/advanced">'+esc(t('advanced.converter.title'))+'</a></p>'}
 function subsMainHtml(){
 const rows=mainSubEntries();
 let sh='<section class="card"><div class="card__head"><div><div class="card__title">'+esc(t('subs.main.title'))+'</div><div class="field__hint">'+esc(t('subs.main.desc'))+'</div></div>'+subsModeSeg()+'</div>';
@@ -18,13 +24,14 @@ rows.forEach((entry,i)=>{
 const meta=FORMAT_LABELS[entry.format]||{key:null,hint:null,ext:null};
 const label=meta.key?t(meta.key):entry.format;
 const url=subUrlWithMode(entry.url);
-sh+='<div class="row" data-subs-entry="'+i+'"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(label)+'</span>'+copyFieldHtml(url,'hub-u'+i)+'</div>';
+sh+='<div class="row" data-subs-entry="'+i+'"><span class="field__label" style="margin:0;flex:none;max-width:40%">'+esc(label)+(meta.via?' <span class="conv-badge">'+esc(t(meta.via))+'</span>':'')+'</span>'+copyFieldHtml(url,'hub-u'+i)+'</div>';
 sh+='<details class="warp-acc subs-acc" data-subs-entry="'+i+'"'+(i===0?' open':'')+'><summary>'+esc(t('subs.main.expand'))+'</summary><div style="padding-block:4px 10px">';
 if(meta.hint)sh+='<p class="field__hint" style="margin-block:0 8px"><strong>'+esc(t('subs.usedby'))+':</strong> '+esc(t(meta.hint))+'</p>';
 sh+='<p class="field__hint" style="margin-block:0 8px">'+esc(t('subs.main.user_agent'))+'</p>';
 sh+='<div class="field" style="margin-block:0 10px"><span class="field__label">'+esc(t('subs.main.variant'))+'</span>'+copyFieldHtml(subVariantUrl(entry),'hub-v'+i)+'</div>';
 if(meta.ext)sh+='<p style="margin-block:0"><a class="btn btn--ghost btn--sm" href="'+esc(entry.url)+'" download><svg aria-hidden="true"><use href="#i-download"/></svg>'+esc(t('subs.main.download',{ext:meta.ext}))+'</a></p>';
 sh+='</div></details>'});
+sh+=converterStatusHtml();
 sh+='<p class="field__hint" dir="auto" style="margin-block:12px 0">'+esc(t('home.subs.quota'))+'</p>';
 sh+='</section>';
 return sh}

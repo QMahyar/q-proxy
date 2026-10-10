@@ -181,12 +181,15 @@ describe("panel auth lifecycle", () => {
       label: string;
       url: string;
     }>;
-    expect(urls.length).toBe(5);
+    expect(urls.length).toBe(8);
     expect(urls.map((u) => u.format)).toEqual([
       "base64",
       "singbox",
       "clash",
       "xray",
+      "surge",
+      "quanx",
+      "loon",
       "base64",
     ]);
     expect(urls[0]!.url).toBe(`https://example.com/${SP}/sub`);

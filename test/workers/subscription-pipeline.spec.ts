@@ -95,11 +95,17 @@ describe("subscription pipeline", () => {
     const tags = expectedNames(settings);
     expect(doc.outbounds.filter((o) => o.protocol === "vless")).toHaveLength(tags.length);
   });
-  it("rejects deleted format targets as invalid", async () => {
+  it("rejects unknown format targets as invalid (converter targets stay valid)", async () => {
     await seedAddresses(ONE_ADDRESS);
-    for (const dead of ["surge", "loon", "quantumult"]) {
+    for (const dead of ["quantumult", "ss", "trojan"]) {
       const res = await SELF.fetch(`${BASE}/sub?target=${dead}`);
       expect(res.status, dead).toBe(400);
+    }
+    // B1 converter targets are valid even with no converter configured —
+    // they fail as unavailable, not as bad requests.
+    for (const live of ["surge", "quanx", "loon"]) {
+      const res = await SELF.fetch(`${BASE}/sub?target=${live}`);
+      expect(res.status, live).toBe(503);
     }
   });
 });

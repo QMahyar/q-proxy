@@ -5,6 +5,7 @@ import { isPlainObject } from "../migrate";
 import { applyAccessCustom, validateProxyIps } from "./access";
 import { applyEndpointsCustom } from "./endpoints";
 import { applyIntegrationsCustom, validateBootstrapConsistency } from "./integrations";
+import { applySubscriptionCustom } from "./subscription";
 import { applyGenericField, fail, type ValidationResult } from "./shared";
 import { validateFragmentOrdering, applyTransportCustom } from "./transport";
 
@@ -20,6 +21,7 @@ function applyCustomField(
   if (applyAccessCustom(path, patch, out, fields)) return;
   if (applyEndpointsCustom(path, patch, out, fields)) return;
   if (applyTransportCustom(path, patch, out, fields)) return;
+  if (applySubscriptionCustom(path, patch, out, fields)) return;
   applyIntegrationsCustom(path, patch, out, fields);
 }
 

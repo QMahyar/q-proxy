@@ -65,12 +65,14 @@ const ps=Array.isArray(f.path)?f.path:[f.path];
 ps.forEach(p=>{
 if(f.type==='num'&&typeof f.min==='number')SCALAR_RULES[p]={kind:'num',min:f.min,max:f.max};
 else if(f.type==='secret'&&f.gen==='uuid')SCALAR_RULES[p]={kind:'uuid'};
+else if(f.vtype==='url')SCALAR_RULES[p]={kind:'url'};
 else if(f.vtype==='domain')SCALAR_RULES[p]={kind:'domain'}})})));
 function scalarError(el){
 const rule=SCALAR_RULES[el.dataset.bind];
 if(!rule)return null;
 const raw=String(el.value==null?'':el.value).trim();
 if(rule.kind==='uuid')return raw===''||RE_UUID.test(raw)?null:'err.uuid';
+if(rule.kind==='url')return raw===''||/^https?:\/\/\S+$/i.test(raw)?null:'err.url';
 if(rule.kind==='domain')return raw===''||RE_HOST.test(raw)?null:'err.domain';
 if(rule.kind==='num'){
 if(raw==='')return 'err.number';

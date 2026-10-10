@@ -197,6 +197,42 @@ describe("versionless legacy payloads", () => {
   });
 });
 
+describe("B1 subscription migration (3 -> 4)", () => {
+  it("fills subName/skipCertVerify/subConverter defaults on a v3 blob", () => {
+    const blob = {
+      version: 3,
+      updatedAt: Date.now(),
+      data: { ...structuredClone(DEFAULT_SETTINGS), version: 3, securePath: "deployed-b1" },
+    };
+    const out = migrateSettings(blob);
+    expect(out.version).toBe(SETTINGS_VERSION);
+    expect(out.securePath).toBe("deployed-b1");
+    expect(out.subName).toBe("");
+    expect(out.skipCertVerify).toBe(false);
+    expect(out.subConverter).toEqual(DEFAULT_SETTINGS.subConverter);
+    expect(validateSettings(JSON.parse(JSON.stringify(out))).ok).toBe(true);
+  });
+
+  it("keeps explicit B1 values and repairs malformed shapes", () => {
+    const blob = {
+      version: 3,
+      updatedAt: Date.now(),
+      data: {
+        ...structuredClone(DEFAULT_SETTINGS),
+        securePath: "deployed-b1b",
+        subName: "Keep Me",
+        skipCertVerify: true,
+        subConverter: "not-an-object",
+      },
+    };
+    const out = migrateSettings(blob);
+    expect(out.subName).toBe("Keep Me");
+    expect(out.skipCertVerify).toBe(true);
+    expect(out.subConverter).toEqual(DEFAULT_SETTINGS.subConverter);
+    expect(validateSettings(JSON.parse(JSON.stringify(out))).ok).toBe(true);
+  });
+});
+
 describe("telegram identity lock migration", () => {
   it("clears a legacy @username chatId so validation keeps passing", () => {
     const blob = {

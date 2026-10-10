@@ -16,7 +16,7 @@ import type { RouteHandler } from "../types/context";
 import { handleTunnel } from "../handlers/tunnel";
 import { isUpgradeRequest } from "../tunnel/websocket";
 import { handleDoh } from "../handlers/doh";
-import { handleSubscribe } from "../handlers/subscribe";
+import { handleQuickSub, handleSubscribe } from "../handlers/subscribe";
 import { handleRobots } from "../handlers/robots";
 import { handleHealth } from "../handlers/health";
 
@@ -164,6 +164,9 @@ async function dispatchSecureRoute(
       expectMethods(req, ["GET", "HEAD"]);
       void recordConnection(env, undefined, ctx).catch((err: unknown) => log.error("counters", "record failed", String(err)));
       return handleSubscribe(req, env, s, ctx);
+    case "quick-sub":
+      expectMethods(req, ["GET", "HEAD"]);
+      return handleQuickSub(req, env, s, ctx);
     case "warp-sub":
       expectMethods(req, ["GET", "HEAD"]);
       return handleWarpSub(req, env, s, ctx);

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { handleSubscribe } from "../../src/handlers/subscribe";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { handleQuickSub, handleSubscribe } from "../../src/handlers/subscribe";
 import { DEFAULT_SETTINGS } from "../../src/types/settings";
 import type { Settings } from "../../src/types/settings";
 import { decodeBase64 } from "../../src/utils/base64";
@@ -32,7 +32,9 @@ function request(url: string, ua?: string): Request {
 const BROWSER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36";
 
 describe("handleSubscribe", () => {
-  it("serves the bilingual info page to browsers with textual sub URLs", async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });  it("serves the bilingual info page to browsers with textual sub URLs", async () => {
     const res = await handleSubscribe(
       request("https://w.test/sp12345678/sub", BROWSER),
       envStub(),
@@ -111,10 +113,121 @@ describe("handleSubscribe", () => {
     expect(doc.outbounds.length).toBeGreaterThan(1);
   });
 
-  it("rejects deleted targets as invalid", async () => {
+  it("rejects unknown targets as invalid", async () => {
     await expect(
-      handleSubscribe(request("https://w.test/sp12345678/sub?target=surge"), envStub(), settings()),
+      handleSubscribe(request("https://w.test/sp12345678/sub?target=hysteria"), envStub(), settings()),
     ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      handleSubscribe(request("https://w.test/sp12345678/sub?target=SINGBOX"), envStub(), settings()),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("serves target=mixed as byte-identical base64", async () => {
+    const s = settings();
+    const mixed = await (
+      await handleSubscribe(request("https://w.test/sp12345678/sub?target=mixed", "Surge iOS/1"), envStub(), s)
+    ).text();
+    const base = await (
+      await handleSubscribe(request("https://w.test/sp12345678/sub?target=base64", "Surge iOS/1"), envStub(), s)
+    ).text();
+    expect(mixed).toBe(base);
+    expect(mixed.length).toBeGreaterThan(0);
+  });
+
+  it("serves converter targets as patched plain text with .conf filenames", async () => {
+    let seen = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) => {
+        seen = String(url);
+        return new Response("# first\n[Proxy]\nA = ss, 1.2.3.4, 443", { status: 200 });
+      }),
+    );
+    const s = settings();
+    s.subConverter.api = "https://sub.example.com";
+    const res = await handleSubscribe(
+      request("https://w.test/sp12345678/sub?target=surge", "Surge iOS/2520"),
+      envStub(),
+      s,
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(res.headers.get("content-disposition")).toContain(".conf");
+    expect(res.headers.get("profile-update-interval")).toBe("12");
+    const body = await res.text();
+    expect(body.split("\n")[0]).toContain("#!MANAGED-CONFIG");
+    expect(new URL(seen).searchParams.get("url")).toBe("https://w.test/sp12345678/sub?target=mixed");
+  });
+
+  it("sniffs surge/quanx/loon UAs to converter targets", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("ok", { status: 200 })));
+    const s = settings();
+    s.subConverter.api = "https://sub.example.com";
+    for (const [ua, target] of [
+      ["Surge iOS/2520", "surge"],
+      ["Quantumult X/1.5.4", "quanx"],
+      ["Loon/3.2.4", "loon"],
+    ] as const) {
+      const res = await handleSubscribe(request("https://w.test/sp12345678/sub", ua), envStub(), s);
+      expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+      expect(res.headers.get("content-disposition")).toContain(".conf");
+      void target;
+    }
+  });
+
+  it("forwards cnIspCode into the wrapped mixed URL for converter targets", async () => {
+    let seen = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) => {
+        seen = String(url);
+        return new Response("ok", { status: 200 });
+      }),
+    );
+    const s = settings();
+    s.subConverter.api = "https://sub.example.com";
+    await handleSubscribe(
+      request("https://w.test/sp12345678/sub?target=loon&cnIspCode=ct", "Loon/3"),
+      envStub(),
+      s,
+    );
+    expect(new URL(seen).searchParams.get("url")).toBe(
+      "https://w.test/sp12345678/sub?target=mixed&cnIspCode=ct",
+    );
+  });
+
+  it("ignores cnIspCode for native formats (byte-identical bodies)", async () => {
+    const s = settings();
+    const plain = await (
+      await handleSubscribe(request("https://w.test/sp12345678/sub?target=clash", BROWSER), envStub(), s)
+    ).text();
+    const tagged = await (
+      await handleSubscribe(request("https://w.test/sp12345678/sub?target=clash&cnIspCode=ct", BROWSER), envStub(), s)
+    ).text();
+    expect(tagged).toBe(plain);
+  });
+
+  it("returns 503 when a converter target has no converter api configured", async () => {
+    await expect(
+      handleSubscribe(request("https://w.test/sp12345678/sub?target=surge", "Surge iOS/1"), envStub(), settings()),
+    ).rejects.toMatchObject({ status: 503 });
+  });
+
+  it("names the download file from subName with a profileTitle fallback", async () => {
+    const named = settings();
+    named.subName = "MySub";
+    const res = await handleSubscribe(
+      request("https://w.test/sp12345678/sub?target=clash", BROWSER),
+      envStub(),
+      named,
+    );
+    expect(res.headers.get("content-disposition")).toBe("attachment; filename*=UTF-8''MySub.yaml");
+    const fallback = await handleSubscribe(
+      request("https://w.test/sp12345678/sub?target=clash", BROWSER),
+      envStub(),
+      settings(),
+    );
+    expect(fallback.headers.get("content-disposition")).toContain("Q%20Proxy.yaml");
   });
 
   it("honors target=singbox overriding a browser UA", async () => {
@@ -151,5 +264,30 @@ describe("handleSubscribe", () => {
     expect(head.headers.get("content-length")).toBe(get.headers.get("content-length"));
     expect(Number(head.headers.get("content-length"))).toBeGreaterThan(0);
     expect(await head.text()).toBe("");
+  });
+});
+
+describe("handleQuickSub", () => {
+  it("redirects to /sub preserving the query string", async () => {
+    const s = settings();
+    const res = await handleQuickSub(
+      request("https://w.test/sp12345678/q?target=surge&cnIspCode=ct"),
+      envStub(),
+      s,
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/sp12345678/sub?target=surge&cnIspCode=ct");
+  });
+
+  it("redirects bare quick-sub links to the info page route", async () => {
+    const res = await handleQuickSub(request("https://w.test/sp12345678/q"), envStub(), settings());
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/sp12345678/sub");
+  });
+
+  it("throws NotFound off the quick-sub route", async () => {
+    await expect(
+      handleQuickSub(request("https://w.test/sp12345678/sub"), envStub(), settings()),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });

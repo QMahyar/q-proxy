@@ -38,6 +38,9 @@ export const EXTENSIONS: Record<SubFormat, string> = {
   singbox: "json",
   clash: "yaml",
   xray: "json",
+  surge: "conf",
+  quanx: "conf",
+  loon: "conf",
 };
 
 export const SUB_THROTTLE_SECONDS = 60;

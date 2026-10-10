@@ -554,6 +554,93 @@ describe("resolveEchServerName", () => {
   });
 });
 
+describe("subscription settings block (B1)", () => {
+  it("defaults subName/skipCertVerify/subConverter", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.subName).toBe("");
+      expect(result.value.skipCertVerify).toBe(false);
+      expect(result.value.subConverter).toEqual({
+        api: "",
+        config: "",
+        emoji: false,
+        list: false,
+        udp: false,
+        xudp: false,
+        tls13: false,
+        appendType: false,
+        sort: false,
+        expand: true,
+      });
+    }
+  });
+
+  it("accepts a full valid subscription patch", () => {
+    const result = validateSettings({
+      subName: "MySub 1",
+      skipCertVerify: true,
+      subConverter: {
+        api: "https://sub.example.com",
+        config: "https://example.com/rules.ini",
+        emoji: true,
+        list: true,
+        udp: true,
+        xudp: true,
+        tls13: true,
+        appendType: true,
+        sort: true,
+        expand: false,
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.subName).toBe("MySub 1");
+      expect(result.value.skipCertVerify).toBe(true);
+      expect(result.value.subConverter.api).toBe("https://sub.example.com");
+      expect(result.value.subConverter.expand).toBe(false);
+    }
+  });
+
+  it("trims and token-checks subName, empty falls back", () => {
+    expect(validateSettings({ subName: "  " }).ok).toBe(true);
+    if (validateSettings({ subName: "  " }).ok) {
+      const v = validateSettings({ subName: "  Pad " });
+      expect(v.ok).toBe(true);
+      if (v.ok) expect(v.value.subName).toBe("Pad");
+    }
+    for (const bad of ["a/b", "x?y", "semi;colon", "quote\"q", "back\\slash", "a".repeat(65)]) {
+      expect(fieldsOf({ subName: bad }).subName, bad).toBeTruthy();
+    }
+    expect(fieldsOf({ subName: 42 }).subName).toBeTruthy();
+  });
+
+  it("requires exact booleans for skipCertVerify and converter flags", () => {
+    expect(fieldsOf({ skipCertVerify: "yes" }).skipCertVerify).toBeTruthy();
+    expect(fieldsOf({ subConverter: { emoji: 1 } })["subConverter.emoji"]).toBeTruthy();
+    expect(fieldsOf({ subConverter: { sort: "true" } })["subConverter.sort"]).toBeTruthy();
+  });
+
+  it("requires http(s) converter urls and guards the api against local targets", () => {
+    expect(fieldsOf({ subConverter: { api: "ftp://x/sub" } })["subConverter.api"]).toBeTruthy();
+    expect(fieldsOf({ subConverter: { api: "not-a-url" } })["subConverter.api"]).toBeTruthy();
+    expect(fieldsOf({ subConverter: { config: "ftp://x/rules.ini" } })["subConverter.config"]).toBeTruthy();
+    for (const local of ["http://127.0.0.1/sub", "http://10.0.0.5/sub", "http://localhost/sub"]) {
+      expect(fieldsOf({ subConverter: { api: local } })["subConverter.api"], local).toBeTruthy();
+    }
+    expect(validateSettings({ subConverter: { api: "https://sub.example.com" } }).ok).toBe(true);
+    expect(validateSettings({ subConverter: { api: "", config: "" } }).ok).toBe(true);
+    // config is never fetched server-side: any public http(s) URL is fine
+    expect(validateSettings({ subConverter: { config: "http://cdn.example/rules.ini" } }).ok).toBe(true);
+  });
+
+  it("rejects non-object subConverter blocks", () => {
+    const result = validateSettings({ subConverter: [1] });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.fields.subConverter).toBe("must be an object");
+  });
+});
+
 describe("allowedIps", () => {
   it("defaults to an empty list that allows all", () => {
     const result = validateSettings({});

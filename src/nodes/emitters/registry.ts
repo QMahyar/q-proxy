@@ -1,4 +1,3 @@
-import type { SubFormat } from "../../core/ua";
 import type { ProxyNode } from "../../types/node";
 import { stripBrackets } from "../../utils/net";
 import { emitClashYaml } from "./clash-yaml";
@@ -57,7 +56,7 @@ export function nodeHasAlpn(node: ProxyNode): boolean {
 
 export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;
 
-export type SyncSubFormat = Exclude<SubFormat, "base64">;
+export type SyncSubFormat = "singbox" | "clash" | "xray";
 
 export const EMITTERS: Record<SyncSubFormat, NodeEmitter> = {
   singbox: emitSingBoxJson,

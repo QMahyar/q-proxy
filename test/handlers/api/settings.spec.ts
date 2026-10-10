@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ConflictError, ValidationError } from "../../../src/core/errors";
-import { handleSaveSettings } from "../../../src/handlers/api/settings";
+import { handleSaveSettings, publicSettingsView } from "../../../src/handlers/api/settings";
 import { invalidateSettingsCache, loadSettings, readSettingsRev } from "../../../src/settings/store";
+import { makeTestSettings } from "../../helpers/settings";
 
 class FakeKV {
   map = new Map<string, string>();
@@ -39,6 +40,38 @@ async function seed(kv: FakeKV): Promise<{ env: never; s: Awaited<ReturnType<typ
   return { env, s };
 }
 
+describe("publicSettingsView", () => {
+  it("masks secrets while exposing the B1 subscription block", () => {
+    const s = makeTestSettings({
+      passwordHash: "hash",
+      passwordSalt: "salt",
+      telegram: { enabled: true, botToken: "tok", chatId: "123" },
+      subName: "MySub",
+      skipCertVerify: true,
+      subConverter: {
+        api: "https://sub.example.com",
+        config: "https://example.com/rules.ini",
+        emoji: true,
+        list: false,
+        udp: false,
+        xudp: false,
+        tls13: false,
+        appendType: false,
+        sort: false,
+        expand: true,
+      },
+    });
+    const view = publicSettingsView(s) as Record<string, unknown>;
+    expect(view.passwordHash).toBeUndefined();
+    expect(view.passwordSalt).toBeUndefined();
+    expect(view.sessionSecret).toBeUndefined();
+    expect((view.telegram as Record<string, unknown>).botToken).toBeUndefined();
+    expect(view.hasPassword).toBe(true);
+    expect(view.subName).toBe("MySub");
+    expect(view.skipCertVerify).toBe(true);
+    expect(view.subConverter).toEqual(s.subConverter);
+  });
+});
 describe("handleSaveSettings", () => {
   it("saves with a matching baseRev and echoes the new rev", async () => {
     const kv = new FakeKV();

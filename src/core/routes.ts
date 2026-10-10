@@ -46,6 +46,7 @@ export type SecureRoute =
   | { kind: "root" }
   | { kind: "page"; page: "panel" | "login" }
   | { kind: "sub" }
+  | { kind: "quick-sub" }
   | { kind: "warp-sub" }
   | { kind: "doh" }
   | { kind: "api"; api: ApiRouteName };
@@ -67,6 +68,8 @@ export function resolveSecureRoute(url: URL, s: Settings): SecureRoute | null {
         return { kind: "warp-sub" };
       }
       return null;
+    case "q":
+      return rest.length === 1 ? { kind: "quick-sub" } : null;
     case "doh":
       return rest.length === 1 ? { kind: "doh" } : null;
     case "telegram": {

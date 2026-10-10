@@ -1,8 +1,13 @@
-export type SubFormat = "base64" | "singbox" | "clash" | "xray";
+export type SubFormat = "base64" | "singbox" | "clash" | "xray" | "surge" | "quanx" | "loon";
+
+export type ConverterSubFormat = "surge" | "quanx" | "loon";
 
 const SINGBOX_TOKENS = ["sing-box", "singbox", "hiddify", "nekobox", "karing", "throne", "nekoray", "sfa", "sfi", "sfm", "sft"];
 const CLASH_TOKENS = ["clash", "mihomo", "stash"];
 const XRAY_TOKENS = ["xray-core"];
+const SURGE_TOKENS = ["surge"];
+const QUANX_TOKENS = ["quantumult", "quanx"];
+const LOON_TOKENS = ["loon"];
 const BASE64_CLIENT_TOKENS = [
   "v2rayng",
   "v2rayn",
@@ -23,6 +28,9 @@ export function classifyUA(ua: string): SubFormat | "browser" {
   if (containsAny(s, SINGBOX_TOKENS)) return "singbox";
   if (containsAny(s, CLASH_TOKENS)) return "clash";
   if (containsAny(s, XRAY_TOKENS)) return "xray";
+  if (containsAny(s, SURGE_TOKENS)) return "surge";
+  if (containsAny(s, QUANX_TOKENS)) return "quanx";
+  if (containsAny(s, LOON_TOKENS)) return "loon";
   if (containsAny(s, BASE64_CLIENT_TOKENS)) return "base64";
   if (s.startsWith("mozilla/") || s.includes("chrome/") || s.includes("safari/") || s.includes("firefox/")) {
     return "browser";

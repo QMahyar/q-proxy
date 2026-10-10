@@ -159,6 +159,18 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    withBusy(el,()=>api('api/address-probe',{fresh:true})
    .then(d=>{const r=d&&d.results||[];const ok=r.filter(x=>x.status==='ok').length;toast(t('endpoints.probe.done',{ok:ok,n:r.length}),ok===r.length&&r.length>0?'ok':'err')})
    .catch(err=>toastErr(err)))},
+  'converter-test'(el){
+   const box=$('converter-test-result');
+   const say=(msg,isOk)=>{if(box)box.textContent=msg;toast(msg,isOk?'ok':'err')};
+   const input=document.querySelector('[data-bind="subConverter.api"]');
+   const raw=String((input&&'value' in input?input.value:getPath(S.set,'subConverter.api'))||'').trim().replace(/\/+$/,'');
+   if(!raw||!/^https?:\/\/\S+$/i.test(raw)){say(t('advanced.converter.test_missing'),false);return}
+   withBusy(el,()=>{
+   const ctl=new AbortController();const timer=setTimeout(()=>ctl.abort(),8000);
+   return fetch(raw+'/version',{signal:ctl.signal})
+   .then(r=>{clearTimeout(timer);if(!r.ok)throw new Error('http '+r.status);return r.text()})
+   .then(v=>say(t('advanced.converter.test_ok',{v:v.trim().slice(0,32)}),true))
+   .catch(()=>{clearTimeout(timer);say(t('advanced.converter.test_fail'),false)})})()},
   'pool-fetch'(el){loadPool(false)},
   'pool-test'(el){loadPool(true)},
   'home-pool-refresh'(el){loadHomePool()},

@@ -1,4 +1,4 @@
-export const SETTINGS_VERSION = 3;
+export const SETTINGS_VERSION = 4;
 
 export const CF_TLS_PORTS = [443, 2053, 2083, 2087, 2096, 8443] as const;
 export const CF_PLAIN_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095] as const;
@@ -40,6 +40,19 @@ export interface TelegramSettings {
   chatId: string;
 }
 
+export interface SubConverterSettings {
+  api: string;
+  config: string;
+  emoji: boolean;
+  list: boolean;
+  udp: boolean;
+  xudp: boolean;
+  tls13: boolean;
+  appendType: boolean;
+  sort: boolean;
+  expand: boolean;
+}
+
 export interface Settings {
   version: number;
   securePath: string;
@@ -76,6 +89,9 @@ export interface Settings {
   enableUdp53: boolean;
   dohUpstream: string;
   profileTitle: string;
+  subName: string;
+  skipCertVerify: boolean;
+  subConverter: SubConverterSettings;
   subUpdateIntervalHours: number;
   maxNodesPerFormat: number;
   killSwitch: boolean;
@@ -130,6 +146,20 @@ export const DEFAULT_SETTINGS: Settings = {
   enableUdp53: true,
   dohUpstream: "https://cloudflare-dns.com/dns-query",
   profileTitle: "Q Proxy",
+  subName: "",
+  skipCertVerify: false,
+  subConverter: {
+    api: "",
+    config: "",
+    emoji: false,
+    list: false,
+    udp: false,
+    xudp: false,
+    tls13: false,
+    appendType: false,
+    sort: false,
+    expand: true,
+  },
   subUpdateIntervalHours: 12,
   maxNodesPerFormat: 500,
   killSwitch: false,

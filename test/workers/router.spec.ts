@@ -354,7 +354,12 @@ describe("router dispatch", () => {
       expect(res.headers.get("Content-Type")).toContain("json");
       expect(await res.text()).toContain("leastPing");
 
+      // B1: surge/loon/quanx are valid converter targets (503 when no
+      // converter is configured); unknown names stay 400.
       res = await SELF.fetch(`${BASE}/sub?target=surge`);
+      expect(res.status).toBe(503);
+
+      res = await SELF.fetch(`${BASE}/sub?target=quantumult`);
       expect(res.status).toBe(400);
 
       res = await SELF.fetch(`${BASE}/sub`);
