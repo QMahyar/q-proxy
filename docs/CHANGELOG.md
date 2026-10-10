@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Added (B4 — edgetunnel parity: CF usage + access log + TG events)
+- New settings `cf { email, globalApiKey, accountId, apiToken, usageApiUrl }`
+  (keys masked on read like `botToken`) and server-written `cfUsage
+  { success, pages, workers, total, max, updatedAt }` snapshot (read-only
+  panel state, zero snapshot = never refreshed).
+- New authed `GET/POST api/cf-usage` (`auth: write`): GET reads the cached
+  snapshot; POST optionally applies a validated `cf` patch then refreshes —
+  `usageApiUrl` JSON wins over keys, else a minimal documented GraphQL
+  workers-requests query fills `total` only (use the JSON feed for the full
+  breakdown). Unconfigured/failed refreshes answer 200 with
+  `refreshed: false`; keys never reach logs or responses.
+- New authed `GET api/access-log` (`auth: read`): paginated
+  `?page&limit` (limit max 100) read of served-subscription events.
+  Storage reuses the D1 `audit_log` table when present (rows namespaced
+  `sub:<format>`, admin-audit reads unaffected), else a KV ring (200
+  entries, 30min per-format dedup); writes are non-blocking and never throw.
+- Telegram per-event toggles (`onSubscribe, onSaveConfig, onAdminLogin`,
+  default on) plus `silent` master switch (OFF_LOG-equivalent): the
+  subscribe/save/login senders honor them, never throw, and never send
+  secrets/UUIDs/paths.
+- Panel Home: usage progress bar (`used/max %`) + userinfo-style
+  upload/download hint + refresh button in the Status card, and a paginated
+  access-log viewer; Advanced: Cloudflare usage card + TG event toggles
+  (en + fa). Telegram event notifications default on — turn them off per
+  event or via silent mode.
+
 ### Added (B3 — edgetunnel parity: proxy check + locations)
 - New authed `POST api/proxy-check` (`auth: write`): input
   `{protocol: socks5|http|https|turn|sstp, param: user:pass@host:port}` →

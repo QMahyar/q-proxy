@@ -8,6 +8,8 @@ import { clientIp } from "../../auth/guard";
 import { deepMergeDefaults } from "../../settings/migrate";
 import { validateSettings } from "../../settings/validate";
 import { loadSettingsFresh, readSettingsRev, saveSettings, settingsEtag, settingsRev } from "../../settings/store";
+import { afterResponse } from "../../core/counters";
+import { notifyTelegramEvent } from "./telegram";
 
 const PRESERVED_FIELDS = [
   "securePath",
@@ -37,6 +39,10 @@ export function publicSettingsView(s: Settings): PublicSettings & { hasPassword:
   for (const path of SENSITIVE_SETTING_PATHS) delete view[path];
   if (view.telegram !== null && typeof view.telegram === "object") {
     delete asRecord(view.telegram).botToken;
+  }
+  if (view.cf !== null && typeof view.cf === "object") {
+    delete asRecord(view.cf).globalApiKey;
+    delete asRecord(view.cf).apiToken;
   }
   view.hasPassword = s.passwordHash !== null;
   return view as PublicSettings & { hasPassword: boolean };
@@ -78,8 +84,10 @@ export const handleSaveSettings: RouteHandler = async (req, _env, s, ctx) => {
   void s;
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);
-  audit("settings.save", { ip: clientIp(req), keys: changedTopLevelKeys(fresh, result.value) }, undefined, ctx);
+  const changedKeys = changedTopLevelKeys(fresh, result.value);
+  audit("settings.save", { ip: clientIp(req), keys: changedKeys }, undefined, ctx);
   const rev = await saveSettings(_env, result.value);
+  afterResponse(ctx, notifyTelegramEvent(result.value, "save-config", `Settings saved (${changedKeys.join(", ") || "no changes"})`));
   return jsonOk({ saved: true, rev });
 };
 
@@ -102,6 +110,10 @@ export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
   for (const path of [...SENSITIVE_SETTING_PATHS, "securePath"]) delete view[path];
   if (view.telegram !== null && typeof view.telegram === "object") {
     delete asRecord(view.telegram).botToken;
+  }
+  if (view.cf !== null && typeof view.cf === "object") {
+    delete asRecord(view.cf).globalApiKey;
+    delete asRecord(view.cf).apiToken;
   }
   const body = JSON.stringify({ kind: "q-proxy-settings", version: SETTINGS_VERSION, exportedAt: new Date().toISOString(), settings: view }, null, 2);
   return new Response(body, {

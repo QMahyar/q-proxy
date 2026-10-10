@@ -45,7 +45,7 @@ describe("publicSettingsView", () => {
     const s = makeTestSettings({
       passwordHash: "hash",
       passwordSalt: "salt",
-      telegram: { enabled: true, botToken: "tok", chatId: "123" },
+      telegram: { enabled: true, botToken: "tok", chatId: "123", onSubscribe: true, onSaveConfig: true, onAdminLogin: true, silent: false },
       subName: "MySub",
       skipCertVerify: true,
       subConverter: {
@@ -70,6 +70,40 @@ describe("publicSettingsView", () => {
     expect(view.subName).toBe("MySub");
     expect(view.skipCertVerify).toBe(true);
     expect(view.subConverter).toEqual(s.subConverter);
+  });
+
+  it("masks cf keys while exposing cfUsage and telegram toggles (B4)", () => {
+    const s = makeTestSettings({
+      cf: {
+        email: "ops@example.com",
+        globalApiKey: "gk-secret",
+        accountId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        apiToken: "at-secret",
+        usageApiUrl: "https://usage.example.com/cf.json",
+      },
+      cfUsage: { success: true, pages: 1, workers: 2, total: 3, max: 100, updatedAt: 7 },
+      telegram: {
+        enabled: true,
+        botToken: "tok",
+        chatId: "123",
+        onSubscribe: true,
+        onSaveConfig: false,
+        onAdminLogin: true,
+        silent: false,
+      },
+    });
+    const view = publicSettingsView(s) as Record<string, unknown>;
+    const cf = view.cf as Record<string, unknown>;
+    expect(cf.globalApiKey).toBeUndefined();
+    expect(cf.apiToken).toBeUndefined();
+    expect(cf.email).toBe("ops@example.com");
+    expect(cf.usageApiUrl).toBe("https://usage.example.com/cf.json");
+    expect(view.cfUsage).toEqual(s.cfUsage);
+    const tg = view.telegram as Record<string, unknown>;
+    expect(tg.botToken).toBeUndefined();
+    expect(tg.onSubscribe).toBe(true);
+    expect(tg.onSaveConfig).toBe(false);
+    expect(tg.silent).toBe(false);
   });
 });
 describe("handleSaveSettings", () => {

@@ -36,6 +36,8 @@ import { handleSubImport } from "../handlers/api/sub-import";
 import { handlePreferredValidate } from "../handlers/api/preferred";
 import { handleProxyCheck } from "../handlers/api/proxy-check";
 import { handleLocations } from "../handlers/api/locations";
+import { handleCfUsage } from "../handlers/api/cf-usage";
+import { handleAccessLog } from "../handlers/api/access-log";
 import { handleBootstrap } from "../handlers/api/bootstrap";
 import { handleWarpApi } from "../handlers/api/warp";
 import { handleProxyPoolApi } from "../handlers/api/proxy-pool";
@@ -126,6 +128,8 @@ const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
   "preferred-validate": { methods: ["GET", "POST"], auth: "write", handler: handlePreferredValidate },
   "proxy-check": { methods: ["POST"], auth: "write", handler: handleProxyCheck },
   locations: { methods: ["GET"], auth: "read", handler: handleLocations },
+  "cf-usage": { methods: ["GET", "POST"], auth: "write", handler: handleCfUsage },
+  "access-log": { methods: ["GET"], auth: "read", handler: handleAccessLog },
   warp: { methods: [], auth: "write", handler: handleWarpApi },
   "proxy-pool": { methods: [], auth: "write", handler: handleProxyPoolApi },
   "address-probe": { methods: [], auth: "write", handler: handleAddressProbeApi },

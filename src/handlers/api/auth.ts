@@ -21,6 +21,8 @@ import {
 } from "../../auth/guard";
 import { loadSettingsFresh, saveSettings } from "../../settings/store";
 import { validateSettings } from "../../settings/validate";
+import { afterResponse } from "../../core/counters";
+import { notifyTelegramEvent } from "./telegram";
 
 const SETUP_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -58,7 +60,7 @@ export const handleAuthStatus: RouteHandler = async (req, env, s) => {
   return jsonOk({ hasSession });
 };
 
-export const handleLogin: RouteHandler = async (req, env, _s) => {
+export const handleLogin: RouteHandler = async (req, env, _s, ctx) => {
   void _s;
   const ip = clientIp(req);
   await assertLoginAllowed(env, ip);
@@ -80,6 +82,7 @@ export const handleLogin: RouteHandler = async (req, env, _s) => {
   if (verified.tier === "legacy") await upgradeLegacyHash(env, password, fresh.sessionSecret);
   await clearLoginThrottle(env, ip);
   const floor = await getSessionFloor(env);
+  afterResponse(ctx, notifyTelegramEvent(fresh, "admin-login", `Admin login from ${ip}`));
   return jsonOk(
     loginSuccessData(fresh),
     { "Set-Cookie": await issuedSessionCookieWithIat(fresh.sessionSecret, Math.max(unixNow(), floor + 1)) },

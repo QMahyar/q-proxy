@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS } from "../../types/settings";
 import { SETTING_FIELD_DESCRIPTORS } from "../fields";
 import { isPlainObject } from "../migrate";
 import { applyAccessCustom, validateProxyIps } from "./access";
+import { applyCfCustom } from "./cf";
 import { applyEndpointsCustom } from "./endpoints";
 import { applyIntegrationsCustom, validateBootstrapConsistency } from "./integrations";
 import { applySubscriptionCustom } from "./subscription";
@@ -19,6 +20,7 @@ function applyCustomField(
   fields: Record<string, string>,
 ): void {
   if (applyAccessCustom(path, patch, out, fields)) return;
+  if (applyCfCustom(path, patch, out, fields)) return;
   if (applyEndpointsCustom(path, patch, out, fields)) return;
   if (applyTransportCustom(path, patch, out, fields)) return;
   if (applySubscriptionCustom(path, patch, out, fields)) return;
@@ -43,11 +45,19 @@ export function validateSettings(input: unknown): ValidationResult {
     const parent = path.slice(0, dot);
     const sub = patch[parent];
     if (sub === undefined) continue;
+    // cfUsage defaults to null (no snapshot yet): null means "not provided".
+    if (sub === null && parent === "cfUsage") continue;
     if (!isPlainObject(sub)) {
       fail(fields, parent, "must be an object");
       continue;
     }
     const nested = sub as Record<string, unknown>;
+    // cfUsage snapshots are server-written: an explicit null means "not
+    // provided" (keep the default zero snapshot), an object validates leaf
+    // by leaf below.
+    if (parent === "cfUsage" && out.cfUsage === null) {
+      out.cfUsage = { success: false, pages: 0, workers: 0, total: 0, max: 0, updatedAt: 0 };
+    }
     const group = out[parent as keyof Settings];
     if (group === undefined || group === null || typeof group !== "object") continue;
     if (spec.kind === "custom") {

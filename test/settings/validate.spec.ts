@@ -423,7 +423,16 @@ describe("telegram settings block", () => {
   it("defaults to a disabled empty bot", () => {
     const result = validateSettings({});
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.telegram).toEqual({ enabled: false, botToken: "", chatId: "" });
+    if (result.ok)
+      expect(result.value.telegram).toEqual({
+        enabled: false,
+        botToken: "",
+        chatId: "",
+        onSubscribe: true,
+        onSaveConfig: true,
+        onAdminLogin: true,
+        silent: false,
+      });
   });
 
   it("accepts a full valid telegram patch", () => {
@@ -432,7 +441,15 @@ describe("telegram settings block", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok)
-      expect(result.value.telegram).toEqual({ enabled: true, botToken: VALID_TOKEN, chatId: "424242" });
+      expect(result.value.telegram).toEqual({
+        enabled: true,
+        botToken: VALID_TOKEN,
+        chatId: "424242",
+        onSubscribe: true,
+        onSaveConfig: true,
+        onAdminLogin: true,
+        silent: false,
+      });
   });
 
   it("rejects a malformed token shape when enabled", () => {
@@ -489,6 +506,64 @@ describe("telegram settings block", () => {
     const result = validateSettings({ telegram: [1] });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.fields.telegram).toBe("must be an object");
+  });
+
+  it("defaults event toggles on and silent off (B4)", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.telegram.onSubscribe).toBe(true);
+      expect(result.value.telegram.onSaveConfig).toBe(true);
+      expect(result.value.telegram.onAdminLogin).toBe(true);
+      expect(result.value.telegram.silent).toBe(false);
+    }
+  });
+
+  it("requires exact booleans for the event toggles (B4)", () => {
+    expect(fieldsOf({ telegram: { onSubscribe: "yes" } })["telegram.onSubscribe"]).toBeTruthy();
+    expect(fieldsOf({ telegram: { silent: 1 } })["telegram.silent"]).toBeTruthy();
+    expect(validateSettings({ telegram: { onSubscribe: false, silent: true } }).ok).toBe(true);
+  });
+});
+
+describe("cloudflare settings block (B4)", () => {
+  it("defaults cf to empty strings and cfUsage to a zero snapshot", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.cf).toEqual({ email: "", globalApiKey: "", accountId: "", apiToken: "", usageApiUrl: "" });
+      expect(result.value.cfUsage).toEqual({ success: false, pages: 0, workers: 0, total: 0, max: 0, updatedAt: 0 });
+    }
+  });
+
+  it("accepts a full valid cf patch", () => {
+    const result = validateSettings({
+      cf: {
+        email: "ops@example.com",
+        globalApiKey: "key123",
+        accountId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        apiToken: "token123",
+        usageApiUrl: "https://usage.example.com/cf.json",
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cf.email).toBe("ops@example.com");
+  });
+
+  it("validates email shape and rejects local usage-api targets", () => {
+    expect(fieldsOf({ cf: { email: "not-an-email" } })["cf.email"]).toBeTruthy();
+    expect(validateSettings({ cf: { email: "" } }).ok).toBe(true);
+    for (const local of ["http://127.0.0.1/usage", "http://10.0.0.5/x", "ftp://example.com/x", "not-a-url"]) {
+      expect(fieldsOf({ cf: { usageApiUrl: local } })["cf.usageApiUrl"], local).toBeTruthy();
+    }
+    expect(validateSettings({ cf: { usageApiUrl: "https://usage.example.com/cf.json" } }).ok).toBe(true);
+  });
+
+  it("round-trips server-written cfUsage snapshots", () => {
+    const snap = { success: true, pages: 10, workers: 20, total: 30, max: 100, updatedAt: 1700000000000 };
+    const result = validateSettings({ cfUsage: snap });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cfUsage).toEqual(snap);
   });
 });
 

@@ -38,6 +38,27 @@ export interface TelegramSettings {
   enabled: boolean;
   botToken: string;
   chatId: string;
+  onSubscribe: boolean;
+  onSaveConfig: boolean;
+  onAdminLogin: boolean;
+  silent: boolean;
+}
+
+export interface CfSettings {
+  email: string;
+  globalApiKey: string;
+  accountId: string;
+  apiToken: string;
+  usageApiUrl: string;
+}
+
+export interface CfUsageState {
+  success: boolean;
+  pages: number;
+  workers: number;
+  total: number;
+  max: number;
+  updatedAt: number;
 }
 
 export interface SubConverterSettings {
@@ -103,6 +124,8 @@ export interface Settings {
   camouflage: CamouflageSettings;
   routingRules: RoutingRules;
   telegram: TelegramSettings;
+  cf: CfSettings;
+  cfUsage: CfUsageState | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -174,13 +197,16 @@ export const DEFAULT_SETTINGS: Settings = {
   allowedIps: [],
   camouflage: { mode: "static" },
   routingRules: { bypassLan: false, blockAds: false, blockMalware: false, blockQuic: false, customBypass: [], customBlock: [] },
-  telegram: { enabled: false, botToken: "", chatId: "" },
+  telegram: { enabled: false, botToken: "", chatId: "", onSubscribe: true, onSaveConfig: true, onAdminLogin: true, silent: false },
+  cf: { email: "", globalApiKey: "", accountId: "", apiToken: "", usageApiUrl: "" },
+  cfUsage: { success: false, pages: 0, workers: 0, total: 0, max: 0, updatedAt: 0 },
 };
 
 export const SENSITIVE_SETTING_PATHS = ["passwordHash", "passwordSalt", "sessionSecret"] as const;
 
 export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number]> & {
   telegram: Omit<TelegramSettings, "botToken">;
+  cf: Omit<CfSettings, "globalApiKey" | "apiToken">;
 };
 
 export interface RoutingRules {

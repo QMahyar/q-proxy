@@ -205,6 +205,13 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
   document.head.appendChild(js);
   }catch(e){fail()}},
   'home-pool-refresh'(el){loadHomePool()},
+  'cf-refresh'(el){
+  withBusy(el,()=>api('api/cf-usage',{method:'POST',body:{}})
+  .then(d=>{if(d&&d.cfUsage)Object.assign(S.set,{cfUsage:d.cfUsage});if(parseRoute().view==='home')renderHome();toast(t(d&&d.refreshed?'common.saved':'advanced.cf.not_configured'),d&&d.refreshed?'ok':'err')})
+  .catch(err=>toastErr(err)))},
+  'log-prev'(){if(logPage>1){logPage--;renderAccessLog()}},
+  'log-next'(){logPage++;renderAccessLog()},
+  'log-retry'(){logPage=1;renderAccessLog()},
   'subs-import-preview'(el){
   const ta=$('sub-import-text');const box=$('sub-import-preview');if(!ta||!box)return;
   box.innerHTML=loadingBox({rows:2});

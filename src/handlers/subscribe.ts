@@ -19,6 +19,9 @@ import { pickSubFormat, SUB_FORMATS } from "../subscription/negotiate";
 import { readCnIspCode } from "../subscription/targets";
 import { attachmentHeaders } from "../subscription/headers";
 import { escapeHtml } from "../utils/html";
+import { clientIp } from "../auth/guard";
+import { recordAccessEvent } from "../log/access";
+import { notifyTelegramEvent } from "./api/telegram";
 
 const FORMAT_LABELS: Record<SubFormat, string> = {
   base64: "Base64 / v2rayNG",
@@ -143,6 +146,13 @@ export const handleSubscribe: RouteHandler = async (req, env, s, reqCtx) => {
   });
 
   const usage = await readUsage(env);
+  // Best-effort side effects only: access logging (30min dedup) and the
+  // optional Telegram subscribe event never block or break serving.
+  afterResponse(
+    reqCtx,
+    recordAccessEvent(env, { ip: clientIp(req), action: `sub:${format}`, detail: JSON.stringify({ format }) }),
+  );
+  afterResponse(reqCtx, notifyTelegramEvent(s, "subscribe", `Subscription served (${format})`));
   const headers = subscriptionHeaders(format, s.profileTitle, nodes, usage, {
     updateIntervalHours: s.subUpdateIntervalHours,
     webPageUrl: `${url.origin}/${s.securePath}/panel`,

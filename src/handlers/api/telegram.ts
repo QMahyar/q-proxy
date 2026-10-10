@@ -155,6 +155,46 @@ export function normalizeTelegramChatId(chatId: string): string {
   return chatId.startsWith("@") ? chatId.toLowerCase() : chatId;
 }
 
+export type TelegramEventKind = "subscribe" | "save-config" | "admin-login";
+
+function eventToggleFor(s: Settings, kind: TelegramEventKind): boolean {
+  switch (kind) {
+    case "subscribe":
+      return s.telegram.onSubscribe;
+    case "save-config":
+      return s.telegram.onSaveConfig;
+    case "admin-login":
+      return s.telegram.onAdminLogin;
+  }
+}
+
+// Fire-and-forget event notification (OFF_LOG-equivalent `silent` gates all
+// three). Honors enabled + per-event toggles, never throws, and never sends
+// secrets — callers pass pre-built safe text only.
+export async function notifyTelegramEvent(
+  s: Settings,
+  kind: TelegramEventKind,
+  text: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<void> {
+  try {
+    if (!s.telegram.enabled || s.telegram.silent) return;
+    if (!eventToggleFor(s, kind)) return;
+    const token = s.telegram.botToken;
+    const chatId = s.telegram.chatId;
+    if (token.length === 0 || chatId.length === 0) return;
+    if (typeof text !== "string" || text.trim().length === 0) return;
+    await fetchFn(`${TG_API_BASE}${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: text.slice(0, 1024) }),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    });
+  } catch {
+    // Best-effort: event notifications must never break the caller.
+  }
+}
+
 function updateChat(update: TelegramUpdate): TelegramChat | undefined {
   return update.message?.chat ?? update.callback_query?.message?.chat ?? update.callback_query?.from;
 }
