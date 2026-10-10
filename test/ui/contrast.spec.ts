@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error node builtin lacks types in this repo (precedent: test/ui/assets.spec.ts)
 import { readFileSync } from "node:fs";
 
 const CSS_PATH = "src/ui/panel/app.css";

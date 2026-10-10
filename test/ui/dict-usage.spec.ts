@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error node builtin lacks types in this repo (precedent: assets.spec.ts)
 import { readFileSync, readdirSync } from "node:fs";
-// @ts-expect-error node builtin lacks types in this repo (precedent: assets.spec.ts)
 import { join } from "node:path";
 
 const PANEL_DIR = join(process.cwd(), "src", "ui", "panel");

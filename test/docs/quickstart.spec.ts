@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SUB_FORMATS } from "../../src/subscription/negotiate";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { readFileSync } from "node:fs";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { join } from "node:path";
 
 const quickstart = readFileSync(join(process.cwd(), "docs", "QUICKSTART.md"), "utf8");

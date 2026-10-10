@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { readFileSync, readdirSync } from "node:fs";
-// @ts-expect-error node builtin lacks types in this repo (precedent: assets.spec.ts)
 import { join } from "node:path";
 import { ASSETS } from "../../src/ui/assets";
 import { buildSubUrls } from "../../src/handlers/api/status";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { execFileSync } from "node:child_process";
-// @ts-expect-error untyped build script export (plain .mjs)
 import { minifyHtmlAsset } from "../../scripts/build-single-file.mjs";
 
 const TOTAL_BUDGET_BYTES = 340 * 1024;
