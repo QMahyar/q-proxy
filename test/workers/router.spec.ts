@@ -103,7 +103,7 @@ describe("router dispatch", () => {
     invalidateSettingsCache();
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
 
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: "wrong" }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: "wrong" }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(401);
 
     res = await SELF.fetch(`${BASE}/api/auth/password`, post({}, { Cookie: cookie }));
@@ -260,6 +260,7 @@ describe("router dispatch", () => {
         { url: `${BASE}/api/settings/import`, init: post({ settings: {} }, cookieOnly) },
         { url: `${BASE}/api/sub-import`, init: post({ text: "vless://x@y:443" }, cookieOnly) },
         { url: `${BASE}/api/auth/password`, init: post({}, cookieOnly) },
+        { url: `${BASE}/api/auth/login`, init: post({ password: "x" }, cookieOnly) },
         { url: `${BASE}/telegram/setup`, init: post({}, cookieOnly) },
         { url: `${BASE}/telegram/remove`, init: post({}, cookieOnly) },
       ];
@@ -359,6 +360,11 @@ describe("router dispatch", () => {
       res = await SELF.fetch(`${BASE}/sub`);
       expect(res.status).toBe(200);
 
+      res = await SELF.fetch(`${BASE}/sub?target=clash`, { method: "HEAD" });
+      expect(res.status).toBe(200);
+      expect(Number(res.headers.get("Content-Length"))).toBeGreaterThan(0);
+      expect(await res.text()).toBe("");
+
       res = await SELF.fetch(`${BASE}/doh?dns=q80BAAABAAAAAAAAA2NvbQdhZXJvcGlhA2NvbQAAAQAB`, {
         headers: { Accept: "application/dns-message" },
       });
@@ -387,7 +393,7 @@ describe("router dispatch", () => {
     const { hash, salt } = await hashPassword(PASSWORD);
     await seed(kv, SP, { passwordHash: hash, passwordSalt: salt, passwordIsBootstrap: true });
 
-    let res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    let res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
     expect((await body(res)).data.mustChangePassword).toBe(true);
     const cookie = (res.headers.get("Set-Cookie") ?? "").split(";")[0]!;
@@ -490,7 +496,7 @@ describe("router dispatch", () => {
     res = await SELF.fetch(`${BASE}/api/settings`, { headers: { Cookie: cookie } });
     expect((await body(res)).data.hasPassword).toBe(true);
 
-    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }));
+    res = await SELF.fetch(`${BASE}/api/auth/login`, post({ password: PASSWORD }, { "X-Q-Panel": "1" }));
     expect(res.status).toBe(200);
 
     res = await SELF.fetch(`${BASE}/api/settings/import`, {

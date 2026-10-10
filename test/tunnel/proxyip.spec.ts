@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  clearExpandMemoForTests,
   expandProxyIps,
+  expandProxyIpsCached,
   hashSeed,
   mulberry32,
   shuffleDeterministic,
@@ -11,6 +13,7 @@ import { clearResolverCache } from "../../src/tunnel/resolver";
 afterEach(() => {
   vi.unstubAllGlobals();
   clearResolverCache();
+  clearExpandMemoForTests();
 });
 
 function fakeResolver(overrides: Partial<DohResolver> = {}): DohResolver {
@@ -116,6 +119,36 @@ describe("expandProxyIps", () => {
       }),
     });
     expect(entries.map((e) => e.host)).toEqual(["6.6.6.6"]);
+  });
+});
+
+describe("expandProxyIpsCached", () => {
+  it("serves repeat expansions without re-querying the resolver", async () => {
+    let calls = 0;
+    const resolver = fakeResolver({
+      resolveTXT: async () => {
+        calls++;
+        return ["100.0.0.1,100.0.0.2"];
+      },
+    });
+    const first = await expandProxyIpsCached(["cache-me.example"], "https://dns.example/dns-query", resolver);
+    const second = await expandProxyIpsCached(["cache-me.example"], "https://dns.example/dns-query", resolver);
+    expect(first.map((e) => e.host)).toEqual(["100.0.0.1", "100.0.0.2"]);
+    expect(second).toEqual(first);
+    expect(calls).toBe(1);
+  });
+
+  it("keys the memo by upstream so different DoH endpoints re-expand", async () => {
+    let calls = 0;
+    const resolver = fakeResolver({
+      resolveTXT: async () => {
+        calls++;
+        return ["100.0.0.3"];
+      },
+    });
+    await expandProxyIpsCached(["upstream.example"], "https://a.example/dns-query", resolver);
+    await expandProxyIpsCached(["upstream.example"], "https://b.example/dns-query", resolver);
+    expect(calls).toBe(2);
   });
 });
 

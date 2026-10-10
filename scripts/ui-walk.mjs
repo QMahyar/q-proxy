@@ -3,12 +3,22 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const require2 = createRequire('C:/Users/qmahyar/AppData/Roaming/npm/node_modules/@playwright/mcp/node_modules/playwright/index.js');
-const { chromium } = require2('playwright');
-
 // ================= config =================
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const BASE = 'http://127.0.0.1:8799';
+const projectRequire = createRequire(join(ROOT, 'package.json'));
+let chromium;
+try {
+  ({ chromium } = projectRequire('playwright'));
+} catch {
+  try {
+    ({ chromium } = projectRequire('playwright-core'));
+  } catch {
+    throw new Error('playwright not found: install it (npm i -D playwright-core) to run scripts/ui-walk.mjs');
+  }
+}
+const BASE = (process.env.UI_WALK_BASE ?? process.env.BASE_URL ?? 'http://127.0.0.1:8799').replace(/\/+$/, '');
+const BROWSER_CHANNEL = process.env.UI_WALK_CHANNEL ?? process.env.PLAYWRIGHT_CHANNEL ?? 'chrome';
+const HEADLESS = process.env.UI_WALK_HEADLESS !== '0';
 const SP_FILE = join(ROOT, '.pi/ui-audit/local-sp.txt');
 const PW_FILE = join(ROOT, '.pi/ui-audit/local-pw.txt');
 const SP = existsSync(SP_FILE) ? readFileSync(SP_FILE, 'utf8').trim() : '';
@@ -477,36 +487,36 @@ async function step7_settings(page) {
     await page.waitForFunction(n => n === 2, saves.length, { timeout: 8000 });
     // fragment preset off -> low (persisted) -> off (reverted); state-safe: an interrupted
     // earlier attempt can leave 'low' saved, so always start by force-saving 'off'
-    await gotoSub(page, 'tunnel');
-    await page.click('#sp-tunnel .chip[data-preset="off"]');
+    await gotoSub(page, 'protocols');
+    await page.click('#sp-protocols .chip[data-preset="off"]');
     await page.waitForTimeout(350);
-    await page.click('#sp-tunnel [data-action="section-save"]');
+    await page.click('#sp-protocols [data-action="section-save"]');
     await page.waitForTimeout(900); // settle regardless of whether a PUT was needed
-    await gotoSub(page, 'tunnel');
-    await page.click('#sp-tunnel .chip[data-preset="low"]');
+    await gotoSub(page, 'protocols');
+    await page.click('#sp-protocols .chip[data-preset="low"]');
     await page.waitForTimeout(350);
     const rangeDisabled = await page.evaluate(() => {
-      const el = document.querySelector('#sp-tunnel [data-bind="fragment.lengthMin"]');
+      const el = document.querySelector('#sp-protocols [data-bind="fragment.lengthMin"]');
       return el ? el.disabled : null;
     });
     assert(rangeDisabled === true, 'fragment preset low did not lock range inputs');
     const savesBeforeLow = saves.length;
-    await page.click('#sp-tunnel [data-action="section-save"]');
+    await page.click('#sp-protocols [data-action="section-save"]');
     await page.waitForTimeout(1200);
     assert(saves.length === savesBeforeLow + 1, 'fragment-low save: expected exactly 1 PUT, got ' + (saves.length - savesBeforeLow));
     await navAfterSave(page);
-    await gotoSub(page, 'tunnel');
+    await gotoSub(page, 'protocols');
     // bounded re-check (KV read-after-write can lag one render)
-    let mode = await page.evaluate(() => { const c = document.querySelector('#sp-tunnel .chip[data-preset="low"]'); return c ? c.getAttribute('aria-checked') : null; });
+    let mode = await page.evaluate(() => { const c = document.querySelector('#sp-protocols .chip[data-preset="low"]'); return c ? c.getAttribute('aria-checked') : null; });
     for (let i = 0; i < 2 && mode !== 'true'; i++) {
       await page.waitForTimeout(800);
-      mode = await page.evaluate(() => { const c = document.querySelector('#sp-tunnel .chip[data-preset="low"]'); return c ? c.getAttribute('aria-checked') : null; });
+      mode = await page.evaluate(() => { const c = document.querySelector('#sp-protocols .chip[data-preset="low"]'); return c ? c.getAttribute('aria-checked') : null; });
     }
     assert(mode === 'true', 'fragment preset low not persisted after reload');
-    await page.click('#sp-tunnel .chip[data-preset="off"]');
+    await page.click('#sp-protocols .chip[data-preset="off"]');
     await page.waitForTimeout(300);
     const savesBeforeOff = saves.length;
-    await page.click('#sp-tunnel [data-action="section-save"]');
+    await page.click('#sp-protocols [data-action="section-save"]');
     await page.waitForTimeout(1200);
     assert(saves.length === savesBeforeOff + 1, 'fragment-off save: expected exactly 1 PUT, got ' + (saves.length - savesBeforeOff));
     // routing rule toggle -> persisted -> revert (state-safe per-save PUT counting)
@@ -599,7 +609,7 @@ async function step7_settings(page) {
     await page.waitForTimeout(1200);
     ok('settings-roundtrips', 'profileTitle + fragment-low + routing toggle + endpoints persisted & reverted; exactly 1 PUT per save (' + saves.length + ' PUTs observed)');
     // egress pool card: fetch settles into rows, an error card with retry, or an empty card with retry
-    await gotoSub(page, 'egress');
+    await gotoSub(page, 'addresses');
     await page.click('[data-action="pool-fetch"]');
     await page.waitForFunction(() => { const el = document.getElementById('pool-list'); return el && !el.querySelector('.loading-box'); }, null, { timeout: 20000 }).catch(() => {});
     const poolState = await page.evaluate(() => {
@@ -689,7 +699,7 @@ async function step10_i18n(page) {
   const dir = await page.evaluate(() => document.documentElement.getAttribute('dir'));
   assert(dir === 'rtl', 'dir != rtl in FA (got ' + dir + ')');
   const leaked = [];
-  for (const h of ['#/home', '#/subs', '#/warp', '#/settings/general', '#/settings/protocols', '#/settings/addresses', '#/settings/egress', '#/settings/tunnel', '#/settings/advanced']) {
+  for (const h of ['#/home', '#/subs', '#/warp', '#/settings/general', '#/settings/protocols', '#/settings/addresses', '#/settings/advanced']) {
     await page.evaluate(hash => { location.hash = hash; }, h);
     await page.waitForTimeout(T.navTo);
     const found = await page.evaluate(() => {
@@ -707,10 +717,20 @@ async function step10_i18n(page) {
     if (found.length) leaked.push({ hash: h, found });
   }
   assert(leaked.length === 0, 'raw dict keys visible in FA: ' + JSON.stringify(leaked));
+  // grafted subsections redirect to their new homes
+  for (const [oldHash, sec] of [['#/settings/egress', 'addresses'], ['#/settings/tunnel', 'protocols']]) {
+    await page.evaluate(hash => { location.hash = hash; }, oldHash);
+    await page.waitForTimeout(T.navTo);
+    const visible = await page.evaluate(() => {
+      const el = document.querySelector('#settings-panels [id^="sp-"]:not([hidden])');
+      return el ? el.id : null;
+    });
+    assert(visible === 'sp-' + sec, oldHash + ' did not land on ' + sec + ' (got ' + visible + ')');
+  }
   await page.evaluate(() => { document.cookie = 'qp_lang=en; Path=/; Max-Age=31536000; SameSite=Lax'; location.reload(); });
   await waitForPanel(page);
   await dismissWizard(page);
-  ok('i18n', 'FA dir=rtl, zero raw dict keys across 9 views, back to EN');
+  ok('i18n', 'FA dir=rtl, zero raw dict keys across 7 views, graft redirects hold, back to EN');
 }
 
 async function step11_mobile(context) {
@@ -784,7 +804,7 @@ const started = new Date().toISOString();
 let browser = null;
 try {
   assert(SP.length === 24, 'securePath missing from .pi/ui-audit/local-sp.txt');
-  browser = await chromium.launch({ channel: 'chrome', headless: true });
+  browser = await chromium.launch(BROWSER_CHANNEL ? { channel: BROWSER_CHANNEL, headless: HEADLESS } : { headless: HEADLESS });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addCookies([{ name: 'qp_lang', value: 'en', url: BASE }]);
   await context.addInitScript(() => { try { localStorage.setItem('qp_wizard_done', '1'); } catch (e) {} });

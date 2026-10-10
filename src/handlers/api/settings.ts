@@ -21,11 +21,22 @@ const PRESERVED_FIELDS = [
   "seededAt",
 ] as const satisfies readonly (keyof Settings)[];
 
+// Typed structuredClone-as-record helper: Settings (and its nested telegram
+// group) are plain JSON data, so a deep clone viewed as a mutable record is
+// safe without a double cast at every call site.
+function cloneRecord<T>(value: T): Record<string, unknown> {
+  return structuredClone(value) as unknown as Record<string, unknown>;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value as Record<string, unknown>;
+}
+
 export function publicSettingsView(s: Settings): PublicSettings & { hasPassword: boolean } {
-  const view = structuredClone(s) as unknown as Record<string, unknown>;
+  const view = cloneRecord(s);
   for (const path of SENSITIVE_SETTING_PATHS) delete view[path];
   if (view.telegram !== null && typeof view.telegram === "object") {
-    delete (view.telegram as Record<string, unknown>).botToken;
+    delete asRecord(view.telegram).botToken;
   }
   view.hasPassword = s.passwordHash !== null;
   return view as PublicSettings & { hasPassword: boolean };
@@ -45,8 +56,8 @@ function changedTopLevelKeys(before: Settings, after: Settings): string[] {
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
   const out: string[] = [];
   for (const key of keys) {
-    const a = (before as unknown as Record<string, unknown>)[key];
-    const b = (after as unknown as Record<string, unknown>)[key];
+    const a = asRecord(before)[key];
+    const b = asRecord(after)[key];
     if (JSON.stringify(a) !== JSON.stringify(b)) out.push(key);
   }
   return out.sort();
@@ -54,8 +65,8 @@ function changedTopLevelKeys(before: Settings, after: Settings): string[] {
 
 export const handleSaveSettings: RouteHandler = async (req, _env, s, ctx) => {
   const body = await readJsonObject(req);
-  for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "passwordIsBootstrap", "seededAt"]) delete (body as Record<string, unknown>)[k];
-  const baseRev = (body as Record<string, unknown>).baseRev;
+  for (const k of ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "passwordIsBootstrap", "seededAt"]) delete asRecord(body)[k];
+  const baseRev = asRecord(body).baseRev;
   const fresh = await loadSettingsFresh(_env);
   if (typeof baseRev === "number" && Number.isInteger(baseRev)) {
     const currentRev = await readSettingsRev(_env);
@@ -77,7 +88,7 @@ export const handleResetSettings: RouteHandler = async (req, env, _s, ctx) => {
   void _s;
   const fresh = structuredClone(DEFAULT_SETTINGS);
   for (const key of PRESERVED_FIELDS) {
-    (fresh as unknown as Record<string, unknown>)[key] = (freshSrc as unknown as Record<string, unknown>)[key];
+    asRecord(fresh)[key] = asRecord(freshSrc)[key];
   }
   const result = validateSettings(fresh);
   if (!result.ok) throw new ValidationError(result.fields);
@@ -87,10 +98,10 @@ export const handleResetSettings: RouteHandler = async (req, env, _s, ctx) => {
 };
 
 export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
-  const view = structuredClone(s) as unknown as Record<string, unknown>;
+  const view = cloneRecord(s);
   for (const path of [...SENSITIVE_SETTING_PATHS, "securePath"]) delete view[path];
   if (view.telegram !== null && typeof view.telegram === "object") {
-    delete (view.telegram as Record<string, unknown>).botToken;
+    delete asRecord(view.telegram).botToken;
   }
   const body = JSON.stringify({ kind: "q-proxy-settings", version: SETTINGS_VERSION, exportedAt: new Date().toISOString(), settings: view }, null, 2);
   return new Response(body, {
@@ -105,7 +116,7 @@ export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
 
 export const handleImportSettings: RouteHandler = async (req, env, s, ctx) => {
   const body = await readJsonObject(req);
-  const incoming = (body as Record<string, unknown>).settings;
+  const incoming = asRecord(body).settings;
   if (incoming === null || typeof incoming !== "object" || Array.isArray(incoming)) {
     throw new ValidationError({ settings: "must be an exported settings object" });
   }
@@ -123,7 +134,7 @@ export const handleImportSettings: RouteHandler = async (req, env, s, ctx) => {
   const fresh = await loadSettingsFresh(env);
   void s;
   for (const key of PRESERVED_FIELDS) {
-    (merged as unknown as Record<string, unknown>)[key] = (fresh as unknown as Record<string, unknown>)[key];
+    asRecord(merged)[key] = asRecord(fresh)[key];
   }
   const result = validateSettings(merged);
   if (!result.ok) throw new ValidationError(result.fields);

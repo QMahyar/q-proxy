@@ -18,10 +18,12 @@ const inp=$('share-url');
 if(!inp||!inp.value||!(navigator.share))return;
 navigator.share({title:$('share-title').textContent,url:inp.value}).catch(()=>{})}
 function shareSavePng(){
+const dl=document.getElementById('share-download');
+const name=dl&&!dl.hidden&&dl.getAttribute('download')?dl.getAttribute('download'):null;
 const canvas=$('share-canvas');if(!canvas)return;
 const a=document.createElement('a');
 a.href=canvas.toDataURL('image/png');
-a.download='q-proxy-qr.png';
+a.download=(name?name.replace(/\.[^.]*$/,''):'q-proxy-qr')+'.png';
 document.body.appendChild(a);a.click();a.remove()}
 const qrCache=new Map();
 function openShareSheet(o){

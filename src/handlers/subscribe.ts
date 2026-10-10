@@ -93,12 +93,17 @@ export const handleSubscribe: RouteHandler = async (req, env, s, reqCtx) => {
       format: f,
       url: `${origin}${url.pathname}?target=${f}`,
     }));
-    return htmlResponse(infoPageHtml(subUrls, s.profileTitle), 200, { "Cache-Control": "no-store" });
+    const page = htmlResponse(infoPageHtml(subUrls, s.profileTitle), 200, { "Cache-Control": "no-store" });
+    if (req.method === "HEAD") return new Response(null, { status: page.status, headers: page.headers });
+    return page;
   }
 
   const cacheKey = versionedEdgeCacheKey(makeEdgeCacheKey(req, format, isFragmentMode), s);
   const cached = await matchEdgeCache(cacheKey);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    if (req.method === "HEAD") return new Response(null, { status: cached.status, headers: cached.headers });
+    return cached;
+  }
 
   const ctx = { settings: s, hostname: resolveHostname(s, url), request: req };
   const nodes = selectVariantNodes(generateNodes(ctx), isFragmentMode ? "fragment" : "normal");
@@ -117,7 +122,9 @@ export const handleSubscribe: RouteHandler = async (req, env, s, reqCtx) => {
   });
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
   Object.assign(headers, attachmentHeaders(format, s.profileTitle));
+  headers["Content-Length"] = String(new TextEncoder().encode(body).byteLength);
   const res = new Response(body, { status: 200, headers });
   if (typeof caches !== "undefined") afterResponse(reqCtx, caches.default.put(cacheKey, res.clone()));
+  if (req.method === "HEAD") return new Response(null, { status: 200, headers: res.headers });
   return res;
 };

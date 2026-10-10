@@ -1,7 +1,7 @@
 import type { Settings } from "../types/settings";
-import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
+import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, normalizeToken, parseHostPort } from "../utils/net";
 import { dialTcp } from "./egress";
-import { expandProxyIps, hashSeed, shuffleDeterministic } from "./proxyip";
+import { expandProxyIps, expandProxyIpsCached, hashSeed, shuffleDeterministic } from "./proxyip";
 import { createResolver } from "./resolver";
 import type { DohResolver } from "./resolver";
 
@@ -105,7 +105,7 @@ function extractPoolTokens(text: string): string[] {
 }
 
 function parsePoolToken(token: string): RelayEndpoint | null {
-  const t = token.trim().replace(/^["']+|["']+$/g, "").toLowerCase();
+  const t = normalizeToken(token);
   if (t.length === 0 || /\s/.test(t)) return null;
   const hp = parseHostPort(t, DEFAULT_RELAY_PORT);
   if (hp === null || hp.host.length === 0) return null;
@@ -202,8 +202,9 @@ export async function tcpProbe(host: string, port: number): Promise<number | nul
 }
 
 export async function collectProxyPoolDetailed(settings: Settings, colo: string): Promise<ProxyPoolResult> {
-  const resolver = createResolver(settings.dohUpstream || DEFAULT_DOH_UPSTREAM);
-  const listEntries = await expandProxyIps(settings.proxyIps, { resolver });
+  const upstream = settings.dohUpstream || DEFAULT_DOH_UPSTREAM;
+  const resolver = createResolver(upstream);
+  const listEntries = await expandProxyIpsCached(settings.proxyIps, upstream, resolver);
   const seen = new Set<string>();
   const endpoints: RelayEndpoint[] = [];
   const pushAll = (items: readonly RelayEndpoint[]): void => {

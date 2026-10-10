@@ -40,7 +40,10 @@ export const handleWarpSub: RouteHandler = async (req, env, s, reqCtx) => {
   const edgeCache: Cache | null = typeof caches === "undefined" ? null : caches.default;
   if (edgeCache !== null) {
     const cached = await edgeCache.match(cacheKey);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      if (req.method === "HEAD") return new Response(null, { status: cached.status, headers: cached.headers });
+      return cached;
+    }
   }
 
   const ctx = await expandAccount(env, account, s);
@@ -59,7 +62,10 @@ export const handleWarpSub: RouteHandler = async (req, env, s, reqCtx) => {
     "X-WG-Version": appVersion(),
   };
   const body: BodyInit = typeof result === "string" ? result : new Uint8Array(result);
+  const bodyBytes = typeof result === "string" ? new TextEncoder().encode(result).byteLength : result.byteLength;
+  headers["Content-Length"] = String(bodyBytes);
   const res = new Response(body as BodyInit, { status: 200, headers });
   if (edgeCache !== null) afterResponse(reqCtx, edgeCache.put(cacheKey, res.clone()));
+  if (req.method === "HEAD") return new Response(null, { status: 200, headers: res.headers });
   return res;
 };

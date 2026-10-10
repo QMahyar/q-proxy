@@ -2,11 +2,11 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex,nofollow">
 <title>Q Proxy</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233b82f6'/%3E%3Cstop offset='1' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Ccircle cx='15' cy='15' r='8' fill='none' stroke='white' stroke-width='2.5'/%3E%3Cpath d='m18.5 18.5 6.5 6.5' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233b82f6'/%3E%3Cstop offset='1' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cpath d='M18 4 9 18h6l-2 10 9-14h-6l2-10z' fill='white'/%3E%3C/svg%3E">
 <script>
 <!--panel:head-js-->
 </script>
@@ -17,7 +17,7 @@
 </head>
 <body>
 <a class="visually-hidden skip-link" href="#main" id="skip-link">Skip to content</a>
-<div class="texture-wrap" aria-hidden="true"><div class="dotgrid"></div><div class="noise"></div><div class="blob blob-a"></div><div class="blob blob-b"></div></div>
+<div class="texture-wrap" aria-hidden="true"><div class="dotgrid"></div><div class="blob blob-a"></div><div class="blob blob-b"></div></div>
 <svg hidden xmlns="http://www.w3.org/2000/svg">
 <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
 <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12A3 3 0 1 1 9.88 9.88"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
@@ -37,7 +37,7 @@
 <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
 </svg>
 <header class="topbar">
-<div class="brand"><span class="logo-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m15.5 15.5 5 5"/></svg></span> Q Proxy</div>
+<div class="brand"><span class="logo-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span> Q Proxy <small>Console</small></div>
 <nav class="tabs" role="tablist" aria-label="Navigation" id="nav">
 <a class="tab" role="tab" id="tab-home" href="#/home" data-view="home"></a>
 <a class="tab" role="tab" id="tab-subs" href="#/subs" data-view="subs"></a>
@@ -60,26 +60,27 @@
 <main id="main" tabindex="-1">
 <div id="backup-banner" hidden></div>
 <section id="view-home" hidden role="tabpanel" aria-labelledby="tab-home">
-<h1 class="view-title" id="home-h1" tabindex="-1"></h1>
+<div class="view-head"><div><h1 class="view-title" id="home-h1" tabindex="-1"></h1><p class="view-subtitle" id="home-sub"></p></div></div>
 <div class="home-grid" id="home-body"></div>
 </section>
 <section id="view-subs" hidden role="tabpanel" aria-labelledby="tab-subs">
-<h1 class="view-title" id="subs-h1" tabindex="-1"></h1>
+<div class="view-head"><div><h1 class="view-title" id="subs-h1" tabindex="-1"></h1><p class="view-subtitle" id="subs-sub"></p></div></div>
 <div id="subs-body"></div>
 </section>
 <section id="view-settings" hidden role="tabpanel" aria-labelledby="tab-settings">
-<h1 class="view-title" id="settings-h1" tabindex="-1"></h1>
+<div class="view-head"><div><h1 class="view-title" id="settings-h1" tabindex="-1"></h1><p class="view-subtitle" id="settings-sub"></p></div></div>
 <div class="subtabs" role="tablist" aria-label="Settings sections" id="subtabs"></div>
 <div id="settings-panels"></div>
 </section>
 <section id="view-warp" hidden role="tabpanel" aria-labelledby="tab-warp">
-<h1 class="view-title" id="warp-h1" tabindex="-1"></h1>
+<div class="view-head"><div><h1 class="view-title" id="warp-h1" tabindex="-1"></h1><p class="view-subtitle" id="warp-sub"></p></div></div>
 <div id="warp-body"></div>
 </section>
 </main>
+<footer class="app-foot" id="app-foot"></footer>
 <div class="applybar" id="applybar" hidden><div class="applybar__inner"><span class="applybar__label"><span class="dot dot--warn"></span><span id="dirty-label"></span></span><button type="button" class="btn btn--ghost btn--sm" id="discard-btn" data-action="discard"></button><button type="button" class="btn btn--primary btn--sm" id="apply-btn" data-action="apply"></button></div></div>
 <div class="modal" id="m-confirm" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="cf-title"><div class="modal__title" id="cf-title"></div><div class="modal__body" id="cf-body"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="cf-cancel"></button><button type="button" class="btn btn--primary" id="cf-ok"></button></div></div></div>
-<div class="modal" id="m-warp-generate" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wg-title"><div class="modal__title" id="wg-title"></div><p class="field__hint" id="wg-desc" style="margin-block-end:12px"></p><div class="field"><label class="field__label" for="wg-name" id="wg-name-label"></label><input class="input" type="text" id="wg-name" maxlength="100" autocomplete="off"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wg-cancel" data-action="close-warp-modal" data-modal="m-warp-generate"></button><button type="button" class="btn btn--primary" id="wg-go"></button></div></div></div>
+<div class="modal" id="m-warp-generate" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wg-title"><div class="modal__title" id="wg-title"></div><p class="field__hint" id="wg-desc" style="margin-block-end:12px"></p><div class="field"><label class="field__label" for="wg-name" id="wg-name-label"></label><input class="input" type="text" id="wg-name" maxlength="100" autocomplete="off"><p class="field__error" id="wg-error" role="alert"></p></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wg-cancel" data-action="close-warp-modal" data-modal="m-warp-generate"></button><button type="button" class="btn btn--primary" id="wg-go"></button></div></div></div>
 <div class="modal" id="m-warp-import" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wi-title"><div class="modal__title" id="wi-title"></div><p class="field__hint" id="wi-desc" style="margin-block-end:12px"></p><div class="field"><label class="field__label" for="wi-name" id="wi-name-label"></label><input class="input" type="text" id="wi-name" maxlength="100" autocomplete="off"></div><div class="field"><label class="field__label" for="wi-config" id="wi-config-label"></label><textarea class="input textarea textarea--mono" id="wi-config" rows="7" spellcheck="false" dir="ltr"></textarea><p class="field__error" id="wi-error" role="alert"></p></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wi-cancel" data-action="close-warp-modal" data-modal="m-warp-import"></button><button type="button" class="btn btn--primary" id="wi-go"></button></div></div></div>
 <div class="modal" id="m-warp-preset" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="wp-title"><div class="modal__title" id="wp-title"></div><div class="field"><label class="field__label" for="wp-name" id="wp-name-label"></label><input class="input" type="text" id="wp-name" maxlength="100" autocomplete="off"></div><div class="field"><label class="field__label" for="wp-endpoints" id="wp-endpoints-label"></label><textarea class="input textarea textarea--mono" id="wp-endpoints" rows="6" spellcheck="false" dir="ltr" placeholder="162.159.192.1:2408"></textarea><p class="field__hint" id="wp-hint"></p><p class="field__error" id="wp-error" role="alert"></p></div><div class="field"><label class="field__label" for="wp-dns" id="wp-dns-label"></label><input class="input" type="text" id="wp-dns" maxlength="253" autocomplete="off" dir="ltr"></div><div class="modal__actions"><button type="button" class="btn btn--ghost" id="wp-cancel" data-action="close-warp-modal" data-modal="m-warp-preset"></button><button type="button" class="btn btn--primary" id="wp-go"></button></div></div></div>
 <div class="modal" id="m-share" hidden><div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="share-title" aria-describedby="share-warning"><div class="modal__title" id="share-title"></div><label class="visually-hidden" for="share-url" id="share-url-label"></label><input class="input input--mono" type="text" id="share-url" readonly dir="ltr" spellcheck="false" style="margin-block-end:12px"><div class="qr-wrap"><canvas id="share-canvas" width="560" height="560" style="width:240px;height:240px;display:block;max-width:56vw;max-height:56vw" role="img" aria-label="QR code"></canvas><button type="button" class="btn btn--icon btn--sm btn--ghost" id="share-png"><svg aria-hidden="true"><use href="#i-download"/></svg></button></div><p class="field__hint" id="share-warning" hidden style="margin-block:0 12px;color:var(--warning)"></p><div class="modal__actions" style="margin-block-start:16px"><a class="btn btn--ghost" id="share-download" hidden download><svg aria-hidden="true"><use href="#i-download"/></svg><span id="share-download-label"></span></a><button type="button" class="btn btn--ghost" id="share-native" hidden><svg aria-hidden="true"><use href="#i-share"/></svg><span id="share-native-label"></span></button><button type="button" class="btn btn--primary" id="share-copy"></button><button type="button" class="btn btn--ghost" id="share-close"></button></div></div></div>

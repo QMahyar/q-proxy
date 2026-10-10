@@ -1,5 +1,5 @@
 import type { ProxyNode } from "../../types/node";
-import { isIpLiteral } from "../../utils/net";
+import { isIpLiteral, stripBrackets } from "../../utils/net";
 import { DEFAULT_PROXY_DNS, TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
 
@@ -42,7 +42,7 @@ function dnsServerEntry(address: string, tag: string, detour?: string): Record<s
   const entry: Record<string, unknown> = {
     type,
     tag,
-    server: url.hostname.replace(/^\[/, "").replace(/\]$/, ""),
+    server: stripBrackets(url.hostname),
   };
   const port = url.port === "" ? defaultPort : Number(url.port);
   if (port !== defaultPort) entry.server_port = port;

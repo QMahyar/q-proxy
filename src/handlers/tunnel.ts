@@ -1,47 +1,16 @@
 import type { RouteHandler } from "../types/context";
 import type { Settings } from "../types/settings";
-import type { DialTarget, DnsPacketRelay } from "../types/tunnel";
+import type { TunnelKind } from "../core/routes";
 import { NotFoundError, RateLimitedError } from "../core/errors";
 import { log } from "../core/log";
-import { recordBytes } from "../core/counters";
 import { clientIp } from "../auth/guard";
 import { tryConsume } from "../tunnel/ratelimit";
-import { identifyTunnel, type TunnelKind } from "../core/routes";
-import { ByteAccumulator } from "../protocols/common";
-import type {
-  DownlinkEncoder,
-  ParsedRequest,
-  ProtocolInbound,
-} from "../protocols/common";
-import { createVlessInbound } from "../protocols/vless";
-import { openEgressWithSpeculativeDirect } from "../tunnel/egress";
-import { createRelay } from "../tunnel/relay";
-import { createDnsPacketRelay } from "../tunnel/resolver";
+import { identifyTunnel } from "../core/routes";
 import { acceptTunnelSocket } from "../tunnel/websocket";
-import { concatBytes, utf8Encode } from "../utils/bytes";
+import { attachTunnelSocket } from "./tunnel/messages";
+import { createTunnelSession } from "./tunnel/session";
 
-type TunnelParsed = ParsedRequest<"tcp"> | ParsedRequest<"udp">;
-
-const HANDSHAKE_TIMEOUT_MS = 10_000;
-const EMPTY_BYTES = new Uint8Array(0);
-
-export async function resolveTcpFirstPacket(
-  inbound: ProtocolInbound<ParsedRequest<"tcp"> | ParsedRequest<"udp">>,
-  uplinkDecode: ((chunk: Uint8Array) => Promise<Uint8Array | null>) | null,
-  rest: Uint8Array,
-): Promise<Uint8Array> {
-  let firstPacket = inbound.takeInitialPayload() ?? rest;
-  if (uplinkDecode !== null) {
-    const drained = await uplinkDecode(EMPTY_BYTES);
-    if (drained !== null && drained.length > 0) firstPacket = concatBytes(firstPacket, drained);
-  }
-  return firstPacket;
-}
-
-function createInbound(kind: TunnelKind, s: Settings): ProtocolInbound<TunnelParsed> {
-  void kind;
-  return createVlessInbound(s.vlessUuid);
-}
+export { resolveTcpFirstPacket } from "./tunnel/session";
 
 export const handleTunnel: RouteHandler = async (req, env, s, ctx) => {
   const kind = identifyTunnel(new URL(req.url).pathname, s);
@@ -56,11 +25,19 @@ export const handleTunnel: RouteHandler = async (req, env, s, ctx) => {
     log.error("tunnel", "driveSession unhandled", String(err));
     try {
       if (accepted.ws.readyState !== 3) accepted.ws.close(1011);
-    } catch {}
+    } catch {
+      // Best-effort: the socket is already dead if close throws here; the
+      // error above is the one that matters.
+    }
   });
   return new Response(null, { status: 101, webSocket: accepted.client });
 };
 
+// Session invariants (phases live in ./tunnel/, this file only routes + drives):
+// - One session carries at most one relay: TCP via createRelay, or UDP-DNS via
+//   the packet relay restricted to port 53 when enableUdp53 is on.
+// - Handshake must complete within 10 s and fit the 16 KiB accumulator.
+// - Client messages run in order on a promise tail; early data replays first.
 async function driveSession(
   ws: WebSocket,
   kind: TunnelKind,
@@ -69,233 +46,6 @@ async function driveSession(
   env: Env,
   ctx?: ExecutionContext | null,
 ): Promise<void> {
-  const inbound = createInbound(kind, s);
-  const acc = new ByteAccumulator();
-
-  let phase: "handshake" | "tcp" | "udp" = "handshake";
-  let relayHandle: ReturnType<typeof createRelay> | null = null;
-  let dnsRelay: DnsPacketRelay | null = null;
-  let downlinkEncoder: DownlinkEncoder | null = null;
-  let uplinkDecode: ((chunk: Uint8Array) => Promise<Uint8Array | null>) | null = null;
-  let headerBytes: Uint8Array | null = null;
-  let clientGone = false;
-
-  const safeClose = (code: number): void => {
-    try {
-      if (ws.readyState !== 3) ws.close(code);
-    } catch {}
-  };
-
-  const sendRaw = (data: Uint8Array): void => {
-    try {
-      if (ws.readyState === 1) ws.send(data);
-    } catch {}
-  };
-
-  const sendServerData = (data: Uint8Array): void => {
-    if (downlinkEncoder === null) {
-      sendRaw(data);
-      return;
-    }
-    void downlinkEncoder
-      .encode(data)
-      .then((frame) => {
-        if (frame.length > 0) sendRaw(frame);
-      })
-      .catch((err: unknown) => {
-        log.error("tunnel", "downlink encode failed", String(err));
-        safeClose(1011);
-      });
-  };
-
-  const activateBodyPath = (): void => {
-    const codec = inbound.bodyCodec();
-    if (codec !== null) {
-      const encoder = codec.beginDownlink();
-      downlinkEncoder = encoder;
-      headerBytes = inbound.responseHeader() ?? encoder.header();
-      uplinkDecode = (chunk: Uint8Array) => codec.decodeUp(chunk);
-      log.debug("tunnel", "body codec active", { kind });
-    } else {
-      downlinkEncoder = null;
-      headerBytes = inbound.responseHeader();
-      uplinkDecode = null;
-    }
-  };
-
-  const handshakeTimer = setTimeout(() => {
-    if (phase === "handshake") {
-      log.debug("tunnel", "handshake timeout", { kind });
-      safeClose(1008);
-    }
-  }, HANDSHAKE_TIMEOUT_MS);
-
-  const cleanupHandshake = (): void => {
-    clearTimeout(handshakeTimer);
-  };
-
-  const rejectClose = (reason: string): void => {
-    cleanupHandshake();
-    log.debug("tunnel", "handshake rejected", { kind, reason });
-    safeClose(1008);
-  };
-
-  const startTcpSession = async (target: DialTarget, firstPacket: Uint8Array): Promise<void> => {
-    try {
-      const packet = firstPacket.length > 0 ? firstPacket : null;
-      const { established, opener } = await openEgressWithSpeculativeDirect(s, target, packet);
-      if (clientGone) {
-        void established.socket.close().catch(() => {});
-        return;
-      }
-      phase = "tcp";
-      cleanupHandshake();
-      const encoder = downlinkEncoder;
-      relayHandle = createRelay(
-        { send: sendRaw, close: safeClose },
-        {
-          responseHeader: headerBytes,
-          uplinkDecode,
-          downlinkEncode:
-            encoder !== null ? (chunk: Uint8Array) => encoder.encode(chunk) : null,
-          retry: () => opener.retry(target, packet),
-        },
-      );
-      const handle = relayHandle;
-      void relayHandle.run(established).then(
-        () => {
-          void recordBytes(env, { bytesUp: handle.bytesUp, bytesDown: handle.bytesDown }, ctx).catch(
-            (err: unknown) => log.error("counters", "record bytes failed", String(err)),
-          );
-        },
-        (err: unknown) => {
-          log.error("tunnel", "relay crashed", String(err));
-          void recordBytes(env, { bytesUp: handle.bytesUp, bytesDown: handle.bytesDown }, ctx).catch(() => {});
-          safeClose(1011);
-        },
-      );
-    } catch (err) {
-      cleanupHandshake();
-      log.debug("tunnel", "egress failed", { kind, reason: String(err) });
-      safeClose(1011);
-    }
-  };
-
-  const toBytes = (data: ArrayBuffer | string | Uint8Array): Uint8Array => {
-    if (typeof data === "string") return utf8Encode(data);
-    if (data instanceof Uint8Array) return data;
-    return new Uint8Array(data);
-  };
-
-  const handleMessage = async (data: ArrayBuffer | string | Uint8Array): Promise<void> => {
-    const bytes = toBytes(data);
-    if (phase === "handshake") {
-      if (!acc.append(bytes)) {
-        rejectClose("handshake buffer exceeded 16 KiB cap");
-        return;
-      }
-      let outcome: Awaited<ReturnType<ProtocolInbound<TunnelParsed>["push"]>>;
-      try {
-        outcome = await inbound.push(acc.drain());
-      } catch (err) {
-        rejectClose(`inbound push error: ${String(err)}`);
-        return;
-      }
-      if (outcome.state === "need-more") return;
-      if (outcome.state === "reject") {
-        rejectClose(outcome.reason);
-        return;
-      }
-      cleanupHandshake();
-      activateBodyPath();
-      const parsed = outcome.parsed;
-      const rest = outcome.rest ?? EMPTY_BYTES;
-      if (parsed.command === "udp") {
-        if (!s.enableUdp53 || parsed.target.port !== 53) {
-          rejectClose("udp is restricted to port 53 when enabled");
-          return;
-        }
-        phase = "udp";
-        dnsRelay = createDnsPacketRelay(s.dohUpstream);
-        if (headerBytes !== null && headerBytes.length > 0) sendRaw(headerBytes);
-        let packet: Uint8Array | null = inbound.takeInitialPayload() ?? rest;
-        if (uplinkDecode !== null && packet !== null) {
-          try {
-            packet = await uplinkDecode(packet);
-          } catch (err) {
-            log.debug("tunnel", "udp uplink decode failed", { kind, reason: String(err) });
-            safeClose(1008);
-            return;
-          }
-        }
-        if (packet !== null && packet.length > 0) {
-          try {
-            const answer = await dnsRelay(packet);
-            if (answer !== null && answer.length > 0) sendServerData(answer);
-          } catch {}
-        }
-        return;
-      }
-      const firstPacket = await resolveTcpFirstPacket(inbound, uplinkDecode, rest);
-      await startTcpSession(parsed.target, firstPacket);
-      return;
-    }
-    if (phase === "udp" && dnsRelay !== null) {
-      let packet: Uint8Array | null = bytes;
-      if (uplinkDecode !== null) {
-        try {
-          packet = await uplinkDecode(bytes);
-        } catch (err) {
-          log.debug("tunnel", "udp uplink decode failed", { kind, reason: String(err) });
-          safeClose(1008);
-          return;
-        }
-      }
-      if (packet === null || packet.length === 0) return;
-      try {
-        const answer = await dnsRelay(packet);
-        if (answer !== null && answer.length > 0) sendServerData(answer);
-      } catch {
-        return;
-      }
-      return;
-    }
-    if (phase === "tcp" && relayHandle !== null) {
-      relayHandle.feedClient(bytes);
-    }
-  };
-
-  let msgTail: Promise<void> = Promise.resolve();
-
-  const onMessage = (evt: MessageEvent): void => {
-    msgTail = msgTail
-      .then(() => handleMessage(evt.data as ArrayBuffer | string))
-      .catch((err: unknown) => {
-        log.error("tunnel", "message handler failed", String(err));
-        safeClose(1011);
-      });
-  };
-
-  ws.addEventListener("message", onMessage);
-  ws.addEventListener("error", () => {
-    clientGone = true;
-    cleanupHandshake();
-    safeClose(1011);
-  });
-  ws.addEventListener("close", () => {
-    clientGone = true;
-    cleanupHandshake();
-    relayHandle?.clientClosed();
-  });
-
-  if (earlyData !== null && earlyData.length > 0) {
-    const first = earlyData;
-    msgTail = msgTail
-      .then(() => handleMessage(first))
-      .catch((err: unknown) => {
-        log.error("tunnel", "message handler failed", String(err));
-        safeClose(1011);
-      });
-    await msgTail;
-  }
+  const st = createTunnelSession(ws, kind, s, env, ctx);
+  await attachTunnelSocket(st, earlyData);
 }

@@ -1,41 +1,24 @@
-# Q Proxy — Five-Minute Quickstart
+# Q Proxy — Quickstart
 
-From zero to a connected client. No CLI, no Cloudflare account needed upfront.
-Every step below is verified against the shipped code — the proof table at the
-bottom maps each claim to its source or test.
+Deploy, claim the panel, connect a client.
 
-## Minute 0–2 — Deploy with one click
+## 1. Deploy
 
-1. Click **Deploy to Cloudflare** (README badge, or
-   `https://deploy.workers.cloudflare.com/?url=https://github.com/QMahyar/q-proxy`).
-   It walks you through Cloudflare signup, then deploys the Worker.
-2. In the dashboard, add the two bindings the button cannot create
-   (Worker → Settings → Bindings → Deploy after each):
-   - KV namespace, variable **`QPROXY_KV`**
-   - D1 database **`q-proxy`**, variable **`QPROXY_DB`** — then apply both files in
-     `migrations/` (`0001_init.sql`, `0002_drop_users.sql`) in the D1 SQL console.
-3. Visit `https://<your-worker>.workers.dev/` once (this seeds settings),
-   read `data.securePath` from KV key `qproxy:settings`, and open
-   `https://<your-worker>.workers.dev/<securePath>/panel`.
+Preferred: `npm run deploy` (direct Cloudflare API — creates the
+`QPROXY_KV` namespace and `q-proxy` D1 database, applies
+`migrations/0001_init.sql`, uploads `dist/q-proxy.js`).
 
-Prefer the terminal instead? The same deploy is one command —
-`docs/DEPLOYMENT.md` Way 0 (`deploy.py`), Way 1 (dashboard paste),
-Way 2 (one-liner), Way 3 (npm/wrangler/Pages). All seven paths are compared
-in the [deployment matrix](DEPLOYMENT.md#deployment-matrix).
+Then visit `https://<your-worker>.workers.dev/` once to seed settings.
 
-## Minute 2–3 — Claim the panel
+## 2. Claim the panel
 
-1. The login page shows the **setup card** (open for 24 h after seeding).
-   Choose a passphrase: **at least 8 characters, with a letter and a digit**.
-   Weaker secrets are rejected with an inline error.
-2. Log in, then set a **personal** passphrase when asked (the first one is a
-   bootstrap password — the panel stays locked until you change it).
-3. A 3-step wizard appears: protocols → your subscription URLs → done.
-   It never shows again (replay it anytime from the `?` shortcuts menu).
+Read `securePath` from KV key `qproxy:settings`, open
+`https://<your-worker>.workers.dev/<securePath>/panel`, and set a
+passphrase (minimum 8 characters, with a letter and a digit).
 
-## Minute 3–5 — Connect your first client
+## 3. Connect a client
 
-Open the **Subscriptions** hub (`#/subs`) or copy a URL from the wizard.
+Copy a subscription URL from the panel Subscriptions hub (`#/subs`).
 Pick the row matching your client:
 
 | Client | URL | Format |
@@ -45,29 +28,7 @@ Pick the row matching your client:
 | Clash Verge / Mihomo / Stash | `/<securePath>/sub?target=clash` | Clash YAML profile |
 | Xray-core desktop (v2rayN / NekoRay) | `/<securePath>/sub?target=xray` | Xray JSON profile |
 
-No `?target=` at all in a phone browser opens an info page with the same
-links (plus QR codes in the panel's ShareSheet). Any other `?target=` value
-is rejected — those three are the whole list.
-
-Paste the URL into your client (Profiles → import from URL), enable the
-connection, and open any website. The Home status card counts requests as
-**estimates** (labeled in the panel) — the worker has no byte meter.
-
-Done. For WARP configs, Telegram bot, kill switch, and troubleshooting, see
-[USER_GUIDE.md](USER_GUIDE.md). For what q-proxy deliberately does *not* do,
-see [USER_GUIDE.md §19](USER_GUIDE.md#19-what-q-proxy-deliberately-does-not-do).
-
-Screenshot: *Deploy Button success + setup card + wizard step 2 + connected client*
-
-## Proof table (step → shipped behavior)
-
-| Quickstart claim | Proved by |
-|---|---|
-| Button URL deploys this repo | `docs/DEPLOYMENT.md` Way B (ticket 10) |
-| Bindings `QPROXY_KV` / `QPROXY_DB`, migrations `0001_init.sql` + `0002_drop_users.sql` | `wrangler.toml`, `migrations/` |
-| Setup card 24 h window, bootstrap forced change | `src/handlers/api/auth.ts`, `test/workers/auth-flow.spec.ts` |
-| 8 + letter + digit floor, inline field error | `src/auth/password.ts`, `test/auth/password.spec.ts` |
-| Wizard: protocols → per-format URLs → done | `src/ui/panel/actions.js` `maybeWizard`, walk step 8 |
-| `?target=base64\|singbox\|clash` serve those bodies; anything else 400s | `SUB_FORMATS`, `test/workers/subscription-pipeline.spec.ts` |
-| Hub rows match served formats (drift-guarded) | `test/ui/format-labels.spec.ts` |
-| Usage figures are labeled estimates | `usageView.estimated`, `test/handlers/api/status.spec.ts` |
+Without `?target=` in a browser you get an info page with the same links.
+Any other `?target=` value is rejected with a 400 — these four are the
+whole list (see `SUB_FORMATS` in `src/subscription/negotiate.ts`,
+drift-guarded by `test/docs/quickstart.spec.ts`).

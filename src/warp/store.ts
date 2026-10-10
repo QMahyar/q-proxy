@@ -72,15 +72,27 @@ type KvLike = {
   list?(options: KvListOptions): Promise<KvListResult>;
 };
 
+const WARP_MEMO_TTL_MS = 30_000;
+
+let presetsMemo: { value: WarpPreset[]; expiresAt: number } | null = null;
+let globalMemo: { value: WarpGlobalSettings; expiresAt: number } | null = null;
+
+export function clearWarpMemoForTests(): void {
+  presetsMemo = null;
+  globalMemo = null;
+}
+
 export async function ensureWarpDefaults(env: { QPROXY_KV: KvLike }): Promise<void> {
   const presets = await env.QPROXY_KV.get(WARP_PRESETS_KEY, "json");
   if (presets === null) {
     await env.QPROXY_KV.put(WARP_PRESETS_KEY, JSON.stringify(DEFAULT_PRESETS));
+    presetsMemo = null;
   }
   const global = await env.QPROXY_KV.get(WARP_GLOBAL_KEY, "json");
   if (global === null) {
     const seed: WarpGlobalSettings = { amnezia: { ...DEFAULT_AMNEZIA }, amneziaEnabled: false };
     await env.QPROXY_KV.put(WARP_GLOBAL_KEY, JSON.stringify(seed));
+    globalMemo = null;
   }
 }
 
@@ -128,18 +140,27 @@ function pickAmnezia(raw: unknown): AmneziaParams | null {
 }
 
 export async function listPresets(env: { QPROXY_KV: KvLike }): Promise<WarpPreset[]> {
+  const memo = presetsMemo;
+  if (memo !== null && memo.expiresAt > Date.now()) {
+    return memo.value.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+  }
   const raw = (await env.QPROXY_KV.get(WARP_PRESETS_KEY, "json")) as unknown;
   if (Array.isArray(raw)) {
     const valid = raw.filter(isWarpPreset);
     if (valid.length > 0) {
-      return valid.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+      const out = valid.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+      presetsMemo = { value: out, expiresAt: Date.now() + WARP_MEMO_TTL_MS };
+      return out.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
     }
   }
-  return DEFAULT_PRESETS.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+  const fallback = DEFAULT_PRESETS.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
+  presetsMemo = { value: fallback, expiresAt: Date.now() + WARP_MEMO_TTL_MS };
+  return fallback.map((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e })) }));
 }
 
 export async function savePresets(env: { QPROXY_KV: KvLike }, presets: WarpPreset[]): Promise<void> {
   await env.QPROXY_KV.put(WARP_PRESETS_KEY, JSON.stringify(presets));
+  presetsMemo = null;
 }
 
 export function newAccountId(): string {
@@ -158,6 +179,8 @@ export async function storeAccount(env: { QPROXY_KV: KvLike }, account: WarpAcco
     await env.QPROXY_KV.put(WARP_TOKEN_PREFIX + account.token, JSON.stringify(account.id));
   } catch (err) {
     if (isNew) {
+      // Best-effort rollback of the half-written account; the original error
+      // below is what the caller must see, so a cleanup failure is swallowed.
       await env.QPROXY_KV.delete(WARP_ACCOUNT_PREFIX + account.id).catch(() => {});
     }
     throw err;
@@ -173,7 +196,9 @@ export async function getAccountByToken(env: { QPROXY_KV: KvLike }, token: strin
   if (!/^[0-9a-f-]{36}$/i.test(token)) return null;
   const id = (await env.QPROXY_KV.get(WARP_TOKEN_PREFIX + token, "json")) as unknown;
   if (typeof id !== "string") return null;
-  return getAccount(env, id);
+  const account = await getAccount(env, id);
+  if (account === null || account.token !== token) return null;
+  return account;
 }
 
 export async function listAccounts(env: { QPROXY_KV: KvLike }): Promise<WarpAccount[]> {
@@ -211,15 +236,24 @@ export async function regenerateToken(env: { QPROXY_KV: KvLike }, account: WarpA
     account.token = snapshot;
     try {
       await env.QPROXY_KV.put(WARP_ACCOUNT_PREFIX + account.id, JSON.stringify({ ...account, token: snapshot }));
-    } catch {}
+    } catch {
+      // Best-effort rollback of the account record; the rotation error below
+      // is authoritative, so swallow cleanup failures here.
+    }
     try {
       await env.QPROXY_KV.delete(WARP_TOKEN_PREFIX + next);
-    } catch {}
+    } catch {
+      // Best-effort removal of the orphaned token index; the leaked index
+      // self-heals on next rotation and must not mask the original error.
+    }
     throw err;
   }
   try {
     await env.QPROXY_KV.delete(WARP_TOKEN_PREFIX + oldToken);
-  } catch {}
+  } catch {
+    // Best-effort invalidation of the superseded token; rotation already
+    // succeeded, so a stale index entry is harmless and expires via TTL use.
+  }
   return next;
 }
 
@@ -260,17 +294,27 @@ function isAccount(raw: unknown): raw is WarpAccount {
 }
 
 export async function getGlobalSettings(env: { QPROXY_KV: KvLike }): Promise<WarpGlobalSettings> {
+  if (globalMemo !== null && globalMemo.expiresAt > Date.now()) {
+    return { amnezia: { ...globalMemo.value.amnezia }, amneziaEnabled: globalMemo.value.amneziaEnabled };
+  }
   const raw = (await env.QPROXY_KV.get(WARP_GLOBAL_KEY, "json")) as unknown;
   if (raw !== null && typeof raw === "object") {
     const rec = raw as Record<string, unknown>;
     const amnezia = pickAmnezia(rec.amnezia);
-    if (amnezia !== null) return { amnezia, amneziaEnabled: rec.amneziaEnabled === true };
+    if (amnezia !== null) {
+      const out = { amnezia, amneziaEnabled: rec.amneziaEnabled === true };
+      globalMemo = { value: out, expiresAt: Date.now() + WARP_MEMO_TTL_MS };
+      return { amnezia: { ...out.amnezia }, amneziaEnabled: out.amneziaEnabled };
+    }
   }
-  return { amnezia: { ...DEFAULT_AMNEZIA }, amneziaEnabled: false };
+  const fallback = { amnezia: { ...DEFAULT_AMNEZIA }, amneziaEnabled: false };
+  globalMemo = { value: fallback, expiresAt: Date.now() + WARP_MEMO_TTL_MS };
+  return { amnezia: { ...fallback.amnezia }, amneziaEnabled: false };
 }
 
 export async function setGlobalSettings(env: { QPROXY_KV: KvLike }, settings: WarpGlobalSettings): Promise<void> {
   await env.QPROXY_KV.put(WARP_GLOBAL_KEY, JSON.stringify(settings));
+  globalMemo = null;
 }
 
 export function resolveAmnezia(global: AmneziaParams, overrides: AmneziaParams | null): AmneziaParams {

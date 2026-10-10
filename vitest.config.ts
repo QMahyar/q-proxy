@@ -1,6 +1,5 @@
 import { defineConfig } from "vitest/config";
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
-// @ts-expect-error node builtin used only while vitest evaluates this config
 import { readFileSync } from "node:fs";
 
 const htmlAsText = () => ({

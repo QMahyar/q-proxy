@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dayKeyUtc } from "../../src/utils/time";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { readFileSync } from "node:fs";
 
 type CountersModule = typeof import("../../src/core/counters");

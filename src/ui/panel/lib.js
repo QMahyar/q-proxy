@@ -21,18 +21,18 @@ const API_TTL=30000;const apiInflight=new Map();
 async function api(p,o={}){
 const isGet=(!o.method||o.method==='GET')&&!o.fresh;
 if(isGet){const inf=apiInflight.get(p);if(inf)return inf;
-try{const c=JSON.parse(sessionStorage.getItem('qpc:'+p)||'null');if(c&&Date.now()-c.t<API_TTL)return c.d}catch(e){}}
+{const c=sessionGetJson('qpc:'+p);if(c&&Date.now()-c.t<API_TTL)return c.d}
 const prom=(async()=>{
 let r;const h=o.body!==undefined?{'Content-Type':'application/json','X-Q-Panel':'1'}:(o.mutate?{'X-Q-Panel':'1'}:{});
-if((!o.method||o.method==='GET')){const et=sessionStorage.getItem('qpe:'+p);if(et)h['If-None-Match']=et}
+if((!o.method||o.method==='GET')){const et=sessionGet('qpe:'+p);if(et)h['If-None-Match']=et}
 try{r=await fetch(BASE+p,{credentials:'same-origin',method:o.method||'GET',headers:Object.assign(h,o.headers||{}),body:o.body!==undefined?JSON.stringify(o.body):undefined,signal:o.signal})}catch(e){if(e&&e.name==='AbortError')throw e;throw{status:0,code:'',message:''}}
 if(r.status===401&&!o.keep401){if(S.dirty&&S.dirty.size>0&&!confirm(t('common.unsaved')))throw{status:401,code:'',message:''};location.replace(BASE+'login');throw{status:401,code:'',message:''}}
-if(r.status===304){try{const c=JSON.parse(sessionStorage.getItem('qpc:'+p)||'null');if(c){c.t=Date.now();sessionStorage.setItem('qpc:'+p,JSON.stringify(c));return c.d}}catch(e){}
+if(r.status===304){const c=sessionGetJson('qpc:'+p);if(c){c.t=Date.now();sessionSet('qpc:'+p,JSON.stringify(c));return c.d}
 return api(p,Object.assign({},o,{fresh:true}))}
 let j=null;try{j=await r.json()}catch(e){}
 if(r.status===403&&j&&j.error&&j.error.code==='PASSWORD_CHANGE_REQUIRED'&&!o.keep401){showForceChange();throw{status:403,code:'PASSWORD_CHANGE_REQUIRED',message:'',handled:true}}
 if(!r.ok||!j||j.ok!==true)throw{status:r.status,code:j&&j.error?j.error.code:'',message:j&&j.error?j.error.message:'',fields:j&&j.fields||null,retryAfter:Number(r.headers.get('Retry-After'))||0};
-if(!o.method||o.method==='GET'){const et=r.headers.get('ETag');if(et)sessionStorage.setItem('qpe:'+p,et);try{sessionStorage.setItem('qpc:'+p,JSON.stringify({t:Date.now(),d:j.data}))}catch(e){}}
+if(!o.method||o.method==='GET'){const et=r.headers.get('ETag');if(et)sessionSet('qpe:'+p,et);sessionSet('qpc:'+p,JSON.stringify({t:Date.now(),d:j.data}))}
 return j.data})();
 if(isGet){apiInflight.set(p,prom);const fin=(d)=>{apiInflight.delete(p);return d};prom.then(fin,fin)}
 return prom}

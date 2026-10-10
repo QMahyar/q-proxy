@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { readFileSync, readdirSync } from "node:fs";
-// @ts-expect-error node builtin lacks types in this repo (precedent: assets.spec.ts)
 import { join } from "node:path";
 import { ASSETS } from "../../src/ui/assets";
 import { buildSubUrls } from "../../src/handlers/api/status";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { execFileSync } from "node:child_process";
-// @ts-expect-error untyped build script export (plain .mjs)
 import { minifyHtmlAsset } from "../../scripts/build-single-file.mjs";
 
 const TOTAL_BUDGET_BYTES = 340 * 1024;
@@ -109,7 +105,7 @@ describe("panel html", () => {
   it("adds the Subscriptions hub as a top-level tab", () => {
     expect(html).toContain('id="tab-subs"');
     expect(html).toContain('href="#/subs"');
-    expect(html).toContain("seg[0]==='subs')return{view:'subs'}");
+    expect(html).toContain("seg[0]==='subs')return{view:'subs',mode}");
     expect(html).toContain("'nav.subs':'Subs'");
     expect(html).toContain("'nav.subs':'اشتراک‌ها'");
     expect(html).toContain("'tabs.subs.title':'Subscriptions'");
@@ -171,14 +167,14 @@ describe("panel html", () => {
   });
 
   it("covers settings controls grouped into sections", () => {
-    for (const section of ["general", "protocols", "addresses", "egress", "tunnel", "advanced"]) {
+    for (const section of ["general", "protocols", "addresses", "advanced"]) {
       expect(html).toContain(`'${section}'`);
       expect(html).toContain(`key:'${section}'`);
     }
     for (const removed of ["fragment'", "chain'", "sources'"]) {
       expect(html).not.toContain(`key:'${removed}`);
     }
-    expect(html).toContain("SETTINGS_SEC_ALIAS={fragment:'tunnel'}");
+    expect(html).toContain("SETTINGS_SEC_ALIAS={fragment:'protocols',egress:'addresses',tunnel:'protocols'}");
     for (const bind of [
       "profileTitle",
       "debugLogging",
@@ -237,14 +233,22 @@ describe("panel html", () => {
     expect(html).not.toContain("'advanced.camouflage.proxy'");
   });
 
-  it("merges settings to six subtabs with a SECTIONS ↔ tabs.settings 1:1 drift guard", () => {
+  it("merges settings to four subtabs with a SECTIONS ↔ tabs.settings 1:1 drift guard", () => {
     const keys = [...html.matchAll(/key:'([a-z]+)',cards:\[/g)].map((m) => m[1]);
-    expect(keys).toEqual(["general", "protocols", "addresses", "egress", "tunnel", "advanced"]);
+    expect(keys).toEqual(["general", "protocols", "addresses", "advanced"]);
     const dictKeys = [...new Set([...html.matchAll(/'tabs\.settings\.([a-z]+)':'/g)].map((m) => m[1]))].sort();
     expect(dictKeys).toEqual([...new Set(keys)].sort());
     for (const k of keys) {
       expect(html.match(new RegExp(`'tabs\\.settings\\.${k}':'`, "g"))?.length).toBe(2);
     }
+  });
+
+  it("grafts tunnel into protocols and egress into addresses with legacy redirects", () => {
+    expect(html).toContain("{title:'fragment.card.title'");
+    expect(html).toContain("{title:'egress.pool.title',pool:true");
+    expect(html).not.toContain("{key:'tunnel'");
+    expect(html).not.toContain("{key:'egress'");
+    expect(html).toContain("SETTINGS_SEC_ALIAS={fragment:'protocols',egress:'addresses',tunnel:'protocols'}");
   });
 
   it("drops the write-only sources card with its server field and dict family", () => {

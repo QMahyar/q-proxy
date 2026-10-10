@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { readFileSync } from "node:fs";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { join } from "node:path";
 
 const toml = readFileSync(join(process.cwd(), "wrangler.toml"), "utf8");

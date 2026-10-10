@@ -1,6 +1,6 @@
 import type { Settings } from "../types/settings";
 import { DEFAULT_SETTINGS, SETTINGS_VERSION } from "../types/settings";
-import { migrateSettings } from "./migrate";
+import { migrateSettings, storedVlessUuid } from "./migrate";
 import { fillIdentity, hasIdentity } from "./seed";
 import { validateSettings } from "./validate";
 import { log } from "../core/log";
@@ -28,21 +28,10 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log (action);
 `;
 
 export async function ensureD1Schema(db: D1Database): Promise<void> {
-  const parts = D1_CORE_SCHEMA.split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  for (const part of parts) {
-    try {
-      await db.prepare(part).run();
-    } catch {
-      await db.exec(part);
-    }
-  }
-}
-
-async function bootstrapD1(env: Env): Promise<void> {  const db = env.QPROXY_DB;
-  if (db === undefined || db === null) return;
   try {
+    await db.exec(D1_CORE_SCHEMA);
+    return;
+  } catch {
     const parts = D1_CORE_SCHEMA.split(";")
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
@@ -53,8 +42,19 @@ async function bootstrapD1(env: Env): Promise<void> {  const db = env.QPROXY_DB;
         await db.exec(part);
       }
     }
+  }
+}
+
+async function bootstrapD1(env: Env): Promise<void> {  const db = env.QPROXY_DB;
+  if (db === undefined || db === null) return;
+  try {
+    await db.exec(D1_CORE_SCHEMA);
   } catch {
-    return;
+    try {
+      await ensureD1Schema(db);
+    } catch {
+      return;
+    }
   }
 }
 
@@ -219,9 +219,12 @@ export async function loadSettings(env: Env): Promise<Settings> {
   const updatedAt = blobUpdatedAt(raw);
   const rev = blobRev(raw);
   next = await maybePurgePreCut(env, raw, next);
+  const storedUuid = v.ok ? storedVlessUuid(raw) : null;
   if (!hasIdentity(next)) {
     next = fillIdentity(next);
     await persist(env, next, updatedAt, rev);
+  } else if (storedUuid !== null && storedUuid.length > 0 && storedUuid !== next.vlessUuid) {
+    await persist(env, next, Date.now(), rev);
   }
   remember(next, updatedAt, rev);
   return next;
@@ -234,9 +237,13 @@ export async function loadSettingsFresh(env: Env): Promise<Settings> {
   if (!v2.ok) next = structuredClone(DEFAULT_SETTINGS);
   else next = v2.value;
   next = await maybePurgePreCut(env, raw, next);
+  const storedUuid = v2.ok ? storedVlessUuid(raw) : null;
   if (!hasIdentity(next)) {
     next = fillIdentity(next);
     await persist(env, next, Date.now(), blobRev(raw));
+  } else if (storedUuid !== null && storedUuid.length > 0 && storedUuid !== next.vlessUuid) {
+    await persist(env, next, Date.now(), blobRev(raw));
+    invalidateSettingsCache();
   }
   return next;
 }

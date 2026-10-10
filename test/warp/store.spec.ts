@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  clearWarpMemoForTests,
   DEFAULT_PRESETS,
   deleteAccount,
   ensureWarpDefaults,
@@ -11,6 +12,7 @@ import {
   regenerateToken,
   resolveAmnezia,
   sanitizeAccount,
+  savePresets,
   setGlobalSettings,
   storeAccount,
   validateAmnezia,
@@ -64,6 +66,7 @@ function mkAccount(): WarpAccount {
 let kv: FakeKV;
 beforeEach(() => {
   kv = new FakeKV();
+  clearWarpMemoForTests();
 });
 
 describe("warp store", () => {
@@ -134,10 +137,13 @@ describe("warp store", () => {
 
   it("falls back to default amnezia when the stored global settings are corrupt", async () => {
     kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: "pwn" }));
+    clearWarpMemoForTests();
     expect((await getGlobalSettings(kv.asEnv())).amnezia.Jc).toBe(5);
     kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: { Jc: 9999 } }));
+    clearWarpMemoForTests();
     expect((await getGlobalSettings(kv.asEnv())).amnezia.Jc).toBe(5);
     kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: { Jc: 7, junk: { nested: true } } }));
+    clearWarpMemoForTests();
     const global = await getGlobalSettings(kv.asEnv());
     expect(global.amnezia.Jc).toBe(7);
     expect((global.amnezia as Record<string, unknown>).junk).toBeUndefined();
@@ -145,12 +151,16 @@ describe("warp store", () => {
 
   it("defaults the global amnezia toggle to false and validates stored values", async () => {
     kv.map.delete("qproxy:warp:global");
+    clearWarpMemoForTests();
     expect((await getGlobalSettings(kv.asEnv())).amneziaEnabled).toBe(false);
     kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: {}, amneziaEnabled: "yes" }));
+    clearWarpMemoForTests();
     expect((await getGlobalSettings(kv.asEnv())).amneziaEnabled).toBe(false);
     kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: {}, amneziaEnabled: 1 }));
+    clearWarpMemoForTests();
     expect((await getGlobalSettings(kv.asEnv())).amneziaEnabled).toBe(false);
     kv.map.set("qproxy:warp:global", JSON.stringify({ amnezia: {}, amneziaEnabled: true }));
+    clearWarpMemoForTests();
     expect((await getGlobalSettings(kv.asEnv())).amneziaEnabled).toBe(true);
   });
 
@@ -179,6 +189,24 @@ describe("warp store", () => {
     expect(next).not.toBe(old);
     expect(await getAccountByToken(kv.asEnv(), old)).toBeNull();
     expect((await getAccountByToken(kv.asEnv(), next))?.id).toBe(a.id);
+  });
+
+  it("rejects orphaned token mappings left behind by a crashed rotation", async () => {
+    const a = mkAccount();
+    await storeAccount(kv.asEnv(), a);
+    const old = a.token;
+    const next = await regenerateToken(kv.asEnv(), a);
+    kv.map.set(`qproxy:warp:token:${old}`, JSON.stringify(a.id));
+    expect(await getAccountByToken(kv.asEnv(), old)).toBeNull();
+    expect((await getAccountByToken(kv.asEnv(), next))?.id).toBe(a.id);
+  });
+
+  it("rejects token mappings whose account record is gone", async () => {
+    const a = mkAccount();
+    await storeAccount(kv.asEnv(), a);
+    await deleteAccount(kv.asEnv(), { ...a, token: "33333333-3333-4333-8333-333333333333" });
+    kv.map.set(`qproxy:warp:token:${a.token}`, JSON.stringify(a.id));
+    expect(await getAccountByToken(kv.asEnv(), a.token)).toBeNull();
   });
 
   it("keeps the old token index until the new state commits when the index write fails", async () => {
@@ -313,5 +341,36 @@ describe("warp store", () => {
     for (const secret of [account.token, account.warp_token, account.config.private_key]) {
       if (typeof secret === "string" && secret.length > 0) expect(line).not.toContain(secret);
     }
+  });
+
+  it("serves presets and global settings from isolate memo and invalidates on write", async () => {
+    await ensureWarpDefaults(kv.asEnv());
+    clearWarpMemoForTests();
+    let presetGets = 0;
+    let globalGets = 0;
+    const counting = {
+      QPROXY_KV: {
+        get: async (key: string) => {
+          if (key === "qproxy:warp:presets") presetGets++;
+          if (key === "qproxy:warp:global") globalGets++;
+          return kv.get(key);
+        },
+        put: kv.put.bind(kv),
+        delete: kv.delete.bind(kv),
+        list: kv.list.bind(kv),
+      },
+    };
+    await listPresets(counting as never);
+    await listPresets(counting as never);
+    expect(presetGets).toBe(1);
+    await getGlobalSettings(counting as never);
+    await getGlobalSettings(counting as never);
+    expect(globalGets).toBe(1);
+    await savePresets(counting as never, DEFAULT_PRESETS);
+    await listPresets(counting as never);
+    expect(presetGets).toBe(2);
+    await setGlobalSettings(counting as never, { amnezia: { Jc: 9 }, amneziaEnabled: true });
+    await getGlobalSettings(counting as never);
+    expect(globalGets).toBe(2);
   });
 });

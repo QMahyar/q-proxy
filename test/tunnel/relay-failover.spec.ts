@@ -110,6 +110,37 @@ describe("zero-byte failover via opener retry", () => {
     expect(sink.sent).toHaveLength(0);
     expect(sink.closedWith).toBe(1011);
   });
+
+  it("spends the failover budget on a zero-byte uplink write failure and delivers the queued bytes", async () => {
+    const dead = manualSocket();
+    const rstSocket: Socket = {
+      ...dead.socket,
+      writable: new WritableStream<Uint8Array>({
+        write: () => Promise.reject(new Error("rst on first write")),
+      }),
+    };
+    const healthy = manualSocket();
+    const sink = new RecordingSink();
+    const opener = {
+      attempts: 0,
+      retry: (): Promise<EstablishedEgress | null> => {
+        opener.attempts++;
+        healthy.push(utf8Encode("recovered"));
+        healthy.closeRemote();
+        return Promise.resolve(establishedOf(healthy.socket, 1, "proxyip"));
+      },
+    };
+    const relay = createRelay(sink, { retry: () => opener.retry() });
+    const done = relay.run(establishedOf(rstSocket, 0));
+    relay.feedClient(utf8Encode("first-packet"));
+    await vi.advanceTimersByTimeAsync(200);
+    expect(opener.attempts).toBe(1);
+    expect(healthy.writes).toHaveLength(1);
+    expect(utf8Decode(healthy.writes[0]!)).toBe("first-packet");
+    await done;
+    expect(utf8Decode(sink.sent[0]!)).toBe("recovered");
+    expect(sink.closedWith).toBe(1000);
+  });
 });
 
 describe("half-open grace drain", () => {

@@ -1,4 +1,4 @@
-import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, parseHostPort } from "../utils/net";
+import { isCloudflareIp, isIPv4, isIPv6, isLocalOrPrivateTarget, normalizeToken, parseHostPort, stripBrackets } from "../utils/net";
 import { createResolver } from "./resolver";
 import type { DohResolver } from "./resolver";
 
@@ -20,7 +20,7 @@ type Classified =
   | { kind: "domain"; host: string; port: number };
 
 function classifyToken(token: string): Classified | null {
-  let t = token.trim().replace(/^["']+|["']+$/g, "").toLowerCase();
+  let t = normalizeToken(token);
   if (t.length === 0) return null;
   let portOverride: number | null = null;
   const tp = TP_PORT_RE.exec(t);
@@ -51,7 +51,7 @@ function splitTxtList(txt: string): string[] {
   return txt
     .replace(/\\010/gi, "\n")
     .split(/[\n\r\x08,;]+/)
-    .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
+    .map((t) => normalizeToken(t))
     .filter((t) => t.length > 0);
 }
 
@@ -101,7 +101,7 @@ export async function expandProxyIps(
   const out: ProxyIpEntry[] = [];
   const seen = new Set<string>();
   const push = (host: string, port: number, label: string): void => {
-    const bare = host.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+    const bare = stripBrackets(host.trim().toLowerCase());
     if (isLocalOrPrivateTarget(bare) || isCloudflareIp(bare)) return;
     const key = `${host}:${port}`;
     if (seen.has(key)) return;
@@ -122,6 +122,38 @@ export async function expandProxyIps(
   }
   await Promise.all(domainTasks);
   return out;
+}
+
+const EXPAND_MEMO_TTL_MS = 300_000;
+const EXPAND_MEMO_MAX = 32;
+const expandMemo = new Map<string, { value: ProxyIpEntry[]; expiresAt: number }>();
+
+export function clearExpandMemoForTests(): void {
+  expandMemo.clear();
+}
+
+function copyEntries(entries: readonly ProxyIpEntry[]): ProxyIpEntry[] {
+  return entries.map((e) => ({ ...e }));
+}
+
+export async function expandProxyIpsCached(
+  entries: readonly string[],
+  upstreamKey: string,
+  resolver: DohResolver,
+): Promise<ProxyIpEntry[]> {
+  const key = `${upstreamKey}\u0001${entries.join("\u0002")}`;
+  const hit = expandMemo.get(key);
+  if (hit !== undefined) {
+    if (Date.now() <= hit.expiresAt) return copyEntries(hit.value);
+    expandMemo.delete(key);
+  }
+  const value = await expandProxyIps(entries, { resolver });
+  if (expandMemo.size >= EXPAND_MEMO_MAX) {
+    const oldest = expandMemo.keys().next();
+    if (!oldest.done) expandMemo.delete(oldest.value);
+  }
+  expandMemo.set(key, { value: copyEntries(value), expiresAt: Date.now() + EXPAND_MEMO_TTL_MS });
+  return copyEntries(value);
 }
 
 export function hashSeed(input: string): number {

@@ -8,8 +8,8 @@ import type {
   Socket,
 } from "../types/tunnel";
 import { log } from "../core/log";
-import { isCloudflareIp, isIPv4, isLocalOrPrivateTarget } from "../utils/net";
-import { expandProxyIps, hashSeed, shuffleDeterministic } from "./proxyip";
+import { isCloudflareIp, isIPv4, isLocalOrPrivateTarget, stripBrackets } from "../utils/net";
+import { expandProxyIpsCached, hashSeed, shuffleDeterministic } from "./proxyip";
 import { createResolver } from "./resolver";
 
 export interface OpenedEgress extends EstablishedEgress {
@@ -40,7 +40,7 @@ export interface EgressOpenerOptions {
 }
 
 function isBlockedDirectHost(host: string): boolean {
-  const bare = host.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  const bare = stripBrackets(host.trim().toLowerCase());
   if (isLocalOrPrivateTarget(bare)) return true;
   if (isIPv4(bare) && isCloudflareIp(bare)) return true;
   if (bare.includes(":") && isCloudflareIp(bare)) return true;
@@ -56,7 +56,8 @@ async function buildTailCandidates(
   settings: Settings,
   target: DialTarget,
 ): Promise<EgressCandidate[]> {
-  const pool = await expandProxyIps(settings.proxyIps, { resolver: createResolver(settings.dohUpstream) });
+  const upstream = settings.dohUpstream;
+  const pool = await expandProxyIpsCached(settings.proxyIps, upstream, createResolver(upstream));
   const shuffled = shuffleDeterministic(pool, hashSeed(target.host));
   const tail: EgressCandidate[] = [];
   for (const entry of shuffled) {
@@ -108,8 +109,13 @@ async function defaultDialImpl(
     } catch (err) {
       try {
         writer.releaseLock();
-      } catch {}
-      await socket.close().catch(() => {});
+      } catch {
+        // Best-effort: the writer lock may already be released after a
+        // failed write; the socket close below is the real cleanup.
+      }
+      await socket.close().catch(() => {
+        // Best-effort: the half-opened socket is being discarded anyway.
+      });
       throw err instanceof Error ? err : new Error(String(err));
     }
     writer.releaseLock();
@@ -148,8 +154,15 @@ export function createEgressOpener(
     } catch (err) {
       if (fallback !== undefined) clearTimeout(fallback);
       void pending
-        .then((s) => s.close().catch(() => {}))
-        .catch(() => {});
+        .then((s) =>
+          s.close().catch(() => {
+            // Best-effort: loser of the dial/timeout race is discarded.
+          }),
+        )
+        .catch(() => {
+          // Best-effort: a late dial rejection after timeout is expected and
+          // already surfaced as the timeout error below.
+        });
       throw err instanceof Error ? err : new Error(String(err));
     }
     if (fallback !== undefined) clearTimeout(fallback);
@@ -209,6 +222,8 @@ export async function openEgressWithSpeculativeDirect(
   const pending = new Map<string, Promise<Socket>>();
   for (const candidate of prefix) {
     const started = Promise.resolve().then(() => dial(candidate, target, firstPacket));
+    // Best-effort: the speculative dial is consumed via `reuse` or closed in
+    // the finally below; an early rejection here must not unhandled-reject.
     started.catch(() => {});
     pending.set(`${candidate.via}:${candidate.host}:${candidate.port}`, started);
   }
@@ -230,8 +245,14 @@ export async function openEgressWithSpeculativeDirect(
     for (const [key, promise] of pending) {
       if (consumed.has(key)) continue;
       promise.then(
-        (s) => s.close().catch(() => {}),
-        () => {},
+        (s) =>
+          s.close().catch(() => {
+            // Best-effort: unconsumed speculative sockets are discarded.
+          }),
+        () => {
+          // Best-effort: an unconsumed speculative dial failure is already
+          // covered by the failover candidates; nothing to report.
+        },
       );
     }
   }

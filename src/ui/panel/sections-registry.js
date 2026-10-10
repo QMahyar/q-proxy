@@ -24,7 +24,13 @@ FL('randomizeSniCase','bool','protocols.sniCase.label','protocols.sniCase.hint')
 FL('echEnabled','bool','protocols.ech.label','protocols.ech.short',{help:'protocols.ech.help'}),
 FL('echAuto','bool','protocols.ech.auto','protocols.ech.auto_hint',{help:'protocols.ech.auto_help'}),
 FL('echServerName','str','protocols.ech.server','protocols.ech.server_hint',{maxLen:253,vtype:'domain',preview:'ech'}),
-FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
+FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]},
+{title:'fragment.card.title',fields:[
+FL('fragment.mode','fpreset',null,null),
+FL('fragment.packets','select','fragment.packets',null,{opts:PACKETS}),
+FL(['fragment.lengthMin','fragment.lengthMax'],'range','fragment.length',null),
+FL(['fragment.delayMin','fragment.delayMax'],'range','fragment.delay',null),
+FL(['fragment.maxSplitMin','fragment.maxSplitMax'],'range','fragment.split',null)]}]},
   {key:'addresses',cards:[
   {title:'endpoints.card.title',fields:[
   FL('cdnPresets','presetChecks','endpoints.presets.label','endpoints.presets.hint',{presetKind:'cdn'}),
@@ -33,19 +39,11 @@ FL('alpn','list','protocols.alpn.label','protocols.alpn.hint')]}]},
   FL('cdnSni','str','endpoints.front.sni','endpoints.front.sni_hint',{maxLen:253,vtype:'domain'}),
   FL('defaultPort','select','addresses.defaultPort.label','addresses.defaultPort.hint',{opts:[[443,'443'],[2053,'2053'],[2083,'2083'],[2087,'2087'],[2096,'2096'],[8443,'8443']]}),
   FL('nameTemplate','str','addresses.nameTemplate.label','addresses.nameTemplate.hint',{mono:true,maxLen:512})]},
-  {title:'endpoints.probe.title',probe:true,fields:[]}]},
-  {key:'egress',cards:[
+  {title:'endpoints.probe.title',probe:true,fields:[]},
   {title:'egress.mode.title',fields:[
   FL('proxyIps','list','egress.list.label','egress.list.short',{validate:'host_port',help:'egress.list.help'}),
   FL('proxyIpPoolUrl','str','egress.poolUrl.label','egress.poolUrl.hint',{mono:true})]},
   {title:'egress.pool.title',pool:true,fields:[]}]},
-{key:'tunnel',cards:[
-{title:'fragment.card.title',fields:[
-FL('fragment.mode','fpreset',null,null),
-FL('fragment.packets','select','fragment.packets',null,{opts:PACKETS}),
-FL(['fragment.lengthMin','fragment.lengthMax'],'range','fragment.length',null),
-FL(['fragment.delayMin','fragment.delayMax'],'range','fragment.delay',null),
-FL(['fragment.maxSplitMin','fragment.maxSplitMax'],'range','fragment.split',null)]}]},
 {key:'advanced',cards:[
 {title:'advanced.doh.label',fields:[
 FL('dohUpstream','str','advanced.doh.label','advanced.doh.short',{mono:true,help:'advanced.doh.help'}),

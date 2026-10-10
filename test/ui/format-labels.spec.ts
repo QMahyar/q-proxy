@@ -3,7 +3,6 @@ import { SUB_FORMATS } from "../../src/subscription/negotiate";
 import { SUB_CONTENT_TYPES } from "../../src/subscription/render";
 import { EXTENSIONS } from "../../src/subscription/headers";
 import { WARP_FORMATS, WARP_EXTENSIONS } from "../../src/warp/formats/registry";
-// @ts-expect-error node builtin lacks types in this repo (precedent: vitest.config.ts)
 import { readFileSync } from "node:fs";
 
 const LABELS_PATH = "src/ui/panel/format-labels.js";

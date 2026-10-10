@@ -105,7 +105,7 @@ const settingsGetOrSave: RouteHandler = (req, env, s, ctx) =>
   req.method === "GET" ? handleGetSettings(req, env, s, ctx) : handleSaveSettings(req, env, s, ctx);
 
 const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
-  "auth-login": { methods: ["POST"], auth: "none", handler: handleLogin },
+  "auth-login": { methods: ["POST"], auth: "none", handler: csrfOnly(handleLogin) },
   "auth-logout": { methods: ["POST"], auth: "none", handler: csrfOnly(handleLogout), bootstrap: "allow" },
   "auth-setup": { methods: ["POST"], auth: "none", handler: csrfOnly(handleSetup) },
   "auth-status": { methods: ["GET"], auth: "none", handler: handleAuthStatus },
@@ -161,7 +161,7 @@ async function dispatchSecureRoute(
     case "doh":
       return handleDoh(req, env, s, ctx);
     case "sub":
-      expectMethods(req, ["GET"]);
+      expectMethods(req, ["GET", "HEAD"]);
       void recordConnection(env, undefined, ctx).catch((err: unknown) => log.error("counters", "record failed", String(err)));
       return handleSubscribe(req, env, s, ctx);
     case "warp-sub":
