@@ -4,7 +4,7 @@ import type { SubFormat } from "../core/ua";
 import { NotFoundError } from "../core/errors";
 import { settingsEtag } from "../settings/store";
 import { afterResponse, readUsage } from "../core/counters";
-import { htmlResponse } from "../core/respond";
+import { htmlResponse, redirect } from "../core/respond";
 import { resolveHostname, resolveSecureRoute } from "../core/routes";
 import { generateNodes } from "../nodes/generate";
 import { subscriptionHeaders } from "../subscription/headers";
@@ -16,14 +16,21 @@ import {
   SUB_CONTENT_TYPES,
 } from "../subscription/render";
 import { pickSubFormat, SUB_FORMATS } from "../subscription/negotiate";
+import { readCnIspCode } from "../subscription/targets";
 import { attachmentHeaders } from "../subscription/headers";
 import { escapeHtml } from "../utils/html";
+import { clientIp } from "../auth/guard";
+import { recordAccessEvent } from "../log/access";
+import { notifyTelegramEvent } from "./api/telegram";
 
 const FORMAT_LABELS: Record<SubFormat, string> = {
   base64: "Base64 / v2rayNG",
   singbox: "sing-box",
   clash: "Clash / Mihomo",
   xray: "Xray JSON",
+  surge: "Surge",
+  quanx: "Quantumult X",
+  loon: "Loon",
 };
 
 function settingsCacheStamp(s: Settings): string {
@@ -35,6 +42,20 @@ function versionedEdgeCacheKey(base: Request, s: Settings): Request {
   keyUrl.searchParams.set("_v", settingsCacheStamp(s));
   return new Request(keyUrl.toString(), { method: "GET" });
 }
+
+// Download filename base: explicit subName wins, profileTitle is the fallback
+// (empty default keeps every existing Content-Disposition byte identical).
+export function downloadBasename(s: Settings): string {
+  const name = s.subName.trim();
+  return name.length > 0 ? name : s.profileTitle;
+}
+
+export const handleQuickSub: RouteHandler = async (req, _env, s) => {
+  const url = new URL(req.url);
+  const route = resolveSecureRoute(url, s);
+  if (route === null || route.kind !== "quick-sub") throw new NotFoundError();
+  return redirect(`/${s.securePath}/sub${url.search}`, 302);
+};
 
 export function infoPageHtml(subUrls: Array<{ format: SubFormat; url: string }>, title: string): string {
   const rows = subUrls
@@ -107,21 +128,37 @@ export const handleSubscribe: RouteHandler = async (req, env, s, reqCtx) => {
 
   const ctx = { settings: s, hostname: resolveHostname(s, url), request: req };
   const nodes = selectVariantNodes(generateNodes(ctx), isFragmentMode ? "fragment" : "normal");
+  const selfUrl = `${url.origin}${url.pathname}?target=${format}`;
+  const cnIspCode = readCnIspCode(url);
+  // cnIspCode rides inside the wrapped mixed URL for the converter only;
+  // native formats never see it, so their bytes are unchanged when absent.
+  const mixedUrl =
+    cnIspCode === null
+      ? `${url.origin}${url.pathname}?target=mixed`
+      : `${url.origin}${url.pathname}?target=mixed&cnIspCode=${encodeURIComponent(cnIspCode)}`;
   const body = await renderSubscriptionBody({
     settings: s,
     nodes,
     format,
     isFragmentMode,
-    subscriptionUrl: `${url.origin}${url.pathname}?target=${format}`,
+    subscriptionUrl: selfUrl,
+    mixedUrl,
   });
 
   const usage = await readUsage(env);
+  // Best-effort side effects only: access logging (30min dedup) and the
+  // optional Telegram subscribe event never block or break serving.
+  afterResponse(
+    reqCtx,
+    recordAccessEvent(env, { ip: clientIp(req), action: `sub:${format}`, detail: JSON.stringify({ format }) }),
+  );
+  afterResponse(reqCtx, notifyTelegramEvent(s, "subscribe", `Subscription served (${format})`));
   const headers = subscriptionHeaders(format, s.profileTitle, nodes, usage, {
     updateIntervalHours: s.subUpdateIntervalHours,
     webPageUrl: `${url.origin}/${s.securePath}/panel`,
   });
   headers["Content-Type"] = SUB_CONTENT_TYPES[format];
-  Object.assign(headers, attachmentHeaders(format, s.profileTitle));
+  Object.assign(headers, attachmentHeaders(format, downloadBasename(s)));
   headers["Content-Length"] = String(new TextEncoder().encode(body).byteLength);
   const res = new Response(body, { status: 200, headers });
   if (typeof caches !== "undefined") afterResponse(reqCtx, caches.default.put(cacheKey, res.clone()));

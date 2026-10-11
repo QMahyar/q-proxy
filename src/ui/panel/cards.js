@@ -28,5 +28,7 @@ const dim=card.protoCard&&getPath(S.set,card.protoCard)===false;
 let h='<section class="card'+(dim?' card--dim':'')+'"'+(card.protoCard?' data-proto-card="'+card.protoCard+'"':'')+'><div class="card__head"><div class="card__title">'+esc(t(card.title))+'</div></div>';
 card.fields.forEach(f=>{h+=bindHtml(f)});
 if(card.probe)h+='<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="addr-probe">'+esc(t('endpoints.probe.label'))+'</button></div>';
+if(card.converterTest)h+='<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="converter-test">'+esc(t('advanced.converter.test'))+'</button><span class="field__hint" id="converter-test-result" role="status" aria-live="polite"></span></div>';
 if(card.tgActions)h+='<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="tg-setup">'+esc(t('advanced.tg.setup'))+'</button><button type="button" class="btn btn--ghost btn--sm" data-action="tg-remove">'+esc(t('advanced.tg.remove'))+'</button></div>';
+if(card.cfActions)h+='<div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-action="cf-refresh">'+esc(t('advanced.cf.refresh'))+'</button></div>';
 return h+'</section>'}

@@ -131,6 +131,19 @@ describe("validateSettings", () => {
     expect(validateSettings({ language: "fa", fingerprint: "randomized" }).ok).toBe(true);
     expect(validateSettings({ camouflage: { mode: "static" } }).ok).toBe(true);
     expect(validateSettings({ camouflage: { mode: "off" } }).ok).toBe(true);
+    for (const mode of ["nginx", "minimal"] as const) {
+      expect(validateSettings({ camouflage: { mode } }).ok, mode).toBe(true);
+    }
+    expect(validateSettings({ camouflage: { mode: "reverse", reverseUrl: "https://origin.example" } }).ok).toBe(true);
+  });
+
+  it("requires an https reverse URL for reverse mode (B5b)", () => {
+    expect(fieldsOf({ camouflage: { mode: "reverse" } })["camouflage.reverseUrl"]).toMatch(/https/);
+    expect(fieldsOf({ camouflage: { mode: "reverse", reverseUrl: "http://example.com" } })["camouflage.reverseUrl"]).toBeTruthy();
+    expect(fieldsOf({ camouflage: { mode: "reverse", reverseUrl: "not-a-url" } })["camouflage.reverseUrl"]).toBeTruthy();
+    expect(fieldsOf({ camouflage: { mode: "reverse", reverseUrl: "https://127.0.0.1/x" } })["camouflage.reverseUrl"]).toBeTruthy();
+    expect(validateSettings({ camouflage: { mode: "reverse", reverseUrl: "https://origin.example/blog" } }).ok).toBe(true);
+    expect(validateSettings({ camouflage: { mode: "static", reverseUrl: "" } }).ok).toBe(true);
   });
 
   it("requires exact boolean types", () => {
@@ -336,13 +349,103 @@ describe("custom endpoint lines", () => {
   });
 });
 
+describe("preferred settings block (B2)", () => {
+  it("defaults preferredLocal/count/port/remoteUrl", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.preferredLocal).toBe(true);
+      expect(result.value.preferredCount).toBe(16);
+      expect(result.value.preferredPort).toBe(-1);
+      expect(result.value.preferredRemoteUrl).toBe("");
+    }
+  });
+
+  it("accepts a full valid preferred patch", () => {
+    const result = validateSettings({
+      preferredLocal: false,
+      preferredCount: 200,
+      preferredPort: 8443,
+      preferredRemoteUrl: "sub.example.com",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.preferredLocal).toBe(false);
+      expect(result.value.preferredCount).toBe(200);
+      expect(result.value.preferredPort).toBe(8443);
+      expect(result.value.preferredRemoteUrl).toBe("sub.example.com");
+    }
+  });
+
+  it("ranges preferredCount 1-2000 and preferredPort -1 or 1-65535", () => {
+    expect(fieldsOf({ preferredCount: 0 }).preferredCount).toBeTruthy();
+    expect(fieldsOf({ preferredCount: 2001 }).preferredCount).toBeTruthy();
+    expect(fieldsOf({ preferredCount: 1.5 }).preferredCount).toBeTruthy();
+    expect(fieldsOf({ preferredPort: -2 }).preferredPort).toBeTruthy();
+    expect(fieldsOf({ preferredPort: 0 }).preferredPort).toBeTruthy();
+    expect(fieldsOf({ preferredPort: 65536 }).preferredPort).toBeTruthy();
+    expect(validateSettings({ preferredCount: 1, preferredPort: -1 }).ok).toBe(true);
+    expect(validateSettings({ preferredCount: 2000, preferredPort: 65535 }).ok).toBe(true);
+  });
+
+  it("requires exact booleans for preferredLocal", () => {
+    expect(fieldsOf({ preferredLocal: "yes" }).preferredLocal).toBeTruthy();
+    expect(validateSettings({ preferredLocal: false }).ok).toBe(true);
+  });
+
+  it("allows an empty remote url but requires a hostname or IP otherwise", () => {
+    expect(validateSettings({ preferredRemoteUrl: "" }).ok).toBe(true);
+    expect(validateSettings({ preferredRemoteUrl: "203.0.113.9" }).ok).toBe(true);
+    expect(fieldsOf({ preferredRemoteUrl: "not a host!!" }).preferredRemoteUrl).toBeTruthy();
+    expect(fieldsOf({ preferredRemoteUrl: "https://example.com/x" }).preferredRemoteUrl).toBeTruthy();
+  });
+});
+
+describe("preferred endpoint line syntax (B2)", () => {
+  it("accepts remark, sub://, https-list, wildcard, chain, and proxyip lines verbatim", () => {
+    const lines = [
+      "1.2.3.4:443#Tehran",
+      "sub://5.6.7.8:8443#home?proxyip=true",
+      "https://example.com/add.txt",
+      "192.168.*.*:443",
+      "9.9.9.9:2053#via$socks5://u:p@9.9.9.9:1080",
+      "10.0.0.1:443?proxyip=true",
+    ];
+    const result = validateSettings({ customEndpoints: lines });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.customEndpoints).toEqual(lines);
+  });
+
+  it("keeps rejecting bad ports, bad hosts, and over-limit lists", () => {
+    expect(fieldsOf({ customEndpoints: ["9.9.9.9:22"] }).customEndpoints).toContain("line 1");
+    expect(fieldsOf({ customEndpoints: ["1.2.3.4:443#r$wireguard://x"] }).customEndpoints).toContain("line 1");
+    expect(fieldsOf({ customEndpoints: ["http://example.com/a.txt"] }).customEndpoints).toBeTruthy();
+    const list = Array.from({ length: 65 }, (_, i) => `10.2.0.${(i % 250) + 1}:443`);
+    expect(fieldsOf({ customEndpoints: list }).customEndpoints).toContain("too many");
+  });
+
+  it("keeps WARP custom lines on the strict host:port syntax", () => {
+    expect(fieldsOf({ warpCustomEndpoints: ["sub://1.2.3.4:443"] }).warpCustomEndpoints).toBeTruthy();
+    expect(fieldsOf({ warpCustomEndpoints: ["1.2.3.4:443#r"] }).warpCustomEndpoints).toBeTruthy();
+  });
+});
+
 describe("telegram settings block", () => {
   const VALID_TOKEN = `123456789:${"A".repeat(35)}`;
 
   it("defaults to a disabled empty bot", () => {
     const result = validateSettings({});
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.telegram).toEqual({ enabled: false, botToken: "", chatId: "" });
+    if (result.ok)
+      expect(result.value.telegram).toEqual({
+        enabled: false,
+        botToken: "",
+        chatId: "",
+        onSubscribe: true,
+        onSaveConfig: true,
+        onAdminLogin: true,
+        silent: false,
+      });
   });
 
   it("accepts a full valid telegram patch", () => {
@@ -351,7 +454,15 @@ describe("telegram settings block", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok)
-      expect(result.value.telegram).toEqual({ enabled: true, botToken: VALID_TOKEN, chatId: "424242" });
+      expect(result.value.telegram).toEqual({
+        enabled: true,
+        botToken: VALID_TOKEN,
+        chatId: "424242",
+        onSubscribe: true,
+        onSaveConfig: true,
+        onAdminLogin: true,
+        silent: false,
+      });
   });
 
   it("rejects a malformed token shape when enabled", () => {
@@ -408,6 +519,64 @@ describe("telegram settings block", () => {
     const result = validateSettings({ telegram: [1] });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.fields.telegram).toBe("must be an object");
+  });
+
+  it("defaults event toggles on and silent off (B4)", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.telegram.onSubscribe).toBe(true);
+      expect(result.value.telegram.onSaveConfig).toBe(true);
+      expect(result.value.telegram.onAdminLogin).toBe(true);
+      expect(result.value.telegram.silent).toBe(false);
+    }
+  });
+
+  it("requires exact booleans for the event toggles (B4)", () => {
+    expect(fieldsOf({ telegram: { onSubscribe: "yes" } })["telegram.onSubscribe"]).toBeTruthy();
+    expect(fieldsOf({ telegram: { silent: 1 } })["telegram.silent"]).toBeTruthy();
+    expect(validateSettings({ telegram: { onSubscribe: false, silent: true } }).ok).toBe(true);
+  });
+});
+
+describe("cloudflare settings block (B4)", () => {
+  it("defaults cf to empty strings and cfUsage to a zero snapshot", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.cf).toEqual({ email: "", globalApiKey: "", accountId: "", apiToken: "", usageApiUrl: "" });
+      expect(result.value.cfUsage).toEqual({ success: false, pages: 0, workers: 0, total: 0, max: 0, updatedAt: 0 });
+    }
+  });
+
+  it("accepts a full valid cf patch", () => {
+    const result = validateSettings({
+      cf: {
+        email: "ops@example.com",
+        globalApiKey: "key123",
+        accountId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        apiToken: "token123",
+        usageApiUrl: "https://usage.example.com/cf.json",
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cf.email).toBe("ops@example.com");
+  });
+
+  it("validates email shape and rejects local usage-api targets", () => {
+    expect(fieldsOf({ cf: { email: "not-an-email" } })["cf.email"]).toBeTruthy();
+    expect(validateSettings({ cf: { email: "" } }).ok).toBe(true);
+    for (const local of ["http://127.0.0.1/usage", "http://10.0.0.5/x", "ftp://example.com/x", "not-a-url"]) {
+      expect(fieldsOf({ cf: { usageApiUrl: local } })["cf.usageApiUrl"], local).toBeTruthy();
+    }
+    expect(validateSettings({ cf: { usageApiUrl: "https://usage.example.com/cf.json" } }).ok).toBe(true);
+  });
+
+  it("round-trips server-written cfUsage snapshots", () => {
+    const snap = { success: true, pages: 10, workers: 20, total: 30, max: 100, updatedAt: 1700000000000 };
+    const result = validateSettings({ cfUsage: snap });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cfUsage).toEqual(snap);
   });
 });
 
@@ -554,6 +723,93 @@ describe("resolveEchServerName", () => {
   });
 });
 
+describe("subscription settings block (B1)", () => {
+  it("defaults subName/skipCertVerify/subConverter", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.subName).toBe("");
+      expect(result.value.skipCertVerify).toBe(false);
+      expect(result.value.subConverter).toEqual({
+        api: "",
+        config: "",
+        emoji: false,
+        list: false,
+        udp: false,
+        xudp: false,
+        tls13: false,
+        appendType: false,
+        sort: false,
+        expand: true,
+      });
+    }
+  });
+
+  it("accepts a full valid subscription patch", () => {
+    const result = validateSettings({
+      subName: "MySub 1",
+      skipCertVerify: true,
+      subConverter: {
+        api: "https://sub.example.com",
+        config: "https://example.com/rules.ini",
+        emoji: true,
+        list: true,
+        udp: true,
+        xudp: true,
+        tls13: true,
+        appendType: true,
+        sort: true,
+        expand: false,
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.subName).toBe("MySub 1");
+      expect(result.value.skipCertVerify).toBe(true);
+      expect(result.value.subConverter.api).toBe("https://sub.example.com");
+      expect(result.value.subConverter.expand).toBe(false);
+    }
+  });
+
+  it("trims and token-checks subName, empty falls back", () => {
+    expect(validateSettings({ subName: "  " }).ok).toBe(true);
+    if (validateSettings({ subName: "  " }).ok) {
+      const v = validateSettings({ subName: "  Pad " });
+      expect(v.ok).toBe(true);
+      if (v.ok) expect(v.value.subName).toBe("Pad");
+    }
+    for (const bad of ["a/b", "x?y", "semi;colon", "quote\"q", "back\\slash", "a".repeat(65)]) {
+      expect(fieldsOf({ subName: bad }).subName, bad).toBeTruthy();
+    }
+    expect(fieldsOf({ subName: 42 }).subName).toBeTruthy();
+  });
+
+  it("requires exact booleans for skipCertVerify and converter flags", () => {
+    expect(fieldsOf({ skipCertVerify: "yes" }).skipCertVerify).toBeTruthy();
+    expect(fieldsOf({ subConverter: { emoji: 1 } })["subConverter.emoji"]).toBeTruthy();
+    expect(fieldsOf({ subConverter: { sort: "true" } })["subConverter.sort"]).toBeTruthy();
+  });
+
+  it("requires http(s) converter urls and guards the api against local targets", () => {
+    expect(fieldsOf({ subConverter: { api: "ftp://x/sub" } })["subConverter.api"]).toBeTruthy();
+    expect(fieldsOf({ subConverter: { api: "not-a-url" } })["subConverter.api"]).toBeTruthy();
+    expect(fieldsOf({ subConverter: { config: "ftp://x/rules.ini" } })["subConverter.config"]).toBeTruthy();
+    for (const local of ["http://127.0.0.1/sub", "http://10.0.0.5/sub", "http://localhost/sub"]) {
+      expect(fieldsOf({ subConverter: { api: local } })["subConverter.api"], local).toBeTruthy();
+    }
+    expect(validateSettings({ subConverter: { api: "https://sub.example.com" } }).ok).toBe(true);
+    expect(validateSettings({ subConverter: { api: "", config: "" } }).ok).toBe(true);
+    // config is never fetched server-side: any public http(s) URL is fine
+    expect(validateSettings({ subConverter: { config: "http://cdn.example/rules.ini" } }).ok).toBe(true);
+  });
+
+  it("rejects non-object subConverter blocks", () => {
+    const result = validateSettings({ subConverter: [1] });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.fields.subConverter).toBe("must be an object");
+  });
+});
+
 describe("allowedIps", () => {
   it("defaults to an empty list that allows all", () => {
     const result = validateSettings({});
@@ -597,5 +853,73 @@ describe("allowedIps", () => {
     });
     expect(bypass.ok).toBe(false);
     if (!bypass.ok) expect(bypass.fields["routingRules.customBypass"]).toContain("too many");
+  });
+});
+
+describe("protocol extras block (B5)", () => {
+  it("defaults everything to ws-only vless", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.trojanEnabled).toBe(false);
+      expect(result.value.trojanPassword).toBe("");
+      expect(result.value.trojanPath).toBe("");
+      expect(result.value.ssEnabled).toBe(false);
+      expect(result.value.ssMethod).toBe("aes-128-gcm");
+      expect(result.value.ssTls).toBe(false);
+      expect(result.value.transport).toBe("ws");
+      expect(result.value.grpcMode).toBe("gun");
+      expect(result.value.grpcUserAgent).toBe("");
+      expect(result.value.tlsFragment).toBe("off");
+      expect(result.value.zeroRtt).toBe(false);
+      expect(result.value.randomPath).toBe(false);
+    }
+  });
+
+  it("accepts a full valid extras patch", () => {
+    const result = validateSettings({
+      trojanEnabled: true,
+      trojanPassword: "s3cret-trojan",
+      trojanPath: "tj",
+      ssEnabled: true,
+      ssMethod: "aes-256-gcm",
+      ssTls: true,
+      transport: "grpc",
+      grpcMode: "multi",
+      grpcUserAgent: "custom-agent",
+      tlsFragment: "shadowrocket",
+      zeroRtt: true,
+      randomPath: true,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.trojanPath).toBe("tj");
+      expect(result.value.transport).toBe("grpc");
+    }
+  });
+
+  it("matches transport/method/fragment enums exactly", () => {
+    expect(fieldsOf({ transport: "h2" })["transport"]).toBeTruthy();
+    expect(fieldsOf({ ssMethod: "rc4" })["ssMethod"]).toBeTruthy();
+    expect(fieldsOf({ tlsFragment: "offf" })["tlsFragment"]).toBeTruthy();
+    expect(fieldsOf({ grpcMode: "single" })["grpcMode"]).toBeTruthy();
+  });
+
+  it("requires a distinct trojan path when trojan is enabled", () => {
+    expect(fieldsOf({ trojanEnabled: true })["trojanPath"]).toBeTruthy();
+    expect(fieldsOf({ trojanEnabled: true, trojanPath: "vl" })["trojanPath"]).toBeTruthy();
+    expect(fieldsOf({ trojanEnabled: true, trojanPath: "bad path!" })["trojanPath"]).toBeTruthy();
+    expect(validateSettings({ trojanEnabled: true, trojanPassword: "x", trojanPath: "tj" }).ok).toBe(true);
+    expect(validateSettings({ trojanEnabled: false, trojanPath: "" }).ok).toBe(true);
+  });
+
+  it("requires a trojan password when trojan is enabled", () => {
+    expect(fieldsOf({ trojanEnabled: true, trojanPath: "tj" })["trojanPassword"]).toBeTruthy();
+    expect(fieldsOf({ trojanPassword: "x".repeat(129) })["trojanPassword"]).toBeTruthy();
+  });
+
+  it("requires exact booleans for the extras toggles", () => {
+    expect(fieldsOf({ zeroRtt: "yes" }).zeroRtt).toBeTruthy();
+    expect(fieldsOf({ ssTls: 1 }).ssTls).toBeTruthy();
   });
 });

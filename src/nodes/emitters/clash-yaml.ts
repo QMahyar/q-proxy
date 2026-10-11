@@ -20,6 +20,17 @@ function yamlList(values: string[]): string {
 
 function proxyOf(node: ProxyNode): string {
   const server = bareServer(node.address);
+  switch (node.kind) {
+    case "trojan":
+      return trojanProxyOf(node, server);
+    case "shadowsocks":
+      return shadowsocksProxyOf(node, server);
+    case "vless":
+      return vlessProxyOf(node, server);
+  }
+}
+
+function vlessProxyOf(node: Extract<ProxyNode, { kind: "vless" }>, server: string): string {
   const lines = [
     `  - name: ${yamlString(node.name)}`,
     "    type: vless",
@@ -38,6 +49,39 @@ function proxyOf(node: ProxyNode): string {
   lines.push("    network: ws");
   const early = nodeHasEarlyData(node) ? `, max-early-data: ${node.earlyData}` : "";
   lines.push(`    ws-opts: {path: ${yamlString(node.path)}, headers: {Host: ${yamlString(node.host)}}${early}}`);
+  return lines.join("\n");
+}
+
+function trojanProxyOf(node: Extract<ProxyNode, { kind: "trojan" }>, server: string): string {
+  const lines = [
+    `  - name: ${yamlString(node.name)}`,
+    "    type: trojan",
+    `    server: ${yamlString(server)}`,
+    `    port: ${node.port}`,
+    `    password: ${yamlString(node.password)}`,
+    "    udp: true",
+  ];
+  if (nodeHasTls(node)) {
+    lines.push(`    sni: ${yamlString(node.sni ?? node.host)}`, "    skip-cert-verify: true");
+    if (nodeHasAlpn(node)) lines.push(`    alpn: ${yamlList(node.alpn)}`);
+    if (nodeHasFingerprint(node) && node.fingerprint !== null) lines.push(`    fingerprint: ${yamlString(node.fingerprint)}`);
+  }
+  lines.push("    network: ws");
+  lines.push(`    ws-opts: {path: ${yamlString(node.path)}, headers: {Host: ${yamlString(node.host)}}}`);
+  return lines.join("\n");
+}
+
+function shadowsocksProxyOf(node: Extract<ProxyNode, { kind: "shadowsocks" }>, server: string): string {
+  const lines = [
+    `  - name: ${yamlString(node.name)}`,
+    "    type: ss",
+    `    server: ${yamlString(server)}`,
+    `    port: ${node.port}`,
+    `    cipher: ${node.method}`,
+    `    password: ${yamlString(node.password)}`,
+    "    udp: true",
+  ];
+  if (nodeHasTls(node)) lines.push(`    sni: ${yamlString(node.sni ?? node.host)}`);
   return lines.join("\n");
 }
 

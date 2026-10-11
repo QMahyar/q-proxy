@@ -1,4 +1,4 @@
-export const SETTINGS_VERSION = 3;
+export const SETTINGS_VERSION = 4;
 
 export const CF_TLS_PORTS = [443, 2053, 2083, 2087, 2096, 8443] as const;
 export const CF_PLAIN_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095] as const;
@@ -16,7 +16,11 @@ export type Fingerprint =
   | "random"
   | "randomized";
 export type PlainPortPolicy = "always" | "workers-dev" | "never";
-export type CamouflageMode = "off" | "static";
+export type CamouflageMode = "off" | "static" | "nginx" | "reverse" | "minimal";
+export type ShadowsocksMethod = "aes-128-gcm" | "aes-256-gcm" | "chacha20-ietf-poly1305";
+export type TunnelTransport = "ws" | "grpc" | "xhttp";
+export type GrpcMode = "gun" | "multi";
+export type TlsFragmentPreset = "off" | "shadowrocket" | "happ";
 export type FragmentMode = "off" | "low" | "medium" | "high" | "severe" | "custom";
 
 export interface FragmentSettings {
@@ -32,12 +36,47 @@ export interface FragmentSettings {
 
 export interface CamouflageSettings {
   mode: CamouflageMode;
+  reverseUrl: string;
 }
 
 export interface TelegramSettings {
   enabled: boolean;
   botToken: string;
   chatId: string;
+  onSubscribe: boolean;
+  onSaveConfig: boolean;
+  onAdminLogin: boolean;
+  silent: boolean;
+}
+
+export interface CfSettings {
+  email: string;
+  globalApiKey: string;
+  accountId: string;
+  apiToken: string;
+  usageApiUrl: string;
+}
+
+export interface CfUsageState {
+  success: boolean;
+  pages: number;
+  workers: number;
+  total: number;
+  max: number;
+  updatedAt: number;
+}
+
+export interface SubConverterSettings {
+  api: string;
+  config: string;
+  emoji: boolean;
+  list: boolean;
+  udp: boolean;
+  xudp: boolean;
+  tls13: boolean;
+  appendType: boolean;
+  sort: boolean;
+  expand: boolean;
 }
 
 export interface Settings {
@@ -54,10 +93,26 @@ export interface Settings {
   vlessUuid: string;
   vlessFlow: string;
   vlessPath: string;
+  trojanEnabled: boolean;
+  trojanPassword: string;
+  trojanPath: string;
+  ssEnabled: boolean;
+  ssMethod: ShadowsocksMethod;
+  ssTls: boolean;
+  transport: TunnelTransport;
+  grpcMode: GrpcMode;
+  grpcUserAgent: string;
+  tlsFragment: TlsFragmentPreset;
+  zeroRtt: boolean;
+  randomPath: boolean;
   earlyDataEnabled: boolean;
   earlyDataMaxBytes: number;
   cdnPresets: string[];
   customEndpoints: string[];
+  preferredLocal: boolean;
+  preferredCount: number;
+  preferredPort: number;
+  preferredRemoteUrl: string;
   cdnHost: string;
   cdnSni: string;
   warpPresets: string[];
@@ -76,6 +131,9 @@ export interface Settings {
   enableUdp53: boolean;
   dohUpstream: string;
   profileTitle: string;
+  subName: string;
+  skipCertVerify: boolean;
+  subConverter: SubConverterSettings;
   subUpdateIntervalHours: number;
   maxNodesPerFormat: number;
   killSwitch: boolean;
@@ -83,6 +141,8 @@ export interface Settings {
   camouflage: CamouflageSettings;
   routingRules: RoutingRules;
   telegram: TelegramSettings;
+  cf: CfSettings;
+  cfUsage: CfUsageState | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -99,10 +159,26 @@ export const DEFAULT_SETTINGS: Settings = {
   vlessUuid: "",
   vlessFlow: "",
   vlessPath: "vl",
+  trojanEnabled: false,
+  trojanPassword: "",
+  trojanPath: "",
+  ssEnabled: false,
+  ssMethod: "aes-128-gcm",
+  ssTls: false,
+  transport: "ws",
+  grpcMode: "gun",
+  grpcUserAgent: "",
+  tlsFragment: "off",
+  zeroRtt: false,
+  randomPath: false,
   earlyDataEnabled: true,
   earlyDataMaxBytes: 2048,
   cdnPresets: [],
   customEndpoints: [],
+  preferredLocal: true,
+  preferredCount: 16,
+  preferredPort: -1,
+  preferredRemoteUrl: "",
   cdnHost: "",
   cdnSni: "",
   warpPresets: ["default"],
@@ -130,19 +206,36 @@ export const DEFAULT_SETTINGS: Settings = {
   enableUdp53: true,
   dohUpstream: "https://cloudflare-dns.com/dns-query",
   profileTitle: "Q Proxy",
+  subName: "",
+  skipCertVerify: false,
+  subConverter: {
+    api: "",
+    config: "",
+    emoji: false,
+    list: false,
+    udp: false,
+    xudp: false,
+    tls13: false,
+    appendType: false,
+    sort: false,
+    expand: true,
+  },
   subUpdateIntervalHours: 12,
   maxNodesPerFormat: 500,
   killSwitch: false,
   allowedIps: [],
-  camouflage: { mode: "static" },
+  camouflage: { mode: "static", reverseUrl: "" },
   routingRules: { bypassLan: false, blockAds: false, blockMalware: false, blockQuic: false, customBypass: [], customBlock: [] },
-  telegram: { enabled: false, botToken: "", chatId: "" },
+  telegram: { enabled: false, botToken: "", chatId: "", onSubscribe: true, onSaveConfig: true, onAdminLogin: true, silent: false },
+  cf: { email: "", globalApiKey: "", accountId: "", apiToken: "", usageApiUrl: "" },
+  cfUsage: { success: false, pages: 0, workers: 0, total: 0, max: 0, updatedAt: 0 },
 };
 
 export const SENSITIVE_SETTING_PATHS = ["passwordHash", "passwordSalt", "sessionSecret"] as const;
 
-export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number]> & {
+export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number] | "trojanPassword"> & {
   telegram: Omit<TelegramSettings, "botToken">;
+  cf: Omit<CfSettings, "globalApiKey" | "apiToken">;
 };
 
 export interface RoutingRules {

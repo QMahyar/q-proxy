@@ -16,7 +16,7 @@ import type { RouteHandler } from "../types/context";
 import { handleTunnel } from "../handlers/tunnel";
 import { isUpgradeRequest } from "../tunnel/websocket";
 import { handleDoh } from "../handlers/doh";
-import { handleSubscribe } from "../handlers/subscribe";
+import { handleQuickSub, handleSubscribe } from "../handlers/subscribe";
 import { handleRobots } from "../handlers/robots";
 import { handleHealth } from "../handlers/health";
 
@@ -33,6 +33,11 @@ import {
 } from "../handlers/api/settings";
 import { handleKillSwitch, handleStatus, handleSubUrls } from "../handlers/api/status";
 import { handleSubImport } from "../handlers/api/sub-import";
+import { handlePreferredValidate } from "../handlers/api/preferred";
+import { handleProxyCheck } from "../handlers/api/proxy-check";
+import { handleLocations } from "../handlers/api/locations";
+import { handleCfUsage } from "../handlers/api/cf-usage";
+import { handleAccessLog } from "../handlers/api/access-log";
 import { handleBootstrap } from "../handlers/api/bootstrap";
 import { handleWarpApi } from "../handlers/api/warp";
 import { handleProxyPoolApi } from "../handlers/api/proxy-pool";
@@ -120,6 +125,11 @@ const API_ROUTES: Record<ApiRouteName, ApiRouteDescriptor> = {
   killswitch: { methods: ["POST"], auth: "write", handler: handleKillSwitch },
   suburls: { methods: ["GET"], auth: "read", handler: handleSubUrls },
   "sub-import": { methods: ["POST"], auth: "write", handler: handleSubImport },
+  "preferred-validate": { methods: ["GET", "POST"], auth: "write", handler: handlePreferredValidate },
+  "proxy-check": { methods: ["POST"], auth: "write", handler: handleProxyCheck },
+  locations: { methods: ["GET"], auth: "read", handler: handleLocations },
+  "cf-usage": { methods: ["GET", "POST"], auth: "write", handler: handleCfUsage },
+  "access-log": { methods: ["GET"], auth: "read", handler: handleAccessLog },
   warp: { methods: [], auth: "write", handler: handleWarpApi },
   "proxy-pool": { methods: [], auth: "write", handler: handleProxyPoolApi },
   "address-probe": { methods: [], auth: "write", handler: handleAddressProbeApi },
@@ -164,6 +174,9 @@ async function dispatchSecureRoute(
       expectMethods(req, ["GET", "HEAD"]);
       void recordConnection(env, undefined, ctx).catch((err: unknown) => log.error("counters", "record failed", String(err)));
       return handleSubscribe(req, env, s, ctx);
+    case "quick-sub":
+      expectMethods(req, ["GET", "HEAD"]);
+      return handleQuickSub(req, env, s, ctx);
     case "warp-sub":
       expectMethods(req, ["GET", "HEAD"]);
       return handleWarpSub(req, env, s, ctx);

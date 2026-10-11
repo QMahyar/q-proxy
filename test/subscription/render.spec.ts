@@ -128,6 +128,100 @@ describe("renderSubscriptionBody", () => {
 
 describe("SUB_CONTENT_TYPES", () => {
   it("covers every surviving subscription format", () => {
-    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual(["base64", "clash", "singbox", "xray"]);
+    expect(Object.keys(SUB_CONTENT_TYPES).sort()).toEqual([
+      "base64",
+      "clash",
+      "loon",
+      "quanx",
+      "singbox",
+      "surge",
+      "xray",
+    ]);
+  });
+
+  it("serves converter targets as plain text", () => {
+    expect(SUB_CONTENT_TYPES.surge).toContain("text/plain");
+    expect(SUB_CONTENT_TYPES.quanx).toContain("text/plain");
+    expect(SUB_CONTENT_TYPES.loon).toContain("text/plain");
+  });
+});
+
+describe("renderSubscriptionBody converter targets", () => {
+  const mixedUrl = "https://w.test/sp/sub?target=mixed";
+
+  function converterSettings(): Settings {
+    const s = settings();
+    s.subConverter.api = "https://sub.example.com";
+    s.subConverter.config = "https://example.com/rules.ini";
+    return s;
+  }
+
+  it("fetches loon through the converter wrapping the mixed URL", async () => {
+    let seen = "";
+    const fetchFn = (async (url: unknown) => {
+      seen = String(url);
+      return new Response("proxies:\n  - name: A", { status: 200 });
+    }) as typeof fetch;
+    const body = await renderSubscriptionBody({
+      settings: converterSettings(),
+      nodes: [node("normal")],
+      format: "loon",
+      isFragmentMode: false,
+      subscriptionUrl: "https://w.test/sp/sub?target=loon",
+      mixedUrl,
+      fetchFn,
+    });
+    expect(body).toBe("proxies:\n  - name: A");
+    const u = new URL(seen);
+    expect(`${u.origin}${u.pathname}`).toBe("https://sub.example.com/sub");
+    expect(u.searchParams.get("target")).toBe("loon");
+    expect(u.searchParams.get("url")).toBe(mixedUrl);
+  });
+
+  it("hot-patches surge output with the managed-config line", async () => {
+    const fetchFn = (async () => new Response("# rules\n[Proxy]", { status: 200 })) as typeof fetch;
+    const body = await renderSubscriptionBody({
+      settings: converterSettings(),
+      nodes: [node("normal")],
+      format: "surge",
+      isFragmentMode: false,
+      subscriptionUrl: "https://w.test/sp/sub?target=surge",
+      mixedUrl,
+      fetchFn,
+    });
+    expect(body.split("\n")[0]).toBe(
+      "#!MANAGED-CONFIG https://w.test/sp/sub?target=surge interval=43200 strict=false",
+    );
+    expect(body).toContain("[Proxy]");
+  });
+
+  it("rejects converter targets when no converter api is configured", async () => {
+    const fetchFn = (async () => new Response("x", { status: 200 })) as typeof fetch;
+    await expect(
+      renderSubscriptionBody({
+        settings: settings(),
+        nodes: [node("normal")],
+        format: "surge",
+        isFragmentMode: false,
+        subscriptionUrl: "https://w.test/sp/sub?target=surge",
+        mixedUrl,
+        fetchFn,
+      }),
+    ).rejects.toMatchObject({ status: 503 });
+  });
+
+  it("maps converter upstream failures to 502 without leaking the URL", async () => {
+    const fetchFn = (async () => new Response("bad gateway", { status: 502 })) as typeof fetch;
+    const err = await renderSubscriptionBody({
+      settings: converterSettings(),
+      nodes: [node("normal")],
+      format: "quanx",
+      isFragmentMode: false,
+      subscriptionUrl: "https://w.test/sp/sub?target=quanx",
+      mixedUrl,
+      fetchFn,
+    }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 502, code: "UPSTREAM" });
+    expect(String((err as Error).message)).not.toContain("sub.example.com");
   });
 });

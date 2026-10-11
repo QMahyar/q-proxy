@@ -31,15 +31,12 @@ describe("classifyUA", () => {
     expect(classifyUA("sing-box 1.13.0; ClashMeta; mihomo/1.19.16")).toBe("singbox");
   });
 
-  it("maps former surge/loon UAs to base64 (formats removed)", () => {
-    expect(classifyUA("Surge iOS/2406")).toBe("base64");
-    expect(classifyUA("Loon/3.2.4")).toBe("base64");
-  });
-
-  it("maps former quantumult x family to base64 (format removed)", () => {
-    expect(classifyUA("Quantumult X/1.5.4 (iPhone; iOS 17.0.3; Scale/3.00)")).toBe("base64");
-    expect(classifyUA("quantumult/2.0")).toBe("base64");
-    expect(classifyUA("QuanX/1.0")).toBe("base64");
+  it("maps surge/loon/quantumult UAs to the converter targets", () => {
+    expect(classifyUA("Surge iOS/2406")).toBe("surge");
+    expect(classifyUA("Loon/3.2.4")).toBe("loon");
+    expect(classifyUA("Quantumult X/1.5.4 (iPhone; iOS 17.0.3; Scale/3.00)")).toBe("quanx");
+    expect(classifyUA("quantumult/2.0")).toBe("quanx");
+    expect(classifyUA("QuanX/1.0")).toBe("quanx");
   });
 
   it("base64 clients", () => {

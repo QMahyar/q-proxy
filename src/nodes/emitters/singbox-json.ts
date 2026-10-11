@@ -1,4 +1,5 @@
-import type { ProxyNode } from "../../types/node";
+import type { ProxyNode, ShadowsocksNode, TrojanNode, VlessNode } from "../../types/node";
+import type { TlsFragmentPreset } from "../../types/settings";
 import { isIpLiteral, stripBrackets } from "../../utils/net";
 import { DEFAULT_PROXY_DNS, TEST_URL, bareServer, nodeHasAlpn, nodeHasEarlyData, nodeHasEch, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
 import type { EmitOptions } from "./registry";
@@ -61,6 +62,20 @@ interface SingBoxTls {
   alpn?: string[];
   utls?: { enabled: boolean; fingerprint: string };
   ech?: { enabled: boolean; query_server_name: string };
+  fragment?: boolean;
+  fragment_fallback_delay?: string;
+}
+
+// Documented preset mapping for sing-box TLS fragment fallback delays.
+const FRAGMENT_FALLBACK_DELAY: Record<Exclude<TlsFragmentPreset, "off">, string> = {
+  shadowrocket: "50ms",
+  happ: "300ms",
+};
+
+function applyTlsFragment(tls: SingBoxTls, preset: TlsFragmentPreset | undefined): void {
+  if (preset === undefined || preset === "off") return;
+  tls.fragment = true;
+  tls.fragment_fallback_delay = FRAGMENT_FALLBACK_DELAY[preset];
 }
 
 interface SingBoxTransport {
@@ -83,7 +98,28 @@ export interface SingBoxVlessOutbound {
   transport: SingBoxTransport;
 }
 
-export type SingBoxOutbound = SingBoxVlessOutbound;
+export interface SingBoxTrojanOutbound {
+  type: "trojan";
+  tag: string;
+  server: string;
+  server_port: number;
+  password: string;
+  tls?: SingBoxTls;
+  transport: SingBoxTransport;
+}
+
+export interface SingBoxShadowsocksOutbound {
+  type: "shadowsocks";
+  tag: string;
+  server: string;
+  server_port: number;
+  method: string;
+  password: string;
+  tls?: SingBoxTls;
+  transport: SingBoxTransport;
+}
+
+export type SingBoxOutbound = SingBoxVlessOutbound | SingBoxTrojanOutbound | SingBoxShadowsocksOutbound;
 
 function tlsObject(node: ProxyNode, serverName: string): SingBoxTls {
   const t: SingBoxTls = { enabled: true, server_name: serverName };
@@ -106,20 +142,53 @@ function transportObject(node: ProxyNode): SingBoxTransport {
   return t;
 }
 
-function outboundOf(node: ProxyNode): SingBoxOutbound {
+function outboundOf(node: ProxyNode, tlsFragment?: TlsFragmentPreset): SingBoxOutbound {
   const server = bareServer(node.address);
-  const outbound: SingBoxOutbound = {
-    type: "vless",
-    tag: node.name,
-    server,
-    server_port: node.port,
-    uuid: node.uuid,
-    packet_encoding: "xudp",
-    ...(nodeHasTls(node) ? { tls: tlsObject(node, node.sni ?? node.host) } : {}),
-    transport: transportObject(node),
-  };
-  if (node.flow !== null && node.flow !== undefined && node.flow.length > 0) outbound.flow = node.flow;
-  return outbound;
+  const tls = nodeHasTls(node) ? tlsObject(node, node.sni ?? node.host) : undefined;
+  if (tls !== undefined) applyTlsFragment(tls, tlsFragment);
+  const transport = transportObject(node);
+  switch (node.kind) {
+    case "trojan": {
+      const trojan = node as TrojanNode;
+      return {
+        type: "trojan",
+        tag: node.name,
+        server,
+        server_port: node.port,
+        password: trojan.password,
+        ...(tls !== undefined ? { tls } : {}),
+        transport,
+      };
+    }
+    case "shadowsocks": {
+      const ss = node as ShadowsocksNode;
+      return {
+        type: "shadowsocks",
+        tag: node.name,
+        server,
+        server_port: node.port,
+        method: ss.method,
+        password: ss.password,
+        ...(tls !== undefined ? { tls } : {}),
+        transport,
+      };
+    }
+    case "vless": {
+      const vless = node as VlessNode;
+      const outbound: SingBoxVlessOutbound = {
+        type: "vless",
+        tag: node.name,
+        server,
+        server_port: node.port,
+        uuid: vless.uuid,
+        packet_encoding: "xudp",
+        ...(tls !== undefined ? { tls } : {}),
+        transport,
+      };
+      if (vless.flow !== null && vless.flow !== undefined && vless.flow.length > 0) outbound.flow = vless.flow;
+      return outbound;
+    }
+  }
 }
 
 export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions): string {
@@ -178,7 +247,7 @@ export function emitSingBoxJson(nodes: readonly ProxyNode[], opts: EmitOptions):
       },
     ],
     outbounds: [
-      ...visible.map(outboundOf),
+      ...visible.map((node) => outboundOf(node, opts.tlsFragment)),
       ...(group ? [group] : []),
       { type: "direct", tag: "DIRECT" },
     ],

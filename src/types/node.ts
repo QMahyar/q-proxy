@@ -1,4 +1,4 @@
-import type { Fingerprint } from "./settings";
+import type { Fingerprint, ShadowsocksMethod } from "./settings";
 
 export type NodeVariant = "normal" | "fragment";
 
@@ -8,6 +8,7 @@ export type NodeTag =
   | "clean-ip"
   | "cdn"
   | "fragment"
+  | "proxy-ip"
   | "no-tls";
 
 export interface NodeBase {
@@ -32,4 +33,16 @@ export interface VlessNode extends NodeBase {
   flow?: string | null;
 }
 
-export type ProxyNode = VlessNode;
+export interface TrojanNode extends NodeBase {
+  kind: "trojan";
+  password: string;
+}
+
+export interface ShadowsocksNode extends NodeBase {
+  kind: "shadowsocks";
+  method: ShadowsocksMethod;
+  password: string;
+  tls: boolean;
+}
+
+export type ProxyNode = VlessNode | TrojanNode | ShadowsocksNode;

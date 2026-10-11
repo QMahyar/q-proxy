@@ -132,6 +132,29 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  if(accounts>0&&!same){confirmDialog('warp.confirm.endpoints_title','warp.confirm.endpoints_body',true,{n:accounts}).then(yes=>{if(yes)doSave()});return}
  doSave()},
   'shortcuts'(){renderShortcuts();openModal('m-keys')},
+  'expert-open'(){
+  closeModal('m-keys');
+  $('ex-title').textContent=t('expert.title');
+  $('ex-desc').textContent=t('expert.desc');
+  $('ex-json-label').textContent=t('expert.title');
+  $('ex-close').textContent=t('common.close');
+  $('ex-save').textContent=t('expert.save');
+  const ta=$('ex-json'),box=$('ex-error');
+  box.textContent='';box.style.display='';ta.removeAttribute('aria-invalid');
+  ta.value=JSON.stringify(S.set||{},null,2);
+  openModal('m-expert');
+  ta.focus()},
+  'close-expert'(){closeModal('m-expert')},
+  'expert-save'(el){
+  const ta=$('ex-json'),box=$('ex-error');
+  let parsed=null;
+  try{parsed=JSON.parse(ta.value)}
+  catch(e){box.textContent=t('expert.badJson');box.style.display='block';ta.setAttribute('aria-invalid','true');ta.focus();return}
+  const body=parsed&&typeof parsed==='object'?parsed:{};
+  if(typeof S.rev==='number')body.baseRev=S.rev;
+  withBusy(el,()=>api('api/settings/save',{method:'PUT',body:body})
+  .then(d=>{if(d&&typeof d.rev==='number')S.rev=d.rev;closeModal('m-expert');toast(t('common.saved'),'ok');location.reload()})
+  .catch(err=>{if(err&&err.code==='CONFLICT'){box.textContent=t('settings.conflict')}else if(err&&err.fields){box.textContent=String(Object.values(err.fields)[0]||t('common.error'))}else{box.textContent=(err&&err.message)||t('common.error')}box.style.display='block';ta.setAttribute('aria-invalid','true')}))},
   'boot-retry'(){boot()},
  'close-keys'(){closeModal('m-keys')},
  'wizard-skip'(){wizardDone()},
@@ -159,17 +182,73 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
    withBusy(el,()=>api('api/address-probe',{fresh:true})
    .then(d=>{const r=d&&d.results||[];const ok=r.filter(x=>x.status==='ok').length;toast(t('endpoints.probe.done',{ok:ok,n:r.length}),ok===r.length&&r.length>0?'ok':'err')})
    .catch(err=>toastErr(err)))},
+  'converter-test'(el){
+   const box=$('converter-test-result');
+   const say=(msg,isOk)=>{if(box)box.textContent=msg;toast(msg,isOk?'ok':'err')};
+   const input=document.querySelector('[data-bind="subConverter.api"]');
+   const raw=String((input&&'value' in input?input.value:getPath(S.set,'subConverter.api'))||'').trim().replace(/\/+$/,'');
+   if(!raw||!/^https?:\/\/\S+$/i.test(raw)){say(t('advanced.converter.test_missing'),false);return}
+   withBusy(el,()=>{
+   const ctl=new AbortController();const timer=setTimeout(()=>ctl.abort(),8000);
+   return fetch(raw+'/version',{signal:ctl.signal})
+   .then(r=>{clearTimeout(timer);if(!r.ok)throw new Error('http '+r.status);return r.text()})
+   .then(v=>say(t('advanced.converter.test_ok',{v:v.trim().slice(0,32)}),true))
+   .catch(()=>{clearTimeout(timer);say(t('advanced.converter.test_fail'),false)})})()},
   'pool-fetch'(el){loadPool(false)},
   'pool-test'(el){loadPool(true)},
+  'proxy-check'(el){
+  const proto=$('tool-check-proto'),param=$('tool-check-param'),box=$('tool-check-result');
+  if(!proto||!param||!box)return;
+  const say=(msg,ok)=>{box.textContent=msg;if(ok===true)box.dataset.ok='1';else if(ok===false)box.dataset.ok='0';else box.removeAttribute('data-ok')};
+  const raw=param.value.trim();
+  if(!raw){say(t('subs.tools.check_missing'),false);return}
+  say(t('common.loading'));
+  withBusy(el,()=>api('api/proxy-check',{method:'POST',body:{protocol:proto.value,param:raw}})
+  .then(d=>{say(t('subs.tools.check_ok',{ip:d.ip,loc:d.loc,ms:d.responseTimeMs}),true)})
+  .catch(err=>{const f=err&&err.fields?(err.fields.protocol||err.fields.param):null;say(f||(err&&err.message)||t('common.error'),false)}))},
+  'locations-load'(el){
+  const box=$('tool-locations');if(!box)return;
+  box.innerHTML=loadingBox({rows:3});
+  withBusy(el,()=>api('api/locations')
+  .then(d=>{renderLocationsTable(d&&d.locations||[])})
+  .catch(()=>{box.innerHTML=errorCard({title:'common.error',retryAction:'data-action="locations-load"'})}))},
+  'locations-map'(el){
+  const map=$('tool-map');if(!map)return;
+  if(!map.hidden){map.hidden=true;return}
+  map.hidden=false;
+  if(map.dataset.done)return;
+  // Lazy CDN on purpose: Leaflet is NOT vendored (zero runtime deps) and
+  // loads only on explicit user tap; the table above is the offline fallback.
+  const fail=()=>{map.hidden=true;toast(t('subs.tools.map_offline'),'err')};
+  try{
+  const css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css);
+  const js=document.createElement('script');js.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';js.async=true;
+  js.onload=()=>{try{renderLocationsMap()}catch(e){fail()}};
+  js.onerror=fail;
+  document.head.appendChild(js);
+  }catch(e){fail()}},
   'home-pool-refresh'(el){loadHomePool()},
+  'cf-refresh'(el){
+  withBusy(el,()=>api('api/cf-usage',{method:'POST',body:{}})
+  .then(d=>{if(d&&d.cfUsage)Object.assign(S.set,{cfUsage:d.cfUsage});if(parseRoute().view==='home')renderHome();toast(t(d&&d.refreshed?'common.saved':'advanced.cf.not_configured'),d&&d.refreshed?'ok':'err')})
+  .catch(err=>toastErr(err)))},
+  'log-prev'(){if(logPage>1){logPage--;renderAccessLog()}},
+  'log-next'(){logPage++;renderAccessLog()},
+  'log-retry'(){logPage=1;renderAccessLog()},
   'subs-import-preview'(el){
   const ta=$('sub-import-text');const box=$('sub-import-preview');if(!ta||!box)return;
   box.innerHTML=loadingBox({rows:2});
   withBusy(el,()=>api('api/sub-import',{method:'POST',body:{text:ta.value}})
   .then(d=>{renderImportPreview(d&&d.sources||[])})
   .catch(()=>{box.innerHTML=errorCard({title:'common.error',retryAction:'data-action="subs-import-preview"'})}))},
-  'subs-import-confirm'(el){
-  if(!subImportEndpoints.length)return;
+  'subs-preferred-validate'(el){
+  const ta=$('sub-import-text');const box=$('sub-import-preview');if(!ta||!box)return;
+  box.innerHTML=loadingBox({rows:2});
+  const text=ta.value;
+  withBusy(el,()=>api('api/preferred-validate',{method:'POST',body:text.trim().length>0?{text:text}:{}})
+  .then(d=>{renderPreferredPreview((d&&d.valid)||[],(d&&d.invalid)||[])})
+  .catch(()=>{box.innerHTML=errorCard({title:'common.error',retryAction:'data-action="subs-preferred-validate"'})}))},
+  'subs-import-confirm'(el){  if(!subImportEndpoints.length)return;
   const cur=Array.isArray(S.set&&S.set.customEndpoints)?S.set.customEndpoints.map(l=>String(l).trim()).filter(l=>l.length>0):[];
   const merged=cur.slice();const have=new Set(cur.map(l=>l.toLowerCase()));
   subImportEndpoints.forEach(e=>{if(!have.has(e.toLowerCase())){have.add(e.toLowerCase());merged.push(e)}});
@@ -300,9 +379,9 @@ if(bind){
 if(bind.tagName==='TEXTAREA')validateOneEditor(bind);
 markDirty(bind);
 if(/^vlessEnabled$/.test(bind.dataset.bind))applyProtoDim()
-if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()}}
-let dirtyTimer=null;
-function onInput(e){
+if(bind.dataset.bind==='echAuto'||bind.dataset.bind==='echServerName')updateEchPreview()
+if(bind.dataset.bind==='camouflage.mode')refreshShowIf()}}
+let dirtyTimer=null;function onInput(e){
 const bind=e.target.closest('[data-bind]');
 if(!bind)return;
 if(bind.tagName==='TEXTAREA'){clearTimeout(leTimer);leTimer=setTimeout(()=>validateOneEditor(bind),250);clearTimeout(dirtyTimer);dirtyTimer=setTimeout(()=>markDirty(bind),120);return}
@@ -326,10 +405,11 @@ const el=e.target;
 if(el&&el.dataset&&el.dataset.bind&&el.tagName==='INPUT')blurValidateEl(el)});
 $('m-confirm').addEventListener('click',e=>{if(e.target===$('m-confirm'))settleConfirm(false)});
 $('m-share').addEventListener('click',e=>{if(e.target===$('m-share'))closeModal('m-share')});
+$('m-expert').addEventListener('click',e=>{if(e.target===$('m-expert'))closeModal('m-expert')});
 $('cf-cancel').addEventListener('click',()=>settleConfirm(false));
 $('cf-ok').addEventListener('click',()=>settleConfirm(true));
 $('m-confirm').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-confirm'),e)});
-['m-warp-generate','m-warp-import','m-warp-preset','m-share','m-keys','m-wizard'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus(el,e)})});
+['m-warp-generate','m-warp-import','m-warp-preset','m-share','m-keys','m-wizard','m-expert'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus(el,e)})});
 document.addEventListener('keydown',globalKeys);
 document.addEventListener('keydown',e=>{
 if(e.key==='Escape'){
@@ -339,7 +419,8 @@ else if(!$('m-warp-generate').hidden)closeModal('m-warp-generate');
 else if(!$('m-warp-import').hidden)closeModal('m-warp-import');
 else if(!$('m-warp-preset').hidden)closeModal('m-warp-preset');
 else if(!$('m-wizard').hidden)wizardDone();
-else if(!$('m-keys').hidden)closeModal('m-keys')}});
+else if(!$('m-keys').hidden)closeModal('m-keys');
+else if(!$('m-expert').hidden)closeModal('m-expert')}});
 window.addEventListener('hashchange',navigate);
 wireApplyBarUr();
 window.addEventListener('beforeunload',e=>{

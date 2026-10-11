@@ -154,14 +154,15 @@ const total=kind==='err'?6000:3500;const bar=el.querySelector('.toast-bar');bar.
 let gone=false,timer=0;const dismiss=()=>{if(gone)return;gone=true;clearTimeout(timer);el.classList.add('toast--out');setTimeout(()=>el.remove(),220)};
 timer=setTimeout(dismiss,total);el.querySelector('.toast__close').addEventListener('click',dismiss)}
 if(!document.getElementById('i-x')){const s=document.querySelector('#i-eye').closest('svg');const x=document.createElementNS('http://www.w3.org/2000/svg','symbol');x.id='i-x';x.setAttribute('viewBox','0 0 24 24');x.innerHTML='<path d="M18 6 6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';s.appendChild(x)}
-async function post(path,body){let r;try{r=await fetch(BASE+'api/'+path,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Q-Panel':'1'},body:JSON.stringify(body)})}catch(e){throw{status:0,code:'',message:'network'}}
+async function post(path,body){let r;try{r=await fetch(BASE+'api/'+path,{method:'POST',credentials:'same-origin',redirect:'manual',headers:{'Content-Type':'application/json','X-Q-Panel':'1'},body:JSON.stringify(body)})}catch(e){throw{status:0,code:'',message:'network'}}
+if(r.type==='opaqueredirect')return{redirected:true};
 let d=null;try{d=await r.json()}catch(e){}
 if(!r.ok||!d||d.ok!==true)throw{status:r.status,code:d&&d.error?d.error.code:'',message:d&&d.error?d.error.message:'',retryAfter:Number(r.headers.get('Retry-After'))||0};
 return d.data}
 function eyeBtn(targetId){return '<button type="button" class="icon-btn" data-reveal="'+targetId+'" aria-label="'+t('common.reveal')+'" aria-pressed="false"><svg aria-hidden="true"><use href="#i-eye"/></svg></button>'}
 function wireReveals(root){root.querySelectorAll('[data-reveal]').forEach(b=>{b.addEventListener('click',()=>{const inp=$(b.getAttribute('data-reveal'));const show=inp.type==='password';inp.type=show?'text':'password';b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',t(show?'common.hide':'common.reveal'));b.querySelector('use').setAttribute('href',show?'#i-eye-off':'#i-eye')})})}
 let busy=false,countdownTimer=null;
-function setBusy(btn,labelKey){busy=true;btn.disabled=true;btn.innerHTML='<span class="spin" aria-hidden="true"></span>'+t(labelKey)}
+function setBusy(btn,labelKey){busy=true;btn.disabled=true;try{sessionStorage.removeItem('_auth_auto_redirect')}catch(e){}btn.innerHTML='<span class="spin" aria-hidden="true"></span>'+t(labelKey)}
 function setIdle(btn,labelKey){busy=false;btn.disabled=false;btn.textContent=t(labelKey)}
 function showError(id,msg){if(!msg)return;const el=$(id);el.textContent=msg;el.classList.add('show')}
 function clearErrors(){document.querySelectorAll('.err').forEach(e=>e.classList.remove('show'))}
@@ -173,9 +174,13 @@ function startCountdown(sec,btn){countdown=sec;clearInterval(countdownTimer);btn
 function strength(pw){let sc=0;if(pw.length>=8)sc++;if(/[A-Z]/.test(pw))sc++;if(/\d/.test(pw))sc++;if(sc<2||pw.length<8)return{k:'setup.strength.weak',v:.33,c:'var(--danger)'};if(sc===2)return{k:'setup.strength.ok',v:.66,c:'var(--warning)'};return{k:'setup.strength.strong',v:1,c:'var(--success)'}}
 function renderSetup(){clearErrors();const c=$('card');c.innerHTML='<h2 style="font-size:var(--fs-xl);font-weight:600;text-align:center">'+t('setup.title')+'</h2><p style="text-align:center;color:var(--text-dim);font-size:var(--fs-sm);margin-top:6px">'+t('setup.hint')+'</p><form id="f" novalidate style="margin-top:var(--s-4)"><div class="field"><label class="field__label" for="np">'+t('setup.new')+'</label><div class="control"><input class="input" type="password" id="np" autocomplete="new-password" spellcheck="false">'+eyeBtn('np')+'</div><div class="hint-line" id="meter-row"><span class="meter"><i id="meter-i"></i></span><span id="meter-l"></span></div><p class="hint-line show" id="rule-row"><span>'+t('setup.rule')+'</span></p><p class="err" id="e-np" role="alert"></p></div><div class="field"><label class="field__label" for="cp">'+t('setup.confirm')+'</label><div class="control"><input class="input" type="password" id="cp" autocomplete="new-password" spellcheck="false">'+eyeBtn('cp')+'</div><p class="err" id="e-cp" role="alert"></p></div><button class="btn btn--primary btn--block" id="go" type="submit">'+t('setup.submit')+'</button></form>';wireReveals(c);const f=$('f'),np=$('np'),cp=$('cp'),go=$('go'),row=$('meter-row'),bar=$('meter-i'),lab=$('meter-l');np.addEventListener('input',()=>{row.classList.add('show');const s=strength(np.value);bar.style.width=Math.round(s.v*100)+'%';bar.style.background=s.c;lab.textContent=t(s.k);lab.style.color=s.c});f.addEventListener('submit',ev=>{ev.preventDefault();if(busy)return;clearErrors();if(np.value.length<8){showError('e-np',t('setup.rule'));np.focus();return}if(!(/[A-Z]/.test(np.value)&&/\d/.test(np.value))){showError('e-np',t('setup.rule'));np.focus();return}if(np.value!==cp.value){showError('e-cp',t('setup.error.mismatch'));cp.focus();return}setBusy(go,'setup.submitting');post('auth/setup',{newPassword:np.value}).then(()=>{toast(t('setup.title')+' ✓','ok');goPanel()}).catch(async err=>{if(err.code==='SETUP_WINDOW_EXPIRED'){clearErrors();c.innerHTML='<h2 style="font-size:var(--fs-xl);font-weight:600;text-align:center">'+t('setup.title')+'</h2><p class="setup-expired" role="alert">'+t('onboarding.setup.expired')+'</p>';return}if(err.code!=='ALREADY_SET'&&err.status!==409&&err.status!==0){try{await post('auth/login',{password:np.value});return goPanel()}catch(e2){}}setIdle(go,'setup.submit');if(err.status===409||err.code==='ALREADY_SET'){renderLogin();return}showError('e-np',err.status===0?t('toast.networkError'):t('setup.rule'));np.focus()})});np.focus()}
 applyLang();renderLangSeg();
-(async()=>{try{const d=await fetch(BASE+'api/auth/status',{credentials:'same-origin',cache:'no-store'});let j=null;try{j=await d.json()}catch(e){}
-if(d.ok&&j&&j.ok&&j.data&&j.data.hasSession){goPanel();return}}catch(e){}
-renderLogin()})();
+const REDIRECT_KEY='_auth_auto_redirect';
+let autoRedirects=0;
+try{autoRedirects=Number(sessionStorage.getItem(REDIRECT_KEY)||'0')}catch(e){autoRedirects=0}
+if(autoRedirects>=1){try{sessionStorage.removeItem(REDIRECT_KEY)}catch(e){}renderLogin()}
+else{(async()=>{try{const d=await fetch(BASE+'api/auth/status',{credentials:'same-origin',cache:'no-store'});let j=null;try{j=await d.json()}catch(e){}
+if(d.ok&&j&&j.ok&&j.data&&j.data.hasSession){try{sessionStorage.setItem(REDIRECT_KEY,'1')}catch(e){}goPanel();return}}catch(e){}
+renderLogin()})();}
 })();
 </script>
 </body>

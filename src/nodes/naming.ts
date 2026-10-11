@@ -3,10 +3,14 @@ import { bracketIpv6 } from "../utils/net";
 
 const PROTO_LABEL: Record<ProxyNode["kind"], string> = {
   vless: "VLESS",
+  trojan: "Trojan",
+  shadowsocks: "Shadowsocks",
 };
 
 const PROTO_TAG: Record<ProxyNode["kind"], string> = {
   vless: "vless",
+  trojan: "trojan",
+  shadowsocks: "ss",
 };
 
 const TAG_LABEL: Partial<Record<NodeTag, string>> = {

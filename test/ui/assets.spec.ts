@@ -85,7 +85,12 @@ describe("panel html", () => {
     expect(html).toContain("#22d3ee");
     expect(html.toLowerCase()).not.toContain("<script src=");
     expect(html).not.toContain('href="http');
-    expect(html).not.toContain("src=");
+    // B3 lazy-Leaflet is the one documented runtime-CDN exception (spec B3):
+    // injected only on an explicit user tap, never a static tag — the table
+    // is the offline fallback. Strip that single assignment before asserting
+    // nothing else loads external sources.
+    const withoutLazyLeaflet = html.replace(/\.src='https:\/\/unpkg\.com\/leaflet@[^']*'/g, "");
+    expect(withoutLazyLeaflet).not.toContain("src=");
     expect(html).not.toContain("@import");
   });
 
@@ -203,13 +208,16 @@ describe("panel html", () => {
       "camouflage.mode",
       "routingRules.bypassLan",
       "routingRules.customBlock",
+      "trojanEnabled",
+      "trojanPassword",
+      "trojanPath",
+      "ssEnabled",
+      "ssMethod",
     ]) {
       expect(html).toContain(`'${bind}'`);
     }
     for (const removedBind of [
       "vmessUuid",
-      "trojanPassword",
-      "ssMethod",
       "ssPassword",
       "ssPath",
       "ssDirect",
@@ -224,8 +232,6 @@ describe("panel html", () => {
       "speedtestIntercept",
       "camouflage.url",
       "vmessEnabled",
-      "trojanEnabled",
-      "ssEnabled",
     ]) {
       expect(html).not.toContain(`'${removedBind}'`);
     }
@@ -547,8 +553,10 @@ describe("login html", () => {
 
   it("bounces authed visitors via the api/auth/status probe before rendering either card", () => {
     expect(html).toContain("fetch(BASE+'api/auth/status'");
-    expect(html).toMatch(/if\(d\.ok&&j&&j\.ok&&j\.data&&j\.data\.hasSession\)\{\s*goPanel\(\);\s*return\s*\}/);
-    expect(html).toMatch(/catch\(e\)\{\}\s*renderLogin\(\)\}\)\(\)/);
+    expect(html).toContain("_auth_auto_redirect");
+    expect(html).toMatch(/if\(d\.ok&&j&&j\.ok&&j\.data&&j\.data\.hasSession\)\{[\s\S]*?goPanel\(\);return/);
+    expect(html).toContain("renderLogin()");
+    expect(html).toContain("opaqueredirect");
     expect(html).not.toContain("fetch(BASE+'api/settings'");
   });
 
@@ -912,7 +920,7 @@ describe("dead-code resurrection guards", () => {
     "loadSubsUsers",
     "subsUsersHtml",
     "vmessEnabled",
-    "trojanEnabled",
+    // B5 revived trojanEnabled as a live protocol toggle (Trojan card).
     "remoteSubUrls",
     "remoteNodes",
     "proxyIpMode",

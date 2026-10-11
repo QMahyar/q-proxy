@@ -31,7 +31,9 @@ const NON_REGISTRY_UI_PATHS: string[] = ["warpPresets", "warpCustomEndpoints"];
 const WARP_GLOBAL_UI_MARKERS = ["warp-endpoints", "data-warp-preset", "warp-eps-custom"];
 const READONLY_UI_PATHS = ["securePath"];
 const SHELL_MANAGED_PATHS = ["killSwitch", "language"];
-const API_MANAGED_PATHS = ["passwordHash", "passwordSalt", "sessionSecret", "passwordIsBootstrap", "seededAt"];
+const API_MANAGED_PATHS = ["passwordHash", "passwordSalt", "sessionSecret", "passwordIsBootstrap", "seededAt",
+  // B4: cfUsage is a server-written snapshot (read-only panel state).
+  "cfUsage.success", "cfUsage.pages", "cfUsage.workers", "cfUsage.total", "cfUsage.max", "cfUsage.updatedAt"];
 
 function settingLeafPaths(value: unknown, prefix = ""): string[] {
   if (prefix.length > 0 && (value === null || typeof value !== "object" || Array.isArray(value))) {

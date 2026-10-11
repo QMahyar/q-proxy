@@ -13,16 +13,21 @@ export async function handleTunnelMessage(
   data: ArrayBuffer | string | Uint8Array,
 ): Promise<void> {
   const bytes = toSessionBytes(data);
-  if (st.phase === "handshake") {
-    await handleHandshakeMessage(st, bytes);
-    return;
-  }
-  if (st.phase === "udp" && st.dnsRelay !== null) {
-    await relayUdpPacket(st, bytes);
-    return;
-  }
-  if (st.phase === "tcp" && st.relayHandle !== null) {
-    st.relayHandle.feedClient(bytes);
+  // Non-ws transports frame every message; ws passes through untouched.
+  const chunks = st.transportFramer === null ? [bytes] : st.transportFramer.pushUp(bytes);
+  for (const chunk of chunks) {
+    if (chunk.length === 0) continue;
+    if (st.phase === "handshake") {
+      await handleHandshakeMessage(st, chunk);
+      continue;
+    }
+    if (st.phase === "udp" && st.dnsRelay !== null) {
+      await relayUdpPacket(st, chunk);
+      continue;
+    }
+    if (st.phase === "tcp" && st.relayHandle !== null) {
+      st.relayHandle.feedClient(chunk);
+    }
   }
 }
 

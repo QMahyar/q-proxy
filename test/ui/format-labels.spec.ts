@@ -15,7 +15,7 @@ const parseLabels = (): Record<string, FormatMeta> => {
   const start = src.indexOf("{", src.indexOf("FORMAT_LABELS="));
   const line = src.slice(start, src.indexOf("};", start));
   const out: Record<string, FormatMeta> = {};
-  for (const m of line.matchAll(/(\w+):\{key:'([^']+)',hint:'([^']+)',ext:'([^']+)'\}/g)) {
+  for (const m of line.matchAll(/(\w+):\{key:'([^']+)',hint:'([^']+)',ext:'([^']+)'(,via:'([^']+)')?\}/g)) {
     out[m[1]!] = { key: m[2]!, hint: m[3]!, ext: m[4]! };
   }
   return out;
@@ -61,9 +61,9 @@ describe("panel format-labels registry", () => {
     expect(new Set(order).size).toBe(order.length);
   });
 
-  it("orders base64 first, then singbox, clash, and xray", () => {
+  it("orders base64 first, then singbox, clash, xray, then converter targets", () => {
     const order = parseOrder();
-    expect(order).toEqual(["base64", "singbox", "clash", "xray"]);
+    expect(order).toEqual(["base64", "singbox", "clash", "xray", "surge", "quanx", "loon"]);
   });
 
   it("mirrors the server's content-type families (sanity on format identity)", () => {

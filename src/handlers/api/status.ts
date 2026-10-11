@@ -67,6 +67,10 @@ export function buildSubUrls(hostname: string, securePath: string): SubUrlEntry[
     { format: "singbox", label: "sing-box", url: `${base}?target=singbox` },
     { format: "clash", label: "Clash/Mihomo", url: `${base}?target=clash` },
     { format: "xray", label: "Xray JSON", url: `${base}?target=xray` },
+    // Converter targets are additive rows only: native rows above are untouched.
+    { format: "surge", label: "Surge", url: `${base}?target=surge` },
+    { format: "quanx", label: "Quantumult X", url: `${base}?target=quanx` },
+    { format: "loon", label: "Loon", url: `${base}?target=loon` },
     { format: "base64", label: "Panel info", url: `${base}?view=html` },
   ];
 }

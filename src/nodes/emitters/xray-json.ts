@@ -1,4 +1,5 @@
 import type { ProxyNode } from "../../types/node";
+import type { TlsFragmentPreset } from "../../types/settings";
 import { DEFAULT_PROXY_DNS, bareServer, nodeHasAlpn, nodeHasFingerprint, nodeHasTls, tlsRequiredNodes } from "./registry";
 import type { EmitOptions, EmitRules } from "./registry";
 
@@ -10,9 +11,20 @@ interface XrayVnextUser {
 
 interface XrayOutbound {
   tag: string;
-  protocol: "vless" | "freedom" | "blackhole";
+  protocol: "vless" | "trojan" | "shadowsocks" | "freedom" | "blackhole";
   settings?: unknown;
   streamSettings?: unknown;
+}
+
+// Documented preset mapping for Xray TCP fragment intervals.
+const FRAGMENT_INTERVAL: Record<Exclude<TlsFragmentPreset, "off">, string> = {
+  shadowrocket: "10-20",
+  happ: "20-40",
+};
+
+function fragmentSockopt(preset: TlsFragmentPreset | undefined): Record<string, unknown> | null {
+  if (preset === undefined || preset === "off") return null;
+  return { tcpFragment: { packets: "tlshello", length: "100-200", interval: FRAGMENT_INTERVAL[preset] } };
 }
 
 function wsStream(node: ProxyNode): Record<string, unknown> {
@@ -29,7 +41,7 @@ function wsStream(node: ProxyNode): Record<string, unknown> {
   return { ...ws, security: "tls", tlsSettings: tls };
 }
 
-function vlessOutbound(node: ProxyNode): XrayOutbound {
+function vlessOutbound(node: Extract<ProxyNode, { kind: "vless" }>): XrayOutbound {
   const user: XrayVnextUser = { id: node.uuid, encryption: "none" };
   if (node.flow !== null && node.flow !== undefined && node.flow.length > 0) user.flow = node.flow;
   return {
@@ -38,6 +50,39 @@ function vlessOutbound(node: ProxyNode): XrayOutbound {
     settings: { vnext: [{ address: bareServer(node.address), port: node.port, users: [user] }] },
     streamSettings: wsStream(node),
   };
+}
+
+function trojanOutbound(node: Extract<ProxyNode, { kind: "trojan" }>): XrayOutbound {
+  return {
+    tag: node.name,
+    protocol: "trojan",
+    settings: { servers: [{ address: bareServer(node.address), port: node.port, password: node.password }] },
+    streamSettings: wsStream(node),
+  };
+}
+
+function shadowsocksOutbound(node: Extract<ProxyNode, { kind: "shadowsocks" }>): XrayOutbound {
+  return {
+    tag: node.name,
+    protocol: "shadowsocks",
+    settings: {
+      servers: [{ address: bareServer(node.address), port: node.port, method: node.method, password: node.password }],
+    },
+    streamSettings: wsStream(node),
+  };
+}
+
+function outboundOf(node: ProxyNode, tlsFragment: TlsFragmentPreset | undefined): XrayOutbound {
+  const base =
+    node.kind === "trojan"
+      ? trojanOutbound(node)
+      : node.kind === "shadowsocks"
+        ? shadowsocksOutbound(node)
+        : vlessOutbound(node);
+  const sockopt = fragmentSockopt(tlsFragment);
+  if (sockopt === null) return base;
+  const stream = { ...((base.streamSettings ?? {}) as Record<string, unknown>), sockopt };
+  return { ...base, streamSettings: stream };
 }
 
 function routingRules(names: string[], rules: EmitRules | undefined): Array<Record<string, unknown>> {
@@ -77,7 +122,7 @@ export function emitXrayJson(nodes: readonly ProxyNode[], opts: EmitOptions): st
       },
     ],
     outbounds: [
-      ...visible.map(vlessOutbound),
+      ...visible.map((node) => outboundOf(node, opts.tlsFragment)),
       { tag: "direct", protocol: "freedom" },
       { tag: "block", protocol: "blackhole" },
     ],

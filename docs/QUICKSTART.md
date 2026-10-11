@@ -27,8 +27,14 @@ Pick the row matching your client:
 | sing-box / SFA / Karing / NekoBox | `/<securePath>/sub?target=singbox` | sing-box JSON profile |
 | Clash Verge / Mihomo / Stash | `/<securePath>/sub?target=clash` | Clash YAML profile |
 | Xray-core desktop (v2rayN / NekoRay) | `/<securePath>/sub?target=xray` | Xray JSON profile |
+| Surge | `/<securePath>/sub?target=surge` | Surge profile via the configured converter |
+| Quantumult X | `/<securePath>/sub?target=quanx` | QuanX profile via the configured converter |
+| Loon | `/<securePath>/sub?target=loon` | Loon profile via the configured converter |
+
+The last three need a subconverter API in Settings → Advanced →
+Subscription converter; without one they answer `503`.
 
 Without `?target=` in a browser you get an info page with the same links.
-Any other `?target=` value is rejected with a 400 — these four are the
+Any other `?target=` value is rejected with a 400 — these seven are the
 whole list (see `SUB_FORMATS` in `src/subscription/negotiate.ts`,
 drift-guarded by `test/docs/quickstart.spec.ts`).

@@ -8,6 +8,17 @@ type PlainObject = Record<string, unknown>;
 type MigrationStep = (data: unknown) => unknown;
 
 export const MIGRATIONS: Record<number, MigrationStep> = {
+  // B1 (v4): subscription block. Stored v3 blobs predate subName/
+  // skipCertVerify/subConverter, so drop malformed shapes and let
+  // deepMergeDefaults refill them; explicit valid values pass through.
+  3: (data) => {
+    if (!isPlainObject(data)) return data;
+    const out: PlainObject = { ...data };
+    if (!isPlainObject(out.subConverter)) delete out.subConverter;
+    if (typeof out.subName !== "string") delete out.subName;
+    if (typeof out.skipCertVerify !== "boolean") delete out.skipCertVerify;
+    return out;
+  },
   2: (data) => {
     if (!isPlainObject(data)) return data;
     const out: PlainObject = { ...data };

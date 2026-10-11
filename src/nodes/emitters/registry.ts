@@ -1,9 +1,10 @@
-import type { SubFormat } from "../../core/ua";
 import type { ProxyNode } from "../../types/node";
 import { stripBrackets } from "../../utils/net";
 import { emitClashYaml } from "./clash-yaml";
 import { emitSingBoxJson } from "./singbox-json";
 import { emitXrayJson } from "./xray-json";
+
+import type { TlsFragmentPreset } from "../../types/settings";
 
 export interface EmitRules {
   bypassLan: boolean;
@@ -17,6 +18,7 @@ export interface EmitOptions {
   subscriptionUrl?: string;
   updateIntervalHours?: number;
   rules?: EmitRules;
+  tlsFragment?: TlsFragmentPreset;
 }
 
 export const TEST_URL = "https://www.gstatic.com/generate_204";
@@ -57,7 +59,7 @@ export function nodeHasAlpn(node: ProxyNode): boolean {
 
 export type NodeEmitter = (nodes: readonly ProxyNode[], opts: EmitOptions) => string;
 
-export type SyncSubFormat = Exclude<SubFormat, "base64">;
+export type SyncSubFormat = "singbox" | "clash" | "xray";
 
 export const EMITTERS: Record<SyncSubFormat, NodeEmitter> = {
   singbox: emitSingBoxJson,

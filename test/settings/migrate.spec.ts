@@ -115,11 +115,25 @@ describe("MIGRATIONS[2] vless-warp slimdown cut", () => {
     const legacyBlob = { version: 2, updatedAt: Date.now(), data: legacyData };
     const merged = migrateSettings(legacyBlob) as unknown as Record<string, unknown>;
     expect(merged.version).toBe(SETTINGS_VERSION);
+    // B5 revived trojan/ss names as live settings: the v2 cut still drops
+    // the legacy values, then deepMergeDefaults refills B5 defaults.
+    const REVIVED_DEFAULTS: Record<string, unknown> = {
+      trojanEnabled: false,
+      ssEnabled: false,
+      trojanPassword: "",
+      ssMethod: "aes-128-gcm",
+      trojanPath: "",
+    };
     for (const key of REMOVED_KEYS) {
-      expect(merged).not.toHaveProperty(key);
+      if (key in REVIVED_DEFAULTS) {
+        expect(merged).toHaveProperty(key);
+        expect(merged[key]).toEqual(REVIVED_DEFAULTS[key]);
+      } else {
+        expect(merged).not.toHaveProperty(key);
+      }
     }
     expect(merged.securePath).toBe("deployed1");
-    expect(merged.camouflage).toEqual({ mode: "static" });
+    expect(merged.camouflage).toEqual({ mode: "static", reverseUrl: "" });
   });
 });
 
@@ -194,6 +208,42 @@ describe("versionless legacy payloads", () => {
     expect(validateSettings(JSON.parse(JSON.stringify(healed))).ok).toBe(true);
     const kept = migrateSettings({ vlessUuid: "d342d11e-d424-4583-b36e-524ab1f0afa4" });
     expect(kept.vlessUuid).toBe("d342d11e-d424-4583-b36e-524ab1f0afa4");
+  });
+});
+
+describe("B1 subscription migration (3 -> 4)", () => {
+  it("fills subName/skipCertVerify/subConverter defaults on a v3 blob", () => {
+    const blob = {
+      version: 3,
+      updatedAt: Date.now(),
+      data: { ...structuredClone(DEFAULT_SETTINGS), version: 3, securePath: "deployed-b1" },
+    };
+    const out = migrateSettings(blob);
+    expect(out.version).toBe(SETTINGS_VERSION);
+    expect(out.securePath).toBe("deployed-b1");
+    expect(out.subName).toBe("");
+    expect(out.skipCertVerify).toBe(false);
+    expect(out.subConverter).toEqual(DEFAULT_SETTINGS.subConverter);
+    expect(validateSettings(JSON.parse(JSON.stringify(out))).ok).toBe(true);
+  });
+
+  it("keeps explicit B1 values and repairs malformed shapes", () => {
+    const blob = {
+      version: 3,
+      updatedAt: Date.now(),
+      data: {
+        ...structuredClone(DEFAULT_SETTINGS),
+        securePath: "deployed-b1b",
+        subName: "Keep Me",
+        skipCertVerify: true,
+        subConverter: "not-an-object",
+      },
+    };
+    const out = migrateSettings(blob);
+    expect(out.subName).toBe("Keep Me");
+    expect(out.skipCertVerify).toBe(true);
+    expect(out.subConverter).toEqual(DEFAULT_SETTINGS.subConverter);
+    expect(validateSettings(JSON.parse(JSON.stringify(out))).ok).toBe(true);
   });
 });
 

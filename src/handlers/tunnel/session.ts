@@ -9,6 +9,10 @@ import type {
   ProtocolInbound,
 } from "../../protocols/common";
 import { createVlessInbound } from "../../protocols/vless";
+import { createTrojanInbound } from "../../protocols/trojan";
+import { createShadowsocksInbound } from "../../protocols/shadowsocks";
+import { createFallbackInbound } from "../../protocols/dispatch";
+import { createTransportFramer, type TransportFramer } from "../../tunnel/framing";
 import { createRelay } from "../../tunnel/relay";
 import { concatBytes, utf8Encode } from "../../utils/bytes";
 
@@ -28,6 +32,7 @@ export interface TunnelSession {
   acc: ByteAccumulator;
   phase: TunnelPhase;
   relayHandle: ReturnType<typeof createRelay> | null;
+  transportFramer: TransportFramer | null;
   dnsRelay: DnsPacketRelay | null;
   downlinkEncoder: DownlinkEncoder | null;
   uplinkDecode: ((chunk: Uint8Array) => Promise<Uint8Array | null>) | null;
@@ -37,6 +42,16 @@ export interface TunnelSession {
 }
 
 function createInbound(kind: TunnelKind, s: Settings): ProtocolInbound<TunnelParsed> {
+  if (kind === "trojan") return createTrojanInbound(s.trojanPassword);
+  // Shadowsocks shares the vless path: vless stays canonical, ss engages
+  // only when vless cannot complete (and only when enabled — otherwise the
+  // pure vless path runs byte-identical).
+  if (s.ssEnabled) {
+    return createFallbackInbound(
+      () => createVlessInbound(s.vlessUuid),
+      () => createShadowsocksInbound(s.ssMethod, s.vlessUuid),
+    );
+  }
   void kind;
   return createVlessInbound(s.vlessUuid);
 }
@@ -55,6 +70,7 @@ export function createTunnelSession(
     env,
     ctx,
     inbound: createInbound(kind, s),
+    transportFramer: createTransportFramer(s.transport),
     acc: new ByteAccumulator(),
     phase: "handshake",
     relayHandle: null,
@@ -97,7 +113,7 @@ export function closeTunnelSocket(st: TunnelSession, code: number): void {
 
 export function sendTunnelRaw(st: TunnelSession, data: Uint8Array): void {
   try {
-    if (st.ws.readyState === 1) st.ws.send(data);
+    if (st.ws.readyState === 1) st.ws.send(st.transportFramer === null ? data : st.transportFramer.frameDown(data));
   } catch {
     // Best-effort: the client may vanish mid-send; the relay finish path
     // (not this throw) owns session teardown.

@@ -13,15 +13,10 @@ const PASSWORD = "settings-cut-pass-1";
 
 const REMOVED_KEYS = [
   "vmessEnabled",
-  "trojanEnabled",
-  "ssEnabled",
   "vmessUuid",
-  "trojanPassword",
   "ssPassword",
-  "ssMethod",
   "ssDirect",
   "vmessPath",
-  "trojanPath",
   "ssPath",
   "proxyIpMode",
   "nat64Prefixes",
@@ -33,8 +28,17 @@ const REMOVED_KEYS = [
   "speedtestIntercept",
   "totp",
 ];
+// B5 revived these pre-cut names as live settings (trojanPassword stays a
+// masked secret, asserted via SECRETS below).
+const REVIVED_KEYS = [
+  "trojanEnabled",
+  "ssEnabled",
+  "trojanPassword",
+  "ssMethod",
+  "trojanPath",
+];
 
-const SECRETS = ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "botToken"];
+const SECRETS = ["passwordHash", "passwordSalt", "sessionSecret", "securePath", "botToken", "trojanPassword"];
 
 function post(json: unknown, extra: Record<string, string> = {}): RequestInit {
   return {
@@ -81,7 +85,11 @@ describe("settings cutover (export / pre-cut reject / boot purge)", () => {
     }
     const blob = JSON.parse(raw) as { kind: string; version: number; settings: Record<string, unknown> };
     expect(blob.kind).toBe("q-proxy-settings");
-    expect(blob.version).toBe(3);
+    expect(blob.version).toBe(4);
+    for (const key of REVIVED_KEYS) {
+      if (key === "trojanPassword") continue;
+      expect(blob.settings, key).toHaveProperty(key);
+    }
 
     res = await SELF.fetch(`${BASE}/api/settings`, put({ profileTitle: "Cutover Panel" }, csrfHeaders));
     expect(res.status).toBe(200);
@@ -128,7 +136,7 @@ describe("settings cutover (export / pre-cut reject / boot purge)", () => {
     );
   });
 
-  it("purges pre-cut user data on first boot, stamps v3, and is a no-op after (T030)", async () => {
+  it("purges pre-cut user data on first boot, stamps v4, and is a no-op after (T030)", async () => {
     const today = new Date().toISOString().slice(0, 10);
     const legacyData = {
       ...structuredClone(DEFAULT_SETTINGS),
@@ -150,7 +158,7 @@ describe("settings cutover (export / pre-cut reject / boot purge)", () => {
     expect(await kv.get(`qproxy:user-usage:${today}:abc123`)).toBeNull();
 
     const stored = JSON.parse((await kv.get(SETTINGS_KEY)) as string) as { version: number };
-    expect(stored.version).toBe(3);
+    expect(stored.version).toBe(4);
 
     const usersTable = await env.QPROXY_DB.prepare("SELECT COUNT(*) AS n FROM users")
       .first()

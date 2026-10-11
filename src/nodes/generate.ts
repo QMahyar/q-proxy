@@ -1,11 +1,12 @@
 import type { NodeBuilderContext } from "../types/context";
-import type { NodeTag, ProxyNode, VlessNode } from "../types/node";
+import type { NodeTag, ProxyNode } from "../types/node";
 import { CF_PLAIN_PORTS, CF_TLS_PORTS, type Settings } from "../types/settings";
 import { CDN_PRESETS } from "./cdn-presets";
 import { fragmentQuery } from "./fragments";
 import { resolveEchServerName } from "./ech";
 import { renderName } from "./naming";
 import { bracketIpv6, isIpLiteral, parseHostPort } from "../utils/net";
+import { expandWildcard, parsePreferredLine, pickRandomTlsPort, type PreferredEntry } from "./preferred";
 
 interface AddressEntry {
   address: string;
@@ -23,6 +24,7 @@ export function resolveEndpointLines(s: Settings): string[] {
   for (const p of CDN_PRESETS) {
     if (enabled.has(p.id)) out.push(`${p.ip}:${p.port}`);
   }
+  if (s.preferredLocal === false) return out;
   for (const line of s.customEndpoints) {
     const trimmed = line.trim();
     if (trimmed.length > 0) out.push(trimmed);
@@ -30,10 +32,32 @@ export function resolveEndpointLines(s: Settings): string[] {
   return out;
 }
 
+// SUB-generator hostname: an explicit preferredRemoteUrl wins, otherwise the
+// worker hostname. Only changes generation when the setting is non-empty.
+export function resolvePreferredHostname(s: Pick<Settings, "preferredRemoteUrl">, fallback: string): string {
+  const custom = s.preferredRemoteUrl.trim().toLowerCase();
+  return custom.length > 0 ? custom : fallback;
+}
+
+// A line is legacy `host[:port]` when it carries none of the B2 markers.
+// Legacy port-less lines keep defaultPort; port-less new-syntax lines use
+// preferredPort (-1 = random Cloudflare TLS port).
+function isLegacyLine(e: PreferredEntry): boolean {
+  return e.kind === "direct" && !e.wildcard && e.remark === "" && e.chain === null && !e.proxyIp;
+}
+
+function preferredEntryPort(s: Settings, e: PreferredEntry): number {
+  if (e.port !== null) return e.port;
+  if (isLegacyLine(e)) return s.defaultPort;
+  if (s.preferredPort > 0) return s.preferredPort;
+  return pickRandomTlsPort(Math.random);
+}
+
 interface ProtoSpec {
   kind: ProxyNode["kind"];
   enabled: boolean;
   cred: string;
+  prefix: string;
 }
 
 function classifyPort(port: number): "tls" | "none" | null {
@@ -44,7 +68,34 @@ function classifyPort(port: number): "tls" | "none" | null {
   return null;
 }
 
+// Parse one endpoint line for generation. The hostname fallback bypasses
+// preferred syntax; https remote lists resolve via the validator only.
+function parseAddressLine(
+  s: Settings,
+  trimmed: string,
+  isFallback: boolean,
+): { host: string; port: number; label: string | undefined; proxyIp: boolean } | null {
+  if (isFallback) {
+    const hp = parseHostPort(trimmed, s.defaultPort);
+    if (hp === null || hp.host.length === 0) return null;
+    return { host: hp.host, port: hp.port, label: undefined, proxyIp: false };
+  }
+  const r = parsePreferredLine(trimmed);
+  if (!r.ok) return null;
+  const e = r.value;
+  if (e.kind === "https") return null;
+  const host = e.wildcard ? expandWildcard(e.host, Math.random) : e.host;
+  if (host.length === 0) return null;
+  return {
+    host,
+    port: preferredEntryPort(s, e),
+    label: e.remark.length > 0 ? e.remark : undefined,
+    proxyIp: e.proxyIp,
+  };
+}
+
 function collectAddresses(s: Settings, hostname: string): AddressEntry[] {
+  const effective = resolvePreferredHostname(s, hostname);
   const out: AddressEntry[] = [];
   const seen = new Set<string>();
   const lines = resolveEndpointLines(s);
@@ -52,15 +103,15 @@ function collectAddresses(s: Settings, hostname: string): AddressEntry[] {
   for (const raw of raws) {
     const trimmed = raw.trim();
     if (trimmed.length === 0) continue;
-    const hp = parseHostPort(trimmed, s.defaultPort);
-    if (hp === null || hp.host.length === 0) continue;
-    const port = hp.port;
-    const isIp = isIpLiteral(hp.host);
-    const connectHost = isIp ? hp.host : hp.host.toLowerCase();
+    const parsed = parseAddressLine(s, trimmed, lines.length === 0);
+    if (parsed === null) continue;
+    const port = parsed.port;
+    const isIp = isIpLiteral(parsed.host);
+    const connectHost = isIp ? parsed.host : parsed.host.toLowerCase();
     const key = `${connectHost.toLowerCase()}:${port}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const isBase = connectHost.toLowerCase() === hostname.toLowerCase();
+    const isBase = connectHost.toLowerCase() === effective.toLowerCase();
     let host: string;
     let sni: string;
     let tags: NodeTag[];
@@ -69,19 +120,21 @@ function collectAddresses(s: Settings, hostname: string): AddressEntry[] {
       sni = connectHost;
       tags = [];
     } else if (isIp) {
-      host = hostname;
-      sni = hostname;
+      host = effective;
+      sni = effective;
       tags = ["clean-ip"];
     } else {
       host = connectHost;
       sni = connectHost;
       tags = ["custom-domain"];
     }
+    if (parsed.proxyIp) tags.push("proxy-ip");
     if (!isBase) {
       if (s.cdnHost.trim().length > 0) host = s.cdnHost.trim().toLowerCase();
       if (s.cdnSni.trim().length > 0) sni = s.cdnSni.trim().toLowerCase();
     }
-    out.push({ address: bracketIpv6(connectHost), host, sni, tags, port, label: undefined, country: null });
+    out.push({ address: bracketIpv6(connectHost), host, sni, tags, port, label: parsed.label, country: null });
+    if (lines.length > 0 && out.length >= Math.max(0, Math.floor(s.preferredCount))) break;
   }
   return out;
 }
@@ -126,8 +179,24 @@ function tunnelSuffix(cred: string, securePath: string): string {
   return suffix;
 }
 
-function buildPath(prefix: string, cred: string, securePath: string, earlyData: number, fragQ: string): string {
-  let path = `/${prefix}/${tunnelSuffix(cred, securePath)}`;
+const RANDOM_SUFFIX_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+function randomSuffix(): string {
+  let out = "";
+  for (let i = 0; i < 12; i++) out += RANDOM_SUFFIX_CHARS[Math.floor(Math.random() * RANDOM_SUFFIX_CHARS.length)];
+  return out;
+}
+
+function buildPath(
+  prefix: string,
+  cred: string,
+  securePath: string,
+  earlyData: number,
+  fragQ: string,
+  randomPath: boolean,
+): string {
+  const suffix = randomPath ? randomSuffix() : tunnelSuffix(cred, securePath);
+  let path = `/${prefix}/${suffix}`;
   if (earlyData > 0) path += `?ed=${earlyData}`;
   if (fragQ.length > 0) path += `${path.includes("?") ? "&" : "?"}${fragQ}`;
   return path;
@@ -144,7 +213,6 @@ interface KindBuildInput {
 
 function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
   const s = input.settings;
-  const prefix = s.vlessPath;
   const list: ProxyNode[] = [];
   for (const entry of input.addresses) {
     const security = classifyPort(entry.port);
@@ -152,8 +220,18 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
     const variants: Array<"normal" | "fragment"> = ["normal"];
     if (input.fragOn && security === "tls") variants.push("fragment");
     for (const variant of variants) {
-      const earlyData = s.earlyDataEnabled ? Math.max(0, s.earlyDataMaxBytes) : 0;
-      const path = buildPath(prefix, proto.cred, s.securePath, earlyData, variant === "fragment" ? input.fragQ : "");
+      // zeroRtt forces the ed=2560 early-data marker on (0-RTT); otherwise
+      // the early-data switch decides.
+      const baseEarlyData = s.earlyDataEnabled ? Math.max(0, s.earlyDataMaxBytes) : 0;
+      const earlyData = s.zeroRtt ? Math.max(2560, baseEarlyData) : baseEarlyData;
+      const path = buildPath(
+        proto.prefix,
+        proto.cred,
+        s.securePath,
+        earlyData,
+        variant === "fragment" ? input.fragQ : "",
+        s.randomPath,
+      );
       const tags: NodeTag[] = [...entry.tags];
       if (input.hostname.endsWith(".workers.dev")) tags.push("workers-dev");
       if (security === "none") tags.push("no-tls");
@@ -179,12 +257,17 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
         variant,
         tags,
       };
-      const node: ProxyNode = {
-        ...base,
-        kind: "vless",
-        uuid: proto.cred,
-        flow: s.vlessFlow.length > 0 && security === "tls" ? s.vlessFlow : null,
-      } satisfies VlessNode;
+      const node: ProxyNode =
+        proto.kind === "trojan"
+          ? { ...base, kind: "trojan", password: proto.cred }
+          : proto.kind === "shadowsocks"
+            ? { ...base, kind: "shadowsocks", method: s.ssMethod, password: proto.cred, tls: s.ssTls }
+            : {
+                ...base,
+                kind: "vless",
+                uuid: proto.cred,
+                flow: s.vlessFlow.length > 0 && security === "tls" ? s.vlessFlow : null,
+              };
       node.name = renderName(node, input.country, entry.label, s.nameTemplate, entry.host);
       list.push(node);
     }
@@ -202,11 +285,23 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
   const fragQ = fragOn ? fragmentQuery(s.fragment) : "";
   const addresses = collectAddresses(s, ctx.hostname);
 
-  const protos: ProtoSpec[] = [{ kind: "vless", enabled: s.vlessEnabled, cred: s.vlessUuid }];
+  const protos: ProtoSpec[] = [
+    { kind: "vless", enabled: s.vlessEnabled, cred: s.vlessUuid, prefix: s.vlessPath },
+    // Trojan rides its own path (validated distinct from vlessPath).
+    {
+      kind: "trojan",
+      enabled: s.trojanEnabled && s.trojanPassword.length > 0 && s.trojanPath.length > 0,
+      cred: s.trojanPassword,
+      prefix: s.trojanPath,
+    },
+    // Shadowsocks shares the vless path (and, by design, the vless UUID as
+    // its password — there is no separate ssPassword setting).
+    { kind: "shadowsocks", enabled: s.ssEnabled, cred: s.vlessUuid, prefix: s.vlessPath },
+  ];
 
   const input: KindBuildInput = {
     settings: s,
-    hostname: ctx.hostname,
+    hostname: resolvePreferredHostname(s, ctx.hostname),
     addresses,
     fragOn,
     fragQ,

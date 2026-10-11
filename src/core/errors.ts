@@ -62,3 +62,9 @@ export class UpstreamError extends AppError {
     super(message, 502, "UPSTREAM", false);
   }
 }
+
+export class ServiceUnavailableError extends AppError {
+  constructor(message = "service unavailable") {
+    super(message, 503, "UNAVAILABLE");
+  }
+}

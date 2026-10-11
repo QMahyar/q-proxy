@@ -21,7 +21,7 @@ const _hs=$('home-sub');if(_hs)_hs.textContent=t('home.subs.desc');
 const _ss=$('subs-sub');if(_ss)_ss.textContent=t('subs.main.desc');
 const _ws=$('warp-sub');if(_ws)_ws.textContent=t('subs.warp.desc');
 const _gs=$('settings-sub');if(_gs)_gs.textContent=t('settings.sections');
-const _ft=$('app-foot');if(_ft){let vv='';try{vv=typeof __APP_VERSION__!=='undefined'?__APP_VERSION__:(S.status&&S.status.version||'')}catch(e){vv=(S.status&&S.status.version||'')}if(vv)_ft.textContent='Q Proxy v'+vv};
+const _ft=$('app-foot');if(_ft){let vv='';try{vv=typeof __APP_VERSION__!=='undefined'?__APP_VERSION__:(S.status&&S.status.version||'')}catch(e){vv=(S.status&&S.status.version||'')}if(vv){const pre=vv.indexOf('-')>=0;_ft.innerHTML='<span class="ver-dot '+(pre?'ver-preview':'ver-current')+'" aria-hidden="true"></span><span>Q Proxy v'+esc(vv)+'</span>'}};
 $('logout-btn').setAttribute('aria-label',t('nav.logout'));
 $('logout-btn').title=t('nav.logout');
 $('shortcuts-btn').setAttribute('aria-label',t('shortcuts.title'));
@@ -164,13 +164,43 @@ const st=document.createElement('section');st.className='card';
 const u=S.status.usage||{requestsToday:0,requestsTotal:0};
 const todayStr=u.requestsToday!=null?fmtInt(u.requestsToday):'—';
 const totalStr=u.requestsTotal!=null?fmtInt(u.requestsTotal):'—';
-st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><span class="field__hint">'+esc(t('home.status.estimate'))+'</span></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(todayStr)+'</span><span></span><span class="lbl">'+esc(t('home.status.total'))+'</span><span class="mono">'+esc(totalStr)+'</span><span></span></div><div id="traffic-chart"></div>';
+st.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.status.title'))+'</div><span class="field__hint">'+esc(t('home.status.estimate'))+'</span></div><div class="stat-grid"><span class="lbl">'+esc(t('home.status.version'))+'</span><span class="mono">v'+esc(S.status.version||'')+'</span><span></span><span class="lbl">'+esc(t('home.status.colo'))+'</span><span class="mono h-cell">'+esc(S.status.colo||'—')+'</span><span></span><span class="lbl">'+esc(t('home.status.today'))+'</span><span class="mono">'+esc(todayStr)+'</span><span></span><span class="lbl">'+esc(t('home.status.total'))+'</span><span class="mono">'+esc(totalStr)+'</span><span></span></div>'+cfUsageHtml()+'<div id="traffic-chart"></div>';
 right.appendChild(st)}
+const logSec=document.createElement('section');logSec.className='card';
+logSec.innerHTML='<div class="card__head"><div class="card__title">'+esc(t('home.log.title'))+'</div><button type="button" class="btn btn--ghost btn--sm" data-action="log-retry"><svg aria-hidden="true"><use href="#i-refresh"/></svg>'+esc(t('home.stats.refresh'))+'</button></div><div id="home-log"></div>';
+right.appendChild(logSec);
 body.appendChild(right);
 recordTraffic();
 renderTraffic();
 loadHomePool();
+renderAccessLog();
 syncKillUI()}
+function fmtBytes(n){n=Math.max(0,Math.floor(Number(n)||0));const u=['B','KB','MB','GB','TB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return (i===0?String(Math.floor(n)):n.toFixed(1))+' '+u[i]}
+function cfUsageHtml(){
+const u=S.status&&S.status.usage;
+let sh='<p class="field__hint" dir="auto" style="margin-block:8px 0">'+esc(t('home.usage.userinfo',{up:fmtBytes(u&&u.bytesUpTotal||0),down:fmtBytes(u&&u.bytesDownTotal||0)}))+'</p>';
+const c=S.set&&S.set.cfUsage;
+if(!c||!c.updatedAt){sh+='<div class="btn-row" style="margin-block-start:8px"><button type="button" class="btn btn--ghost btn--sm" data-action="cf-refresh">'+esc(t('advanced.cf.refresh'))+'</button><span class="field__hint">'+esc(t('home.usage.never'))+'</span></div>';return sh}
+if(!c.max||c.max<=0){sh+='<p class="field__hint" dir="auto" style="margin-block:8px 0">'+esc(t('home.usage.unlimited',{total:fmtInt(c.total)}))+'</p>';return sh}
+const pct=Math.min(100,Math.round(c.total/c.max*100));
+sh+='<div style="margin-block-start:8px"><div class="cf-bar" role="progressbar" aria-valuenow="'+pct+'" aria-valuemin="0" aria-valuemax="100" aria-label="'+esc(t('advanced.cf.title'))+'"><span class="cf-bar__fill" style="inline-size:'+pct+'%"></span></div><p class="field__hint" dir="auto" style="margin-block:4px 0">'+esc(t('home.usage.used',{pct:fmtInt(pct),used:fmtInt(c.total),max:fmtInt(c.max)}))+'</p></div>';
+return sh}
+let logPage=1;
+function logEmptyHtml(){return emptyCard({title:'home.log.empty'})}
+function renderAccessLog(){
+const box=$('home-log');if(!box)return;
+box.innerHTML=loadingBox({rows:3});
+api('api/access-log?page='+logPage+'&limit=20').then(d=>{
+const list=(d&&d.events)||[];
+const total=(d&&typeof d.total==='number')?d.total:0;
+const pages=Math.max(1,Math.ceil(total/20));
+if(logPage>pages&&total>0){logPage=pages;renderAccessLog();return}
+let sh='';
+if(!list.length)sh+=logEmptyHtml();
+list.forEach(e=>{sh+='<div class="pool-row"><span class="pool-cell" dir="ltr">'+esc(new Date(Number(e.ts)||0).toLocaleString())+'</span><span class="pool-cell" dir="ltr">'+esc(String(e.action||''))+'</span><span class="pool-status"><span class="mono" dir="ltr">'+esc(String(e.ip||''))+'</span></span></div>'});
+sh+='<div class="btn-row" style="margin-block-start:8px"><button type="button" class="btn btn--ghost btn--sm" data-action="log-prev"'+(logPage<=1?' disabled':'')+'>'+esc(t('home.log.prev'))+'</button><span class="field__hint" aria-live="polite">'+esc(t('home.log.page',{n:logPage,pages:pages}))+'</span><button type="button" class="btn btn--ghost btn--sm" data-action="log-next"'+(logPage>=pages?' disabled':'')+'>'+esc(t('home.log.next'))+'</button></div>';
+box.innerHTML=sh;
+}).catch(()=>{box.innerHTML=errorCard({title:'common.error',retryAction:'data-action="log-retry"'})})}
 function syncKillUI(){
 const on=!!(S.status&&S.status.killSwitch);
 document.querySelectorAll('[data-kill]').forEach(b=>{b.checked=on});

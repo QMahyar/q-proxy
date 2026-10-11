@@ -44,7 +44,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     securePath: "testpath",
     sessionSecret: SESSION_SECRET,
     language: "en",
-    telegram: { enabled: true, botToken: BOT_TOKEN, chatId: CHAT_ID },
+    telegram: { enabled: true, botToken: BOT_TOKEN, chatId: CHAT_ID, onSubscribe: true, onSaveConfig: true, onAdminLogin: true, silent: false },
     ...overrides,
   };
 }
@@ -119,7 +119,7 @@ describe("handleTelegramWebhook", () => {
 
   it("answers silently when disabled even with the correct secret", async () => {
     const secret = await telegramWebhookSecret(SESSION_SECRET);
-    const res = await handleTelegramWebhook(webhookRequest("/status", CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings({ telegram: { enabled: false, botToken: BOT_TOKEN, chatId: CHAT_ID } }));
+    const res = await handleTelegramWebhook(webhookRequest("/status", CHAT_ID, secret), new FakeKV().asEnv() as never, makeSettings({ telegram: { enabled: false, botToken: BOT_TOKEN, chatId: CHAT_ID, onSubscribe: true, onSaveConfig: true, onAdminLogin: true, silent: false } }));
     expect(res.status).toBe(200);
     expect(((await res.json()) as { data: unknown }).data).toEqual({});
     expect(calls.length).toBe(0);
@@ -255,7 +255,7 @@ describe("handleTelegramWebhook", () => {
   it("discloses nothing and toggles nothing for a legacy @username binding", async () => {
     const kv = new FakeKV();
     const secret = await telegramWebhookSecret(SESSION_SECRET);
-    const settings = makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "@opsalerts" } });
+    const settings = makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "@opsalerts", onSubscribe: true, onSaveConfig: true, onAdminLogin: true, silent: false } });
     const res = await handleTelegramWebhook(usernameWebhookRequest("/kill on", "OpsAlerts", secret), kv.asEnv() as never, settings);
     expect(res.status).toBe(200);
     expect(((await res.json()) as { data: unknown }).data).toEqual({});
@@ -265,7 +265,7 @@ describe("handleTelegramWebhook", () => {
 
   it("stays silent for username-identity callbacks under a legacy binding", async () => {
     const secret = await telegramWebhookSecret(SESSION_SECRET);
-    const settings = makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "@opsalerts" } });
+    const settings = makeSettings({ telegram: { enabled: true, botToken: BOT_TOKEN, chatId: "@opsalerts", onSubscribe: true, onSaveConfig: true, onAdminLogin: true, silent: false } });
     const callback: Record<string, unknown> = {
       id: "cb-1",
       data: "tg:kill-on",
@@ -364,7 +364,7 @@ describe("telegram admin endpoints", () => {
       method: "POST",
       headers: { "X-Q-Panel": "1" },
     });
-    const res = await handleTelegramSetup(req, new FakeKV().asEnv() as never, makeSettings({ telegram: { enabled: false, botToken: "", chatId: "" } }));
+    const res = await handleTelegramSetup(req, new FakeKV().asEnv() as never, makeSettings({ telegram: { enabled: false, botToken: "", chatId: "", onSubscribe: true, onSaveConfig: true, onAdminLogin: true, silent: false } }));
     const data = ((await res.json()) as { data: { ok: boolean; description: string } }).data;
     expect(data.ok).toBe(false);
     expect(data.description).toContain("token");
