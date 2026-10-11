@@ -855,3 +855,71 @@ describe("allowedIps", () => {
     if (!bypass.ok) expect(bypass.fields["routingRules.customBypass"]).toContain("too many");
   });
 });
+
+describe("protocol extras block (B5)", () => {
+  it("defaults everything to ws-only vless", () => {
+    const result = validateSettings({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.trojanEnabled).toBe(false);
+      expect(result.value.trojanPassword).toBe("");
+      expect(result.value.trojanPath).toBe("");
+      expect(result.value.ssEnabled).toBe(false);
+      expect(result.value.ssMethod).toBe("aes-128-gcm");
+      expect(result.value.ssTls).toBe(false);
+      expect(result.value.transport).toBe("ws");
+      expect(result.value.grpcMode).toBe("gun");
+      expect(result.value.grpcUserAgent).toBe("");
+      expect(result.value.tlsFragment).toBe("off");
+      expect(result.value.zeroRtt).toBe(false);
+      expect(result.value.randomPath).toBe(false);
+    }
+  });
+
+  it("accepts a full valid extras patch", () => {
+    const result = validateSettings({
+      trojanEnabled: true,
+      trojanPassword: "s3cret-trojan",
+      trojanPath: "tj",
+      ssEnabled: true,
+      ssMethod: "aes-256-gcm",
+      ssTls: true,
+      transport: "grpc",
+      grpcMode: "multi",
+      grpcUserAgent: "custom-agent",
+      tlsFragment: "shadowrocket",
+      zeroRtt: true,
+      randomPath: true,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.trojanPath).toBe("tj");
+      expect(result.value.transport).toBe("grpc");
+    }
+  });
+
+  it("matches transport/method/fragment enums exactly", () => {
+    expect(fieldsOf({ transport: "h2" })["transport"]).toBeTruthy();
+    expect(fieldsOf({ ssMethod: "rc4" })["ssMethod"]).toBeTruthy();
+    expect(fieldsOf({ tlsFragment: "offf" })["tlsFragment"]).toBeTruthy();
+    expect(fieldsOf({ grpcMode: "single" })["grpcMode"]).toBeTruthy();
+  });
+
+  it("requires a distinct trojan path when trojan is enabled", () => {
+    expect(fieldsOf({ trojanEnabled: true })["trojanPath"]).toBeTruthy();
+    expect(fieldsOf({ trojanEnabled: true, trojanPath: "vl" })["trojanPath"]).toBeTruthy();
+    expect(fieldsOf({ trojanEnabled: true, trojanPath: "bad path!" })["trojanPath"]).toBeTruthy();
+    expect(validateSettings({ trojanEnabled: true, trojanPassword: "x", trojanPath: "tj" }).ok).toBe(true);
+    expect(validateSettings({ trojanEnabled: false, trojanPath: "" }).ok).toBe(true);
+  });
+
+  it("requires a trojan password when trojan is enabled", () => {
+    expect(fieldsOf({ trojanEnabled: true, trojanPath: "tj" })["trojanPassword"]).toBeTruthy();
+    expect(fieldsOf({ trojanPassword: "x".repeat(129) })["trojanPassword"]).toBeTruthy();
+  });
+
+  it("requires exact booleans for the extras toggles", () => {
+    expect(fieldsOf({ zeroRtt: "yes" }).zeroRtt).toBeTruthy();
+    expect(fieldsOf({ ssTls: 1 }).ssTls).toBeTruthy();
+  });
+});

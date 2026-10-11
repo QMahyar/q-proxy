@@ -424,3 +424,69 @@ describe("generateNodes preferred-list consumption (B2)", () => {
     expect(nodes.every((n) => n.address !== "https://example.com/add.txt")).toBe(true);
   });
 });
+
+describe("generateNodes protocol extras (B5)", () => {
+  it("emits vless only when trojan/ss are off", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4:443"];
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.length).toBeGreaterThan(0);
+    expect(nodes.every((n) => n.kind === "vless")).toBe(true);
+  });
+
+  it("emits trojan nodes on the trojan path when enabled", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4:443"];
+    s.trojanEnabled = true;
+    s.trojanPassword = "s3cret";
+    s.trojanPath = "tj";
+    const nodes = generateNodes(ctx(s));
+    const trojan = nodes.filter((n) => n.kind === "trojan");
+    expect(trojan.length).toBeGreaterThan(0);
+    for (const n of trojan) {
+      if (n.kind !== "trojan") continue;
+      expect(n.password).toBe("s3cret");
+      expect(n.path.startsWith("/tj/")).toBe(true);
+      expect(n.security).toBe("tls");
+    }
+    expect(nodes.some((n) => n.kind === "vless")).toBe(true);
+  });
+
+  it("emits shadowsocks nodes with the configured method when enabled", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4:443"];
+    s.ssEnabled = true;
+    s.ssMethod = "aes-256-gcm";
+    const nodes = generateNodes(ctx(s));
+    const ss = nodes.filter((n) => n.kind === "shadowsocks");
+    expect(ss.length).toBeGreaterThan(0);
+    for (const n of ss) {
+      if (n.kind !== "shadowsocks") continue;
+      expect(n.method).toBe("aes-256-gcm");
+      expect(n.password).toBe(s.vlessUuid);
+    }
+  });
+
+  it("forces ed=2560 in paths when zeroRtt is on", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4:443"];
+    s.zeroRtt = true;
+    const nodes = generateNodes(ctx(s));
+    expect(nodes.length).toBeGreaterThan(0);
+    expect(nodes.every((n) => n.path.includes("ed=2560"))).toBe(true);
+    expect(generateNodes(ctx(settings())).every((n) => !n.path.includes("ed=2560"))).toBe(true);
+  });
+
+  it("randomizes path suffixes only when randomPath is on", () => {
+    const s = settings();
+    s.customEndpoints = ["1.2.3.4:443"];
+    const a = generateNodes(ctx(s)).map((n) => n.path);
+    const b = generateNodes(ctx(s)).map((n) => n.path);
+    expect(a).toEqual(b);
+    s.randomPath = true;
+    const c = generateNodes(ctx(s)).map((n) => n.path);
+    const d = generateNodes(ctx(s)).map((n) => n.path);
+    expect(c).not.toEqual(d);
+    for (const p of [...c, ...d]) expect(p).toMatch(/^\/vl\/[A-Za-z0-9]{8,32}(\?|$)/);
+  });
+});

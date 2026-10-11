@@ -1,5 +1,5 @@
 import type { NodeBuilderContext } from "../types/context";
-import type { NodeTag, ProxyNode, VlessNode } from "../types/node";
+import type { NodeTag, ProxyNode } from "../types/node";
 import { CF_PLAIN_PORTS, CF_TLS_PORTS, type Settings } from "../types/settings";
 import { CDN_PRESETS } from "./cdn-presets";
 import { fragmentQuery } from "./fragments";
@@ -57,6 +57,7 @@ interface ProtoSpec {
   kind: ProxyNode["kind"];
   enabled: boolean;
   cred: string;
+  prefix: string;
 }
 
 function classifyPort(port: number): "tls" | "none" | null {
@@ -178,8 +179,24 @@ function tunnelSuffix(cred: string, securePath: string): string {
   return suffix;
 }
 
-function buildPath(prefix: string, cred: string, securePath: string, earlyData: number, fragQ: string): string {
-  let path = `/${prefix}/${tunnelSuffix(cred, securePath)}`;
+const RANDOM_SUFFIX_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+function randomSuffix(): string {
+  let out = "";
+  for (let i = 0; i < 12; i++) out += RANDOM_SUFFIX_CHARS[Math.floor(Math.random() * RANDOM_SUFFIX_CHARS.length)];
+  return out;
+}
+
+function buildPath(
+  prefix: string,
+  cred: string,
+  securePath: string,
+  earlyData: number,
+  fragQ: string,
+  randomPath: boolean,
+): string {
+  const suffix = randomPath ? randomSuffix() : tunnelSuffix(cred, securePath);
+  let path = `/${prefix}/${suffix}`;
   if (earlyData > 0) path += `?ed=${earlyData}`;
   if (fragQ.length > 0) path += `${path.includes("?") ? "&" : "?"}${fragQ}`;
   return path;
@@ -196,7 +213,6 @@ interface KindBuildInput {
 
 function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
   const s = input.settings;
-  const prefix = s.vlessPath;
   const list: ProxyNode[] = [];
   for (const entry of input.addresses) {
     const security = classifyPort(entry.port);
@@ -204,8 +220,18 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
     const variants: Array<"normal" | "fragment"> = ["normal"];
     if (input.fragOn && security === "tls") variants.push("fragment");
     for (const variant of variants) {
-      const earlyData = s.earlyDataEnabled ? Math.max(0, s.earlyDataMaxBytes) : 0;
-      const path = buildPath(prefix, proto.cred, s.securePath, earlyData, variant === "fragment" ? input.fragQ : "");
+      // zeroRtt forces the ed=2560 early-data marker on (0-RTT); otherwise
+      // the early-data switch decides.
+      const baseEarlyData = s.earlyDataEnabled ? Math.max(0, s.earlyDataMaxBytes) : 0;
+      const earlyData = s.zeroRtt ? Math.max(2560, baseEarlyData) : baseEarlyData;
+      const path = buildPath(
+        proto.prefix,
+        proto.cred,
+        s.securePath,
+        earlyData,
+        variant === "fragment" ? input.fragQ : "",
+        s.randomPath,
+      );
       const tags: NodeTag[] = [...entry.tags];
       if (input.hostname.endsWith(".workers.dev")) tags.push("workers-dev");
       if (security === "none") tags.push("no-tls");
@@ -231,12 +257,17 @@ function buildKindNodes(proto: ProtoSpec, input: KindBuildInput): ProxyNode[] {
         variant,
         tags,
       };
-      const node: ProxyNode = {
-        ...base,
-        kind: "vless",
-        uuid: proto.cred,
-        flow: s.vlessFlow.length > 0 && security === "tls" ? s.vlessFlow : null,
-      } satisfies VlessNode;
+      const node: ProxyNode =
+        proto.kind === "trojan"
+          ? { ...base, kind: "trojan", password: proto.cred }
+          : proto.kind === "shadowsocks"
+            ? { ...base, kind: "shadowsocks", method: s.ssMethod, password: proto.cred, tls: s.ssTls }
+            : {
+                ...base,
+                kind: "vless",
+                uuid: proto.cred,
+                flow: s.vlessFlow.length > 0 && security === "tls" ? s.vlessFlow : null,
+              };
       node.name = renderName(node, input.country, entry.label, s.nameTemplate, entry.host);
       list.push(node);
     }
@@ -254,7 +285,19 @@ export function generateNodes(ctx: NodeBuilderContext): ProxyNode[] {
   const fragQ = fragOn ? fragmentQuery(s.fragment) : "";
   const addresses = collectAddresses(s, ctx.hostname);
 
-  const protos: ProtoSpec[] = [{ kind: "vless", enabled: s.vlessEnabled, cred: s.vlessUuid }];
+  const protos: ProtoSpec[] = [
+    { kind: "vless", enabled: s.vlessEnabled, cred: s.vlessUuid, prefix: s.vlessPath },
+    // Trojan rides its own path (validated distinct from vlessPath).
+    {
+      kind: "trojan",
+      enabled: s.trojanEnabled && s.trojanPassword.length > 0 && s.trojanPath.length > 0,
+      cred: s.trojanPassword,
+      prefix: s.trojanPath,
+    },
+    // Shadowsocks shares the vless path (and, by design, the vless UUID as
+    // its password — there is no separate ssPassword setting).
+    { kind: "shadowsocks", enabled: s.ssEnabled, cred: s.vlessUuid, prefix: s.vlessPath },
+  ];
 
   const input: KindBuildInput = {
     settings: s,

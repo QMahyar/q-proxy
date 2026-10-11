@@ -93,6 +93,7 @@ describe("publicSettingsView", () => {
       },
     });
     const view = publicSettingsView(s) as Record<string, unknown>;
+    expect(view.trojanPassword).toBeUndefined();
     const cf = view.cf as Record<string, unknown>;
     expect(cf.globalApiKey).toBeUndefined();
     expect(cf.apiToken).toBeUndefined();

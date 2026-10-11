@@ -34,12 +34,14 @@ async function setupAdmin(): Promise<Record<string, string>> {
 }
 
 async function totalEvents(csrf: Record<string, string>): Promise<number> {
-  for (let i = 0; i < 40; i++) {
+  // Tight poll cadence: the access-log write lands via waitUntil and can lag
+  // under full-suite CPU contention. Callers set an explicit test timeout.
+  for (let i = 0; i < 80; i++) {
     const res = await SELF.fetch(`${BASE}/api/access-log?limit=100`, { headers: { Cookie: csrf.Cookie! } });
     expect(res.status).toBe(200);
     const total = ((await body(res)).data.total as number) ?? -1;
     if (total > 0) return total;
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 25));
   }
   return -1;
 }
@@ -55,7 +57,7 @@ describe("access-log API", () => {
     expect(res.status).toBe(405);
   });
 
-  it("records served subscriptions and dedups rapid repeats", async () => {
+  it("records served subscriptions and dedups rapid repeats", { timeout: 15000 }, async () => {
     const csrf = await setupAdmin();
     const before = await totalEvents(csrf).catch(() => 0);
 

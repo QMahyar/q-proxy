@@ -208,13 +208,16 @@ describe("panel html", () => {
       "camouflage.mode",
       "routingRules.bypassLan",
       "routingRules.customBlock",
+      "trojanEnabled",
+      "trojanPassword",
+      "trojanPath",
+      "ssEnabled",
+      "ssMethod",
     ]) {
       expect(html).toContain(`'${bind}'`);
     }
     for (const removedBind of [
       "vmessUuid",
-      "trojanPassword",
-      "ssMethod",
       "ssPassword",
       "ssPath",
       "ssDirect",
@@ -229,8 +232,6 @@ describe("panel html", () => {
       "speedtestIntercept",
       "camouflage.url",
       "vmessEnabled",
-      "trojanEnabled",
-      "ssEnabled",
     ]) {
       expect(html).not.toContain(`'${removedBind}'`);
     }
@@ -917,7 +918,7 @@ describe("dead-code resurrection guards", () => {
     "loadSubsUsers",
     "subsUsersHtml",
     "vmessEnabled",
-    "trojanEnabled",
+    // B5 revived trojanEnabled as a live protocol toggle (Trojan card).
     "remoteSubUrls",
     "remoteNodes",
     "proxyIpMode",

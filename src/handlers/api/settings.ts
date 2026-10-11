@@ -37,6 +37,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export function publicSettingsView(s: Settings): PublicSettings & { hasPassword: boolean } {
   const view = cloneRecord(s);
   for (const path of SENSITIVE_SETTING_PATHS) delete view[path];
+  delete view.trojanPassword;
   if (view.telegram !== null && typeof view.telegram === "object") {
     delete asRecord(view.telegram).botToken;
   }
@@ -107,7 +108,7 @@ export const handleResetSettings: RouteHandler = async (req, env, _s, ctx) => {
 
 export const handleExportSettings: RouteHandler = async (_req, _env, s) => {
   const view = cloneRecord(s);
-  for (const path of [...SENSITIVE_SETTING_PATHS, "securePath"]) delete view[path];
+  for (const path of [...SENSITIVE_SETTING_PATHS, "securePath", "trojanPassword"]) delete view[path];
   if (view.telegram !== null && typeof view.telegram === "object") {
     delete asRecord(view.telegram).botToken;
   }

@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Added (B5 — edgetunnel parity: protocols/transports, flag-gated)
+- New settings, all default-off (defaults = ws-only vless, zero behavior
+  change): `trojanEnabled/trojanPassword/trojanPath`,
+  `ssEnabled/ssMethod(aes-128-gcm|aes-256-gcm|chacha20-ietf-poly1305)/ssTls`,
+  `transport(ws|grpc|xhttp)`, `grpcMode(gun|multi)`, `grpcUserAgent`,
+  `tlsFragment(off|shadowrocket|happ)`, `zeroRtt`, `randomPath`.
+  Cross-field rules: trojan needs a password and a path distinct from
+  `vlessPath`; `trojanPassword` is masked on read/export like `botToken`.
+- Trojan inbound (SHA-224 password check via vendored pure-JS hash,
+  TCP + DNS-only UDP) on its own path; shadowsocks AEAD inbound
+  (AES-GCM via WebCrypto, chacha handshakes cleanly rejected) sharing the
+  vless path via vless-first handshake racing. `transport=grpc|xhttp`
+  switches the WebSocket framing (length-prefix / HTTP-chunk codecs);
+  `transport=ws` runs the byte-identical legacy path. `zeroRtt` forces
+  `?ed=2560` in tunnel paths; `randomPath` randomizes suffixes.
+- Additive emitters: `trojan://` + `ss://` share URIs, trojan/ss outbounds
+  in sing-box/Clash/Xray profiles, TLS-fragment blocks in sing-box
+  (`fragment` + preset fallback delay) and Xray (`tcpFragment` sockopt)
+  only when the preset is on. GOLDENS: no existing vless emitter output
+  changed — full golden suites pass byte-identical.
+- Panel Protocols: trojan/ss cards, 0-RTT + random-path toggles, transport
+  card (transport select, grpc fields, fragment chips) (en + fa).
+- Documented limits: ss password reuses the vless UUID (no separate
+  setting); ss serves TCP only (no UDP associate marker on this path —
+  DNS still flows over vless/trojan UDP or DoH); chacha20 inbound
+  handshakes are rejected (labels retained for client configs);
+  `grpcMode: multi` uses gun framing; `grpcUserAgent` is stored, not
+  enforced; fragment blocks are client hints (Clash gets none — no
+  standard slot); emitted profiles stay `ws` transport.
+
 ### Added (B5b — edgetunnel parity: camouflage modes)
 - `camouflage.mode` gains `nginx` (serves the default static page),
   `minimal` (tiny `1101`-style page, `no-store`), and `reverse` (mirrors an

@@ -2,7 +2,11 @@ import type {
   CamouflageMode,
   Fingerprint,
   FragmentMode,
+  GrpcMode,
   Language,
+  ShadowsocksMethod,
+  TlsFragmentPreset,
+  TunnelTransport,
 } from "../types/settings";
 
 export const LANGUAGES: readonly Language[] = ["en", "fa"];
@@ -10,6 +14,10 @@ export const FRAGMENT_MODES: readonly FragmentMode[] = ["off", "low", "medium", 
 export const FRAGMENT_PACKETS = ["tlshello", "1-1", "1-2", "1-3", "1-5"] as const;
 export const CAMOUFLAGE_MODES: readonly CamouflageMode[] = ["off", "static", "nginx", "reverse", "minimal"];
 export const VLESS_FLOWS = ["", "xtls-rprx-vision"] as const;
+export const SS_METHODS: readonly ShadowsocksMethod[] = ["aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305"];
+export const TRANSPORTS: readonly TunnelTransport[] = ["ws", "grpc", "xhttp"];
+export const GRPC_MODES: readonly GrpcMode[] = ["gun", "multi"];
+export const TLS_FRAGMENTS: readonly TlsFragmentPreset[] = ["off", "shadowrocket", "happ"];
 export const FINGERPRINTS: readonly Fingerprint[] = [
   "chrome",
   "firefox",
@@ -61,6 +69,18 @@ export const SETTING_FIELD_DESCRIPTORS: readonly SettingFieldDescriptor[] = [
   { path: "vlessUuid", spec: { kind: "str", maxLen: 64 } },
   { path: "vlessFlow", spec: { kind: "enum", allowed: VLESS_FLOWS } },
   { path: "vlessPath", spec: { kind: "str", maxLen: 32, minLen: 1, pattern: PATH_TOKEN_RE } },
+  { path: "trojanEnabled", spec: { kind: "bool" } },
+  { path: "trojanPassword", spec: { kind: "custom" } },
+  { path: "trojanPath", spec: { kind: "custom" } },
+  { path: "ssEnabled", spec: { kind: "bool" } },
+  { path: "ssMethod", spec: { kind: "enum", allowed: SS_METHODS } },
+  { path: "ssTls", spec: { kind: "bool" } },
+  { path: "transport", spec: { kind: "enum", allowed: TRANSPORTS } },
+  { path: "grpcMode", spec: { kind: "enum", allowed: GRPC_MODES } },
+  { path: "grpcUserAgent", spec: { kind: "str", maxLen: 256 } },
+  { path: "tlsFragment", spec: { kind: "enum", allowed: TLS_FRAGMENTS } },
+  { path: "zeroRtt", spec: { kind: "bool" } },
+  { path: "randomPath", spec: { kind: "bool" } },
   { path: "earlyDataEnabled", spec: { kind: "bool" } },
   { path: "earlyDataMaxBytes", spec: { kind: "int", min: 0, max: 8192 } },
   { path: "defaultPort", spec: { kind: "custom" } },

@@ -1,6 +1,6 @@
 import type { Settings } from "../types/settings";
 
-export type TunnelKind = "vless";
+export type TunnelKind = "vless" | "trojan";
 
 const TUNNEL_SUFFIX_RE = /^[A-Za-z0-9]{8,32}$/;
 
@@ -16,6 +16,10 @@ export function identifyTunnel(pathname: string, s: Settings): TunnelKind | null
   const [prefix, suffix] = segs as [string, string];
   if (!TUNNEL_SUFFIX_RE.test(suffix)) return null;
   if (prefix === s.vlessPath) return "vless";
+  // Trojan rides its own path, gated on the flag (dormant otherwise, so
+  // unknown paths keep their camouflage behavior). Shadowsocks shares the
+  // vless path by design (dispatched by handshake sniffing in session.ts).
+  if (s.trojanEnabled && s.trojanPath.length > 0 && prefix === s.trojanPath) return "trojan";
   return null;
 }
 

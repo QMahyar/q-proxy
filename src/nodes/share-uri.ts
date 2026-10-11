@@ -1,5 +1,6 @@
-import type { ProxyNode, VlessNode } from "../types/node";
+import type { ProxyNode, ShadowsocksNode, TrojanNode, VlessNode } from "../types/node";
 import { bracketIpv6 } from "../utils/net";
+import { encodeUtf8Base64 } from "../utils/base64";
 
 function enc(v: string): string {
   return encodeURIComponent(v);
@@ -9,7 +10,7 @@ function authority(host: string, port: number): string {
   return `${bracketIpv6(host)}:${port}`;
 }
 
-function tlsParams(node: VlessNode): string[] {
+function tlsParams(node: VlessNode | TrojanNode): string[] {
   const p: string[] = [];
   if (node.sni !== null && node.sni.length > 0) p.push(`sni=${enc(node.sni)}`);
   if (node.fingerprint !== null) p.push(`fp=${enc(node.fingerprint)}`);
@@ -34,7 +35,29 @@ export function buildVlessShareUri(node: VlessNode): string {
 }
 
 export function buildShareUri(node: ProxyNode): string {
-  return buildVlessShareUri(node);
+  switch (node.kind) {
+    case "trojan":
+      return buildTrojanShareUri(node);
+    case "shadowsocks":
+      return buildShadowsocksShareUri(node);
+    case "vless":
+      return buildVlessShareUri(node);
+  }
+}
+
+export function buildTrojanShareUri(node: TrojanNode): string {
+  const params = node.security === "tls" ? [`security=tls`, ...tlsParams(node)] : [`security=none`];
+  params.push(`type=ws`, `host=${enc(node.host)}`, `path=${enc(node.path)}`);
+  return `trojan://${enc(node.password)}@${authority(node.address, node.port)}?${params.join("&")}#${enc(node.name)}`;
+}
+
+export function buildShadowsocksShareUri(node: ShadowsocksNode): string {
+  // SIP002-style userinfo; `tls=1&sni=` marks TLS-wrapped nodes (no
+  // standard slot exists — clients ignore unknown query keys).
+  const userinfo = encodeUtf8Base64(`${node.method}:${node.password}`);
+  const tls = node.security === "tls" || node.tls;
+  const suffix = tls && node.sni !== null && node.sni.length > 0 ? `?tls=1&sni=${enc(node.sni)}` : "";
+  return `ss://${userinfo}@${authority(node.address, node.port)}${suffix}#${enc(node.name)}`;
 }
 
 export function buildShareUris(nodes: readonly ProxyNode[]): string[] {

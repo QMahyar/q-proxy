@@ -44,9 +44,12 @@ describe("fillIdentity", () => {
   });
 
   it("no longer knows removed identity fields", () => {
-    for (const key of ["vmessUuid", "trojanPassword", "ssPassword"]) {
+    // B5 revived trojanPassword as a live user-set secret (masked on read);
+    // only the truly-cut identity fields stay absent.
+    for (const key of ["vmessUuid", "ssPassword"]) {
       expect(key in DEFAULT_SETTINGS).toBe(false);
     }
+    expect("trojanPassword" in DEFAULT_SETTINGS).toBe(true);
   });
 
   it("preserves already-present identity fields", () => {

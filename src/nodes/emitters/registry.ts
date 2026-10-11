@@ -4,6 +4,8 @@ import { emitClashYaml } from "./clash-yaml";
 import { emitSingBoxJson } from "./singbox-json";
 import { emitXrayJson } from "./xray-json";
 
+import type { TlsFragmentPreset } from "../../types/settings";
+
 export interface EmitRules {
   bypassLan: boolean;
   bypassDomains: string[];
@@ -16,6 +18,7 @@ export interface EmitOptions {
   subscriptionUrl?: string;
   updateIntervalHours?: number;
   rules?: EmitRules;
+  tlsFragment?: TlsFragmentPreset;
 }
 
 export const TEST_URL = "https://www.gstatic.com/generate_204";

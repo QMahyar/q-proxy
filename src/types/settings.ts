@@ -17,6 +17,10 @@ export type Fingerprint =
   | "randomized";
 export type PlainPortPolicy = "always" | "workers-dev" | "never";
 export type CamouflageMode = "off" | "static" | "nginx" | "reverse" | "minimal";
+export type ShadowsocksMethod = "aes-128-gcm" | "aes-256-gcm" | "chacha20-ietf-poly1305";
+export type TunnelTransport = "ws" | "grpc" | "xhttp";
+export type GrpcMode = "gun" | "multi";
+export type TlsFragmentPreset = "off" | "shadowrocket" | "happ";
 export type FragmentMode = "off" | "low" | "medium" | "high" | "severe" | "custom";
 
 export interface FragmentSettings {
@@ -89,6 +93,18 @@ export interface Settings {
   vlessUuid: string;
   vlessFlow: string;
   vlessPath: string;
+  trojanEnabled: boolean;
+  trojanPassword: string;
+  trojanPath: string;
+  ssEnabled: boolean;
+  ssMethod: ShadowsocksMethod;
+  ssTls: boolean;
+  transport: TunnelTransport;
+  grpcMode: GrpcMode;
+  grpcUserAgent: string;
+  tlsFragment: TlsFragmentPreset;
+  zeroRtt: boolean;
+  randomPath: boolean;
   earlyDataEnabled: boolean;
   earlyDataMaxBytes: number;
   cdnPresets: string[];
@@ -143,6 +159,18 @@ export const DEFAULT_SETTINGS: Settings = {
   vlessUuid: "",
   vlessFlow: "",
   vlessPath: "vl",
+  trojanEnabled: false,
+  trojanPassword: "",
+  trojanPath: "",
+  ssEnabled: false,
+  ssMethod: "aes-128-gcm",
+  ssTls: false,
+  transport: "ws",
+  grpcMode: "gun",
+  grpcUserAgent: "",
+  tlsFragment: "off",
+  zeroRtt: false,
+  randomPath: false,
   earlyDataEnabled: true,
   earlyDataMaxBytes: 2048,
   cdnPresets: [],
@@ -205,7 +233,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const SENSITIVE_SETTING_PATHS = ["passwordHash", "passwordSalt", "sessionSecret"] as const;
 
-export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number]> & {
+export type PublicSettings = Omit<Settings, (typeof SENSITIVE_SETTING_PATHS)[number] | "trojanPassword"> & {
   telegram: Omit<TelegramSettings, "botToken">;
   cf: Omit<CfSettings, "globalApiKey" | "apiToken">;
 };

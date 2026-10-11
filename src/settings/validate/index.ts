@@ -6,6 +6,7 @@ import { applyAccessCustom, validateProxyIps } from "./access";
 import { applyCamouflageCustom } from "./camouflage";
 import { applyCfCustom } from "./cf";
 import { applyEndpointsCustom } from "./endpoints";
+import { applyProtocolsCustom } from "./protocols";
 import { applyIntegrationsCustom, validateBootstrapConsistency } from "./integrations";
 import { applySubscriptionCustom } from "./subscription";
 import { applyGenericField, fail, type ValidationResult } from "./shared";
@@ -22,6 +23,7 @@ function applyCustomField(
 ): void {
   if (applyAccessCustom(path, patch, out, fields)) return;
   if (applyCamouflageCustom(path, patch, out, fields)) return;
+  if (applyProtocolsCustom(path, patch, out, fields)) return;
   if (applyCfCustom(path, patch, out, fields)) return;
   if (applyEndpointsCustom(path, patch, out, fields)) return;
   if (applyTransportCustom(path, patch, out, fields)) return;

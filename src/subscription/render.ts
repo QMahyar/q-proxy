@@ -50,6 +50,7 @@ export function emitterOptions(input: RenderSubInput): EmitOptions {
     isFragment: input.isFragmentMode,
     subscriptionUrl: input.subscriptionUrl,
     updateIntervalHours: s.subUpdateIntervalHours,
+    tlsFragment: s.tlsFragment,
     rules: {
       bypassLan: s.routingRules.bypassLan,
       bypassDomains: [...s.routingRules.customBypass],

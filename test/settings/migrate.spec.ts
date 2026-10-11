@@ -115,8 +115,22 @@ describe("MIGRATIONS[2] vless-warp slimdown cut", () => {
     const legacyBlob = { version: 2, updatedAt: Date.now(), data: legacyData };
     const merged = migrateSettings(legacyBlob) as unknown as Record<string, unknown>;
     expect(merged.version).toBe(SETTINGS_VERSION);
+    // B5 revived trojan/ss names as live settings: the v2 cut still drops
+    // the legacy values, then deepMergeDefaults refills B5 defaults.
+    const REVIVED_DEFAULTS: Record<string, unknown> = {
+      trojanEnabled: false,
+      ssEnabled: false,
+      trojanPassword: "",
+      ssMethod: "aes-128-gcm",
+      trojanPath: "",
+    };
     for (const key of REMOVED_KEYS) {
-      expect(merged).not.toHaveProperty(key);
+      if (key in REVIVED_DEFAULTS) {
+        expect(merged).toHaveProperty(key);
+        expect(merged[key]).toEqual(REVIVED_DEFAULTS[key]);
+      } else {
+        expect(merged).not.toHaveProperty(key);
+      }
     }
     expect(merged.securePath).toBe("deployed1");
     expect(merged.camouflage).toEqual({ mode: "static", reverseUrl: "" });
