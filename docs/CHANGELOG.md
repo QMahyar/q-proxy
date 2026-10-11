@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added (B6 — edgetunnel parity: login/admin polish)
+- Login hardens the authed bounce: the `api/auth/status` probe auto-redirects
+  at most once per tab (`sessionStorage` counter, cleared on any manual
+  submit), and login POSTs use `redirect: manual` so a still-valid cookie
+  lands in the panel instead of misreporting "wrong passphrase".
+- Expert JSON mode: the shortcuts dialog gains an editor that loads the full
+  settings object into a modal textarea and saves via `api/settings/save`
+  (baseRev-aware; field errors and CONFLICTs surface inline, no reload until
+  the save succeeds).
+- Panel footer shows a version state dot (green release / amber preview when
+  the version contains `-`).
+- Onboarding copy no longer claims VLESS is the only protocol (en + fa).
+
 ### Added (B5 — edgetunnel parity: protocols/transports, flag-gated)
 - New settings, all default-off (defaults = ws-only vless, zero behavior
   change): `trojanEnabled/trojanPassword/trojanPath`,

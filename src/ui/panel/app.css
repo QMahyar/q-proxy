@@ -368,3 +368,6 @@ table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-md)}
 .viewall-icon{transform:scaleX(-1)}
 [dir=rtl] .viewall-icon{transform:none}
 .app-foot{margin-block:28px 0;text-align:center;color:var(--text-ghost);font-size:var(--fs-xs);font-family:var(--font-mono)}
+.ver-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-inline-end:6px;vertical-align:baseline}
+.ver-current{background:var(--success)}
+.ver-preview{background:var(--warning)}

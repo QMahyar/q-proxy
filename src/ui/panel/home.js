@@ -21,7 +21,7 @@ const _hs=$('home-sub');if(_hs)_hs.textContent=t('home.subs.desc');
 const _ss=$('subs-sub');if(_ss)_ss.textContent=t('subs.main.desc');
 const _ws=$('warp-sub');if(_ws)_ws.textContent=t('subs.warp.desc');
 const _gs=$('settings-sub');if(_gs)_gs.textContent=t('settings.sections');
-const _ft=$('app-foot');if(_ft){let vv='';try{vv=typeof __APP_VERSION__!=='undefined'?__APP_VERSION__:(S.status&&S.status.version||'')}catch(e){vv=(S.status&&S.status.version||'')}if(vv)_ft.textContent='Q Proxy v'+vv};
+const _ft=$('app-foot');if(_ft){let vv='';try{vv=typeof __APP_VERSION__!=='undefined'?__APP_VERSION__:(S.status&&S.status.version||'')}catch(e){vv=(S.status&&S.status.version||'')}if(vv){const pre=vv.indexOf('-')>=0;_ft.innerHTML='<span class="ver-dot '+(pre?'ver-preview':'ver-current')+'" aria-hidden="true"></span><span>Q Proxy v'+esc(vv)+'</span>'}};
 $('logout-btn').setAttribute('aria-label',t('nav.logout'));
 $('logout-btn').title=t('nav.logout');
 $('shortcuts-btn').setAttribute('aria-label',t('shortcuts.title'));

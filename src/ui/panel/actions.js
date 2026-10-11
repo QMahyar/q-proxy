@@ -132,6 +132,29 @@ try{await withBusy(el,()=>api('api/settings/reset',{method:'POST',body:{}}));loc
  if(accounts>0&&!same){confirmDialog('warp.confirm.endpoints_title','warp.confirm.endpoints_body',true,{n:accounts}).then(yes=>{if(yes)doSave()});return}
  doSave()},
   'shortcuts'(){renderShortcuts();openModal('m-keys')},
+  'expert-open'(){
+  closeModal('m-keys');
+  $('ex-title').textContent=t('expert.title');
+  $('ex-desc').textContent=t('expert.desc');
+  $('ex-json-label').textContent=t('expert.title');
+  $('ex-close').textContent=t('common.close');
+  $('ex-save').textContent=t('expert.save');
+  const ta=$('ex-json'),box=$('ex-error');
+  box.textContent='';box.style.display='';ta.removeAttribute('aria-invalid');
+  ta.value=JSON.stringify(S.set||{},null,2);
+  openModal('m-expert');
+  ta.focus()},
+  'close-expert'(){closeModal('m-expert')},
+  'expert-save'(el){
+  const ta=$('ex-json'),box=$('ex-error');
+  let parsed=null;
+  try{parsed=JSON.parse(ta.value)}
+  catch(e){box.textContent=t('expert.badJson');box.style.display='block';ta.setAttribute('aria-invalid','true');ta.focus();return}
+  const body=parsed&&typeof parsed==='object'?parsed:{};
+  if(typeof S.rev==='number')body.baseRev=S.rev;
+  withBusy(el,()=>api('api/settings/save',{method:'PUT',body:body})
+  .then(d=>{if(d&&typeof d.rev==='number')S.rev=d.rev;closeModal('m-expert');toast(t('common.saved'),'ok');location.reload()})
+  .catch(err=>{if(err&&err.code==='CONFLICT'){box.textContent=t('settings.conflict')}else if(err&&err.fields){box.textContent=String(Object.values(err.fields)[0]||t('common.error'))}else{box.textContent=(err&&err.message)||t('common.error')}box.style.display='block';ta.setAttribute('aria-invalid','true')}))},
   'boot-retry'(){boot()},
  'close-keys'(){closeModal('m-keys')},
  'wizard-skip'(){wizardDone()},
@@ -382,10 +405,11 @@ const el=e.target;
 if(el&&el.dataset&&el.dataset.bind&&el.tagName==='INPUT')blurValidateEl(el)});
 $('m-confirm').addEventListener('click',e=>{if(e.target===$('m-confirm'))settleConfirm(false)});
 $('m-share').addEventListener('click',e=>{if(e.target===$('m-share'))closeModal('m-share')});
+$('m-expert').addEventListener('click',e=>{if(e.target===$('m-expert'))closeModal('m-expert')});
 $('cf-cancel').addEventListener('click',()=>settleConfirm(false));
 $('cf-ok').addEventListener('click',()=>settleConfirm(true));
 $('m-confirm').addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus($('m-confirm'),e)});
-['m-warp-generate','m-warp-import','m-warp-preset','m-share','m-keys','m-wizard'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus(el,e)})});
+['m-warp-generate','m-warp-import','m-warp-preset','m-share','m-keys','m-wizard','m-expert'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Tab')trapFocus(el,e)})});
 document.addEventListener('keydown',globalKeys);
 document.addEventListener('keydown',e=>{
 if(e.key==='Escape'){
@@ -395,7 +419,8 @@ else if(!$('m-warp-generate').hidden)closeModal('m-warp-generate');
 else if(!$('m-warp-import').hidden)closeModal('m-warp-import');
 else if(!$('m-warp-preset').hidden)closeModal('m-warp-preset');
 else if(!$('m-wizard').hidden)wizardDone();
-else if(!$('m-keys').hidden)closeModal('m-keys')}});
+else if(!$('m-keys').hidden)closeModal('m-keys');
+else if(!$('m-expert').hidden)closeModal('m-expert')}});
 window.addEventListener('hashchange',navigate);
 wireApplyBarUr();
 window.addEventListener('beforeunload',e=>{

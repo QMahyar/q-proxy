@@ -553,8 +553,10 @@ describe("login html", () => {
 
   it("bounces authed visitors via the api/auth/status probe before rendering either card", () => {
     expect(html).toContain("fetch(BASE+'api/auth/status'");
-    expect(html).toMatch(/if\(d\.ok&&j&&j\.ok&&j\.data&&j\.data\.hasSession\)\{\s*goPanel\(\);\s*return\s*\}/);
-    expect(html).toMatch(/catch\(e\)\{\}\s*renderLogin\(\)\}\)\(\)/);
+    expect(html).toContain("_auth_auto_redirect");
+    expect(html).toMatch(/if\(d\.ok&&j&&j\.ok&&j\.data&&j\.data\.hasSession\)\{[\s\S]*?goPanel\(\);return/);
+    expect(html).toContain("renderLogin()");
+    expect(html).toContain("opaqueredirect");
     expect(html).not.toContain("fetch(BASE+'api/settings'");
   });
 
